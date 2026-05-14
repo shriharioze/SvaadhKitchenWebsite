@@ -317,6 +317,7 @@ function doGet(e) {
       gateway_env: HDFC_ENV
     });
     if (action === "getAreas") return jsonRes(getAreas());
+    if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
     if (action === "verifyLogin") return jsonRes(verifyLogin(p.phone, p.pin));
     if (action === "setPin") {
@@ -611,6 +612,7 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(markOnAccount(body.phone, body.cycle, body.status));
     }
+    if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "reconcileTransactions") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(reconcileTransactions(body));

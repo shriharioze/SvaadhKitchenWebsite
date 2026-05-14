@@ -2150,19 +2150,24 @@ function renderPinDots() {
 }
 async function verifyPin() {
   if (isLocked()) return;
-  document.getElementById("loginErr").textContent = "Logging you in...";
-  sLoading(true, "Logging you in...");
+  document.getElementById("loginErr").textContent = "Verifying PIN...";
+  sLoading(true, "Verifying PIN...");
   try {
-    const res  = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getAdminData&pin=${S.pin}&_t=${Date.now()}`);
+    // 1. FAST PIN VERIFICATION (軽微)
+    const res = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=verifyAdminPin&pin=${S.pin}&_t=${Date.now()}`);
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (data.error || !data.success) throw new Error(data.error || "Incorrect PIN");
+    
     attempts = 0;
-    S.sessionPin  = S.pin;
-    S.bfMaster    = data.breakfastMaster || [];
-    S.sabjiMaster = data.sabjiMaster     || [];
-    S.menuEntries = data.menuEntries     || [];
+    S.sessionPin = S.pin;
     S.pin = ""; renderPinDots();
+    
+    // 2. BOOT UI IMMEDIATELY
     bootApp();
+    
+    // 3. LOAD SYSTEM DATA IN BACKGROUND
+    loadFullAdminData();
+    
   } catch(e) {
     attempts++;
     if (attempts >= 5) {
@@ -2174,6 +2179,30 @@ async function verifyPin() {
         : "Incorrect PIN — try again";
     }
     S.pin = ""; renderPinDots();
+  } finally {
+    sLoading(false);
+  }
+}
+
+async function loadFullAdminData() {
+  sLoading(true, "Synchronising system data...");
+  try {
+    const res = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getAdminData&pin=${S.sessionPin}&_t=${Date.now()}`, 20000); // 20s timeout for heavy data
+    const data = await res.json();
+    
+    S.bfMaster    = data.breakfastMaster || [];
+    S.sabjiMaster = data.sabjiMaster     || [];
+    S.menuEntries = data.menuEntries     || [];
+    
+    // Re-render components once data is fetched
+    renderBfMasterTable();
+    renderSabjiMasterTable();
+    selectDate(S.selectedDate || toISO(getIST()));
+    
+    console.log("System data synchronised successfully.");
+  } catch(e) {
+    console.error("Data sync failed:", e.message);
+    toast("Warning: Failed to load latest system data. Please refresh.", 5000);
   } finally {
     sLoading(false);
   }
