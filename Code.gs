@@ -361,6 +361,10 @@ function doGet(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getOrderSummary(p.date));
     }
+    if (action === "getUnpaidOrdersData") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(getUnpaidOrdersData(p));
+    }
     if (action === "getPackagingExpenses") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       if (p.from && p.to) return jsonRes(getPackagingExpensesRange(p.from, p.to));
@@ -606,6 +610,14 @@ function doPost(e) {
     if (action === "markOnAccount") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(markOnAccount(body.phone, body.cycle, body.status));
+    }
+    if (action === "reconcileTransactions") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(reconcileTransactions(body));
+    }
+    if (action === "markOrdersPaidBulk") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(markOrdersPaidBulk(body));
     }
     if (action === "getBillingData") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
@@ -7749,3 +7761,164 @@ function fixLoyaltyDiscountMarkers() {
   console.log(`  Rows already correct: ${unchanged}`);
   console.log(`  Total writes : ${writes.length}`);
 }
+
+/**
+ * RECONCILIATION SYSTEM
+ */
+
+function getUnpaidOrdersData(p) {
+  const dateFrom = p.dateFrom;
+  const dateTo = p.dateTo;
+  if (!dateFrom || !dateTo) return {success:false, error:"dateFrom and dateTo required"};
+
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const rows = getAllRows(ws);
+
+  const relevant = rows.filter(r => {
+    const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
+    return d >= dateFrom && d <= dateTo &&
+    (r.Payment_Status === "Pending" || r.Payment_Status === "on account" || !r.Payment_Status);
+  });
+
+  const orders = relevant.map(r => ({
+    id: r.Submission_ID,
+    date: r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim(),
+    phone: r.Phone,
+    name: r.Customer_Name,
+    total: Math.round(Number(r.Net_Total) || 0),
+    status: r.Payment_Status || "Pending",
+    meal: r.Meal_Type
+  }));
+
+  return {success:true, orders};
+}
+
+function reconcileTransactions(body) {
+  const transactions = body.transactions; // [{date, description, amount}]
+  const dateFrom = body.dateFrom;
+  const dateTo = body.dateTo;
+  
+  const unpaid = getUnpaidOrdersData({dateFrom, dateTo}).orders;
+  
+  // Group unpaid orders by customer
+  const groupedByPhone = {};
+  unpaid.forEach(o => {
+    const key = String(o.phone || "").trim();
+    if (!key) return;
+    if (!groupedByPhone[key]) groupedByPhone[key] = { name: o.name, orders: [] };
+    groupedByPhone[key].orders.push(o);
+  });
+
+  const results = transactions.map(tx => {
+    const txAmount = Math.round(Number(tx.amount) || 0);
+    const txDesc = String(tx.description || "").toLowerCase();
+    
+    let bestMatch = { status: "No Match", reason: "No matching name found", matchedOrders: [] };
+    
+    for (const phone in groupedByPhone) {
+      const data = groupedByPhone[phone];
+      const nameParts = data.name.toLowerCase().replace(/[^a-z ]/g, "").split(" ").filter(x => x.length > 2);
+      const cleanDesc = txDesc.replace(/[^a-z]/g, "");
+      
+      // Smart matching: Check if all significant parts of the customer name exist in the narration string
+      const nameMatch = nameParts.length > 0 && nameParts.every(part => cleanDesc.includes(part));
+      
+      if (nameMatch) {
+        const orders = data.orders;
+        const totalPending = Math.round(orders.reduce((s, o) => s + o.total, 0));
+        
+        if (totalPending === txAmount) {
+          bestMatch = {
+            status: "Match",
+            matchType: "Full Pending",
+            phone: phone,
+            name: data.name,
+            matchedOrders: orders,
+            total: totalPending
+          };
+          break;
+        }
+        
+        // Try single order match
+        const singleMatch = orders.find(o => Math.round(o.total) === txAmount);
+        if (singleMatch) {
+          bestMatch = {
+            status: "Match",
+            matchType: "Single Order",
+            phone: phone,
+            name: data.name,
+            matchedOrders: [singleMatch],
+            total: singleMatch.total
+          };
+          break;
+        }
+
+        // Try grouped by date match (e.g. B+L+D for same day)
+        const byDate = {};
+        orders.forEach(o => {
+          if (!byDate[o.date]) byDate[o.date] = 0;
+          byDate[o.date] += o.total;
+        });
+        
+        let dateMatched = false;
+        for (const date in byDate) {
+          if (Math.round(byDate[date]) === txAmount) {
+            bestMatch = {
+              status: "Match",
+              matchType: "Daily Total",
+              phone: phone,
+              name: data.name,
+              matchedOrders: orders.filter(o => o.date === date),
+              total: Math.round(byDate[date])
+            };
+            dateMatched = true;
+            break;
+          }
+        }
+        if (dateMatched) break;
+        
+        // If name matches but amount doesn't
+        bestMatch = {
+          status: "Partial",
+          reason: "Name matches, amount mismatch (Tx: " + txAmount + ", Pending: " + totalPending + ")",
+          phone: phone,
+          name: data.name,
+          matchedOrders: []
+        };
+      }
+    }
+    
+    return {
+      transaction: tx,
+      ...bestMatch
+    };
+  });
+  
+  return {success:true, results};
+}
+
+function markOrdersPaidBulk(body) {
+  const sids = body.submissionIds;
+  if (!sids || !sids.length) return {success:false, error:"submissionIds required"};
+  
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const headers = ws.getRange(1,1,1,ws.getLastColumn()).getValues()[0];
+  const hIdx = {};
+  headers.forEach((h,i) => { hIdx[h] = i+1; });
+  
+  const rows = getAllRows(ws);
+  let updated = 0;
+  
+  rows.forEach(r => {
+    if (sids.includes(String(r.Submission_ID)) && 
+        (r.Payment_Status === "Pending" || r.Payment_Status === "on account" || !r.Payment_Status)) {
+      ws.getRange(r._row, hIdx["Payment_Status"]).setValue("Paid");
+      updated++;
+    }
+  });
+  
+  return {success:true, updated};
+}
+

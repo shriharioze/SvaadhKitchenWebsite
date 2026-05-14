@@ -894,6 +894,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
       <button class="topbar-btn" id="navApprovals" onclick="switchPage('approvals')">✅ Approvals</button>
       <button class="topbar-btn" id="navManual" onclick="switchPage('manual')">➕ Manual Entry</button>
       <button class="topbar-btn" id="navBilling" onclick="switchPage('billing')">📋 On Account Billing</button>
+      <button class="topbar-btn" id="navReconcile" onclick="switchPage('reconcile')">🏦 Reconciliation</button>
     </div>
     <div class="topbar-right">
       <button id="darkToggleBtn" onclick="toggleDarkMode()" title="Toggle dark mode" style="margin-right:6px;font-size:1rem;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:inherit;opacity:0.8;">🌙</button>
@@ -1838,6 +1839,58 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
         <div id="billingPeriodLabel" style="font-size:.78rem;color:var(--muted);margin-bottom:14px;"></div>
         <div id="billingContent"><p class="billing-empty">Select a tab above to load billing data.</p></div>
       </div><!-- /pageBilling -->
+
+      <!-- PAGE: RECONCILIATION -->
+      <div class="page" id="pageReconcile">
+        <div class="page-header">
+          <div class="page-title">🏦 Bank Reconciliation <small>Verify payments from bank statements</small></div>
+        </div>
+
+        <div class="card-section" style="padding: 24px; background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 24px;">
+          <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 250px;">
+              <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">1. Select Date Range</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="date" id="reconDateFrom" class="billing-input" style="flex: 1;">
+                <input type="date" id="reconDateTo" class="billing-input" style="flex: 1;">
+              </div>
+            </div>
+            <div style="flex: 1; min-width: 250px;">
+              <label style="display: block; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">2. Upload Bank Statement (CSV/Text)</label>
+              <input type="file" id="reconFile" accept=".csv,.txt" class="billing-input" style="width: 100%;">
+            </div>
+            <button class="btn-primary" onclick="startReconciliation()" id="reconBtn" style="height: 42px;">Start Matching</button>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--muted); margin-top: 12px;">Supported formats: Generic CSV (Date, Description, Amount), HDFC, ICICI. First row should be headers.</p>
+        </div>
+
+        <div id="reconResults" style="display: none;">
+          <div class="stat-grid">
+            <div class="stat-card green"><div class="sv" id="reconStatMatched">0</div><div class="sl">Matched</div></div>
+            <div class="stat-card orange"><div class="sv" id="reconStatPartial">0</div><div class="sl">Partial</div></div>
+            <div class="stat-card red"><div class="sv" id="reconStatNoMatch">0</div><div class="sl">No Match</div></div>
+          </div>
+
+          <div class="hist-table-wrap">
+            <table class="hist-table">
+              <thead>
+                <tr>
+                  <th>Transaction</th>
+                  <th>Amount</th>
+                  <th>Match Status</th>
+                  <th>Matched Customer</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="reconTableBody"></tbody>
+            </table>
+          </div>
+          
+          <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+            <button class="btn-green" id="reconMarkAllBtn" onclick="markAllReconciled()" style="display: none;">Mark All Matches as Paid</button>
+          </div>
+        </div>
+      </div><!-- /pageReconcile -->
 
 
       <!-- ════ PAGE: MANUAL ENTRY ════ -->
@@ -2891,6 +2944,7 @@ async function switchPage(page) {
   document.getElementById("pageReviews").classList.toggle("on", page==="reviews");
   document.getElementById("pageBilling").classList.toggle("on", page==="billing");
   document.getElementById("pageManual").classList.toggle("on", page==="manual");
+  document.getElementById("pageReconcile").classList.toggle("on", page==="reconcile");
   document.getElementById("navMenu").classList.toggle("active", page==="menu");
   document.getElementById("navManage").classList.toggle("active", page==="manage");
   document.getElementById("navOrders").classList.toggle("active", page==="orders");
@@ -2906,6 +2960,7 @@ async function switchPage(page) {
   document.getElementById("navReviews").classList.toggle("active", page==="reviews");
   document.getElementById("navManual").classList.toggle("active", page==="manual");
   document.getElementById("navBilling").classList.toggle("active", page==="billing");
+  document.getElementById("navReconcile").classList.toggle("active", page==="reconcile");
   
   if (page==="billing") switchBillingTab('Daily');
   if (page==="approvals") {
@@ -2945,6 +3000,12 @@ async function switchPage(page) {
   if (page === "inventory") { initInventoryPage(); }
   if (page === "expenses")  { initExpensePage(); }
   if (page === "tenday") { tendayAutoSelect(); }
+  if (page === "reconcile") {
+    const ist = getIST();
+    document.getElementById("reconDateTo").value = toISO(ist);
+    const from = new Date(ist); from.setDate(from.getDate() - 7);
+    document.getElementById("reconDateFrom").value = toISO(from);
+  }
   if (page === "payments") {
     const pp = document.getElementById("payDate");
     if (!pp.value) pp.value = toISO(getIST());
@@ -7263,6 +7324,255 @@ async function setupAutoTrigger() {
     statusEl.innerHTML = `<div style="color:#2D1A5E;font-size:.82rem;">❌ Error: ${e.message}</div>`;
   }
 }
+
+/** ── RECONCILIATION LOGIC ── **/
+let _reconcileResults = [];
+
+async function startReconciliation() {
+  const fileInput = document.getElementById("reconFile");
+  const dateFrom = document.getElementById("reconDateFrom").value;
+  const dateTo = document.getElementById("reconDateTo").value;
+  
+  if (!fileInput.files.length) return toast("Please select a file", 3000);
+  if (!dateFrom || !dateTo) return toast("Please select date range", 3000);
+  
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  
+  const btn = document.getElementById("reconBtn");
+  btn.disabled = true;
+  btn.innerHTML = "Processing...";
+  
+  reader.onload = async (e) => {
+    const text = e.target.result;
+    const transactions = parseBankStatement(text);
+    
+    if (!transactions.length) {
+      toast("No transactions found in file", 3000);
+      btn.disabled = false;
+      btn.innerHTML = "Start Matching";
+      return;
+    }
+    
+    try {
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          _action: "reconcileTransactions",
+          pin: S.sessionPin,
+          transactions: transactions,
+          dateFrom,
+          dateTo
+        })
+      }).then(r => r.json());
+      
+      if (res && res.success) {
+        _reconcileResults = res.results;
+        renderReconciliationResults(res.results);
+      } else {
+        toast("Reconciliation failed: " + (res.error || "Unknown error"), 3000);
+      }
+    } catch (err) {
+      toast("Error: " + err.message, 3000);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = "Start Matching";
+    }
+  };
+  
+  reader.readAsText(file);
+}
+
+function parseBankStatement(text) {
+  const lines = text.split(/\r?\n/);
+  const transactions = [];
+  
+  let headers = [];
+  let dataLines = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    const parts = line.split(/,|\t|;/).map(p => p.trim().replace(/^"|"$/g, ''));
+    
+    if (parts.some(p => /date|description|narration|amount|credit|deposit/i.test(p))) {
+      headers = parts;
+      dataLines = lines.slice(i + 1);
+      break;
+    }
+  }
+  
+  if (!headers.length) {
+    const firstLine = lines[0].split(/,|\t|;/).map(p => p.trim());
+    if (firstLine.length >= 3) {
+      headers = firstLine;
+      dataLines = lines.slice(1);
+    }
+  }
+  
+  const dateIdx = headers.findIndex(h => /date/i.test(h));
+  const descIdx = headers.findIndex(h => /description|narration|remarks/i.test(h));
+  const amtIdx = headers.findIndex(h => /amount|credit|deposit|deposit amt/i.test(h));
+  
+  if (dateIdx === -1 || descIdx === -1 || amtIdx === -1) return [];
+  
+  dataLines.forEach(line => {
+    if (line.includes("********")) return; // Ignore separator lines
+    const parts = line.split(/,|\t|;/).map(p => p.trim().replace(/^"|"$/g, ''));
+    if (parts.length <= Math.max(dateIdx, descIdx, amtIdx)) return;
+    
+    const date = parts[dateIdx];
+    const desc = parts[descIdx];
+    const amtStr = parts[amtIdx].replace(/,/g, '');
+    const amt = parseFloat(amtStr);
+    
+    if (date && desc && !isNaN(amt) && amt > 0) {
+      transactions.push({ date, description: desc, amount: amt });
+    }
+  });
+  
+  return transactions;
+}
+
+function renderReconciliationResults(results) {
+  const tbody = document.getElementById("reconTableBody");
+  tbody.innerHTML = "";
+  
+  let matchedCount = 0;
+  let partialCount = 0;
+  let noMatchCount = 0;
+  
+  results.forEach((res, idx) => {
+    const tr = document.createElement("tr");
+    
+    if (res.status === "Match") matchedCount++;
+    else if (res.status === "Partial") partialCount++;
+    else noMatchCount++;
+    
+    const tx = res.transaction;
+    
+    let statusBadge = "";
+    if (res.status === "Match") {
+      statusBadge = `<span class="pay-badge paid" style="background:#d5f5e3;color:#1e8449;font-size:0.65rem;">Match: ${res.matchType}</span>`;
+    } else if (res.status === "Partial") {
+      statusBadge = `<span class="pay-badge pending" style="background:#fdebd0;color:#ca6f1e;font-size:0.65rem;">Partial Match</span><br><small style="color:var(--muted);font-size:0.6rem;">${res.reason}</small>`;
+    } else {
+      statusBadge = `<span class="pay-badge pending" style="background:#f2dede;color:#a94442;font-size:0.65rem;">No Match</span>`;
+    }
+    
+    let actionHtml = "";
+    if (res.status === "Match") {
+      actionHtml = `<button class="btn-green" onclick="markReconciledPaid(${idx})" id="reconBtn_${idx}" style="padding:4px 8px;font-size:0.75rem;">Mark Paid</button>`;
+    } else {
+      actionHtml = `<button class="action-btn" onclick="manualMatch(${idx})" style="padding:4px 8px;font-size:0.75rem;">Manual Match</button>`;
+    }
+    
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:600;font-size:0.8rem;">${tx.date}</div>
+        <div style="font-size:0.65rem;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;">${tx.description}</div>
+      </td>
+      <td style="font-weight:700;font-size:0.85rem;">₹${tx.amount}</td>
+      <td>${statusBadge}</td>
+      <td>
+        ${res.name ? `<div style="font-weight:600;font-size:0.8rem;">${res.name}</div><div style="font-size:0.65rem;">${res.phone}</div>` : "-"}
+      </td>
+      <td>${actionHtml}</td>
+    `;
+    
+    tbody.appendChild(tr);
+  });
+  
+  document.getElementById("reconStatMatched").innerText = matchedCount;
+  document.getElementById("reconStatPartial").innerText = partialCount;
+  document.getElementById("reconStatNoMatch").innerText = noMatchCount;
+  document.getElementById("reconResults").style.display = "block";
+  
+  if (matchedCount > 0) {
+    document.getElementById("reconMarkAllBtn").style.display = "block";
+  } else {
+    document.getElementById("reconMarkAllBtn").style.display = "none";
+  }
+}
+
+async function markReconciledPaid(idx) {
+  const res = _reconcileResults[idx];
+  if (!res || !res.matchedOrders || !res.matchedOrders.length) return;
+  
+  const sids = res.matchedOrders.map(o => o.id);
+  const btn = document.getElementById("reconBtn_" + idx);
+  btn.disabled = true;
+  btn.innerHTML = "...";
+  
+  try {
+    const apiRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        _action: "markOrdersPaidBulk",
+        pin: S.sessionPin,
+        submissionIds: sids
+      })
+    }).then(r => r.json());
+    
+    if (apiRes && apiRes.success) {
+      btn.parentElement.innerHTML = `<span style="color:var(--green);font-weight:700;font-size:0.75rem;">✅ Paid</span>`;
+      toast("Marked " + apiRes.updated + " orders as paid", 2500);
+    } else {
+      toast("Failed: " + (apiRes.error || "Unknown error"), 3000);
+      btn.disabled = false;
+      btn.innerHTML = "Mark Paid";
+    }
+  } catch (err) {
+    toast("Error: " + err.message, 3000);
+    btn.disabled = false;
+    btn.innerHTML = "Mark Paid";
+  }
+}
+
+async function markAllReconciled() {
+  const matches = _reconcileResults.filter(r => r.status === "Match");
+  const sids = [];
+  matches.forEach(m => {
+    m.matchedOrders.forEach(o => sids.push(o.id));
+  });
+  
+  if (!sids.length) return;
+  
+  if (!confirm("Mark " + matches.length + " matched transactions as paid?")) return;
+  
+  const btn = document.getElementById("reconMarkAllBtn");
+  btn.disabled = true;
+  btn.innerHTML = "Processing...";
+  
+  try {
+    const apiRes = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        _action: "markOrdersPaidBulk",
+        pin: S.sessionPin,
+        submissionIds: sids
+      })
+    }).then(r => r.json());
+    
+    if (apiRes && apiRes.success) {
+      toast("Successfully marked all matches as paid!", 3000);
+      startReconciliation(); // Refresh
+    } else {
+      toast("Failed: " + (apiRes.error || "Unknown error"), 3000);
+    }
+  } catch (err) {
+    toast("Error: " + err.message, 3000);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "Mark All Matches as Paid";
+  }
+}
+
+function manualMatch(idx) {
+  toast("Manual matching coming soon. Use 'On Account Billing' tab for now.", 3000);
+}
 </script>
+
 </body>
 </html>
