@@ -7380,10 +7380,8 @@ async function startReconciliation() {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, {type: 'array'});
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
-        // Convert rows to CSV strings to reuse existing parser
-        const text = json.map(row => row.map(cell => `"${String(cell || "").replace(/"/g, '""')}"`).join(",")).join("\n");
-        await processReconText(text, dateFrom, dateTo);
+        const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+        await processReconData(rows, dateFrom, dateTo);
       } catch (err) {
         toast("Excel parse error: " + err.message, 3000);
         btn.disabled = false;
@@ -7393,18 +7391,23 @@ async function startReconciliation() {
     reader.readAsArrayBuffer(file);
   } else {
     reader.onload = async (e) => {
-      await processReconText(e.target.result, dateFrom, dateTo);
+      const text = e.target.result;
+      const rows = text.split(/\r?\n/).map(line => {
+        // Simple CSV splitter that handles quotes
+        return line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(",");
+      });
+      await processReconData(rows, dateFrom, dateTo);
     };
     reader.readAsText(file);
   }
 }
 
-async function processReconText(text, dateFrom, dateTo) {
-  const transactions = parseBankStatement(text);
+async function processReconData(rows, dateFrom, dateTo) {
+  const transactions = parseBankRows(rows);
   const btn = document.getElementById("reconBtn");
   
   if (!transactions.length) {
-    toast("No transactions found in file", 3000);
+    toast("No transactions found in file. Ensure headers (Date, Narration, Deposit) are present.", 5000);
     btn.disabled = false;
     btn.innerHTML = "Start Matching";
     return;
@@ -7436,57 +7439,51 @@ async function processReconText(text, dateFrom, dateTo) {
   }
 }
 
-function parseBankStatement(text) {
-  const lines = text.split(/\r?\n/);
+function parseBankRows(rows) {
   const transactions = [];
-  
   let headers = [];
-  let dataLines = [];
+  let headerRowIdx = -1;
   
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    
-    const parts = line.split(/,|\t|;/).map(p => p.trim().replace(/^"|"$/g, ''));
-    
-    if (parts.some(p => /date|description|narration|amount|credit|deposit/i.test(p))) {
-      headers = parts;
-      dataLines = lines.slice(i + 1);
+  // 1. Find Header Row
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.length) continue;
+    const rowStr = row.join(" ").toLowerCase();
+    if (rowStr.includes("date") && (rowStr.includes("narration") || rowStr.includes("description")) && 
+        (rowStr.includes("deposit") || rowStr.includes("amount") || rowStr.includes("credit"))) {
+      headers = row.map(h => String(h || "").trim().toLowerCase());
+      headerRowIdx = i;
       break;
     }
   }
   
-  if (!headers.length) {
-    const firstLine = lines[0].split(/,|\t|;/).map(p => p.trim());
-    if (firstLine.length >= 3) {
-      headers = firstLine;
-      dataLines = lines.slice(1);
-    }
-  }
+  if (headerRowIdx === -1) return [];
   
-  const dateIdx = headers.findIndex(h => /date/i.test(h));
-  const descIdx = headers.findIndex(h => /description|narration|remarks/i.test(h));
-  const amtIdx = headers.findIndex(h => /amount|credit|deposit|deposit amt/i.test(h));
+  const dateIdx = headers.findIndex(h => h.includes("date"));
+  const descIdx = headers.findIndex(h => h.includes("description") || h.includes("narration") || h.includes("remarks"));
+  const amtIdx = headers.findIndex(h => h.includes("amount") || h.includes("credit") || h.includes("deposit"));
   
   if (dateIdx === -1 || descIdx === -1 || amtIdx === -1) return [];
   
-  dataLines.forEach(line => {
-    if (line.includes("********")) return; // Ignore separator lines
-    const parts = line.split(/,|\t|;/).map(p => p.trim().replace(/^"|"$/g, ''));
-    if (parts.length <= Math.max(dateIdx, descIdx, amtIdx)) return;
+  // 2. Parse Data Rows
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length <= Math.max(dateIdx, descIdx, amtIdx)) continue;
     
-    const date = parts[dateIdx];
-    const desc = parts[descIdx];
-    const amtStr = parts[amtIdx].replace(/,/g, '');
+    const dateStr = String(row[dateIdx] || "").trim();
+    const desc = String(row[descIdx] || "").trim();
+    const amtStr = String(row[amtIdx] || "").replace(/,/g, '');
     const amt = parseFloat(amtStr);
     
-    if (date && desc && !isNaN(amt) && amt > 0) {
-      transactions.push({ date, description: desc, amount: amt });
+    // Ignore rows that are separators or empty
+    if (dateStr && desc && !isNaN(amt) && amt > 0 && !dateStr.includes("***") && !desc.includes("***")) {
+      transactions.push({ date: dateStr, description: desc, amount: amt });
     }
-  });
+  }
   
   return transactions;
 }
+
 
 function renderReconciliationResults(results) {
   const tbody = document.getElementById("reconTableBody");
