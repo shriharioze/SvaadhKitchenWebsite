@@ -5036,7 +5036,9 @@
       let streakStart = projection.start;
       let streakEnd = projection.end;
 
-      const periodStr = (streakStart && streakEnd) ? `${formatDate(streakStart)} – ${formatDate(streakEnd)}` : "";
+      const periodStr = (streakStart && streakEnd) 
+        ? (streakStart === streakEnd ? formatDate(streakStart) : `${formatDate(streakStart)} – ${formatDate(streakEnd)}`) 
+        : "";
       const nextDayStr = streakEnd ? formatDate(getNextStreakDay(streakEnd)) : "soon";
 
       let html = "";
@@ -6601,7 +6603,9 @@
           let streakEnd = projection.end;
           let surcharge = projection.surcharge;
 
-          const periodStr = (streakStart && streakEnd) ? `${formatDate(streakStart)} – ${formatDate(streakEnd)}` : "";
+          const periodStr = (streakStart && streakEnd) 
+            ? (streakStart === streakEnd ? formatDate(streakStart) : `${formatDate(streakStart)} – ${formatDate(streakEnd)}`) 
+            : "";
 
           if (sc === 0) {
             streakBadge.style.display = "none";
@@ -6665,6 +6669,12 @@
       // Virtual Streak Tracking for multi-date cart
       let virtualStreakCount = S.loyaltyInfo?.count || 0;
       let virtualPastSurcharge = S.loyaltyInfo?.surcharge || 0;
+      
+      // If the latest past order was already a reward day (count 6), reset for the first cart date
+      if (virtualStreakCount >= 6) {
+        virtualStreakCount = 0;
+        virtualPastSurcharge = 0;
+      }
 
       // ── Pre-compute pass: figure out carry-back credits from streak surplus ──
       // We need to know how much surplus the streak day generates so we can
@@ -6672,6 +6682,7 @@
       const carryBack = {}; // date → ₹ credit applied from streak surplus
       {
         let _psc = S.loyaltyInfo?.count || 0, _pps = S.loyaltyInfo?.surcharge || 0, _ppt = promoTracker;
+        if (_psc >= 6) { _psc = 0; _pps = 0; }
         const _dayNets = {}; // date → net day total (before carry-back)
         const _dateOrder = [];
         for (const _d of S.selectedDates) {
@@ -8223,73 +8234,97 @@
      */
     function calculateLoyaltyStreak(pastOrders, cartDates = []) {
       const dailyTotals = {};
-      const rewardDays = new Set();
+      const isPastReward = new Set();
       const allOrders = [...(S.existingOrders || []), ...(pastOrders || [])];
       const allDates = new Set();
 
+      // 1. Collect past/existing orders and their surcharges
       allOrders.forEach(r => {
         const stat = String(r.payment_status || "").toLowerCase();
         if (stat.includes("cancelled") || stat.includes("deleted")) return;
-
-        const dStr = r.date; // YYYY-MM-DD
+        const dStr = r.date;
         if (!dailyTotals[dStr]) dailyTotals[dStr] = 0;
         dailyTotals[dStr] += Number(r.inflation_surcharge) || 0;
-
-        if (r.loyalty_discount === true) rewardDays.add(dStr);
+        if (r.loyalty_discount === true) isPastReward.add(dStr);
         allDates.add(dStr);
       });
 
+      // 2. Add cart dates and estimate their surcharges based on current selection
       cartDates.forEach(dStr => {
-        if (dailyTotals[dStr] === undefined) dailyTotals[dStr] = 0;
+        if (dailyTotals[dStr] === undefined) {
+          let s = 0;
+          if (S.orders[dStr]) {
+            ["Breakfast", "Lunch", "Dinner"].forEach(m => {
+              const sub = S.orders[dStr][m]?.subtotal || 0;
+              if (sub > 0) s += Math.ceil(sub / 20);
+            });
+          }
+          dailyTotals[dStr] = s;
+        }
         allDates.add(dStr);
       });
 
       if (allDates.size === 0) return { count: 0, surcharge: 0, start: null, end: null };
 
-      // Find all possible streaks
+      // 3. Forward pass to calculate streaks and resets
       const sortedDates = Array.from(allDates).sort();
-      const streaks = [];
+      const allRewardDays = new Set(isPastReward);
+      const streakInfo = {}; // dStr -> { count, surcharge, start }
 
-      // We need to check every date as a potential streak END point
-      sortedDates.forEach(endDate => {
-        let d = new Date(endDate + "T12:00:00");
-        let count = 0;
-        let surcharge = 0;
-        let streakStart = null;
-        let streakEnd = endDate;
-        let safety = 0;
+      let streakCount = 0;
+      let streakSurcharge = 0;
+      let streakStart = null;
+      let lastDate = null;
 
-        while (safety < 60) {
-          safety++;
-          if (d.getDay() === 0) { // Skip Sunday
-            d.setDate(d.getDate() - 1);
-            continue;
-          }
-          let iso = d.toISOString().split('T')[0];
-          if (dailyTotals[iso] !== undefined) {
-            if (rewardDays.has(iso) && iso !== endDate) break; // Break if we hit a previous reward (unless it's the end itself)
-            count++;
-            surcharge += dailyTotals[iso];
-            streakStart = iso;
-            d.setDate(d.getDate() - 1);
+      const isConsecutive = (d1, d2) => {
+        let date1 = new Date(d1 + "T12:00:00"), date2 = new Date(d2 + "T12:00:00");
+        let diff = (date2 - date1) / 86400000;
+        return (diff === 1) || (diff === 2 && date1.getDay() === 6);
+      };
+
+      sortedDates.forEach(dStr => {
+        if (lastDate && isConsecutive(lastDate, dStr)) {
+          // If previous day was a reward day, reset streak to 1
+          if (allRewardDays.has(lastDate)) {
+            streakCount = 1;
+            streakSurcharge = 0;
+            streakStart = dStr;
           } else {
-            break;
+            streakCount++;
           }
+        } else {
+          streakCount = 1;
+          streakSurcharge = 0;
+          streakStart = dStr;
         }
-        if (count > 0) {
-          streaks.push({ count, surcharge, start: streakStart, end: streakEnd });
-        }
+
+        // Projected reward? If we hit 6, this day is a reward day for the NEXT day's lookup
+        if (streakCount === 6) allRewardDays.add(dStr);
+
+        streakInfo[dStr] = { count: streakCount, surcharge: streakSurcharge, start: streakStart };
+        
+        // Prepare accumulator for NEXT day: current day's surcharge is added to the "past" sum
+        streakSurcharge += (dailyTotals[dStr] || 0);
+        lastDate = dStr;
       });
 
-      if (streaks.length === 0) return { count: 0, surcharge: 0, start: null, end: null };
+      // 4. Winner selection for Banner feedback:
+      // - Prioritize any reward completion (count=6) present in the cart.
+      // - Otherwise, show the progress of the latest date in the cart.
+      const cartSorted = [...cartDates].sort().reverse();
+      let winnerDate = cartSorted[0] || sortedDates[sortedDates.length - 1];
 
-      // Winner: Longest streak, then earliest start
-      streaks.sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        return a.start.localeCompare(b.start);
-      });
+      for (const d of cartSorted) {
+        if (streakInfo[d]?.count === 6) { winnerDate = d; break; }
+      }
 
-      return streaks[0];
+      const final = streakInfo[winnerDate];
+      return {
+        count: final.count,
+        surcharge: final.surcharge,
+        start: final.start,
+        end: winnerDate
+      };
     }
 
     function refreshStreakUI() {
