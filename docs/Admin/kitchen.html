@@ -955,7 +955,8 @@
     
     // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
     async function fetchWithTimeout(url, options = {}, timeoutMs) {
-      return fetch(url, options);
+      const fetchOpts = typeof options === 'number' ? {} : options;
+      return fetch(url, fetchOpts);
     }
 
     let K = { pin: "", sessionPin: "" };

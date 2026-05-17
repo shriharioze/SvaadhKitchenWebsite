@@ -252,7 +252,8 @@ const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949
 
 // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
 async function fetchWithTimeout(url, options = {}, timeoutMs) {
-  return fetch(url, options);
+  const fetchOpts = typeof options === 'number' ? {} : options;
+  return fetch(url, fetchOpts);
 }
 
 // ── KITCHEN LOCATION — update to your actual kitchen lat/lng ──────────────────
