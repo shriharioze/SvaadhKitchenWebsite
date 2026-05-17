@@ -953,16 +953,9 @@
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     
-    // ── FETCH WITH TIMEOUT (prevents GAS cold-start hangs) ──
-    async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const res = await fetch(url, { ...options, signal: controller.signal });
-        return res;
-      } finally {
-        clearTimeout(id);
-      }
+    // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
+    async function fetchWithTimeout(url, options = {}, timeoutMs) {
+      return fetch(url, options);
     }
 
     let K = { pin: "", sessionPin: "" };
