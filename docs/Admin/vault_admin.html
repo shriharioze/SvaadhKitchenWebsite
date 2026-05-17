@@ -2151,23 +2151,36 @@ function renderPinDots() {
 }
 async function verifyPin() {
   if (isLocked()) return;
-  document.getElementById("loginErr").textContent = "Verifying PIN...";
-  sLoading(true, "Verifying PIN...");
+  document.getElementById("loginErr").textContent = "Verifying PIN & loading menu...";
+  sLoading(true, "Verifying PIN & loading menu...");
+  const pinAttempt = S.pin;
   try {
-    // 1. FAST PIN VERIFICATION (軽微)
-    const res = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=verifyAdminPin&pin=${S.pin}&_t=${Date.now()}`);
-    const data = await res.json();
-    if (data.error || !data.success) throw new Error(data.error || "Incorrect PIN");
+    // 1. Parallel PIN verification and daily menu loading
+    const [pinRes, menuRes] = await Promise.all([
+      fetchWithTimeout(`${APPS_SCRIPT_URL}?action=verifyAdminPin&pin=${pinAttempt}&_t=${Date.now()}`),
+      fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getAdminData&pin=${pinAttempt}&_t=${Date.now()}`, 20000)
+    ]);
+    
+    const pinData = await pinRes.json();
+    if (pinData.error || !pinData.success) throw new Error(pinData.error || "Incorrect PIN");
+    
+    const menuData = await menuRes.json();
+    if (menuData.error) throw new Error(menuData.error);
     
     attempts = 0;
-    S.sessionPin = S.pin;
+    S.sessionPin = pinAttempt;
     S.pin = ""; renderPinDots();
+    
+    // Populate menu data immediately so Daily Menu tab is fully loaded!
+    S.bfMaster    = menuData.breakfastMaster || [];
+    S.sabjiMaster = menuData.sabjiMaster     || [];
+    S.menuEntries = menuData.menuEntries     || [];
     
     // 2. BOOT UI IMMEDIATELY
     bootApp();
     
-    // 3. LOAD SYSTEM DATA IN BACKGROUND
-    loadFullAdminData();
+    // 3. TRIGGER BACKGROUND TAB LOADING & RETRY LOGIC
+    triggerBackgroundTabLoading();
     
   } catch(e) {
     attempts++;
@@ -2206,6 +2219,76 @@ async function loadFullAdminData() {
     toast("Warning: Failed to load latest system data. Please refresh.", 5000);
   } finally {
     sLoading(false);
+  }
+}
+
+let _backgroundLoadInProgress = false;
+let _backgroundLoadSuccess = {
+  customers: false,
+  reviews: false,
+  orders: false,
+  payments: false,
+  packaging: false
+};
+
+async function triggerBackgroundTabLoading() {
+  if (_backgroundLoadInProgress) return;
+  _backgroundLoadInProgress = true;
+  console.log("Starting background tab preloading...");
+
+  // Pre-initialize default dates for tabs so background preloading works flawlessly
+  const now = getIST();
+  // History page date range default (e.g., past 7 days)
+  const hTo = document.getElementById("histTo");
+  const hFrom = document.getElementById("histFrom");
+  if (hTo && hFrom && !hTo.value) {
+    hTo.value = toISO(now);
+    const prev = new Date(now); prev.setDate(prev.getDate() - 7);
+    hFrom.value = toISO(prev);
+  }
+  // Packaging page date range default (This month)
+  const pkgFrom = document.getElementById("pkgFrom");
+  const pkgTo = document.getElementById("pkgTo");
+  if (pkgFrom && pkgTo && !pkgFrom.value) {
+    _pkgMode = "month";
+    pkgFrom.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+    pkgTo.value   = toISO(now);
+  }
+  // Payments date default (Today)
+  const payDate = document.getElementById("payDate");
+  if (payDate && !payDate.value) {
+    payDate.value = toISO(now);
+  }
+  // Orders date default (Today)
+  const orderDatePicker = document.getElementById("orderDatePicker");
+  if (orderDatePicker && !orderDatePicker.value) {
+    orderDatePicker.value = toISO(now);
+  }
+
+  const tasks = [
+    { name: 'customers', fn: () => loadCustomers(false, true) },
+    { name: 'reviews',   fn: () => loadReviewUsers(false, true) },
+    { name: 'orders',    fn: () => loadOrderSummary(false, true) },
+    { name: 'payments',  fn: () => loadPayments(false, true) },
+    { name: 'packaging', fn: () => loadPackaging(false, true) }
+  ];
+
+  for (const task of tasks) {
+    runBackgroundTabTask(task);
+  }
+}
+
+async function runBackgroundTabTask(task) {
+  while (!_backgroundLoadSuccess[task.name]) {
+    try {
+      console.log(`[Background Load] Fetching ${task.name}...`);
+      await task.fn();
+      _backgroundLoadSuccess[task.name] = true;
+      console.log(`[Background Load] Successfully loaded ${task.name}`);
+    } catch(e) {
+      console.warn(`[Background Load] Failed to load ${task.name}: ${e.message}. Retrying in 5 seconds...`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
   }
 }
 function logout() {
@@ -3002,7 +3085,9 @@ async function switchPage(page) {
   if (page === "orders") {
     const picker = document.getElementById("orderDatePicker");
     if (!picker.value) { picker.value = toISO(getIST()); }
-    loadOrderSummary();
+    if (!_ordersDataLoaded) {
+      loadOrderSummary();
+    }
   }
   if (page === "packaging") {
     // Default to This Month on first open
@@ -3018,7 +3103,9 @@ async function switchPage(page) {
       document.getElementById("pkgTo").value   = toISO(getIST());
       document.querySelectorAll("#pagePackaging .chip").forEach((c,i)=>c.classList.toggle("active", i===2));
     }
-    loadPackaging();
+    if (!_packagingDataLoaded) {
+      loadPackaging();
+    }
   }
 
   if (page === "analytics") {
@@ -3039,14 +3126,24 @@ async function switchPage(page) {
   if (page === "payments") {
     const pp = document.getElementById("payDate");
     if (!pp.value) pp.value = toISO(getIST());
-    loadPayments();
+    if (!_paymentsDataLoaded) {
+      loadPayments();
+    }
   }
   if (page === "manual") {
     const picker = document.getElementById("manualDate");
     if (!picker.value) { picker.value = toISO(getIST()); }
   }
-  if (page === "customers") loadCustomers();
-  if (page === "reviews") loadReviewUsers();
+  if (page === "customers") {
+    if (!_custDataLoaded) {
+      loadCustomers();
+    }
+  }
+  if (page === "reviews") {
+    if (!_reviewUsersLoaded) {
+      loadReviewUsers();
+    }
+  }
   document.getElementById("sidebar").style.setProperty("display", (page==="menu" ? "flex" : "none"), "important");
 }
 
@@ -3165,28 +3262,39 @@ function pkgSetRange(mode) {
   }
 }
 
-async function loadPackaging() {
+let _packagingDataLoaded = false;
+async function loadPackaging(force = false, silent = false) {
+  if (_packagingDataLoaded && !force && !silent) {
+    return;
+  }
   const el = document.getElementById("packagingContent");
-  el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  if (!silent && el) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  }
   try {
     let url;
     if (_pkgMode === "day") {
-      const date = document.getElementById("pkgDatePicker").value;
-      if (!date) { sAlert("Please pick a date first."); el.innerHTML=""; return; }
+      const date = document.getElementById("pkgDatePicker")?.value;
+      if (!date) { if (!silent) sAlert("Please pick a date first."); if (el) el.innerHTML=""; return; }
       url = `${APPS_SCRIPT_URL}?action=getPackagingExpenses&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`;
     } else {
-      const from = document.getElementById("pkgFrom").value;
-      const to   = document.getElementById("pkgTo").value;
-      if (!from || !to) { sAlert("Please select both From and To dates."); el.innerHTML=""; return; }
+      const from = document.getElementById("pkgFrom")?.value;
+      const to   = document.getElementById("pkgTo")?.value;
+      if (!from || !to) { if (!silent) sAlert("Please select both From and To dates."); if (el) el.innerHTML=""; return; }
       url = `${APPS_SCRIPT_URL}?action=getPackagingExpenses&from=${from}&to=${to}&pin=${S.sessionPin}&_t=${Date.now()}`;
     }
     const res  = await fetch(url);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     _pkgData = data;
-    el.innerHTML = _pkgMode === "day" ? renderPackagingDay(data) : renderPackagingRange(data);
+    if (el) el.innerHTML = _pkgMode === "day" ? renderPackagingDay(data) : renderPackagingRange(data);
+    _packagingDataLoaded = true;
+    _backgroundLoadSuccess.packaging = true;
   } catch(e) {
-    el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${e.message}</p>`;
+    if (!silent && el) {
+      el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${e.message}</p>`;
+    }
+    throw e;
   }
 }
 
@@ -3548,20 +3656,26 @@ async function saveLabelsToDrive() {
 }
 
 
-async function loadOrderSummary(manual=false) {
+let _ordersDataLoaded = false;
+async function loadOrderSummary(manual=false, silent=false) {
   const date = document.getElementById("orderDatePicker")?.value || S.selectedDate;
-  if (!date) { sAlert("Please pick a date first."); return; }
+  if (!date) { if (!silent) sAlert("Please pick a date first."); return; }
   if (manual) sLoading(true, "Refreshing orders...");
   
   const el = document.getElementById("orderSummaryContent");
-  if (!manual) el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading orders…</p></div>`;
+  if (!manual && !silent && el) el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading orders…</p></div>`;
 
   try {
     const res  = await fetch(`${APPS_SCRIPT_URL}?action=getOrderSummary&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`);
     const data = await res.json();
     if (manual) sLoading(false);
-    if (data.error) { el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${data.error}</p>`; return; }
-    el.innerHTML = renderOrderSummary(data);
+    if (data.error) { 
+      if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${data.error}</p>`; 
+      throw new Error(data.error); 
+    }
+    if (el) el.innerHTML = renderOrderSummary(data);
+    _ordersDataLoaded = true;
+    _backgroundLoadSuccess.orders = true;
     const srchWrap = document.getElementById("orderSearchWrap");
     if (srchWrap) { srchWrap.style.display = "block"; const si = document.getElementById("orderSearchInput"); if (si) si.value = ""; }
 
@@ -3570,7 +3684,8 @@ async function loadOrderSummary(manual=false) {
     else stopOrdersAutoRefresh();
   } catch(e) {
     if (manual) sLoading(false);
-    el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    throw e;
   }
 }
 
@@ -4672,11 +4787,20 @@ async function adminAddWalletCredit() {
   }
 }
 
-async function loadCustomers() {
+let _custDataLoaded = false;
+async function loadCustomers(force = false, silent = false) {
+  if (_custDataLoaded && !force && !silent && _custData && _custData.length > 0) {
+    applyCustomerFilters();
+    return;
+  }
   const el = document.getElementById("custGridWrap");
-  el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
-  document.getElementById("custDetailWrap").innerHTML = "";
-  document.getElementById("custSearch").value = "";
+  if (!silent && el) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  }
+  const detailWrap = document.getElementById("custDetailWrap");
+  if (detailWrap) detailWrap.innerHTML = "";
+  const custSrch = document.getElementById("custSearch");
+  if (custSrch) custSrch.value = "";
   _custPayFilter = "all";
   _custSortKey   = "recent";
   ["cpf-all","cpf-pending","cpf-paid"].forEach(id=>document.getElementById(id)?.classList.remove("sel"));
@@ -4688,9 +4812,14 @@ async function loadCustomers() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     _custData = data.customers;
+    _custDataLoaded = true;
+    _backgroundLoadSuccess.customers = true;
     applyCustomerFilters();
   } catch(e) {
-    el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    if (!silent && el) {
+      el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    }
+    throw e;
   }
 }
 function setCustPayFilter(f) {
@@ -5140,19 +5269,30 @@ function renderCustomerDetail(data) {
 
 // ── PAYMENTS PAGE ────────────────────────────────────────────────────────────
 let _payDate = "";
-async function loadPayments() {
-  const date = document.getElementById("payDate").value;
-  if (!date) { toast("Pick a date first"); return; }
+let _paymentsDataLoaded = false;
+async function loadPayments(force = false, silent = false) {
+  if (_paymentsDataLoaded && !force && !silent) {
+    return;
+  }
+  const date = document.getElementById("payDate")?.value;
+  if (!date) { if (!silent) toast("Pick a date first"); return; }
   _payDate = date;
   const el = document.getElementById("payContent");
-  el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  if (!silent && el) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  }
   try {
     const res  = await fetch(`${APPS_SCRIPT_URL}?action=getDatePayments&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    el.innerHTML = renderPayments(data);
+    if (el) el.innerHTML = renderPayments(data);
+    _paymentsDataLoaded = true;
+    _backgroundLoadSuccess.payments = true;
   } catch(e) {
-    el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    if (!silent && el) {
+      el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    }
+    throw e;
   }
 }
 function renderPayments(data) {
@@ -6044,19 +6184,29 @@ async function markAsRefunded(subId, name, amt) {
   }
 }
 
-// ── REVIEW REWARDS MANAGEMENT ──
-let _reviewUsers = [];
-async function loadReviewUsers() {
+let _reviewUsersLoaded = false;
+async function loadReviewUsers(force = false, silent = false) {
+  if (_reviewUsersLoaded && !force && !silent && _reviewUsers && _reviewUsers.length > 0) {
+    renderReviewUsers(_reviewUsers);
+    return;
+  }
   const wrap = document.getElementById("reviewGridWrap");
-  wrap.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading customers…</p></div>`;
+  if (!silent && wrap) {
+    wrap.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading customers…</p></div>`;
+  }
   try {
     const res = await fetch(`${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}&_t=${Date.now()}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     _reviewUsers = data.customers;
+    _reviewUsersLoaded = true;
+    _backgroundLoadSuccess.reviews = true;
     renderReviewUsers(_reviewUsers);
   } catch(e) {
-    wrap.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1;color:var(--red);">Error: ${e.message}</div>`;
+    if (!silent && wrap) {
+      wrap.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1;color:var(--red);">Error: ${e.message}</div>`;
+    }
+    throw e;
   }
 }
 

@@ -3508,15 +3508,7 @@
         </div>
       </div>
 
-      <!-- Save Profile Button (UI only shown if logged in) -->
-      <div id="saveProfileBtnWrap" style="margin-top:14px; padding:0 8px; margin-bottom:20px;">
-        <button id="saveProfileBtn" onclick="saveProfileToServer()"
-          style="width:100%; padding:14px; background:#1E1240; color:white; border:none; border-radius:14px; font-weight:800; font-size:1rem; cursor:pointer; box-shadow:0 4px 15px rgba(30,18,64,0.2); display:flex; align-items:center; justify-content:center; gap:10px; transition:all 0.2s;">
-          <span id="saveBtnIcon">💾</span>
-          <span id="saveBtnText">Save Profile & Address</span>
-        </button>
-        <p style="text-align:center; font-size:0.72rem; color:#94a3b8; margin-top:8px;">This will save your details to our system for all future orders.</p>
-      </div>
+
 
     </div>
 
@@ -5135,7 +5127,7 @@
       const btn = $("btnNext");
       delete btn.dataset.locked;
       btn.style.filter = "none";
-      const labels = [t('btn_continue'), t('btn_continue'), t('btn_continue'), t('btn_review'), t('btn_place')];
+      const labels = [t('btn_continue'), t('btn_save_continue'), t('btn_continue'), t('btn_review'), t('btn_place')];
       btn.innerHTML = labels[s];
       // Disable if nothing ordered yet
       if (s === 3 && !hasAnyOrder()) { $("btnNext").disabled = true; $("btnNext").style.opacity = "0.45"; }
@@ -5186,9 +5178,7 @@
         stopGraceTimer();
       }
 
-      // Toggle Save Profile Button visibility
-      const saveBtnWrap = $("saveProfileBtnWrap");
-      if (saveBtnWrap) saveBtnWrap.style.display = (s === 1) ? "block" : "none";
+
 
       // Toggle Quick Button Bar (Wallet, Orders, Logout) only after step 0
       const qb = $("quickButtonBar");
@@ -5969,66 +5959,7 @@
       togglePickupUI("single", area);
     }
 
-    async function saveProfileToServer() {
-      if (!S.phone) {
-        toast("Please verify your phone number first.");
-        return;
-      }
-      
-      const btn = $("saveProfileBtn");
-      const icon = $("saveBtnIcon");
-      const text = $("saveBtnText");
-      
-      // 1. Validate fields (this sets S.profile internally)
-      const isValid = await validate(1);
-      if (!isValid) return; 
 
-      // 2. UI Feedback: Loading
-      const originalBg = btn.style.background || "#1E1240";
-      const originalIcon = icon.innerHTML;
-      const originalText = text.textContent;
-
-      btn.disabled = true;
-      btn.style.opacity = "0.7";
-      text.textContent = "Saving...";
-      icon.innerHTML = '<span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin 1s linear infinite;"></span>';
-
-      try {
-        const res = await apiFetch(APPS_SCRIPT_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            _action: "updateProfile",
-            profile: S.profile
-          })
-        });
-        const data = await res.json();
-
-        if (data.success) {
-          // 3. UI Feedback: Success
-          btn.style.background = "#059669"; // Success green
-          icon.innerHTML = "✅";
-          text.textContent = "Saved Successfully!";
-          toast("Your profile and address have been saved! ✅", 3000);
-          
-          setTimeout(() => {
-            btn.style.background = originalBg;
-            btn.disabled = false;
-            btn.style.opacity = "1";
-            icon.innerHTML = originalIcon;
-            text.textContent = "Save Profile & Address";
-          }, 3000);
-        } else {
-          throw new Error(data.error || "Failed to save profile");
-        }
-      } catch (err) {
-        console.error("Save Error:", err);
-        toast("❌ Error saving profile: " + err.message, 4000);
-        btn.disabled = false;
-        btn.style.opacity = "1";
-        icon.innerHTML = originalIcon;
-        text.textContent = "Save Profile & Address";
-      }
-    }
 
     function readPerMealAddr(pfx) {
       return {
