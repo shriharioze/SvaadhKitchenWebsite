@@ -2080,6 +2080,58 @@ function _submitOrderInternal(body) {
         continue;
       }
 
+      // ════ LAYER 4 — LONG-WINDOW DUPLICATE GUARD ════════════════════════
+      // The three layers above silently dedupe legitimate retries inside a
+      // 5-min window (network retries / double-clicks). They cannot catch
+      // the case where an order somehow gets re-submitted FAR LATER —
+      // e.g. a stale standard-order/auto-place path firing 40 min after
+      // the customer's original checkout.
+      //
+      // Policy: any non-cancelled order for the SAME customer + date +
+      // meal + items signature, with NO time window, is treated as a
+      // duplicate. The submission is REJECTED unless the request body
+      // carries confirm_duplicate=true (set by the frontend after the
+      // customer explicitly accepts the duplicate-warning prompt).
+      //
+      // Case 1 (auto-replay): no confirm flag -> rejected.
+      // Case 2 (manual re-place): customer sees prompt, clicks confirm,
+      //                            frontend retries with the flag -> accepted.
+      if (body.confirm_duplicate !== true) {
+        const _historicalDup = _freshRows.find(r => {
+          if (_normalizePhone(r.Phone) !== _normPhone) return false;
+          if (_normDate(r.Order_Date) !== _normDate(orderDate)) return false;
+          if (r.Meal_Type !== mealType) return false;
+          if (_isOrderCancelled(r.Payment_Status)) return false;
+          try {
+            const stored = typeof r.Items_JSON === "string" ? JSON.parse(r.Items_JSON) : (r.Items_JSON || {});
+            return _itemsSig(stored) === _incomingSig;
+          } catch(e) { return false; }
+        });
+        if (_historicalDup) {
+          console.warn("Duplicate order REJECTED (no confirm flag) — phone=" + _normPhone
+            + " date=" + orderDate + " meal=" + mealType
+            + " existingSid=" + _historicalDup.Submission_ID
+            + " submittedAt=" + _historicalDup.Submitted_At);
+          return {
+            success: false,
+            duplicate_detected: true,
+            error: "A " + mealType + " order with the same items for " + orderDate
+                 + " already exists (Order ID: " + _historicalDup.Submission_ID
+                 + "). If you intentionally want to place another one, please confirm.",
+            existing_submission_id: _historicalDup.Submission_ID,
+            existing_order_date:    _normDate(_historicalDup.Order_Date),
+            existing_meal_type:     _historicalDup.Meal_Type,
+            existing_payment_status: _historicalDup.Payment_Status || "Pending",
+            existing_submitted_at:  _historicalDup.Submitted_At ? String(_historicalDup.Submitted_At) : "",
+            attempted_order_date:   orderDate,
+            attempted_meal_type:    mealType
+          };
+        }
+      } else {
+        console.log("Duplicate order ALLOWED (confirm_duplicate=true) — phone=" + _normPhone
+          + " date=" + orderDate + " meal=" + mealType);
+      }
+
       // Reserve the cache key BEFORE the wallet deduction + row write so any
       // concurrent retry that arrives during this meal's processing hits layer 1.
       try { _cache.put(_dupKey, sid, 300); } catch(e) {}
