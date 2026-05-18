@@ -2418,6 +2418,68 @@ function getDayTotalsForDates(phone, datesParam, preloadedRows) {
  * Calculates current streak and accumulated surcharges for a customer.
  * Skips Sundays (kitchen closed).
  */
+/**
+ * Diagnostic — run from the Apps Script editor to see exactly what the
+ * loyalty-streak calculator is seeing for a specific customer.
+ *
+ * Usage:
+ *   In Code.gs editor, add at the bottom:
+ *     function _runDiag() { diagnoseLoyaltyStreak("9930748908"); }
+ *   Pick _runDiag from the function dropdown -> Run.
+ *   Watch the Execution Log.
+ *
+ * Prints for each of the customer's recent past rows:
+ *   date, meal, Food_Subtotal, Inflation_Surcharge stored, derived
+ *   surcharge from food, Loyalty_Discount Y/N, Payment_Status.
+ * Then summarises what _calculateLoyaltyStreak returns.
+ */
+function diagnoseLoyaltyStreak(phone) {
+  if (!phone) { Logger.log("Pass a phone number"); return; }
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const rows = getAllRows(ws);
+  const phoneStr = _normalizePhone(phone);
+  const todayISO = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+
+  Logger.log("=== diagnoseLoyaltyStreak(" + phone + ") ===");
+  Logger.log("Today (IST): " + todayISO);
+
+  const mine = rows.filter(r => _normalizePhone(r.Phone) === phoneStr);
+  Logger.log("Total rows for this customer: " + mine.length);
+
+  // Sort by date descending so most recent appears first
+  mine.sort((a, b) => {
+    const da = a.Order_Date instanceof Date ? Utilities.formatDate(a.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(a.Order_Date).trim();
+    const db = b.Order_Date instanceof Date ? Utilities.formatDate(b.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(b.Order_Date).trim();
+    return db.localeCompare(da);
+  });
+
+  Logger.log("--- Last 15 rows (newest first) ---");
+  mine.slice(0, 15).forEach((r, idx) => {
+    const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
+    const stored  = Number(r.Inflation_Surcharge);
+    const derived = Math.ceil((Number(r.Food_Subtotal) || 0) / 20);
+    Logger.log("[" + (idx+1) + "] " + d + " " + r.Meal_Type
+      + "  food=" + r.Food_Subtotal
+      + "  storedSurch=" + (isNaN(stored) ? "(empty)" : stored)
+      + "  derivedSurch=" + derived
+      + "  effective=" + Math.max((Number(r.Inflation_Surcharge)||0), derived)
+      + "  Loyalty=" + (r.Loyalty_Discount || "-")
+      + "  net=" + r.Net_Total
+      + "  status=" + (r.Payment_Status || "-")
+      + "  sid=" + (r.Submission_ID || "-")
+    );
+  });
+
+  // Run the actual calculator and log its verdict
+  const result = _calculateLoyaltyStreak(phone, rows);
+  Logger.log("--- _calculateLoyaltyStreak verdict ---");
+  Logger.log(JSON.stringify(result));
+  Logger.log("Expected next-order behaviour: is6thDay would be " + (result.streak === 5 ? "TRUE" : "FALSE"));
+  Logger.log("If is6thDay TRUE: loyalty waiver = pastSurcharge(" + result.pastSurcharge + ") + today's surcharge");
+  Logger.log("=== end ===");
+}
+
 function _calculateLoyaltyStreak(phone, preloadedRows) {
   if (!phone) return { streak: 0, pastSurcharge: 0 };
   const ss = getSpreadsheet();
@@ -2450,7 +2512,16 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
     if (d > todayISO) return; // future dates — ignore
 
     if (!dailyTotals[d]) dailyTotals[d] = 0;
-    dailyTotals[d] += (Number(r.Inflation_Surcharge) || (Math.ceil((Number(r.Food_Subtotal)||0)/20)));
+    // Hardened surcharge derivation: take the MAX of the stored
+    // Inflation_Surcharge column and the food-derived value. Protects
+    // against legacy rows / manual admin entries where the
+    // Inflation_Surcharge column was empty (= 0) but Food_Subtotal
+    // shows a real cart — without this, even one such bad row in the
+    // 5-day streak history collapses pastSurcharge to 0 and the
+    // customer ends up paying full price on their day-6 reward.
+    const storedSurch  = Number(r.Inflation_Surcharge) || 0;
+    const derivedSurch = Math.ceil((Number(r.Food_Subtotal) || 0) / 20);
+    dailyTotals[d] += Math.max(storedSurch, derivedSurch);
 
     // Track days where the 6-day loyalty reward was already given
     if (String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes") {
@@ -2489,6 +2560,19 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
   // return streak=0 so any subsequent meal on the same day doesn't get a double reward.
   if (rewardDays.has(todayISO)) {
     return { streak: 0, pastSurcharge: 0 };
+  }
+
+  // Anomaly logging — if the customer hit a full 5-day streak but the
+  // accumulated surcharge came out unreasonably small (< streakCount,
+  // meaning at least one past day contributed 0), log a warning so we
+  // can audit the affected rows. The Math.max guard above protects the
+  // common cases; this log surfaces any cases it can't fix.
+  if (streakCount >= 5 && accumulatedSurcharge < streakCount) {
+    console.warn("loyalty-streak anomaly — phone=" + phoneStr
+      + " streak=" + streakCount
+      + " accumulatedSurcharge=" + accumulatedSurcharge
+      + " (suspiciously low — at least one past day contributed 0)."
+      + " dailyTotals=" + JSON.stringify(dailyTotals));
   }
 
   return { streak: streakCount, pastSurcharge: accumulatedSurcharge };
@@ -6177,6 +6261,78 @@ function batchProcessApprovals(body) {
 }
 
 /**
+ * Recompute the loyalty waiver for a given order as it would have been
+ * if all past-row data were intact (Math.max guard against legacy
+ * rows with missing Inflation_Surcharge column).
+ *
+ * Returns the FULL waiver = sum of past-5-day surcharges + this order's
+ * day surcharge — same shape submitOrder uses, but anchored to this
+ * specific order's date so it gives the right answer even retrospectively.
+ *
+ * Used by admin display endpoints to show the corrected "customer paid"
+ * value even when the row's stored Discount_Amount is wrong.
+ */
+function _recomputeLoyaltyWaiverForRow(orderRow, allRows) {
+  if (!orderRow) return 0;
+  const phoneStr = _normalizePhone(orderRow.Phone);
+  if (!phoneStr) return 0;
+
+  const orderDate = orderRow.Order_Date instanceof Date
+    ? Utilities.formatDate(orderRow.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+    : String(orderRow.Order_Date || "").trim();
+  if (!orderDate) return 0;
+
+  // Build dailyTotals for THIS customer's past orders strictly BEFORE this order's date.
+  const dailyTotals = {};
+  const rewardDays = new Set();
+  allRows.forEach(r => {
+    if (_normalizePhone(r.Phone) !== phoneStr) return;
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    const d = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date || "").trim();
+    if (!d || d >= orderDate) return; // skip the order itself + anything on/after
+    if (!dailyTotals[d]) dailyTotals[d] = 0;
+    // Same hardened MAX(stored, derived) rule as _calculateLoyaltyStreak.
+    const stored  = Number(r.Inflation_Surcharge) || 0;
+    const derived = Math.ceil((Number(r.Food_Subtotal) || 0) / 20);
+    dailyTotals[d] += Math.max(stored, derived);
+    if (String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes") rewardDays.add(d);
+  });
+
+  // Walk backwards from the day BEFORE orderDate counting consecutive days.
+  let accSurch = 0;
+  let streak = 0;
+  const orderD = new Date(orderDate + "T12:00:00");
+  let d = new Date(orderD); d.setDate(d.getDate() - 1);
+  let safety = 0;
+  while (safety < 30) {
+    safety++;
+    if (d.getDay() === 0) { d.setDate(d.getDate() - 1); continue; }
+    const iso = Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd");
+    if (dailyTotals[iso] !== undefined) {
+      if (rewardDays.has(iso)) break; // prior cycle closed here
+      streak++;
+      accSurch += dailyTotals[iso];
+    } else {
+      break;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+
+  // Today's contribution (this order's own day surcharge, hardened).
+  const currentSurch = Math.max(
+    Number(orderRow.Inflation_Surcharge) || 0,
+    Math.ceil((Number(orderRow.Food_Subtotal) || 0) / 20)
+  );
+
+  // Only return the FULL waiver if the streak was actually 5 prior days
+  // (so this order is the 6th day). Otherwise return 0 — Loyalty_Discount
+  // wouldn't have applied at all.
+  return (streak >= 5) ? (accSurch + currentSurch) : 0;
+}
+
+/**
  * ADMIN: Fetch all orders with "Pending" status (usually UPI)
  */
 function getPendingUPIPayments() {
@@ -6193,14 +6349,44 @@ function getPendingUPIPayments() {
              .map(r => {
                const walletCredit = Number(r.Wallet_Credit) || 0;
                const isSplit = String(r.Payment_Method || "").trim() === "Split";
-               const loyaltyDiscount = Number(r.Discount_Amount) || 0;
-               const isLoyalty       = String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes";
+               const storedLoyaltyDiscount = Number(r.Discount_Amount) || 0;
+               const isLoyalty             = String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes";
+
+               // ── Loyalty admin-display correction ────────────────────────
+               // The row's stored Discount_Amount may be too small if any
+               // past-streak row had a missing Inflation_Surcharge column.
+               // Recompute the correct waiver on-the-fly and override the
+               // displayed amount + loyalty_discount so admin sees what
+               // the customer actually paid (after full loyalty), not the
+               // wrongly-stored Net_Total.
+               let displayAmount   = isSplit ? Math.max(0, (Number(r.Net_Total) || 0) - walletCredit) : (Number(r.Net_Total) || 0);
+               let displayLoyalty  = isLoyalty ? storedLoyaltyDiscount : 0;
+               let loyaltyCorrected = false;
+               let loyaltyStoredVal = storedLoyaltyDiscount;
+
+               if (isLoyalty) {
+                 const correctedWaiver = _recomputeLoyaltyWaiverForRow(r, rows);
+                 if (correctedWaiver > storedLoyaltyDiscount) {
+                   // Stored waiver was understated. Re-derive the true Net_Total:
+                   //   food + delivery + small_fee + surcharge - corrected_waiver - review_discount
+                   const food   = Number(r.Food_Subtotal) || 0;
+                   const surch  = Math.max(Number(r.Inflation_Surcharge) || 0, Math.ceil(food / 20));
+                   const del    = Number(r.Delivery_Charge) || 0;
+                   const sFee   = Number(r.Small_Order_Fee) || 0;
+                   const review = Number(r.Review_Discount) || 0;
+                   const correctedNet = Math.max(0, food + del + sFee + surch - correctedWaiver - review);
+                   displayAmount    = isSplit ? Math.max(0, correctedNet - walletCredit) : correctedNet;
+                   displayLoyalty   = correctedWaiver;
+                   loyaltyCorrected = true;
+                 }
+               }
+
                return {
                  id: r.Submission_ID,
                  date: r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd") : r.Order_Date,
                  customer: r.Customer_Name,
                  phone: r.Phone,
-                 amount: isSplit ? Math.max(0, (Number(r.Net_Total) || 0) - walletCredit) : r.Net_Total,
+                 amount: displayAmount,
                  full_amount: r.Net_Total,
                  wallet_credit: walletCredit,
                  meal: r.Meal_Type,
@@ -6208,8 +6394,13 @@ function getPendingUPIPayments() {
                  status: r.Payment_Status,
                  payment_method: String(r.Payment_Method || ""),
                  refund_preference: r.Refund_Preference || "",
-                 loyalty_discount: isLoyalty ? loyaltyDiscount : 0,
-                 is_loyalty: isLoyalty
+                 loyalty_discount: displayLoyalty,
+                 is_loyalty:       isLoyalty,
+                 // Audit metadata so the admin UI can optionally flag
+                 // rows whose stored Discount_Amount got bumped here.
+                 loyalty_corrected:    loyaltyCorrected,
+                 loyalty_stored_value: loyaltyStoredVal,
+                 loyalty_stored_net:   Number(r.Net_Total) || 0
                };
              });
 }
