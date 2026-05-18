@@ -2055,17 +2055,28 @@
       const lbl = lang === "Devanagari" ? LABEL_MR : LABEL_EN;
       const parts = [];
       if (meal === "Breakfast") {
-        let bfHasCurdSlot = false;
+        const bfMap = {};
         for (let n = 1; n <= 4; n++) {
-          const item = order["BF_Item_" + n], qty = Number(order["BF_Qty_" + n]) || 0;
-          if (item && qty > 0) {
-            const a = lbl[item] || lbl[item.replace(/ /g, "_")] || item;
-            parts.push(qty + "x" + a);
-            if (item === "Curd") bfHasCurdSlot = true;
-          }
+          const it = String(order["BF_Item_" + n] || "").trim();
+          const q  = Number(order["BF_Qty_" + n]) || 0;
+          if (it && q > 0) bfMap[it] = (bfMap[it] || 0) + q;
         }
-        const curdQty = Number(order.Curd) || 0;
-        if (curdQty > 0 && !bfHasCurdSlot) parts.push(curdQty + "x" + lbl.Curd);
+        if (order.Items_JSON) {
+          try {
+            const parsed = JSON.parse(order.Items_JSON);
+            Object.entries(parsed).forEach(([k, q]) => {
+              const qty = Number(q) || 0;
+              if (qty <= 0) return;
+              const name = (k === "Breakfast Curd") ? "Curd" : k;
+              if (!bfMap[name]) bfMap[name] = qty;
+            });
+          } catch(e) {}
+        }
+        if (!bfMap["Curd"] && Number(order.Curd) > 0) bfMap["Curd"] = Number(order.Curd);
+        Object.entries(bfMap).forEach(([name, qty]) => {
+          const a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
+          parts.push(qty + "x" + a);
+        });
       } else {
         LD_COLS.forEach(col => {
           const q = Number(order[col]) || 0;

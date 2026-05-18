@@ -4112,7 +4112,8 @@ function getLabelOrders(date, meal) {
         name:  String(r.Customer_Name || ""),
         area:  String(r.Area || ""),
         notes: String(r.Special_Notes || ""),
-        Curd:  Number(r.Curd) || 0
+        Curd:  Number(r.Curd) || 0,
+        Items_JSON: String(r.Items_JSON || "")
       };
       if (meal === "Breakfast") {
         for (var n = 1; n <= 4; n++) {
