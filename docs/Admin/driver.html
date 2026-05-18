@@ -265,6 +265,39 @@ let D = { pin: "", sessionPin: "" };
 let _ordersData = { Breakfast: [], Lunch: [], Dinner: [] };
 let _pollTimer  = null;
 let _routeDists = { Breakfast: null, Lunch: null, Dinner: null };
+// Per-meal search query — kept independent so searching in Lunch never
+// leaks into Breakfast/Dinner panels.
+let _searchQuery = { Breakfast: "", Lunch: "", Dinner: "" };
+
+function applyDriverSearch(meal, query) {
+  if (typeof query === "string") _searchQuery[meal] = query;
+  const q = (_searchQuery[meal] || "").toLowerCase().trim();
+  const panel = document.getElementById("panel_" + meal);
+  if (!panel) return;
+  const cards = panel.querySelectorAll(".order-card[data-meal='" + meal + "']");
+  let shown = 0;
+  cards.forEach(card => {
+    const name = card.getAttribute("data-search") || "";
+    const match = !q || name.indexOf(q) !== -1;
+    card.style.display = match ? "" : "none";
+    if (match) shown++;
+  });
+  const meta = document.getElementById("searchMeta_" + meal);
+  if (meta) {
+    if (!q) meta.textContent = "";
+    else if (shown === 0) meta.textContent = "No matches in " + meal;
+    else meta.textContent = "Showing " + shown + " of " + cards.length;
+  }
+}
+
+function clearDriverSearch(meal) {
+  _searchQuery[meal] = "";
+  const input = document.getElementById("search_" + meal);
+  if (input) input.value = "";
+  applyDriverSearch(meal, "");
+  // Hide the clear-button on next render by re-applying empty value;
+  // the input is still focusable and ready for another query.
+}
 
 // ── RATE LIMITING ──
 let attempts = 0;
@@ -453,14 +486,18 @@ function setSyncBadge() {
 function renderAll(data) {
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const raw = ((data.meals || {})[meal] || []);
-    // Sort: Undelivered first, then Delivered (sorted by delivery time)
+    // Sort alphabetically by customer name within each group so drivers can
+    // scan the list faster. Undelivered first, then Delivered (alpha too).
+    const byName = (a, b) => String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity: "base" });
     const orders = [
-      ...raw.filter(o => !o.deliveredAt),
-      ...raw.filter(o => o.deliveredAt).sort((a,b) => new Date(a.deliveredAt) - new Date(b.deliveredAt))
+      ...raw.filter(o => !o.deliveredAt).sort(byName),
+      ...raw.filter(o => o.deliveredAt).sort(byName)
     ];
     _ordersData[meal] = orders;
     document.getElementById("cnt_"+meal).textContent = orders.length;
     document.getElementById("panel_"+meal).innerHTML = renderMealPanel(orders, meal);
+    // Re-apply any active search query for this meal after re-render.
+    applyDriverSearch(meal);
   });
   // Show progress for the currently active tab
   const activeMeal = ["Breakfast","Lunch","Dinner"].find(m =>
@@ -550,6 +587,21 @@ function renderMealPanel(orders, meal) {
     btnAttr = 'disabled style="padding:10px 14px;font-size:0.85rem;box-shadow:none;opacity:0.8;"';
   }
 
+  // Per-meal search bar — scoped to this meal only so searching in Lunch
+  // never reaches Breakfast/Dinner cards (those panels are hidden anyway).
+  // The handler hides any .order-card whose data-search doesn't contain the
+  // query; clearing the input shows everything again.
+  const prevQuery = (_searchQuery && _searchQuery[meal]) || "";
+  const searchBar = `<div class="driver-search-bar" style="padding:10px 12px 0;background:#fff;">
+    <div style="position:relative;">
+      <input type="search" id="search_${meal}" placeholder="🔍 Search customer name…" value="${prevQuery.replace(/"/g,'&quot;')}"
+             oninput="applyDriverSearch('${meal}', this.value)"
+             style="width:100%;padding:8px 32px 8px 12px;font-size:0.85rem;border:1.5px solid #ddd;border-radius:10px;font-family:inherit;box-sizing:border-box;background:#fafafa;">
+      ${prevQuery ? `<button type="button" onclick="clearDriverSearch('${meal}')" aria-label="Clear" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;color:#888;padding:4px 8px;">✕</button>` : ""}
+    </div>
+    <div id="searchMeta_${meal}" style="font-size:0.7rem;color:#888;margin-top:4px;min-height:14px;"></div>
+  </div>`;
+
   const routeBar = `<div class="route-bar" id="routeBar_${meal}" style="border-bottom:2.5px solid #1E1240;">
     <button class="route-btn ${btnClass}" 
             onclick="markAllEnRoute('${meal}')" 
@@ -569,7 +621,7 @@ function renderMealPanel(orders, meal) {
        title="Verify kitchen start/end point">🏠 Kitchen pin</a>
   </div>`;
 
-  return routeBar + orders.map((o, i) => renderCard(o, i, meal)).join("");
+  return searchBar + routeBar + orders.map((o, i) => renderCard(o, i, meal)).join("");
 }
 
 function renderCard(o, i, meal) {
@@ -609,7 +661,7 @@ function renderCard(o, i, meal) {
   }
   const isPickup = displayArea.toLowerCase().includes("pickup");
 
-  return `<div class="order-card${isDelivered?" delivered":""}" id="dcard_${o.submissionId}">
+  return `<div class="order-card${isDelivered?" delivered":""}" id="dcard_${o.submissionId}" data-meal="${meal}" data-search="${String(o.name||"").toLowerCase().replace(/"/g,'&quot;')}">
     <div class="order-header">
       <div class="order-num">DELIVERY #${i+1}</div>
       ${isDelivered
