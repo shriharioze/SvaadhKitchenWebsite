@@ -3454,12 +3454,17 @@ function abbr(key, dict) {
 function buildSummary(order, meal, dict) {
   const parts = [];
   if (meal === "Breakfast") {
+    let bfHasCurdSlot = false;
     for (let n=1;n<=4;n++) {
       const item = order[`BF_Item_${n}`]||""; const qty = Number(order[`BF_Qty_${n}`])||0;
-      if (item && qty > 0) parts.push(`${qty}×${abbr(item, dict)}`);
+      if (item && qty > 0) {
+        parts.push(`${qty}×${abbr(item, dict)}`);
+        if (item === "Curd") bfHasCurdSlot = true;
+      }
     }
+    // Dedupe: submitOrder writes Curd to both BF_Item_N and Curd column.
     const curd = Number(order.Curd)||0;
-    if (curd > 0) parts.push(`${curd}×${abbr("Curd", dict)}`);
+    if (curd > 0 && !bfHasCurdSlot) parts.push(`${curd}×${abbr("Curd", dict)}`);
   } else {
     const cols = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka",
                   "Jowar_Bhakri","Bajra_Bhakri","Dry_Sabji_Mini","Dry_Sabji_Full",
@@ -3505,12 +3510,16 @@ async function generateLabels() {
       const parts = [];
 
       if (meal === "Breakfast") {
+        let bfHasCurdSlot = false;
         for (let n=1;n<=4;n++) {
           const item = order[`BF_Item_${n}`]||"";
           const qty  = Number(order[`BF_Qty_${n}`])||0;
-          if (item && qty > 0) parts.push(`${qty}×${abbr(item, dict)}`);
+          if (item && qty > 0) {
+            parts.push(`${qty}×${abbr(item, dict)}`);
+            if (item === "Curd") bfHasCurdSlot = true;
+          }
         }
-        if (order.Curd > 0) parts.push(`${order.Curd}×${abbr("Curd", dict)}`);
+        if (order.Curd > 0 && !bfHasCurdSlot) parts.push(`${order.Curd}×${abbr("Curd", dict)}`);
       } else {
         const cols = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka",
                       "Jowar_Bhakri","Bajra_Bhakri","Dry_Sabji_Mini","Dry_Sabji_Full",
@@ -3933,16 +3942,18 @@ function getItemSummary(order, meal, lang) {
   const lbl = lang === "Devanagari" ? LABEL_MR : LABEL_EN;
   const parts = [];
   if (meal === "Breakfast") {
+    let bfHasCurdSlot = false;
     for (let n = 1; n <= 4; n++) {
       const item = order["BF_Item_"+n], qty = Number(order["BF_Qty_"+n]) || 0;
       if (item && qty > 0) {
         // look up by name or name-with-underscores
         const a = lbl[item] || lbl[item.replace(/ /g,"_")] || item;
         parts.push(qty + "x" + a);
+        if (item === "Curd") bfHasCurdSlot = true;
       }
     }
     const curdQty = Number(order.Curd) || 0;
-    if (curdQty > 0) parts.push(curdQty + "x" + lbl.Curd);
+    if (curdQty > 0 && !bfHasCurdSlot) parts.push(curdQty + "x" + lbl.Curd);
   } else {
     LD_COLS.forEach(col => {
       const q = Number(order[col]) || 0;

@@ -1360,6 +1360,17 @@
         </div>`;
           }).join("");
 
+        // Extras — breakfast-style items placed in lunch/dinner via backend
+        // (e.g. Kanda Poha, Ghee Upma). Hidden unless something is present.
+        const extraEntries = Object.entries(current_m.extras || {}).filter(([, q]) => q > 0);
+        const extrasHtml = extraEntries.length
+          ? `<hr class="divider">
+             <div class="sec-label">अतिरिक्त (Extras)</div>
+             <div class="item-grid">${extraEntries.map(([name, qty]) =>
+               `<div class="item-card"><span class="iname">${mr(name)}</span><span class="inum">${qty}</span></div>`
+             ).join("")}</div>`
+          : "";
+
         html += `<div class="meal-block">
       <div class="meal-head">
         <span class="meal-icon">${icon}</span>
@@ -1375,6 +1386,7 @@
         <hr class="divider">
         <div class="sec-label">इतर</div>
         <div class="item-grid">${otherHtml}</div>
+        ${extrasHtml}
       </div>
     </div>`;
       }
@@ -2043,15 +2055,17 @@
       const lbl = lang === "Devanagari" ? LABEL_MR : LABEL_EN;
       const parts = [];
       if (meal === "Breakfast") {
+        let bfHasCurdSlot = false;
         for (let n = 1; n <= 4; n++) {
           const item = order["BF_Item_" + n], qty = Number(order["BF_Qty_" + n]) || 0;
           if (item && qty > 0) {
             const a = lbl[item] || lbl[item.replace(/ /g, "_")] || item;
             parts.push(qty + "x" + a);
+            if (item === "Curd") bfHasCurdSlot = true;
           }
         }
         const curdQty = Number(order.Curd) || 0;
-        if (curdQty > 0) parts.push(curdQty + "x" + lbl.Curd);
+        if (curdQty > 0 && !bfHasCurdSlot) parts.push(curdQty + "x" + lbl.Curd);
       } else {
         LD_COLS.forEach(col => {
           const q = Number(order[col]) || 0;
