@@ -4441,7 +4441,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.16.1";
+    const APP_VERSION = "v26.05.16.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6630,7 +6630,11 @@
           else if (_cdt >= DISC_T1.min) _dr = DISC_T1.rate;
           const _exDisc = Object.values(_ex).reduce((s,m) => s+(m.discount_applied||0), 0);
           const _retro = Math.max(0, Math.round(_exft*_dr) - _exDisc);
-          const _is6 = (_psc === 5);
+          // Mirror the main bill loop's loyalty guard: don't fire 6th-day
+          // bonus if this date already has existing orders (already counted
+          // toward virtualStreakCount via S.loyaltyInfo).
+          const _hasExisting = (_exft > 0);
+          const _is6 = !_hasExisting && (_psc === 5);
           let _da = 0;
           if (_is6) {
             const _cds = Math.ceil(_dft/20);
@@ -6660,7 +6664,11 @@
           });
           const _net = _dft - _da + _tdel + _tsm + _tsu - _tcred - _trev;
           _dayNets[_d] = { net: _net, is6: _is6 };
-          if (_is6) { _psc=0; _pps=0; } else { _psc++; _pps+=Math.ceil(_dft/20); }
+          // Same streak-state guard as the main loop — don't increment for
+          // dates that already had existing orders (already counted upstream).
+          if (_hasExisting) { /* no streak state change */ }
+          else if (_is6)    { _psc = 0; _pps = 0; }
+          else              { _psc++; _pps += Math.ceil(_dft/20); }
         }
         // Find streak day surplus and carry backwards
         let _surplus = 0;
@@ -6699,8 +6707,17 @@
         const existingDiscountTotal = Object.values(existDay).reduce((s, m) => s + (m.discount_applied || 0), 0);
         const existingEntitledDiscount = Math.round(existingDayFoodTotal * discRate);
         const retroDiscountCredit = Math.max(0, existingEntitledDiscount - existingDiscountTotal);
-        
-        const is6thDay = (virtualStreakCount === 5);
+
+        // ── Loyalty-bonus guard ──────────────────────────────────────────
+        // If THIS cart date already has existing (non-cancelled) orders for
+        // this customer, those orders ALREADY contributed to the streak
+        // count when they were placed. Adding more meals to the same day
+        // shouldn't extend the streak — and must NOT re-trigger the day-6
+        // loyalty bonus. Without this guard the bonus would double-apply
+        // across submissions on the reward day, and (worse) fire one day
+        // EARLY when S.existingOrders pushes the virtual count up by one.
+        const dateAlreadyHasExistingOrder = (existingDayFoodTotal > 0);
+        const is6thDay = !dateAlreadyHasExistingOrder && (virtualStreakCount === 5);
         let discAmt = 0;
         let loyaltyWaiverTotal = 0;
 
@@ -6889,9 +6906,15 @@
 
         grandTotal += dayTotal;
 
-        // Update virtual streak for NEXT date in this cart
+        // Update virtual streak for NEXT date in this cart.
+        // Skip increment if this cart date already had existing orders —
+        // those orders already contributed to virtualStreakCount via
+        // S.loyaltyInfo, so re-incrementing would over-count.
         const daySurcharge = Math.ceil(dayFoodTotal / 20);
-        if (is6thDay) {
+        if (dateAlreadyHasExistingOrder) {
+          // No state change — adding meals to an existing day doesn't
+          // change the streak count or past-surcharge sum.
+        } else if (is6thDay) {
           virtualStreakCount = 0;
           virtualPastSurcharge = 0;
         } else {
