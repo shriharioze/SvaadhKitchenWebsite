@@ -549,6 +549,54 @@
       box-shadow: 0 3px 8px rgba(39, 174, 96, 0.1);
     }
 
+    /* ── PROFILE DRAWER ─────────────────────────────────────────── */
+    .pd-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.92rem;
+      color: #1E1240;
+      text-align: left;
+      text-decoration: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .pd-item:hover {
+      background: #f8f5ff;
+      border-left-color: #1E1240;
+    }
+    .pd-item:active {
+      background: #ede7f6;
+    }
+    .pd-icon {
+      font-size: 1.15rem;
+      width: 24px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .pd-label {
+      flex: 1;
+      font-weight: 600;
+    }
+    .pd-item-danger {
+      color: #c0392b;
+    }
+    .pd-item-danger:hover {
+      background: #fff5f4;
+      border-left-color: #c0392b;
+    }
+    .pd-sep {
+      height: 1px;
+      background: #eee;
+      margin: 6px 16px;
+    }
+
     /* SCREENS */
     .screen {
       display: none;
@@ -3035,7 +3083,9 @@
     <button class="help-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle dark mode"
       style="right:auto;left:16px;font-size:1.15rem;">🌙</button>
     <button class="help-btn" onclick="showHowModal()" title="How it works">?</button>
-    <!-- Guide button: visible pre-login (floats under tagline), hidden once action bar appears -->
+    <!-- Pre-login Guide button — kept visible until the user logs in. Once
+         the quick-action bar appears the avatar in that bar exposes Guide
+         (and the rest) via the drawer, so this button hides itself then. -->
     <button id="headerGuideBtn" onclick="showGuideHub()"
       style="margin-top:6px;padding:4px 12px;font-size:0.68rem;font-weight:700;border-radius:8px;background:rgba(255,255,255,0.18);border:1.5px solid rgba(255,255,255,0.5);color:#fff;cursor:pointer;display:inline-block;">📖 Guide to Order</button>
   </div>
@@ -3051,16 +3101,86 @@
       <span id="walletChipPlus" style="border-left:1px solid #c8e6c9; padding-left:4px; color:#2e7d32; font-size:0.75rem;">+</span>
     </div>
 
-    <!-- Action buttons (right) -->
+    <!-- Action buttons (right) — Orders / Guide / Log out now live inside the drawer -->
     <div id="authActionsWrap" style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-      <button onclick="showManageOrders()"
-        style="padding:6px 10px; font-size:0.72rem; font-weight:700; border-radius:10px; background:#fff; border:1.5px solid #1E1240; color:#1E1240; white-space:nowrap; cursor:pointer;">📋 Orders</button>
-      <button onclick="showGuideHub()"
-        style="padding:6px 10px; font-size:0.72rem; font-weight:700; border-radius:10px; background:#fff; border:1.5px solid #7f8c8d; color:#555; white-space:nowrap; cursor:pointer;">📖 Guide</button>
-      <button onclick="logoutCustomer()"
-        style="padding:6px 10px; font-size:0.72rem; font-weight:700; border-radius:10px; background:#fff5f4; border:1.5px solid #ffcdcc; color:#1E1240; white-space:nowrap; cursor:pointer;">↩ Out</button>
+      <button id="profileAvatarBtn" type="button" onclick="openProfileDrawer()" aria-label="Open menu"
+        style="display:flex; align-items:center; gap:6px; padding:4px 10px 4px 4px; background:#1E1240; color:#fff; border:none; border-radius:999px; cursor:pointer; box-shadow:0 2px 6px rgba(30,18,64,0.25); font-family:inherit; transition:transform 0.15s ease, box-shadow 0.15s ease;"
+        onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 4px 10px rgba(30,18,64,0.35)'"
+        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 6px rgba(30,18,64,0.25)'">
+        <span id="profileAvatarInitials"
+          style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:#fff; color:#1E1240; font-size:0.78rem; font-weight:800; letter-spacing:0.3px;">SK</span>
+        <span style="font-size:0.78rem; font-weight:600; opacity:0.95;">▾</span>
+      </button>
     </div>
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       PROFILE DRAWER — slides in from the right when the avatar is tapped.
+       Wraps every "what I can do" customer action that used to clutter
+       the top bar. Pre-login (no S.phone) → avatar is hidden upstream and
+       this drawer never opens.
+  ════════════════════════════════════════════════════════════════════ -->
+  <div id="profileDrawerOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:35000;" onclick="closeProfileDrawer()"></div>
+  <aside id="profileDrawer" role="dialog" aria-modal="true" aria-label="Profile menu"
+    style="display:none; position:fixed; top:0; right:0; width:min(86vw,340px); height:100vh; background:#fff; z-index:35001; box-shadow:-8px 0 24px rgba(0,0,0,0.18); transform:translateX(100%); transition:transform 0.28s cubic-bezier(0.4,0,0.2,1); display:flex; flex-direction:column;">
+
+    <!-- Profile header -->
+    <div style="background:linear-gradient(135deg,#1E1240,#3a2b6e); color:#fff; padding:22px 20px 18px; flex-shrink:0;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div id="profileDrawerAvatar"
+          style="width:54px; height:54px; border-radius:50%; background:#fff; color:#1E1240; display:flex; align-items:center; justify-content:center; font-size:1.25rem; font-weight:800; letter-spacing:0.5px; box-shadow:0 2px 8px rgba(0,0,0,0.18);">SK</div>
+        <div style="flex:1; min-width:0;">
+          <div id="profileDrawerName" style="font-size:1rem; font-weight:700; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Svaadh Customer</div>
+          <div id="profileDrawerPhone" style="font-size:0.78rem; opacity:0.85; margin-top:2px;">+91 ----- -----</div>
+        </div>
+        <button type="button" onclick="closeProfileDrawer()" aria-label="Close menu"
+          style="background:rgba(255,255,255,0.15); border:none; color:#fff; width:32px; height:32px; border-radius:50%; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
+      </div>
+    </div>
+
+    <!-- Menu — scrolls if it overflows -->
+    <nav style="flex:1; overflow-y:auto; padding:8px 0;">
+
+      <!-- Primary actions -->
+      <button type="button" class="pd-item" onclick="closeProfileDrawer(); goToStep(1);">
+        <span class="pd-icon">📍</span><span class="pd-label">Addresses</span>
+      </button>
+      <button type="button" class="pd-item" onclick="closeProfileDrawer(); showGuideHub();">
+        <span class="pd-icon">📖</span><span class="pd-label">Guide</span>
+      </button>
+      <button type="button" class="pd-item" onclick="closeProfileDrawer(); showManageOrders();">
+        <span class="pd-icon">🛒</span><span class="pd-label">Orders</span>
+      </button>
+      <button type="button" class="pd-item" onclick="closeProfileDrawer(); openWalletTxn();">
+        <span class="pd-icon">💳</span><span class="pd-label">Wallet <span style="font-size:0.7rem; color:#888; font-weight:500;">(transactions)</span></span>
+      </button>
+
+      <div class="pd-sep"></div>
+
+      <!-- Secondary -->
+      <a class="pd-item" href="https://wa.me/919322246765" target="_blank" rel="noopener" onclick="closeProfileDrawer()">
+        <span class="pd-icon">📞</span><span class="pd-label">Contact us <span style="font-size:0.7rem; color:#888; font-weight:500;">(WhatsApp)</span></span>
+      </a>
+      <a class="pd-item" href="https://share.google/UnZM2xcLOF2QVO9cj" target="_blank" rel="noopener" onclick="closeProfileDrawer()">
+        <span class="pd-icon">⭐</span><span class="pd-label">Rate &amp; Review</span>
+      </a>
+      <button type="button" class="pd-item" onclick="closeProfileDrawer(); openPastOrdersFromDrawer();">
+        <span class="pd-icon">📜</span><span class="pd-label">Past orders</span>
+      </button>
+
+      <div class="pd-sep"></div>
+
+      <!-- Sign out -->
+      <button type="button" class="pd-item pd-item-danger" onclick="closeProfileDrawer(); logoutCustomer();">
+        <span class="pd-icon">🚪</span><span class="pd-label">Log out</span>
+      </button>
+    </nav>
+
+    <!-- Footer -->
+    <div style="flex-shrink:0; padding:14px 20px; border-top:1px solid #eee; text-align:center; font-size:0.7rem; color:#999;">
+      Svaadh Kitchen <span id="profileDrawerVersion">v—</span>
+    </div>
+  </aside>
 
   <!-- STICKY PROGRESS INDICATOR (ONLY SHOWN IF NEEDED) -->
   <div class="progress-wrap" style="position:relative; z-index:50;">
@@ -4441,7 +4561,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.16.5";
+    const APP_VERSION = "v26.05.16.6";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5180,9 +5300,12 @@
 
 
 
-      // Toggle Quick Button Bar (Wallet, Orders, Logout) only after step 0
+      // Toggle Quick Button Bar (Wallet, profile avatar) only after step 0
       const qb = $("quickButtonBar");
       if (qb) qb.style.display = (s > 0) ? "flex" : "none";
+      // Refresh avatar initials + drawer header whenever step changes so
+      // the avatar shows the right name even if the profile loaded mid-step.
+      try { _refreshProfileAvatar(); } catch (_) {}
 
       // Analytics tracking
       trackGA("step_view", {
@@ -7849,6 +7972,72 @@
     // ═══════════════════════════════════════════════════════════
     // MANAGE ORDERS — inline edit + delete
     // ═══════════════════════════════════════════════════════════
+    // ── PROFILE DRAWER ───────────────────────────────────────────
+    // Builds initials from S.profile.name, opens/closes the drawer,
+    // and wires the small helper "openPastOrdersFromDrawer" that
+    // jumps to the Manage Orders modal with focus on the past list.
+    function _profileInitials(name) {
+      const safe = String(name || "").trim();
+      if (!safe) return "SK";
+      const parts = safe.split(/\s+/).filter(Boolean);
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    function _refreshProfileAvatar() {
+      const name = (S.profile && S.profile.name) || "";
+      const initials = _profileInitials(name);
+      const av = document.getElementById("profileAvatarInitials");
+      if (av) av.textContent = initials;
+      const av2 = document.getElementById("profileDrawerAvatar");
+      if (av2) av2.textContent = initials;
+      const nameEl = document.getElementById("profileDrawerName");
+      if (nameEl) nameEl.textContent = name || "Svaadh Customer";
+      const phoneEl = document.getElementById("profileDrawerPhone");
+      if (phoneEl) {
+        const p = String(S.phone || "").trim();
+        phoneEl.textContent = p ? "+91 " + p.slice(0, 5) + " " + p.slice(5) : "+91 ----- -----";
+      }
+      const vEl = document.getElementById("profileDrawerVersion");
+      if (vEl) vEl.textContent = (typeof APP_VERSION === "string" ? APP_VERSION : "v—");
+    }
+    function openProfileDrawer() {
+      _refreshProfileAvatar();
+      const overlay = document.getElementById("profileDrawerOverlay");
+      const drawer  = document.getElementById("profileDrawer");
+      if (!overlay || !drawer) return;
+      overlay.style.display = "block";
+      drawer.style.display  = "flex";
+      // next frame so transition triggers
+      requestAnimationFrame(() => { drawer.style.transform = "translateX(0)"; });
+      document.body.style.overflow = "hidden";
+      // Close on Esc — installed once
+      if (!window._pdEscHandler) {
+        window._pdEscHandler = (e) => { if (e.key === "Escape") closeProfileDrawer(); };
+        document.addEventListener("keydown", window._pdEscHandler);
+      }
+    }
+    function closeProfileDrawer() {
+      const overlay = document.getElementById("profileDrawerOverlay");
+      const drawer  = document.getElementById("profileDrawer");
+      if (drawer) drawer.style.transform = "translateX(100%)";
+      // small delay so slide-out animation completes
+      setTimeout(() => {
+        if (overlay) overlay.style.display = "none";
+        if (drawer)  drawer.style.display  = "none";
+      }, 280);
+      document.body.style.overflow = "";
+    }
+    function openPastOrdersFromDrawer() {
+      // Reuse the existing Manage Orders modal. It already renders a
+      // Past Orders section at the bottom; we just scroll there once
+      // the list loads.
+      showManageOrders();
+      setTimeout(() => {
+        const past = document.getElementById("pastOrdersList");
+        if (past) past.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 350);
+    }
+
     function showManageOrders() {
       const phone = S.phone;
       if (!phone) { toast(t('toast_enter_phone_first')); return; }
