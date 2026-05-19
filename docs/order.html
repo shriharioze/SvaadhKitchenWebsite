@@ -4567,7 +4567,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.19.5";
+    const APP_VERSION = "v26.05.19.6";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5099,16 +5099,19 @@
     // FAQ
     // ═══════════════════════════════════════════════════════════
     const FAQ_ITEMS = [
-      { q: "What is Svaadh Wallet (Prepaid Credits)?", a: "Svaadh Wallet is a prepaid system for <strong>1-tap instant ordering</strong>. Load ₹100+ via UPI to bypass paying per order. Your balance is always visible at the top-right corner from Step 2 of the form. To add funds, tap the Wallet chip or use the 'View/Edit upcoming orders' dashboard." },
-      { q: "How do I track my delivery in real-time?", a: "Once our driver marks your order as 'Out for Delivery', a <strong>🚗 Out for Delivery</strong> badge will appear next to that order's timing in the 'View/Edit upcoming orders' dashboard." },
-      { q: "Can I install this as an App on my phone?", a: "Yes! Look for the <strong>📲 Install App</strong> button on the home screen. This will add Svaadh Kitchen to your home screen for fast, one-tap access just like a regular app." },
-      { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹9 · Phulka ₹7 · Ghee Phulka ₹10 · Jowar/Bajra Bhakri ₹20<br>🥘 <strong>Sabji</strong>: Mini 100ml ₹22 · Full 250ml ₹45 (changes daily)<br>🍲 <strong>Dal</strong> 200ml ₹22 · <strong>Rice</strong> 100g ₹12 · <strong>Salad</strong> 40g ₹6 · <strong>Curd</strong> 50g ₹12<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha & more." },
-      { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery." },
-      { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually." },
-      { q: "How do discounts work?", a: "If your total for a single day is ₹300+, you get <strong>5% off</strong>. ₹450+, you get <strong>7.5% off</strong>. Applied automatically on the bill screen." },
-      { q: "What is Prepaid Wallet Billing?", a: "Prepaid Wallet Billing allows you to maintain a balance on our platform so that your orders are automatically deducted without needing UPI entry every time. Perfect for regular customers!" },
-      { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. If you need to make corrections, please <strong>delete</strong> the existing order and place a <strong>new</strong> one with the correct items. This ensures total accuracy in our kitchen. Credits from deletions will be automatically refunded to your Svaadh Wallet or UPI as per your preference." },
-      { q: "Do you offer self-pickup?", a: "Yes! You can select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small order fee are <strong>completely waived</strong> for pickup orders. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
+      { q: "Where do I find Manage Orders, Wallet, Guide etc.?", a: "After login, tap the <strong>profile avatar (your initials)</strong> at the top-right of the order page. A side drawer opens with: 📍 Addresses · 📖 Guide · 🛒 Manage Orders · 💳 Wallet · 📞 Contact us · 🛵 Call delivery partner · ⭐ Rate &amp; Review · 🚪 Log out." },
+      { q: "What's the correct UPI payment flow?", a: "Please follow this order to avoid order-not-placed issues on low-RAM phones:<br>1️⃣ Copy the UPI ID shown on the bill page<br>2️⃣ Note down the amount<br>3️⃣ Tick <strong>“Will pay”</strong> and tap <strong>Place Order</strong> first<br>4️⃣ Once the Success screen loads, open GPay/PhonePe/Paytm and pay using the copied UPI ID<br><br>Submitting before switching apps guarantees the order is saved — your phone may otherwise pause our app in the background." },
+      { q: "What is Svaadh Wallet (Prepaid Credits)?", a: "Svaadh Wallet is a prepaid system for <strong>1-tap instant ordering</strong>. Load ₹100+ via UPI to skip per-order payments. Your balance is always visible at the top-left wallet chip from Step 2 onwards. To add funds, tap the wallet chip or open the avatar drawer → <strong>Wallet</strong>." },
+      { q: "How do I track my delivery in real-time?", a: "Open avatar drawer → <strong>Manage Orders</strong>. Once our driver marks your order as 'Out for Delivery', a <strong>🚗 Out for Delivery</strong> badge appears next to that order's timing. To call the delivery partner directly, use <strong>🛵 Call delivery partner (Abhijeet · 86055 12646)</strong> from the drawer." },
+      { q: "Can I install this as an App on my phone?", a: "Yes! Look for the <strong>📲 Install App</strong> button on the home screen. This adds Svaadh Kitchen to your home screen for fast, one-tap access just like a regular app." },
+      { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹9 · Without Oil Chapati ₹8 · Phulka ₹7 · Ghee Phulka ₹10 · Jowar/Bajra Bhakri ₹20<br>🥘 <strong>Sabji</strong>: Mini 100ml ₹22 · Full 250ml ₹45 (changes daily)<br>🍲 <strong>Dal</strong> 200ml ₹22 · <strong>Rice</strong> 100g ₹12 · <strong>Salad</strong> 40g ₹7 · <strong>Curd</strong> 50g ₹12<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha &amp; more." },
+      { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
+      { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually. Use the <strong>Copy</strong> button to clone a meal you built to other selected dates." },
+      { q: "How do discounts work?", a: "If your total for a single day is ₹300+, you get <strong>5% off</strong>. ₹450+, you get <strong>7.5% off</strong>. Applied automatically on the bill screen. Discounts are per-day, not per-order." },
+      { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, the surcharge accumulated from your previous 5 days is refunded back into your bill as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
+      { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. To make corrections, <strong>delete</strong> the existing order from Manage Orders and place a <strong>new</strong> one before the cutoff. Wallet payments are refunded instantly to the wallet; UPI refunds are processed within 1–2 working days." },
+      { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
+      { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. If it's missing, place again and choose 'Already Paid' if you've already completed the UPI payment." },
     ];
 
     function buildFAQ() {
@@ -8099,7 +8102,7 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #3498db;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📲 How to Load Wallet</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              1. On the order page, tap the <b>wallet balance chip</b> (top right, Step 2 onwards)<br>
+              1. On the order page, tap the <b>wallet balance chip</b> on the top-left bar (Step 2 onwards) — or open the avatar drawer → <b>Wallet</b><br>
               2. Enter the amount (minimum <b>₹100</b>)<br>
               3. Pay via UPI to our ID: <b>9819969682@hdfc</b><br>
               4. Submit the recharge request — our team verifies and credits within a few hours<br><br>
@@ -8145,7 +8148,7 @@
               ["3","Pick Your Dates","Tap on one or more dates on the calendar. You can order for today, tomorrow, or the whole week in one go. Dates with orders already placed are highlighted."],
               ["4","Build Your Meal","For each date, choose your meals — Breakfast, Lunch, and/or Dinner. Pick exactly what you want à la carte: Chapati, Sabji, Dal, Rice, etc. Today's sabji is shown live."],
               ["5","Review Your Bill","See your full itemised bill with all charges and discounts applied automatically. Check the total before paying."],
-              ["6","Pay & Confirm","Pay via UPI QR shown on screen, or use your Svaadh Wallet balance for 1-tap checkout. Once confirmed, your order is placed!"]
+              ["6","Pay &amp; Confirm","If paying via UPI: copy the UPI ID, note the amount, tick <b>“Will pay”</b>, and tap <b>Place Order</b> first — then switch to GPay/PhonePe and complete the payment once the Success screen loads. If using Svaadh Wallet, just tick the confirm box and place the order — 1-tap, no UPI app needed."]
             ].map(([n,title,desc]) => `
               <div style="display:flex;gap:12px;align-items:flex-start;background:#f8f9fa;border-radius:12px;padding:12px 14px;">
                 <div style="min-width:28px;height:28px;border-radius:50%;background:#1E1240;color:#fff;font-size:0.8rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${n}</div>
@@ -8183,7 +8186,7 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #3498db;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🗑️ How to Cancel an Order</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              1. Tap <b>Manage Orders</b> button on the order page<br>
+              1. Tap your <b>profile avatar</b> (top-right) → choose <b>Manage Orders</b> from the drawer<br>
               2. Find the upcoming order you want to cancel<br>
               3. Tap the <b>Delete</b> button on that order<br>
               4. Confirm the cancellation<br><br>
@@ -8265,9 +8268,9 @@
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🎯 Make Your Own Meal</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               Pick exactly what you want, in the quantities you want. No bundle, no thali, no wastage.<br><br>
-              <b>Breads:</b> Chapati ₹9 · Without Oil Chapati ₹9 · Phulka ₹9 · Ghee Phulka ₹10 · Jowar Bhakri ₹20 · Bajra Bhakri ₹20<br>
+              <b>Breads:</b> Chapati ₹9 · Without Oil Chapati ₹8 · Phulka ₹7 · Ghee Phulka ₹10 · Jowar Bhakri ₹20 · Bajra Bhakri ₹20<br>
               <b>Sabji:</b> Dry Mini ₹22 · Dry Full ₹45 · Curry Mini ₹22 · Curry Full ₹45<br>
-              <b>Basics:</b> Dal ₹22 · Rice ₹12 · Salad ₹6 · Curd ₹12
+              <b>Basics:</b> Dal ₹22 · Rice ₹12 · Salad ₹7 · Curd ₹12
             </div>
           </div>
 
@@ -8310,8 +8313,8 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #3498db;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📋 Opening Manage Orders</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              Tap <b>Manage Orders</b> (top right of the order page after login).<br>
-              You'll see all your upcoming orders for the next few days, and recent past orders below.
+              After login, tap the <b>profile avatar (your initials)</b> at the top-right and choose <b>Manage Orders</b> from the side drawer.<br>
+              You'll see all your upcoming orders, plus recent past orders below.
             </div>
           </div>
 
@@ -8329,8 +8332,7 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #e67e22;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">💳 Wallet Balance</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              Your Svaadh Wallet balance is shown at the top of the Manage Orders panel.<br>
-              You can also submit a wallet recharge request from there.
+              Your Svaadh Wallet balance is shown on the wallet chip at the top-left of the order page (Step 2 onwards). You can also open the avatar drawer → <b>Wallet</b> to see transactions and submit recharge requests.
             </div>
           </div>
 
@@ -8338,7 +8340,7 @@
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">⏱️ Server Timeout During Ordering?</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               If you see a "Request Timed Out" message, <b>do not place the order again immediately</b>.<br>
-              First open <b>Manage Orders</b> and check if your order appears there.<br>
+              First open the avatar drawer → <b>Manage Orders</b> and check if your order appears there.<br>
               ✅ Order visible → you're all set, don't resubmit.<br>
               ❌ Order not visible → safe to place again.
             </div>
