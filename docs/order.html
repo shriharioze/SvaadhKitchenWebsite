@@ -3772,12 +3772,15 @@
             </div>
 
             <div style="background:#fff8e1;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 14px;text-align:center;">
-              <div style="font-size:0.8rem;font-weight:700;color:#78350f;margin-bottom:4px;">📋 How to Pay via UPI</div>
-              <div style="font-size:0.75rem;color:#92400e;line-height:1.6;">
+              <div style="font-size:0.8rem;font-weight:700;color:#78350f;margin-bottom:4px;">📋 How to Pay via UPI — Please follow in order</div>
+              <div style="font-size:0.75rem;color:#92400e;line-height:1.6;text-align:left;">
                 1. Tap the UPI ID above to <strong>copy</strong> it<br>
-                2. Open GPay / PhonePe / Paytm / any UPI app<br>
-                3. Paste the UPI ID and enter the amount<br>
-                4. Complete payment, then confirm below
+                2. <strong>Note down the amount</strong> shown in your bill<br>
+                3. Tick <strong>"Payment complete"</strong> below &amp; tap <strong>Place Order</strong> first<br>
+                4. <em>Only then</em> switch to GPay / PhonePe / Paytm and complete the payment using the copied UPI ID
+              </div>
+              <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
+                💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
               </div>
               <div style="margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:6px 10px;font-size:0.72rem;color:#991b1b;line-height:1.5;">
                 ⚠️ <strong>Pay using the UPI ID only</strong> — do not pay directly to the phone number, as it may not be linked to the same account.
@@ -3969,12 +3972,15 @@
             </div>
 
             <div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:12px;padding:12px 14px;text-align:center;">
-              <div style="font-size:0.8rem;font-weight:700;color:#1e3a8a;margin-bottom:4px;">📋 How to Pay via UPI</div>
-              <div style="font-size:0.75rem;color:#1e40af;line-height:1.6;">
+              <div style="font-size:0.8rem;font-weight:700;color:#1e3a8a;margin-bottom:4px;">📋 How to Pay via UPI — Please follow in order</div>
+              <div style="font-size:0.75rem;color:#1e40af;line-height:1.6;text-align:left;">
                 1. Tap the UPI ID above to <strong>copy</strong> it<br>
-                2. Open GPay / PhonePe / Paytm / any UPI app<br>
-                3. Paste the UPI ID and pay ₹<span id="splitUpiDeepLinkAmt">0</span><br>
-                4. Complete payment, then confirm below
+                2. <strong>Note down ₹<span id="splitUpiDeepLinkAmt">0</span></strong> (the UPI portion to pay)<br>
+                3. Tick the confirmation below &amp; tap <strong>Place Order</strong> first<br>
+                4. <em>Only then</em> switch to GPay / PhonePe / Paytm and complete the payment using the copied UPI ID
+              </div>
+              <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
+                💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
               </div>
               <div style="margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:6px 10px;font-size:0.72rem;color:#991b1b;line-height:1.5;">
                 ⚠️ <strong>Pay using the UPI ID only</strong> — do not pay directly to the phone number, as it may not be linked to the same account.
@@ -4558,7 +4564,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.19.2";
+    const APP_VERSION = "v26.05.19.3";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
