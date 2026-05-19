@@ -88,7 +88,7 @@
     upi_scan_hint: "Scan QR code <strong>or</strong> tap the button below to pay",
     payment_note_label: "📝 <strong>Payment note:</strong>",
     step5_wallet_title: "💳 Svaadh Wallet Balance",
-    paid_confirm_label: "✅ Payment complete — I confirm payment has been made",
+    paid_confirm_label: "✅ Will pay — I'll complete the UPI payment right after placing this order",
 
     // ── Step 5 — Prepaid Wallet Hissab ────────────────────────
     step5_hissab_title: "📒 Your Wallet Account",

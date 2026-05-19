@@ -3776,8 +3776,8 @@
               <div style="font-size:0.75rem;color:#92400e;line-height:1.6;text-align:left;">
                 1. Tap the UPI ID above to <strong>copy</strong> it<br>
                 2. <strong>Note down the amount</strong> shown in your bill<br>
-                3. Tick <strong>"Payment complete"</strong> below &amp; tap <strong>Place Order</strong> first<br>
-                4. <em>Only then</em> switch to GPay / PhonePe / Paytm and complete the payment using the copied UPI ID
+                3. Tick <strong>"Will complete payment"</strong> below &amp; tap <strong>Place Order</strong> first<br>
+                4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em>
               </div>
               <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
                 💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
@@ -3797,8 +3797,8 @@
               <input type="checkbox" id="paidConfirm" style="margin-top:2px;width:auto;accent-color:#16a34a;flex-shrink:0;"
                 onchange="checkPaymentConfirmation()">
               <div>
-                <span style="font-size:0.81rem;color:#14532d;font-weight:600;" data-i18n="paid_confirm_label">Payment complete — I confirm payment has been made</span>
-                <p class="mr-note" style="margin-top:2px;">मी पुष्टी करतो की पेमेंट झाले आहे</p>
+                <span style="font-size:0.81rem;color:#14532d;font-weight:600;" data-i18n="paid_confirm_label">Will pay — I'll complete the UPI payment right after placing this order</span>
+                <p class="mr-note" style="margin-top:2px;">मी ऑर्डर दिल्यानंतर लगेच UPI पेमेंट करेन</p>
               </div>
             </label>
           </div>
@@ -3976,8 +3976,8 @@
               <div style="font-size:0.75rem;color:#1e40af;line-height:1.6;text-align:left;">
                 1. Tap the UPI ID above to <strong>copy</strong> it<br>
                 2. <strong>Note down ₹<span id="splitUpiDeepLinkAmt">0</span></strong> (the UPI portion to pay)<br>
-                3. Tick the confirmation below &amp; tap <strong>Place Order</strong> first<br>
-                4. <em>Only then</em> switch to GPay / PhonePe / Paytm and complete the payment using the copied UPI ID
+                3. Tick <strong>"Will complete payment"</strong> below &amp; tap <strong>Place Order</strong> first<br>
+                4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em>
               </div>
               <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
                 💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
@@ -4564,7 +4564,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.19.3";
+    const APP_VERSION = "v26.05.19.4";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
