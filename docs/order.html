@@ -4567,7 +4567,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.19.6";
+    const APP_VERSION = "v26.05.19.7";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7545,7 +7545,14 @@
         syncSingleAddr(); // Final safety sync to ensure S.mealAddrs is consistent with S.profile before saving
       }
 
+      // Idempotency key — server caches the response keyed off this id so
+      // any apiFetch retry (or accidental double-submit) replays the SAME
+      // response instead of re-running the order. Critical for wallet
+      // orders where a retry would otherwise duplicate-debit the wallet.
+      const _reqId = `req_${S.phone || "anon"}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
       const payload = {
+        request_id: _reqId,
         profile: {
           name: S.profile.name, phone: S.phone,
           address: buildAddr(S.profile.wing, S.profile.flat, S.profile.floor, S.profile.society, S.profile.area, S.profile.delivery_point),
@@ -7657,9 +7664,12 @@
 
           if (proceed) {
             // Re-submit with the confirm flag so the backend's
-            // long-window duplicate guard allows it through.
+            // long-window duplicate guard allows it through. Use a FRESH
+            // request_id so the server's idempotency cache doesn't replay
+            // the duplicate-rejection response.
+            const _retryReqId = `req_${S.phone || "anon"}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
             try {
-              const res2  = await apiPost(Object.assign({}, payload, { confirm_duplicate: true }));
+              const res2  = await apiPost(Object.assign({}, payload, { confirm_duplicate: true, request_id: _retryReqId }));
               const data2 = await res2.json();
               if (data2.success) {
                 S.isPlaced = true;
