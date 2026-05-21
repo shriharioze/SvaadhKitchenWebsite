@@ -2547,12 +2547,15 @@ async function toggleKitchenClosed() {
   }
 
   const _send = async (confirmCancelOrders) => {
-    const res  = await apiPost({
-      _action: "setKitchenClosed",
-      pin:     S.sessionPin,
-      date:    iso,
-      isClosed: !isReopening,
-      confirmCancelOrders: !!confirmCancelOrders
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        _action: "setKitchenClosed",
+        pin:     S.sessionPin,
+        date:    iso,
+        isClosed: !isReopening,
+        confirmCancelOrders: !!confirmCancelOrders
+      })
     });
     return res.json();
   };
