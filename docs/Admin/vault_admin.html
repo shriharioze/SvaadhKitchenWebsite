@@ -2498,7 +2498,24 @@ function selectDate(iso) {
         ${hasSabjis ? '✅ Sunday Open' : '🔴 Sunday — Rest Day (set sabjis to open)'}
       </span>`
     : "";
-  badges.innerHTML  = `${todayBadge}${statusBadge}${sundayChip}
+  // Kitchen-closed pill — admin toggle to mark a non-Sunday day off.
+  // Hidden on Sundays (Sundays are already closed by default), past dates,
+  // and dates with no menu row yet (avoid accidental flagging of placeholder).
+  const isKitchenClosed = !!(existing && existing.kitchen_closed);
+  const isPastDate = (iso < toISODate(new Date()));
+  const showKitchenChip = !isSunday && !isPastDate;
+  const kitchenChip = showKitchenChip
+    ? `<button id="kitchenClosedToggle" onclick="toggleKitchenClosed()" title="Mark this day as Kitchen Closed (customers won't be able to order)"
+         style="display:inline-flex;align-items:center;gap:6px;font-size:0.74rem;font-weight:700;
+                background:${isKitchenClosed ? '#fdecea' : '#fff'};
+                color:${isKitchenClosed ? '#c0392b' : '#1E1240'};
+                border:1.5px solid ${isKitchenClosed ? '#f5b7b1' : '#1E1240'};
+                border-radius:20px;padding:5px 12px;cursor:pointer;font-family:inherit;">
+         ${isKitchenClosed ? '🚫 Kitchen Closed (tap to re-open)' : '✅ Open — Tap to Close Kitchen'}
+       </button>`
+    : "";
+
+  badges.innerHTML  = `${todayBadge}${statusBadge}${sundayChip}${kitchenChip}
     <button class="save-hero-btn" id="saveHeroBtn" onclick="saveCurrentMenu()">
       <span id="saveBtnIcon">💾</span> Save Menu
     </button>`;
@@ -2507,6 +2524,84 @@ function selectDate(iso) {
   renderSabjiLists();
   renderOOSPanel();
   renderOrdersClosedPanel();
+}
+
+// ── KITCHEN CLOSED TOGGLE ─────────────────────────────────────
+// Tiny helper used by selectDate's hero chip. Confirms intent, calls
+// the backend, and re-fetches admin data so the chip updates instantly.
+async function toggleKitchenClosed() {
+  if (!S.selectedDate) return;
+  const iso = S.selectedDate;
+  const existing = S.menuEntries.find(e => e.date === iso);
+  const isCurrentlyClosed = !!(existing && existing.kitchen_closed);
+  const isReopening = isCurrentlyClosed;
+
+  if (!isReopening) {
+    const ok = await sConfirm(
+      `Close kitchen on <b>${iso}</b>?<br><br>` +
+      `Customers will see this day greyed out on the calendar with a "Kitchen is closed" message. ` +
+      `If there are already orders for this day, you'll be asked whether to cancel + refund them.`,
+      "Close Kitchen", "🚫", "", { confirmLabel: "Yes, close kitchen", cancelLabel: "Cancel" }
+    );
+    if (!ok) return;
+  }
+
+  const _send = async (confirmCancelOrders) => {
+    const res  = await apiPost({
+      _action: "setKitchenClosed",
+      pin:     S.sessionPin,
+      date:    iso,
+      isClosed: !isReopening,
+      confirmCancelOrders: !!confirmCancelOrders
+    });
+    return res.json();
+  };
+
+  let data;
+  try {
+    data = await _send(false);
+  } catch (e) {
+    await sAlert("Network error: " + e.message, "Failed", "❌");
+    return;
+  }
+
+  // Backend wants explicit confirmation before nuking existing orders.
+  if (data && data.requires_confirm) {
+    const ok2 = await sConfirm(
+      `⚠️ <b>${data.orderCount}</b> active order(s) totaling <b>₹${data.totalAmount}</b> across ` +
+      `<b>${data.customerCount}</b> customer(s) exist for <b>${data.date}</b>.<br><br>` +
+      `Closing this day will <b>cancel and refund</b> all of them ` +
+      `(wallet → instant refund, UPI → manual_upi queue).<br><br>` +
+      `Proceed?`,
+      "Existing Orders Found", "⚠️", "",
+      { confirmLabel: "Yes, cancel & refund all", cancelLabel: "Keep day open" }
+    );
+    if (!ok2) return;
+    try {
+      data = await _send(true);
+    } catch (e) {
+      await sAlert("Network error: " + e.message, "Failed", "❌");
+      return;
+    }
+  }
+
+  if (data && data.success) {
+    await sAlert(data.message || (isReopening ? "Kitchen re-opened." : "Kitchen closed."),
+                 isReopening ? "Re-opened ✅" : "Kitchen Closed 🚫");
+    // Refresh admin data so menuEntries reflects the new state.
+    if (typeof loadAdminData === "function") {
+      try { await loadAdminData(true); } catch(_) {}
+    }
+    selectDate(iso); // re-render hero badges + grids
+  } else {
+    await sAlert((data && data.error) || "Could not update kitchen status.", "Failed", "❌");
+  }
+}
+
+// Local ISO helper — uses IST so comparison against `iso` strings is stable.
+function toISODate(d) {
+  const ist = new Date(d.getTime() + 5.5 * 3600 * 1000);
+  return ist.toISOString().slice(0, 10);
 }
 
 // ════════════════════════════════════════════════════════

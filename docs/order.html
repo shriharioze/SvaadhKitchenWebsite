@@ -803,6 +803,24 @@
       cursor: not-allowed;
     }
 
+    /* Kitchen-closed day — same greyed-out look as Sunday but with a
+       crossed-out 🚫 chip so customers see at a glance why the day is off.
+       Tapping the cell shows a toast (handled in renderCalendar). */
+    .cal-day.kitchen-closed {
+      color: #c0392b;
+      background: #fdf2f0;
+      cursor: pointer;     /* tappable for the explanation toast */
+      position: relative;
+    }
+    .cal-closed-badge {
+      position: absolute;
+      top: 2px;
+      right: 3px;
+      font-size: 0.6rem;
+      line-height: 1;
+      pointer-events: none;
+    }
+
     .cal-day:not(.disabled):not(.empty):hover:not(.selected) {
       background: #fdf0ee;
       border-color: #f0a899;
@@ -4567,7 +4585,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.19.7";
+    const APP_VERSION = "v26.05.20.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4948,6 +4966,7 @@
         payment_preference: "Daily Payment", feeExempt: false
       },
       selectedDates: [], menuCache: {}, orders: {},
+      kitchenClosedDates: [],  // populated by fetchKitchenClosedDates()
       calYear: 0, calMonth: 0,
       grandTotal: 0, runningTotal: 0, walletBalance: 0, walletCredit: 0,
       tempUpiMode: false,
@@ -6122,6 +6141,10 @@
     function initCalendar() {
       const ist = getIST(); S.calYear = ist.getUTCFullYear(); S.calMonth = ist.getUTCMonth();
       renderCalendar();
+      // Fetch admin-marked closed dates asynchronously so the calendar
+      // re-renders with 🚫 badges as soon as the data arrives. Soft-fails
+      // if the request errors — server still guards on submit.
+      fetchKitchenClosedDates().then(() => renderCalendar()).catch(() => {});
       $("calPrev").onclick = () => { S.calMonth--; if (S.calMonth < 0) { S.calMonth = 11; S.calYear--; } renderCalendar(); };
       $("calNext").onclick = () => { S.calMonth++; if (S.calMonth > 11) { S.calMonth = 0; S.calYear++; } renderCalendar(); };
     }
@@ -6132,22 +6155,55 @@
       $("calDayNames").innerHTML = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => `<div class="cal-day-name">${d}</div>`).join("");
       const ist = getIST(), today = toISO(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate());
       const fd = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate();
+      // S.kitchenClosedDates is populated by fetchKitchenClosedDates() on
+      // login + on each calendar nav; defaults to [] so the calendar still
+      // renders if the fetch fails.
+      const closedSet = new Set(S.kitchenClosedDates || []);
       let html = "";
       for (let i = 0; i < fd; i++)html += `<div class="cal-day empty"></div>`;
       for (let d = 1; d <= dim; d++) {
         const ds = toISO(y, m, d), isSun = new Date(ds + "T12:00:00").getDay() === 0, past = ds < today, sel = S.selectedDates.includes(ds);
+        const isKitchenClosed = !isSun && !past && closedSet.has(ds);
         // Issue 3: disable today if all meal cutoffs have already passed
         const avail = getMealAvailability(ds);
         const allCutoffPassed = ds === today && !avail.Breakfast && !avail.Lunch && !avail.Dinner;
-        const disabled = isSun || past || allCutoffPassed;
+        const disabled = isSun || past || allCutoffPassed || isKitchenClosed;
         let cls = "cal-day";
         if (disabled) cls += " disabled"; else if (sel) cls += " selected";
         if (ds === today && !sel && !disabled) cls += " today";
         if (allCutoffPassed && !sel) cls += " disabled";
-        html += `<div class="${cls}" ${!disabled ? `onclick="toggleDate('${ds}')"` : ""} title="${allCutoffPassed ? t('all_cutoffs_passed_title') : ""}">${d}</div>`;
+        if (isKitchenClosed) cls += " kitchen-closed";
+        // Closed-day cells get a 🚫 badge + an onclick that shows the message
+        // (so customers tapping a greyed-out cell get an explanation rather
+        // than silent failure).
+        const inner = isKitchenClosed
+          ? `${d}<span class="cal-closed-badge" title="Kitchen closed">🚫</span>`
+          : `${d}`;
+        const click = isKitchenClosed
+          ? `onclick="showKitchenClosedToast()"`
+          : (!disabled ? `onclick="toggleDate('${ds}')"` : "");
+        html += `<div class="${cls}" ${click} title="${isKitchenClosed ? 'Kitchen is closed on this day' : (allCutoffPassed ? t('all_cutoffs_passed_title') : '')}">${inner}</div>`;
       }
       $("calGrid").innerHTML = html;
       updateDateSummary();
+    }
+    function showKitchenClosedToast() {
+      toast("Kitchen is closed on this day, sorry for inconvenience caused", 3500);
+    }
+    // Fetches the admin-marked closed dates (non-Sunday) from the backend
+    // and caches them in S.kitchenClosedDates. Called once at app start
+    // and after the customer reaches the calendar.
+    async function fetchKitchenClosedDates() {
+      try {
+        const res  = await apiFetch(`${APPS_SCRIPT_URL}?action=getKitchenClosedDates&_t=${Date.now()}`, {}, { silent: true });
+        const data = await res.json();
+        S.kitchenClosedDates = Array.isArray(data.closedDates) ? data.closedDates : [];
+      } catch (e) {
+        // Soft-fail: if the fetch errors, the calendar still works (just
+        // without the closed-day markers). The server-side guard in
+        // submitOrder will still block any closed-day submission.
+        S.kitchenClosedDates = S.kitchenClosedDates || [];
+      }
     }
     function toggleDate(ds) {
       const idx = S.selectedDates.indexOf(ds);
@@ -7690,6 +7746,25 @@
             // Customer changed their mind — nothing to do, leave cart as-is.
             toast("Duplicate order cancelled. Your existing order " + existingId + " is unchanged.");
           }
+        }
+        else if (data.kitchen_closed && Array.isArray(data.closed_dates) && data.closed_dates.length) {
+          // Server rejected because the admin marked one or more selected
+          // dates as Kitchen Closed after this cart was built. Refresh
+          // the closed-dates list so the calendar greys them out, and
+          // pull those dates out of the cart so the customer can retry.
+          await fetchKitchenClosedDates();
+          data.closed_dates.forEach(d => {
+            const idx = S.selectedDates.indexOf(d);
+            if (idx >= 0) S.selectedDates.splice(idx, 1);
+            if (S.orders[d]) delete S.orders[d];
+          });
+          await sAlert(
+            `Kitchen is closed on:<br><br><b>${data.closed_dates.join(", ")}</b><br><br>` +
+            `We've removed these dates from your cart. Please review and try again.`,
+            "Kitchen Closed", "🚫"
+          );
+          renderCalendar();
+          goToStep(2);
         }
         else if (data.stock_conflicts && data.stock_conflicts.length) {
           // Server rejected due to stock exhaustion — auto-reduce cart to available

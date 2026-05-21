@@ -451,6 +451,7 @@ function doGet(e) {
     // Fallback menu / orders for customers (legacy)
     if (action === "getMenu") return jsonRes(getMenu(p.date));
     if (action === "getMenuBatch") return jsonRes(getMenuBatch(p.dates));
+    if (action === "getKitchenClosedDates") return jsonRes(getKitchenClosedDates());
     if (action === "getWeeklyMenu") return jsonRes(getWeeklyMenu());
     if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(p.phone));
     if (action === "getWalletValue") return jsonRes({wallet_balance: _calculateWalletBalance(p.phone)});
@@ -559,6 +560,10 @@ function doPost(e) {
     if (action === "adminCancelOrder") {
       if (!isAdmin) return jsonRes({success:false, error: "STRICT ADMIN PIN REQUIRED"});
       return jsonRes(adminCancelOrder(body));
+    }
+    if (action === "setKitchenClosed") {
+      if (!isAdmin) return jsonRes({success:false, error: "STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(setKitchenClosed(body));
     }
     if (action === "markRefunded") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
@@ -1355,6 +1360,12 @@ function _getMenuUncached(dateStr) {
     return d === dateStr;
   });
 
+  // Admin can mark a specific (non-Sunday) day as Kitchen Closed via the
+  // Daily Menu tab. When set, customer calendar greys out the day and any
+  // submitOrder attempt for it is rejected server-side.
+  const _kitchenClosed = !!(r && (r.Kitchen_Closed === true ||
+    String(r.Kitchen_Closed || "").toLowerCase() === "true"));
+
   // Breakfast master items
   const bfWs = getOrCreateTab(ss, TAB_BF_MASTER, []);
   const bfRows = getAllRows(bfWs).filter(x => String(x.Active).toLowerCase() !== "false");
@@ -1471,8 +1482,34 @@ function _getMenuUncached(dateStr) {
     oos_items:    oosItems,
     orders_closed: ordersClosed,
     stock_limits: stockLimits,
-    units_remaining: unitsRemaining
+    units_remaining: unitsRemaining,
+    kitchen_closed: _kitchenClosed
   };
+}
+
+// ── KITCHEN CLOSURE: list of admin-closed (non-Sunday) dates ─────
+// Lightweight endpoint used by the customer calendar to grey out
+// closed days without having to fetch every date's full menu.
+function getKitchenClosedDates() {
+  return _cachedData("kitchen_closed_dates_v1", 60, function() {
+    const ss   = getSpreadsheet();
+    const ws   = getOrCreateTab(ss, TAB_MENU, []);
+    const rows = getAllRows(ws);
+    const today = getISTDate();
+    const closed = [];
+    rows.forEach(function(r) {
+      const isClosed = (r.Kitchen_Closed === true ||
+        String(r.Kitchen_Closed || "").toLowerCase() === "true");
+      if (!isClosed) return;
+      const d = r.Date instanceof Date
+        ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(r.Date).trim();
+      if (!d || d < today) return;            // skip past dates
+      closed.push(d);
+    });
+    closed.sort();
+    return { closedDates: closed };
+  });
 }
 
 // ── GET WEEKLY MENU (next 7 days) ────────────────────────────
@@ -1807,6 +1844,34 @@ function _submitOrderInternal(body) {
   const initialStreakInfo = _calculateLoyaltyStreak(profile.phone, allOrderRows);
   let virtualStreakCount = initialStreakInfo.streak;
   let virtualPastSurcharge = initialStreakInfo.pastSurcharge;
+
+  // ════ KITCHEN CLOSURE PRE-FLIGHT ════
+  // Reject the entire submission if ANY ordered date has been marked
+  // Kitchen Closed via the admin Daily Menu toggle. Customer calendar
+  // already greys these days out — this is the defensive server guard.
+  {
+    const closedHits = [];
+    for (const _o of orders) {
+      const _menuForDate = menuRowsAll.find(function(mr) {
+        const d = mr.Date instanceof Date
+          ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(mr.Date).trim();
+        return d === _o.date;
+      });
+      const _closed = !!(_menuForDate && (_menuForDate.Kitchen_Closed === true ||
+        String(_menuForDate.Kitchen_Closed || "").toLowerCase() === "true"));
+      if (_closed) closedHits.push(_o.date);
+    }
+    if (closedHits.length) {
+      return {
+        success: false,
+        kitchen_closed: true,
+        closed_dates: closedHits,
+        error: "Kitchen is closed on " + closedHits.join(", ")
+             + ". Please remove that date from your cart and try again."
+      };
+    }
+  }
 
   // ════ STOCK LIMIT PRE-FLIGHT ════
   // Hard-block submission if any requested item exceeds remaining stock.
@@ -3301,6 +3366,8 @@ function _getAdminDataUncached() {
         unitsRemaining[meal][colKey] = Math.max(0, limit - (orderedCounts[meal][itemsJsonKey(colKey)] || 0));
       });
     });
+    const kitchenClosed = (r.Kitchen_Closed === true ||
+      String(r.Kitchen_Closed || "").toLowerCase() === "true");
     return {
       date:             d,
       breakfast:        breakfast,
@@ -3313,6 +3380,7 @@ function _getAdminDataUncached() {
       orders_closed:    ordersClosed,
       stock_limits:     stockLimits,
       units_remaining:  unitsRemaining,
+      kitchen_closed:   kitchenClosed,
     };
   });
 
@@ -3326,10 +3394,17 @@ function saveMenu(body) {
   const ws = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed"
   ]);
   const rows = getAllRows(ws);
-  const hIdx = headerIndex(ws);
+  let hIdx = headerIndex(ws);
+
+  // Self-heal: ensure Kitchen_Closed column exists for legacy sheets.
+  if (!hIdx["Kitchen_Closed"]) {
+    ws.getRange(1, ws.getLastColumn() + 1).setValue("Kitchen_Closed");
+    SpreadsheetApp.flush();
+    hIdx = headerIndex(ws);
+  }
 
   const dateStr     = body.date;
   const existing    = rows.find(r => {
@@ -3344,6 +3419,13 @@ function saveMenu(body) {
     ? JSON.stringify(body.breakfast)
     : (body.breakfastJson || "");
 
+  // Preserve the existing Kitchen_Closed flag — regular menu saves
+  // should never silently flip it. Use setKitchenClosed() to change it.
+  const preservedKitchenClosed = existing
+    ? (existing.Kitchen_Closed === true ||
+       String(existing.Kitchen_Closed || "").toLowerCase() === "true")
+    : false;
+
   const newRow = [
     dateStr,
     bfJson,
@@ -3357,6 +3439,7 @@ function saveMenu(body) {
     JSON.stringify(body.oos_items    || { Breakfast: [], Lunch: [], Dinner: [] }),
     JSON.stringify(body.orders_closed || {}),
     JSON.stringify(body.stock_limits || {}),
+    preservedKitchenClosed ? "TRUE" : "",
   ];
 
   if (existing) {
@@ -3365,8 +3448,143 @@ function saveMenu(body) {
     ws.appendRow(newRow);
   }
   // Bust per-date menu cache and the aggregated admin-data cache
-  _invalidateCache("menu_v2_" + dateStr, "adminData_v1");
+  _invalidateCache("menu_v2_" + dateStr, "adminData_v1", "kitchen_closed_dates_v1");
   return {success: true, action: existing ? "updated" : "saved"};
+}
+
+// ── ADMIN: KITCHEN CLOSURE TOGGLE ─────────────────────────────
+// Marks a single date as "Kitchen Closed" (or reopens it).
+//
+// Flow:
+//   1. If isClosed === true AND there are active orders for that date
+//      AND confirmCancelOrders !== true → returns
+//      { requires_confirm: true, orderCount, totalAmount } so the admin
+//      UI can show "X orders worth ₹Y — cancel + refund all and close?"
+//   2. If confirmed (or no orders exist) → cancel + refund every active
+//      order for that date (wallet payments refund instantly to wallet,
+//      UPI payments go to manual_upi refund queue) and set Kitchen_Closed.
+//   3. If isClosed === false → simply clear the flag (no order action).
+function setKitchenClosed(body) {
+  const pin = String(body && body.pin || "").trim();
+  if (pin !== ADMIN_PIN) return { success: false, error: "STRICT ADMIN PIN REQUIRED" };
+
+  const dateStr = String(body.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return { success: false, error: "Invalid date format (expected YYYY-MM-DD)" };
+  }
+  const isClosed = (body.isClosed === true || String(body.isClosed) === "true");
+  const confirmCancelOrders = (body.confirmCancelOrders === true ||
+                               String(body.confirmCancelOrders) === "true");
+
+  const ss = getSpreadsheet();
+  const menuWs = getOrCreateTab(ss, TAB_MENU, [
+    "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
+    "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed"
+  ]);
+  let mIdx = headerIndex(menuWs);
+  if (!mIdx["Kitchen_Closed"]) {
+    menuWs.getRange(1, menuWs.getLastColumn() + 1).setValue("Kitchen_Closed");
+    SpreadsheetApp.flush();
+    mIdx = headerIndex(menuWs);
+  }
+
+  // If closing AND not yet confirmed: count affected orders + amount.
+  if (isClosed) {
+    const ordersWs = ss.getSheetByName(TAB_ORDERS);
+    const oRows = ordersWs ? getAllRows(ordersWs) : [];
+    const activeMatches = oRows.filter(function(r) {
+      const od = r.Order_Date instanceof Date
+        ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(r.Order_Date || "").trim();
+      if (od !== dateStr) return false;
+      return !_isOrderCancelled(r.Payment_Status);
+    });
+
+    if (activeMatches.length && !confirmCancelOrders) {
+      const total = activeMatches.reduce(function(s, r) {
+        return s + (Number(r.Net_Total) || 0);
+      }, 0);
+      const customers = {};
+      activeMatches.forEach(function(r) { customers[String(r.Phone || "")] = true; });
+      return {
+        success: false,
+        requires_confirm: true,
+        orderCount: activeMatches.length,
+        customerCount: Object.keys(customers).length,
+        totalAmount: total,
+        date: dateStr,
+        message: "There are " + activeMatches.length + " active order(s) totaling ₹"
+               + total + " across " + Object.keys(customers).length
+               + " customer(s) for " + dateStr
+               + ". Closing this day will cancel and refund all of them. Confirm?"
+      };
+    }
+
+    // Auto-cancel + refund every active order for this date.
+    let cancelled = 0;
+    let refundedWallet = 0;
+    let refundedUpi = 0;
+    activeMatches.forEach(function(r) {
+      const pStat = String(r.Payment_Status || "").toLowerCase();
+      let rType = "none";
+      if (pStat === "wallet paid") rType = "wallet";
+      else if (pStat === "paid" || pStat.indexOf("pending") !== -1) rType = "manual_upi";
+
+      try {
+        const res = deleteOrder(String(r.Phone || ""), String(r.Submission_ID || ""),
+                                rType, { isAdmin: true });
+        if (res && res.success) {
+          cancelled++;
+          if (rType === "wallet")    refundedWallet += (Number(r.Net_Total) || 0);
+          if (rType === "manual_upi") refundedUpi    += (Number(r.Net_Total) || 0);
+        }
+        SpreadsheetApp.flush();
+      } catch(e) {
+        console.error("setKitchenClosed: deleteOrder failed for " + r.Submission_ID + ": " + e.message);
+      }
+    });
+
+    // Write Kitchen_Closed = TRUE on the menu row (create row if needed).
+    _writeKitchenClosedFlag(menuWs, mIdx, dateStr, true);
+    _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "adminData_v1");
+    return {
+      success: true,
+      isClosed: true,
+      cancelled: cancelled,
+      refundedWallet: refundedWallet,
+      refundedUpi: refundedUpi,
+      message: "Kitchen closed for " + dateStr + ". " + cancelled
+             + " order(s) cancelled — ₹" + refundedWallet + " refunded to wallets, ₹"
+             + refundedUpi + " queued for UPI refund."
+    };
+  }
+
+  // Re-opening: just clear the flag, no order action.
+  _writeKitchenClosedFlag(menuWs, mIdx, dateStr, false);
+  _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "adminData_v1");
+  return { success: true, isClosed: false, message: "Kitchen re-opened for " + dateStr + "." };
+}
+
+function _writeKitchenClosedFlag(menuWs, mIdx, dateStr, isClosed) {
+  const rows = getAllRows(menuWs);
+  const existing = rows.find(function(x) {
+    const d = x.Date instanceof Date
+      ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(x.Date || "").trim();
+    return d === dateStr;
+  });
+  const colIdx = mIdx["Kitchen_Closed"];
+  if (existing) {
+    menuWs.getRange(existing._row, colIdx).setValue(isClosed ? "TRUE" : "");
+  } else {
+    // Create a minimal menu row just to hold the flag.
+    const newRow = new Array(menuWs.getLastColumn()).fill("");
+    newRow[mIdx["Date"] - 1] = dateStr;
+    newRow[colIdx - 1] = isClosed ? "TRUE" : "";
+    menuWs.appendRow(newRow);
+  }
+  SpreadsheetApp.flush();
 }
 
 // ── ADMIN: BREAKFAST MASTER CRUD ─────────────────────────────
