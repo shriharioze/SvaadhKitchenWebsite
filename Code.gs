@@ -1849,7 +1849,12 @@ function _submitOrderInternal(body) {
   // Reject the entire submission if ANY ordered date has been marked
   // Kitchen Closed via the admin Daily Menu toggle. Customer calendar
   // already greys these days out — this is the defensive server guard.
-  {
+  //
+  // EXCEPTION — payment_method === "Gateway (HDFC)": by the time we get
+  // here the customer has already paid on the HDFC-hosted page. Rejecting
+  // would leave the money taken without an order in our sheet. Accept
+  // the order and log a warning so admin can cancel + refund manually.
+  if (payMethod !== "Gateway (HDFC)") {
     const closedHits = [];
     for (const _o of orders) {
       const _menuForDate = menuRowsAll.find(function(mr) {
@@ -1870,6 +1875,24 @@ function _submitOrderInternal(body) {
         error: "Kitchen is closed on " + closedHits.join(", ")
              + ". Please remove that date from your cart and try again."
       };
+    }
+  } else {
+    // Gateway path — log if a closed date sneaks through, so admin can
+    // catch it manually. Order still gets written.
+    for (const _o of orders) {
+      const _menuForDate = menuRowsAll.find(function(mr) {
+        const d = mr.Date instanceof Date
+          ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(mr.Date).trim();
+        return d === _o.date;
+      });
+      const _closed = !!(_menuForDate && (_menuForDate.Kitchen_Closed === true ||
+        String(_menuForDate.Kitchen_Closed || "").toLowerCase() === "true"));
+      if (_closed) {
+        console.warn("⚠️ Gateway-paid order accepted for KITCHEN-CLOSED date "
+          + _o.date + " (phone " + profile.phone + ", gateway_order_id "
+          + (body.gateway_order_id || "?") + "). Admin must manually cancel + refund this order.");
+      }
     }
   }
 
