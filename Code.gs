@@ -7921,16 +7921,31 @@ function hdfc_verifyReturnPayload(body) {
   }
 
   // ── Step 1: HMAC signature check (fast, no I/O) ─────────────
-  // If signature is present and key is configured, verify it.
-  // On mismatch: do NOT reject outright — fall back to Status API (Step 2).
-  // Reason: HDFC UAT may not send a valid signature; Status API is authoritative.
+  // Tries canonical Juspay (sorted-all-params + base64) first, falls back
+  // to the legacy `order_id|status` hex HMAC for backward compatibility.
+  // On any mismatch fall through to Status API (authoritative).
   var signatureOk = false;
   if (HDFC_RESPONSE_KEY && signature) {
-    const expectedSig = hdfc_hmacSha256(orderId + "|" + status, HDFC_RESPONSE_KEY);
-    if (expectedSig.toLowerCase() === signature.toLowerCase()) {
+    const sigParams = {};
+    for (const k in body) {
+      if (k === "_action" || k === "pin" || k === "sessionPin") continue;
+      sigParams[k] = body[k];
+    }
+    sigParams.order_id  = orderId;
+    sigParams.status    = status;
+    sigParams.signature = signature;
+
+    const matchedFormat = hdfc_verifySignatureMultiFormat(sigParams, HDFC_RESPONSE_KEY);
+    if (matchedFormat) {
       signatureOk = true;
+      console.log("HDFC return: HMAC verified for " + orderId
+        + " via format=" + matchedFormat
+        + " (algo=" + (body.signature_algorithm || "n/a") + ")");
     } else {
-      console.warn("HDFC return: HMAC mismatch for order " + orderId + " — falling back to Status API.");
+      console.warn("HDFC return: HMAC mismatch for order " + orderId
+        + " — tried canonical, canonical-no-algo, and legacy formats."
+        + " params=" + JSON.stringify(Object.keys(sigParams))
+        + " — falling back to Status API.");
     }
   } else {
     console.warn("HDFC return: No signature or key — falling back to Status API.");
@@ -8227,6 +8242,82 @@ function hdfc_hmacSha256(message, secret) {
     Utilities.newBlob(secret).getBytes()
   );
   return sig.map(function(b) { return ("0" + (b & 0xFF).toString(16)).slice(-2); }).join("");
+}
+
+/**
+ * HMAC-SHA256 → Base64 (used by canonical Juspay signature verification).
+ */
+function hdfc_hmacSha256Base64(message, secret) {
+  const sig = Utilities.computeHmacSha256Signature(
+    Utilities.newBlob(message).getBytes(),
+    Utilities.newBlob(secret).getBytes()
+  );
+  return Utilities.base64Encode(sig);
+}
+
+/**
+ * PHP-style urlencode (space → "+", plus a few extras Juspay's signature
+ * contract requires when building the key=value HMAC payload).
+ */
+function hdfc_phpUrlEncode(s) {
+  return encodeURIComponent(String(s == null ? "" : s))
+    .replace(/%20/g, "+")
+    .replace(/!/g, "%21")
+    .replace(/\*/g, "%2A")
+    .replace(/'/g, "%27")
+    .replace(/\(/g, "%28")
+    .replace(/\)/g, "%29")
+    .replace(/~/g, "%7E");
+}
+
+/**
+ * Canonical Juspay / HDFC SmartGateway return-URL signature verification
+ * (post-vulnerability-fix format). Tries the new canonical format first,
+ * then a variant that excludes signature_algorithm, then the legacy
+ * order_id|status hex HMAC for backward compatibility.
+ *
+ * Returns the matched format name, or "" on mismatch.
+ */
+function hdfc_verifySignatureMultiFormat(params, key) {
+  if (!params || !key) return "";
+  const received = String(params.signature || "").trim();
+  if (!received) return "";
+
+  const buildMsg = function(excludeKeys) {
+    const filtered = [];
+    for (const k in params) {
+      if (excludeKeys.indexOf(k) !== -1) continue;
+      if (params[k] === undefined || params[k] === null) continue;
+      filtered.push([k, String(params[k])]);
+    }
+    filtered.sort(function(a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+    return filtered.map(function(p) {
+      return p[0] + "=" + hdfc_phpUrlEncode(p[1]);
+    }).join("&");
+  };
+
+  const candidates = [received];
+  try { candidates.push(decodeURIComponent(received)); } catch(_) {}
+
+  const msgA = buildMsg(["signature"]);
+  const sigA = hdfc_hmacSha256Base64(msgA, key);
+  for (var i = 0; i < candidates.length; i++) {
+    if (sigA === candidates[i]) return "canonical";
+  }
+
+  const msgB = buildMsg(["signature", "signature_algorithm"]);
+  const sigB = hdfc_hmacSha256Base64(msgB, key);
+  for (var j = 0; j < candidates.length; j++) {
+    if (sigB === candidates[j]) return "canonical-no-algo";
+  }
+
+  const legacyMsg = String(params.order_id || "") + "|" + String(params.status || "");
+  const sigLegacy = hdfc_hmacSha256(legacyMsg, key);
+  for (var m = 0; m < candidates.length; m++) {
+    if (sigLegacy.toLowerCase() === String(candidates[m]).toLowerCase()) return "legacy";
+  }
+
+  return "";
 }
 
 
