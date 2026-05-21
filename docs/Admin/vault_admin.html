@@ -2591,11 +2591,14 @@ async function toggleKitchenClosed() {
   if (data && data.success) {
     await sAlert(data.message || (isReopening ? "Kitchen re-opened." : "Kitchen closed."),
                  isReopening ? "Re-opened ✅" : "Kitchen Closed 🚫");
-    // Refresh admin data so menuEntries reflects the new state.
-    if (typeof loadAdminData === "function") {
-      try { await loadAdminData(true); } catch(_) {}
+    // Re-fetch admin data so S.menuEntries reflects the new kitchen_closed
+    // flag. loadFullAdminData internally calls selectDate() so the hero
+    // badges (including the closed pill) re-render with the fresh state.
+    if (typeof loadFullAdminData === "function") {
+      try { await loadFullAdminData(); } catch(_) { selectDate(iso); }
+    } else {
+      selectDate(iso);
     }
-    selectDate(iso); // re-render hero badges + grids
   } else {
     await sAlert((data && data.error) || "Could not update kitchen status.", "Failed", "❌");
   }
