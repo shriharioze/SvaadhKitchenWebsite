@@ -486,7 +486,10 @@ function doPost(e) {
         `<p>Redirecting... <a href="${redirectUrl}">Click here if not redirected</a></p></body></html>`
       );
     }
-    // ── Also handle form-encoded POST (Juspay sometimes sends application/x-www-form-urlencoded)
+    // ── Also handle form-encoded POST (Juspay sends this for the failure path)
+    // Includes the popup-close loop so AUTHORIZATION_FAILED closes the popup
+    // automatically — matching the success-path behaviour. Without the close
+    // attempts the customer had to manually close the failure popup.
     if (!parsedForHdfc.order_id && e.postData && e.postData.type === "application/x-www-form-urlencoded") {
       const formParams = e.parameter || {};
       if (formParams.order_id && formParams.status) {
@@ -494,10 +497,16 @@ function doPost(e) {
           .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(formParams[k]))
           .join("&");
         const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
+        const safeUrlJs = JSON.stringify(redirectUrl);
         return HtmlService.createHtmlOutput(
-          `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head>` +
-          `<body><script>window.location.replace(${JSON.stringify(redirectUrl)});</script>` +
-          `<p>Redirecting... <a href="${redirectUrl}">Click here if not redirected</a></p></body></html>`
+          `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3;url=${redirectUrl}"></head>` +
+          `<body><p>Returning to Svaadh Kitchen…</p><script>(function(){` +
+          `var URL=${safeUrlJs};` +
+          `var n=0;function tryClose(){n++;try{window.close();}catch(_){}try{if(window.top&&window.top!==window){window.top.close();}}catch(_){}if(n<6)setTimeout(tryClose,300);}tryClose();` +
+          `function go(){try{window.top.location.replace(URL);}catch(e){try{window.top.location.href=URL;}catch(_){window.location.href=URL;}}}` +
+          `setTimeout(go,50);setTimeout(go,500);` +
+          `})();</script>` +
+          `<p><a href="${redirectUrl}">Click here if not redirected</a></p></body></html>`
         );
       }
     }
