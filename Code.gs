@@ -193,7 +193,7 @@ const BUSINESS_CONTEXT = {
   name: "Svaadh Kitchen",
   type: "Cloud Kitchen",
   tagline: "Wholesome homemade vegetarian meals, straight from our kitchen to your plate.",
-  about: "Svaadh Kitchen is a home-based vegetarian cloud kitchen in Hadapsar, Pune, serving fresh and wholesome homemade meals since August 2023 (over 2.5 years). We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu. We deliver exclusively to 15 areas in Hadapsar: Bhosale Nagar, Magarpatta, Amanora, DP Road, Triveni Nagar, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Vaiduwadi (till Yash Honda), Pune-Solapur Road (till Gadital), Vihar Chowk, Mandai, and Gadital. Delivery is FREE for Bhosale Nagar and Triveni Nagar. All other areas have a nominal ₹10 fee if the order is below ₹100. Self Pickup is always free.",
+  about: "Svaadh Kitchen is a home-based vegetarian cloud kitchen in Hadapsar, Pune, serving fresh and wholesome homemade meals since August 2023 (over 2.5 years). We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu. We deliver exclusively to 15 areas in Hadapsar: Bhosale Nagar, Magarpatta, Amanora, DP Road, Triveni Nagar, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Vaiduwadi (till Yash Honda), Pune-Solapur Road (till Gadital), Vihar Chowk, Mandai, and Gadital. Delivery is FREE for Bhosale Nagar and Triveni Nagar. All other areas have a nominal ₹11 fee if the order is below ₹100. Self Pickup is always free.",
   vision: "To make homemade vegetarian meals easily accessible and affordable for everyone, while maintaining taste, quality, and consistency.",
   locations_served: [
     "Bhosale Nagar", "Magarpatta", "Amanora", "DP Road", "Triveni Nagar", 
@@ -203,7 +203,7 @@ const BUSINESS_CONTEXT = {
   order_cutoffs: { breakfast: "before 7:00 AM", lunch: "before 9:00 AM", dinner: "before 4:30 PM", closed_on: "Sunday" },
   delivery: {
     free_areas: ["Bhosale Nagar", "Triveni Nagar", "Self Pickup"],
-    charge: "₹10 per meal for other listed areas if subtotal is below ₹100. Free for Bhosale Nagar, Triveni Nagar and Self Pickup always.",
+    charge: "₹11 per meal for other listed areas if subtotal is below ₹100. Free for Bhosale Nagar, Triveni Nagar and Self Pickup always.",
     outside_policy: "We only deliver in the listed Hadapsar areas. We DO NOT deliver to areas like Kothrud, Baner, Viman Nagar, etc."
   },
   menu: {
@@ -1783,7 +1783,7 @@ function _submitOrderInternal(body) {
 
   // Fetch free areas dynamically (replaces hardcoded FREE_AREA = "Bhosale Nagar")
   const freeAreaNames = getAreas().filter(function(a){ return a.free; }).map(function(a){ return a.name; });
-  const DELIVERY  = 10;
+  const DELIVERY  = 11;
 
   const submissionIds = [];
 
@@ -2007,7 +2007,7 @@ function _submitOrderInternal(body) {
     const getDisc = (sub) => {
       if (is6thDay) {
         // Loyalty Discount: Waive all 6 days of surcharge
-        const currentSurcharge = Math.ceil(submissionDayFoodTotal / 20);
+        const currentSurcharge = Math.ceil(submissionDayFoodTotal * 0.06);
         const totalWaiver = virtualPastSurcharge + currentSurcharge;
         return submissionDayFoodTotal > 0 ? Math.round(totalWaiver * (sub / submissionDayFoodTotal)) : 0;
       }
@@ -2015,7 +2015,7 @@ function _submitOrderInternal(body) {
     };
 
     // Update virtual streak state for NEXT loop iteration
-    const currentDaySurcharge = Math.ceil(submissionDayFoodTotal / 20);
+    const currentDaySurcharge = Math.ceil(submissionDayFoodTotal * 0.06);
     if (is6thDay) {
       virtualStreakCount = 0;
       virtualPastSurcharge = 0;
@@ -2081,7 +2081,7 @@ function _submitOrderInternal(body) {
       // On the 6th day, the surcharge IS charged (consistency), and the loyalty discount
       // (totalWaiver) includes all 6 days of surcharge so it covers it. Net effect:
       // the 6th-day surcharge charge and refund cancel each other; customer gets back days 1–5.
-      const inflationSurcharge = Math.ceil(sub / 20);
+      const inflationSurcharge = Math.ceil(sub * 0.06);
 
       // Google Review Promo Logic (10% OFF per meal)
       let reviewDiscount = 0;
@@ -2596,7 +2596,7 @@ function diagnoseLoyaltyStreak(phone) {
   mine.slice(0, 15).forEach((r, idx) => {
     const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
     const stored  = Number(r.Inflation_Surcharge);
-    const derived = Math.ceil((Number(r.Food_Subtotal) || 0) / 20);
+    const derived = Math.ceil((Number(r.Food_Subtotal) || 0) * 0.06);
     Logger.log("[" + (idx+1) + "] " + d + " " + r.Meal_Type
       + "  food=" + r.Food_Subtotal
       + "  storedSurch=" + (isNaN(stored) ? "(empty)" : stored)
@@ -2658,7 +2658,7 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
     // 5-day streak history collapses pastSurcharge to 0 and the
     // customer ends up paying full price on their day-6 reward.
     const storedSurch  = Number(r.Inflation_Surcharge) || 0;
-    const derivedSurch = Math.ceil((Number(r.Food_Subtotal) || 0) / 20);
+    const derivedSurch = Math.ceil((Number(r.Food_Subtotal) || 0) * 0.06);
     dailyTotals[d] += Math.max(storedSurch, derivedSurch);
 
     // Track days where the 6-day loyalty reward was already given
@@ -3104,7 +3104,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
 
         // 1. Delivery Clawback: order was in non-free area but charged ₹0 due to threshold
         if (xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
-          deliveryOwed += 10;
+          deliveryOwed += 11;
           netDelta += 10;
           if (delivColIdx) ws.getRange(x._row, delivColIdx).setValue(10);
         }
@@ -3175,8 +3175,8 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         lines.push(`  • -₹${overDiscount} — discount reversal: a loyalty discount applied to your other order(s) on this day is reversed since it was earned as part of this streak order.`);
       }
       if (deliveryOwed > 0) {
-        const numOrders = deliveryOwed / 10;
-        lines.push(`  • -₹${deliveryOwed} — delivery fee: your remaining ${numOrders > 1 ? numOrders + " orders" : "order"} had free delivery because day total was ₹150+. It now drops below ₹150, so ₹10 delivery applies.`);
+        const numOrders = deliveryOwed / 11;
+        lines.push(`  • -₹${deliveryOwed} — delivery fee: your remaining ${numOrders > 1 ? numOrders + " orders" : "order"} had free delivery because day total was ₹150+. It now drops below ₹150, so ₹11 delivery applies.`);
       }
       if (smallFeeOwed > 0) {
         lines.push(`  • -₹${smallFeeOwed} — small cart fee: a remaining order under ₹50 had its ₹10 small cart fee waived (day total was ₹150+). Now that drops below ₹150, the fee applies.`);
@@ -4714,7 +4714,7 @@ function buildSystemPrompt(extraMenu) {
   const prompt = "You are a helpful assistant for Svaadh Kitchen, a vegetarian cloud kitchen in Hadapsar, Pune."
     +" Closed Sundays. Over 2.5 years of service (since Aug 2023). Cutoffs: BF<7AM, Lunch<9AM, Dinner<4:30PM."
     +" AREAS: " + B.locations_served.join(", ") + ".\n"
-    +" DELIVERY POLICY: FREE for Bhosale Nagar, Triveni Nagar, and Self Pickup. Other areas ₹10/meal if subtotal < ₹100. "
+    +" DELIVERY POLICY: FREE for Bhosale Nagar, Triveni Nagar, and Self Pickup. Other areas ₹11/meal if subtotal < ₹100. "
     + B.delivery.outside_policy + "\n"
     +" PRIVACY & SECURITY: DO NOT disclose user phone numbers, PINs, transaction IDs, UPI details, or specific refund info. If a user asks about their payment or refund, tell them to check their 'Svaadh Wallet' or 'View/Edit existing orders' dashboard, or message us on WhatsApp at " + B.contact.whatsapp + ".\n"
     + todayLine + (extraMenu || "")
@@ -5443,7 +5443,7 @@ function getAnalytics(p) {
     var food=Number(r.Food_Subtotal)||0;
     // Backfill surcharge for old rows where Inflation_Surcharge column was blank
     var surchargeRaw=Number(r.Inflation_Surcharge);
-    var surcharge = (!isNaN(surchargeRaw) && surchargeRaw > 0) ? surchargeRaw : (food > 0 ? Math.ceil(food/20) : 0);
+    var surcharge = (!isNaN(surchargeRaw) && surchargeRaw > 0) ? surchargeRaw : (food > 0 ? Math.ceil(food*0.06) : 0);
     // Small_Order_Fee: exact backfill using Option B (checks VIP, pickup, day threshold)
     var smallFee = calcSmallFee(r);
     var payStatus = String(r.Payment_Status || "").trim();
@@ -6638,7 +6638,7 @@ function batchProcessApprovals(body) {
  *   - streakInfo[dStr].surcharge snapshots the running sum BEFORE
  *     adding dStr's own surcharge (matches frontend's bookkeeping).
  *   - On 6th day: waiver = streakInfo[lastPastDate].surcharge
- *                        + Math.ceil(orderFood / 20)
+ *                        + Math.ceil(orderFood * 0.06)
  *     i.e. exactly what virtualPastSurcharge + currentDaySurcharge
  *     evaluates to on the customer's order page.
  *
@@ -6731,7 +6731,7 @@ function _recomputeLoyaltyWaiverForRow(orderRow, allRows) {
   if (virtualStreakCount !== 5) return 0;
 
   // ── Compute the waiver exactly as the bill builder does on day 6. ──
-  const currentDaySurcharge = Math.ceil((Number(orderRow.Food_Subtotal) || 0) / 20);
+  const currentDaySurcharge = Math.ceil((Number(orderRow.Food_Subtotal) || 0) * 0.06);
   return virtualPastSurcharge + currentDaySurcharge;
 }
 
@@ -6773,7 +6773,7 @@ function getPendingUPIPayments() {
                    // Stored waiver was understated. Re-derive the true Net_Total:
                    //   food + delivery + small_fee + surcharge - corrected_waiver - review_discount
                    const food   = Number(r.Food_Subtotal) || 0;
-                   const surch  = Math.max(Number(r.Inflation_Surcharge) || 0, Math.ceil(food / 20));
+                   const surch  = Math.max(Number(r.Inflation_Surcharge) || 0, Math.ceil(food * 0.06));
                    const del    = Number(r.Delivery_Charge) || 0;
                    const sFee   = Number(r.Small_Order_Fee) || 0;
                    const review = Number(r.Review_Discount) || 0;
