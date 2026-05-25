@@ -449,7 +449,7 @@
 
   <!-- Header & Navbar -->
   <header>
-    <div class="header-content">
+    <a href="https://svaadhkitchen.com" class="header-content" style="text-decoration:none; color:inherit; cursor:pointer;" aria-label="Svaadh Kitchen — back to home">
       <div class="logo">
         <img src="images/svaadh-kitchen-hero.PNG" alt="Svaadh Kitchen Logo" class="logo-img">
       </div>
@@ -457,7 +457,7 @@
         <h1>Svaadh Kitchen</h1>
         <p>Wholesome homemade vegetarian meals, straight from our kitchen to your plate.</p>
       </div>
-    </div>
+    </a>
     <nav>
       <a href="#menu">Menu</a>
       <a href="#about">About Us</a>
@@ -899,11 +899,64 @@
   <script src="chat.js"></script>
 
   <!-- Footer -->
-  <footer>
-    <p>© <span id="current-year"></span> Svaadh Kitchen | Hadapsar, Pune</p>
-    <a href="tel:+919930748908" class="contact-btn call-btn">📞 Call Us</a>
-    <a href="https://wa.me/919322246765" class="contact-btn" style="background:#25D366; color:white; display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:30px; text-decoration:none; font-weight:600; margin-top:10px;">💬 WhatsApp Us</a>
-    <a href="mailto:svaadh.kitchen@gmail.com" class="contact-btn email-btn">✉️ Email Us</a>
+  <footer style="text-align:left;">
+    <div style="max-width:1100px; margin:0 auto; padding:28px 22px 14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:24px; color:#fff;">
+
+      <!-- Brand + address -->
+      <div>
+        <a href="https://svaadhkitchen.com" style="color:#fff; text-decoration:none; font-weight:700; font-size:1.1rem; display:inline-block; margin-bottom:8px;">Svaadh Kitchen</a>
+        <p style="font-size:0.82rem; line-height:1.55; opacity:0.95;">
+          A 104, Shree Laxmi Vihar Society,<br>
+          Bhosale Nagar, Hadapsar,<br>
+          Pune 411028, India
+        </p>
+        <p style="font-size:0.74rem; opacity:0.85; margin-top:8px;">
+          🍱 Home-cooked vegetarian meals.<br>
+          Compliant with Indian food regulations.
+        </p>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <div style="font-weight:700; font-size:0.92rem; margin-bottom:8px;">Contact</div>
+        <p style="font-size:0.82rem; line-height:1.75;">
+          📞 <a href="tel:+919930748908" style="color:#fff; text-decoration:none;">+91 99307 48908</a><br>
+          📞 <a href="tel:+919819969682" style="color:#fff; text-decoration:none;">+91 98199 69682</a><br>
+          💬 <a href="https://wa.me/919322246765" style="color:#fff; text-decoration:none;">WhatsApp +91 93222 46765</a><br>
+          ✉️ <a href="mailto:svaadh.kitchen@gmail.com" style="color:#fff; text-decoration:none;">svaadh.kitchen@gmail.com</a>
+        </p>
+        <p style="font-size:0.74rem; opacity:0.85; margin-top:8px;">
+          Customer support: Mon–Sat, 8:00 AM – 9:00 PM IST
+        </p>
+      </div>
+
+      <!-- Policy links -->
+      <div>
+        <div style="font-weight:700; font-size:0.92rem; margin-bottom:8px;">Policies</div>
+        <p style="font-size:0.82rem; line-height:1.85;">
+          <a href="terms.html" style="color:#fff;">Terms &amp; Conditions</a><br>
+          <a href="privacy.html" style="color:#fff;">Privacy Policy</a><br>
+          <a href="refund.html" style="color:#fff;">Refund &amp; Cancellation</a><br>
+          <a href="shipping.html" style="color:#fff;">Shipping &amp; Delivery</a>
+        </p>
+      </div>
+
+      <!-- Quick order -->
+      <div>
+        <div style="font-weight:700; font-size:0.92rem; margin-bottom:8px;">Get started</div>
+        <p style="font-size:0.82rem; line-height:1.85;">
+          <a href="order.html" style="color:#fff; font-weight:600;">🍽 Place an order →</a><br>
+          <a href="#menu" style="color:#fff;">Today's menu</a><br>
+          <a href="#faq" style="color:#fff;">FAQs</a><br>
+          <a href="#contact" style="color:#fff;">Contact us</a>
+        </p>
+      </div>
+
+    </div>
+
+    <div style="border-top:1px solid rgba(255,255,255,0.25); margin-top:8px; padding:14px 22px; text-align:center; font-size:0.75rem; opacity:0.95;">
+      © <span id="current-year"></span> Svaadh Kitchen · Hadapsar, Pune
+    </div>
   </footer>
 
   <!-- Auto-update copyright year + dark theme -->
