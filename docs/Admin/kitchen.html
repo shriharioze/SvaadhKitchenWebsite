@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.1">
+  <meta name="app-version" content="v26.05.25.2">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1086,10 +1086,150 @@
         _lastCutoffs = data.cutoffs || {};
         renderView();
         _lastUpdated = new Date();
+        // Re-schedule auto-label fires now that we have today's cutoffs.
+        try { scheduleAutoLabels(); } catch(_) {}
       } catch (e) {
         document.getElementById("kbody").innerHTML = `<div class="no-orders" style="color:#c0392b;">${e.message}</div>`;
       } finally {
         sLoading(false);
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // AUTO LABEL TRIGGER — fires 5 min after Lunch / Dinner cutoff
+    // ════════════════════════════════════════════════════════════════════
+    // Reads today's cutoffs from _lastCutoffs (admin-set per day in Daily
+    // Menu, falling back to defaults Breakfast=7 / Lunch=9 / Dinner=16.5)
+    // and schedules timers to auto-fire the label-generate + save-to-drive
+    // flow exactly the same way staff do manually. Same Drive folder, same
+    // PDF format. localStorage keeps track of "already fired today" so a
+    // page refresh after the fire doesn't trigger a duplicate.
+    //
+    // Catches up automatically: if the kitchen tab is opened AFTER the
+    // trigger time but the labels haven't been fired today yet, fires
+    // immediately. Plays a small chime + toast so staff know it ran.
+    const AUTO_LABEL_MEALS = ["Lunch", "Dinner"]; // Breakfast skipped per spec
+    const AUTO_LABEL_DELAY_MIN = 5;               // fire N min after cutoff
+    let _autoLabelTimers = {};
+
+    function _autoLabelKey(date, meal) { return "sk_autolabel_" + date + "_" + meal; }
+    function _autoLabelFiredAlready(date, meal) {
+      try { return !!localStorage.getItem(_autoLabelKey(date, meal)); } catch(_) { return false; }
+    }
+    function _autoLabelMarkFired(date, meal) {
+      try { localStorage.setItem(_autoLabelKey(date, meal), String(Date.now())); } catch(_) {}
+    }
+
+    // Returns the local Date object for today @ (cutoffHours + 5min) IST.
+    // Assumes the kitchen device's local time is IST (which it always is).
+    function _autoLabelTriggerAt(cutoffHours) {
+      const total = cutoffHours + (AUTO_LABEL_DELAY_MIN / 60);
+      const h = Math.floor(total);
+      const m = Math.round((total - h) * 60);
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d;
+    }
+
+    function scheduleAutoLabels() {
+      // Clear any existing timers (we may be called multiple times per day)
+      Object.values(_autoLabelTimers).forEach(t => { try { clearTimeout(t); } catch(_) {} });
+      _autoLabelTimers = {};
+
+      const today = todayIST();
+      const datePicker = document.getElementById("datePicker");
+      // Only auto-fire if the kitchen view is on TODAY. If staff is browsing
+      // a future or past date, leave them alone — they're inspecting.
+      if (datePicker && datePicker.value && datePicker.value !== today) {
+        console.log("[AutoLabel] Date picker on " + datePicker.value + " (not today) — skipping schedule");
+        return;
+      }
+
+      const cutoffs = {
+        Lunch:  Number(_lastCutoffs.Lunch)  || 9,
+        Dinner: Number(_lastCutoffs.Dinner) || 16.5
+      };
+      const now = new Date();
+
+      AUTO_LABEL_MEALS.forEach(meal => {
+        if (_autoLabelFiredAlready(today, meal)) {
+          console.log("[AutoLabel] " + meal + " already fired today — skipping");
+          return;
+        }
+        const triggerAt = _autoLabelTriggerAt(cutoffs[meal]);
+        const delay = triggerAt - now;
+        if (delay <= 0) {
+          // Trigger time has already passed today but we haven't fired yet —
+          // catch up immediately (e.g., kitchen device was off at cutoff).
+          console.log("[AutoLabel] " + meal + " trigger past (was at "
+            + triggerAt.toTimeString().slice(0,5) + ") — firing now");
+          autoFireLabel(today, meal);
+        } else {
+          _autoLabelTimers[meal] = setTimeout(() => autoFireLabel(today, meal), delay);
+          console.log("[AutoLabel] " + meal + " scheduled at "
+            + triggerAt.toTimeString().slice(0,5) + " (in " + Math.round(delay/60000) + " min)");
+        }
+      });
+    }
+
+    async function autoFireLabel(date, meal) {
+      if (_autoLabelFiredAlready(date, meal)) return;  // double-guard
+      _autoLabelMarkFired(date, meal);                  // claim slot first to prevent races
+
+      console.log("[AutoLabel] Firing " + meal + " for " + date);
+
+      try {
+        // Switch to Labels tab so the form is rendered.
+        if (typeof switchKTab === "function" && _currentTab !== "Labels") {
+          switchKTab("Labels");
+          // Let the tab finish rendering before we poke its inputs.
+          await new Promise(r => setTimeout(r, 700));
+        }
+
+        const dEl    = document.getElementById("bulkLabelDate");
+        const mEl    = document.getElementById("bulkLabelMeal");
+        const modeEl = document.getElementById("bulkLabelMode");
+        if (!dEl || !mEl) {
+          console.warn("[AutoLabel] Labels tab form not rendered — clearing fire flag for retry");
+          try { localStorage.removeItem(_autoLabelKey(date, meal)); } catch(_) {}
+          return;
+        }
+
+        dEl.value = date;
+        mEl.value = meal;
+        if (modeEl) modeEl.value = "Actual"; // never auto-fire Test mode
+
+        // Generate (fetches orders + renders preview + populates _bulkLabelOrders)
+        await generateBulkLabels();
+
+        if (!_bulkLabelOrders || !_bulkLabelOrders.length) {
+          console.log("[AutoLabel] No " + meal + " orders for " + date + " — nothing to save");
+          if (typeof toast === "function") toast("Auto-label: no " + meal + " orders today, nothing to save", 5000);
+          return;
+        }
+
+        // Save (builds PDF + uploads to Drive — same flow as the Save button)
+        await saveBulkLabelsToDrive();
+
+        // Audible chime + visible toast
+        try {
+          // Short pleasant beep (data-URI generated tone)
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.frequency.value = 880;
+          g.gain.value = 0.15;
+          o.connect(g); g.connect(ctx.destination);
+          o.start(); o.stop(ctx.currentTime + 0.18);
+          setTimeout(() => { try { ctx.close(); } catch(_){} }, 400);
+        } catch(_) { /* audio blocked — fine, toast still shows */ }
+        if (typeof toast === "function") toast("✅ " + meal + " labels auto-generated and saved to Drive", 7000);
+      } catch (e) {
+        console.error("[AutoLabel] Failed for " + date + " " + meal + ": " + (e && e.message));
+        // Clear the fired flag so the next loadKitchen tick (5-min auto-refresh)
+        // tries again. Staff also see a toast prompting manual generation.
+        try { localStorage.removeItem(_autoLabelKey(date, meal)); } catch(_) {}
+        if (typeof toast === "function") toast("⚠️ Auto-label failed for " + meal + " — please generate manually", 9000);
       }
     }
 
@@ -1732,7 +1872,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.05.25.1";
+    const KITCHEN_VERSION = "v26.05.25.2";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
