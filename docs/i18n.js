@@ -166,7 +166,7 @@
     tap_dates_hint: "Tap dates to select (multiple OK)",
     no_upcoming_orders: "No upcoming orders found.",
     cutoff_passed_edit: "⏰ Cutoff passed — cannot edit",
-    cutoff_passed_meal: "⏰ Order cutoff has passed for {meal} today.",  // only shown for today's date
+    cutoff_passed_meal: "Order cutoff has passed for {meal} today.",  // only shown for today's date
     all_cutoffs_passed_title: "No more meals available today",
     bf_menu_not_set: "Today's breakfast menu hasn't been set yet. Check our WhatsApp for updates!",
     kitchen_closed: "Kitchen is closed on Sundays! 🚪 Enjoy your weekend.",
