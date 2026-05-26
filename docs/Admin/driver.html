@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="mr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <!-- Single source of truth for the deployed version. The runtime
+       compares this to the *_VERSION constant baked into the JS and
+       silently hard-refreshes if they differ — closes the "user is
+       running yesterday's cached HTML" gap. -->
+  <meta name="app-version" content="v26.05.25.1">
 <title>Svaadh Delivery</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -188,6 +191,7 @@
         <div id="wakeStatus" class="wake-status">⚡ Wake: Off</div>
         <span class="sync-badge" id="syncBadge">—</span>
         <button onclick="logout()" style="background:none;border:none;color:#fff;font-size:1.1rem;cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center;opacity:0.8;" title="Logout">🔐</button>
+        <span id="appVerBadge" title="App version — auto-refreshes when a new build is deployed" style="font-size:0.62rem; color:rgba(255,255,255,0.55); font-weight:600; padding:1px 6px; border:1px solid rgba(255,255,255,0.2); border-radius:8px;"></span>
       </div>
     </div>
     <div class="topbar-date">
@@ -298,6 +302,30 @@ function clearDriverSearch(meal) {
   // Hide the clear-button on next render by re-applying empty value;
   // the input is still focusable and ready for another query.
 }
+
+    // ── APP VERSION + AUTO-UPDATE ──
+    // Match this string to the <meta name="app-version"> tag in <head>.
+    // On every page load we fetch the deployed HTML (cache-busted) and
+    // compare its meta-version to this constant. If they differ, the
+    // user is running cached/stale HTML — silently hard-reload so the
+    // newest build always wins. No prompts.
+    const DRIVER_VERSION = "v26.05.25.1";
+    (async function _versionCheck() {
+      try {
+        const badge = document.getElementById("appVerBadge");
+        if (badge) badge.textContent = DRIVER_VERSION;
+        const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) return;
+        const html = await res.text();
+        const m = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
+        if (m && m[1] && m[1] !== DRIVER_VERSION) {
+          console.log("[Driver] Version mismatch: running=" + DRIVER_VERSION
+                      + ", latest=" + m[1] + " — reloading to pick up new build");
+          const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
+          window.location.replace(window.location.href + sep + "_v=" + Date.now());
+        }
+      } catch (_) { /* network blip — try again next load */ }
+    })();
 
 // ── RATE LIMITING ──
 let attempts = 0;
