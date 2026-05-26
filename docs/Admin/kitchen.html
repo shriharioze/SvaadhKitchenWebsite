@@ -4,6 +4,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- Single source of truth for the deployed version. The runtime
+       compares this to the KITCHEN_VERSION constant baked into the
+       loaded JS and silently hard-refreshes if they differ — closes
+       the "staff is running yesterday's cached HTML" gap. -->
+  <meta name="app-version" content="v26.05.25.1">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -913,6 +918,8 @@
         <button class="load-btn" onclick="loadKitchen()">Load</button>
         <button class="menu-btn-mr" onclick="openWeeklyMenu()">आठवड्याचा मेन्यू</button>
         <button class="refresh-btn" onclick="loadKitchen()" title="Refresh">↻</button>
+        <span id="kitchenVerBadge" title="App version — auto-refreshes when a new build is deployed"
+              style="margin-left:auto; font-size:0.65rem; color:#999; font-weight:600; padding:2px 6px; border:1px solid #eee; border-radius:8px;"></span>
       </div>
     </div>
     <div class="ktabs" style="display:flex; justify-content:center; align-items:center;">
@@ -1718,6 +1725,31 @@
       if (failed) alert(`${failed} order(s) failed to mark. Please retry individually.`);
       renderLabelsTab();
     }
+
+    // ── APP VERSION + AUTO-UPDATE ──
+    // Match this string to the <meta name="app-version"> tag in <head>.
+    // On every page load we fetch the deployed HTML (cache-busted) and
+    // compare its meta-version to this constant. If they differ, the
+    // staff is running cached/stale HTML — silently hard-reload so the
+    // newest build always wins. No prompts, no surprises.
+    const KITCHEN_VERSION = "v26.05.25.1";
+    (async function _kitchenVersionCheck() {
+      try {
+        const badge = document.getElementById("kitchenVerBadge");
+        if (badge) badge.textContent = KITCHEN_VERSION;
+        const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) return;
+        const html = await res.text();
+        const m = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
+        if (m && m[1] && m[1] !== KITCHEN_VERSION) {
+          console.log("[Kitchen] Version mismatch: running=" + KITCHEN_VERSION
+                      + ", latest=" + m[1] + " — reloading to pick up new build");
+          // Add cache buster to URL so the browser definitely fetches fresh.
+          const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
+          window.location.replace(window.location.href + sep + "_v=" + Date.now());
+        }
+      } catch (_) { /* network blip — try again next load */ }
+    })();
 
     // ── INITIAL STATE ON LOAD ──
     (function () {
