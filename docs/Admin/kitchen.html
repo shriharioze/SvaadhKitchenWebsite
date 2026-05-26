@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.2">
+  <meta name="app-version" content="v26.05.25.3">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1048,6 +1048,9 @@
         switchKTab(_currentTab);
         _lastUpdated = new Date();
         startAutoRefresh();
+        // Pull the global label-gap value (shared across all kitchen devices)
+        // so the Labels tab uses the same spacing everyone else is using.
+        try { fetchLabelGap(); } catch(_) {}
       } catch (e) {
         if (autoPin) {
           localStorage.removeItem('sk-kitchen-pin');
@@ -1872,7 +1875,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.05.25.2";
+    const KITCHEN_VERSION = "v26.05.25.3";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
@@ -2112,6 +2115,50 @@
 
     // ── BULK PRINT LABELS (PORTED FROM ADMIN) ──
     let _bulkLabelOrders = [];
+    // Server-shared label gap (mm). Populated by fetchLabelGap() on kitchen
+    // login. Replaces the per-device localStorage value so every device
+    // (kitchen tablet, admin laptop, etc.) prints with the same spacing.
+    // localStorage stays only as an offline fallback if the network call
+    // fails on a particular device.
+    let _serverLabelGap = null;
+
+    async function fetchLabelGap() {
+      try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=getLabelGap&pin=${K.sessionPin}&_t=${Date.now()}`,
+                                { cache: "no-store" });
+        const data = await res.json();
+        if (data && !data.error && typeof data.gap_mm === "number") {
+          _serverLabelGap = data.gap_mm;
+          // Cache as local fallback for next offline session.
+          try { localStorage.setItem("sk-label-gap", String(data.gap_mm)); } catch(_) {}
+          // If the labels tab is currently rendered, update the visible input.
+          const el = document.getElementById("bulkLabelGap");
+          if (el && document.activeElement !== el) el.value = String(data.gap_mm);
+        }
+      } catch (_) { /* offline — fall back to localStorage */ }
+    }
+
+    async function saveLabelGap(rawValue) {
+      const v = parseFloat(rawValue);
+      if (!isFinite(v) || v < 0 || v > 20) return; // input box constraints catch this
+      // Update local fallback immediately so the value persists if the
+      // network call below fails.
+      try { localStorage.setItem("sk-label-gap", String(v)); } catch(_) {}
+      _serverLabelGap = v;
+      try {
+        const res = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({ _action: "setLabelGap", pin: K.sessionPin, gap_mm: v })
+        });
+        const data = await res.json();
+        if (data && data.success && typeof toast === "function") {
+          toast("Gap saved (synced to all kitchen devices)", 3500);
+        }
+      } catch (_) {
+        if (typeof toast === "function") toast("⚠️ Gap saved locally but couldn't sync to server", 4500);
+      }
+    }
+
     const LABEL_EN = {
       Chapati: "CH", Without_Oil_Chapati: "CH(O)", Phulka: "PH", Ghee_Phulka: "GPH",
       Jowar_Bhakri: "J", Bajra_Bhakri: "B",
@@ -2159,11 +2206,12 @@
             </select>
           </div>
           <div class="ctrl-group">
-            <label>Gap (MM)</label>
-            <input type="number" id="bulkLabelGap" 
-                   value="${localStorage.getItem('sk-label-gap') || '2.7'}" 
+            <label>Gap (MM) <span style="font-size:0.62rem;color:#aaa;font-weight:500;" id="gapSyncLabel">· global</span></label>
+            <input type="number" id="bulkLabelGap"
+                   value="${(_serverLabelGap !== null && _serverLabelGap !== undefined) ? _serverLabelGap : (localStorage.getItem('sk-label-gap') || '2.7')}"
                    step="0.1" min="0" max="20" style="min-width:80px;"
-                   onchange="localStorage.setItem('sk-label-gap', this.value)">
+                   title="Shared across all kitchen devices — saved on the server"
+                   onchange="saveLabelGap(this.value)">
           </div>
           <div class="ctrl-group">
             <label>Mode</label>

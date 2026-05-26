@@ -348,6 +348,18 @@ function doGet(e) {
       if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
       return jsonRes(getLabelOrders(p.date, p.meal));
     }
+    // ── LABEL GAP (shared across all kitchen devices) ──
+    // Reads + writes a single global label-gap value so kitchen tablets,
+    // phones, and admin laptops always use the same spacing. Frontend
+    // localStorage stays only as a same-device fallback if the network
+    // call fails.
+    if (action === "getLabelGap") {
+      // Public-ish — any staff can read.
+      if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
+      const v = SP.getProperty("LABEL_GAP_MM");
+      const num = (v !== null && !isNaN(Number(v))) ? Number(v) : 2.7;
+      return jsonRes({gap_mm: num});
+    }
 
     // FULL ADMIN ACCESS (Admin PIN ONLY)
     if (action === "getAdminData") {
@@ -611,8 +623,24 @@ function doPost(e) {
       return jsonRes(saveSabjiItem(body));
     }
     if (action === "saveLabels") {
-      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      // Label PDF upload — allow kitchen PIN too, since the matching
+      // getLabelOrders endpoint already accepts staff. Without this,
+      // kitchen-PIN users could fetch the orders but got "permission
+      // required" when actually saving the PDF.
+      if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
       return jsonRes(saveLabels(body));
+    }
+    if (action === "setLabelGap") {
+      // Single global label-gap value, shared across every kitchen device.
+      // Any staff can write (intentional — gap is a printer/paper-size
+      // calibration, not a sensitive setting).
+      if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
+      const v = Number(body.gap_mm);
+      if (!isFinite(v) || v < 0 || v > 20) {
+        return jsonRes({success: false, error: "Invalid gap value (must be 0–20 mm)"});
+      }
+      SP.setProperty("LABEL_GAP_MM", String(v));
+      return jsonRes({success: true, gap_mm: v});
     }
     if (action === "markCustomersPaid") {
       if (!isAdmin) return jsonRes({error:"Invalid PIN"});
