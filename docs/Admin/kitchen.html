@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.3">
+  <meta name="app-version" content="v26.05.25.4">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1181,10 +1181,18 @@
 
       console.log("[AutoLabel] Firing " + meal + " for " + date);
 
+      // Remember where staff was BEFORE we hijack the view. We restore
+      // this tab once the auto-save finishes (success, no-orders, or
+      // failure) so a page refresh / scheduled fire doesn't leave them
+      // stranded on the Labels tab.
+      const _prevTab = _currentTab;
+      let _switchedAway = false;
+
       try {
         // Switch to Labels tab so the form is rendered.
         if (typeof switchKTab === "function" && _currentTab !== "Labels") {
           switchKTab("Labels");
+          _switchedAway = true;
           // Let the tab finish rendering before we poke its inputs.
           await new Promise(r => setTimeout(r, 700));
         }
@@ -1233,6 +1241,13 @@
         // tries again. Staff also see a toast prompting manual generation.
         try { localStorage.removeItem(_autoLabelKey(date, meal)); } catch(_) {}
         if (typeof toast === "function") toast("⚠️ Auto-label failed for " + meal + " — please generate manually", 9000);
+      } finally {
+        // Restore the tab staff was on before we hijacked the view.
+        // Without this, a refresh after lunch/dinner cutoff would leave
+        // staff stranded on Labels even if they were viewing Summary.
+        if (_switchedAway && _prevTab && _prevTab !== "Labels" && typeof switchKTab === "function") {
+          try { switchKTab(_prevTab); } catch(_) {}
+        }
       }
     }
 
@@ -1875,7 +1890,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.05.25.3";
+    const KITCHEN_VERSION = "v26.05.25.4";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
