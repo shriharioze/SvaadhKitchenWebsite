@@ -1721,9 +1721,14 @@
 
     // ── INITIAL STATE ON LOAD ──
     (function () {
-      const savedDate = sessionStorage.getItem('sk_kitchen_date');
-      if (savedDate) document.getElementById("datePicker").value = savedDate;
-      else document.getElementById("datePicker").value = todayIST();
+      // ALWAYS reset to today's date on every page load / refresh.
+      // Previously this honoured a (never-written) sessionStorage key, but
+      // legacy storage from older builds could surface a stale date and
+      // kitchen staff occasionally prepared off the wrong day's order list.
+      // Forcing today on load is the safer default — staff can still pick
+      // a different date manually via the picker if they need to.
+      document.getElementById("datePicker").value = todayIST();
+      try { sessionStorage.removeItem('sk_kitchen_date'); } catch(_) {}
 
       const savedTab = sessionStorage.getItem('sk_kitchen_tab');
       if (savedTab) _currentTab = savedTab;
