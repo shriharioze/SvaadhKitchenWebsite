@@ -121,12 +121,81 @@
     .ok-box{background:#fafafa;border:1px solid var(--line);border-radius:12px;padding:14px;margin:16px 0;text-align:left;}
     .ok-box .oid{font-size:.72rem;color:var(--muted);margin-bottom:8px;}
     .ok-pay{background:#fff8e1;border:1px solid #f5e08a;border-radius:10px;padding:10px 12px;font-size:.78rem;color:#6b5500;line-height:1.5;margin-top:6px;}
+
+    /* PROFILE DRAWER */
+    .avatar-btn{position:fixed;top:11px;right:14px;width:40px;height:40px;border-radius:50%;background:#fff;color:var(--ink);border:none;font-weight:800;font-size:.92rem;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.22);display:none;align-items:center;justify-content:center;z-index:30;}
+    .pd-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:35000;}
+    .pd-drawer{position:fixed;top:0;right:0;width:min(86vw,340px);height:100vh;background:#fff;z-index:35001;box-shadow:-8px 0 24px rgba(0,0,0,.18);transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+    .pd-drawer.open{transform:translateX(0);}
+    .pd-head{background:linear-gradient(135deg,#1E1240,#3a2b6e);color:#fff;padding:22px 20px 18px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
+    .pd-av{width:54px;height:54px;border-radius:50%;background:#fff;color:#1E1240;display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+    .pd-x{background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:1.1rem;cursor:pointer;}
+    .pd-nav{flex:1;overflow-y:auto;padding:8px 0;}
+    .pd-item{display:flex;align-items:center;gap:12px;width:100%;padding:13px 20px;background:transparent;border:none;border-left:3px solid transparent;cursor:pointer;font-family:inherit;font-size:.92rem;color:#1E1240;text-align:left;text-decoration:none;}
+    .pd-item:hover{background:#f8f5ff;border-left-color:#1E1240;}
+    .pd-icon{font-size:1.15rem;width:24px;text-align:center;flex-shrink:0;}
+    .pd-label{flex:1;font-weight:600;}
+    .pd-sub{font-size:.7rem;color:#888;font-weight:500;}
+    .pd-item-danger{color:#c0392b;} .pd-item-danger:hover{background:#fff5f4;border-left-color:#c0392b;}
+    .pd-sep{height:1px;background:#eee;margin:6px 16px;}
+    /* MANAGE ORDERS SHEET */
+    .mo-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:36000;align-items:flex-end;justify-content:center;}
+    .mo-sheet{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;padding:18px 16px 28px;}
+    .mo-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+    .mo-h h2{font-size:1rem;color:var(--ink);font-weight:700;}
+    .mo-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+    .mo-card .top{display:flex;justify-content:space-between;gap:8px;font-size:.86rem;font-weight:600;color:var(--ink);}
+    .mo-card .it{font-size:.78rem;color:var(--muted);margin-top:3px;}
+    .mo-pill{font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap;}
+    .mo-pill.paid{background:#d7f5dd;color:#1c7a35;} .mo-pill.pend{background:#fff3cd;color:#946200;}
   </style>
 </head>
 <body>
   <div class="page-header">
     <h1>🍱 IntentAmplify Meals</h1>
     <p>Powered by Svaadh Kitchen</p>
+  </div>
+  <button class="avatar-btn" id="avatarBtn" onclick="openDrawer()" aria-label="Open menu">SO</button>
+
+  <!-- PROFILE DRAWER -->
+  <div class="pd-overlay" id="pdOverlay" onclick="closeDrawer()"></div>
+  <aside class="pd-drawer" id="pdDrawer" role="dialog" aria-modal="true">
+    <div class="pd-head">
+      <div class="pd-av" id="pdAvatar">SO</div>
+      <div style="flex:1;min-width:0;">
+        <div id="pdName" style="font-size:1rem;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+        <div id="pdPhone" style="font-size:.78rem;opacity:.85;margin-top:2px;">+91 ----- -----</div>
+      </div>
+      <button class="pd-x" onclick="closeDrawer()" aria-label="Close">✕</button>
+    </div>
+    <nav class="pd-nav">
+      <button type="button" class="pd-item" onclick="closeDrawer(); showManageOrders();">
+        <span class="pd-icon">🛒</span><span class="pd-label">Manage Orders</span>
+      </button>
+      <div class="pd-sep"></div>
+      <a class="pd-item" href="https://wa.me/919322246765" target="_blank" rel="noopener" onclick="closeDrawer()">
+        <span class="pd-icon">📞</span><span class="pd-label">Contact us <span class="pd-sub">(WhatsApp)</span></span>
+      </a>
+      <a class="pd-item" href="tel:8605512646" onclick="closeDrawer()">
+        <span class="pd-icon">🛵</span><span class="pd-label">Call delivery partner <span class="pd-sub">(Abhijeet · 86055 12646)</span></span>
+      </a>
+      <a class="pd-item" href="https://share.google/UnZM2xcLOF2QVO9cj" target="_blank" rel="noopener" onclick="closeDrawer()">
+        <span class="pd-icon">⭐</span><span class="pd-label">Rate &amp; Review</span>
+      </a>
+      <div class="pd-sep"></div>
+      <button type="button" class="pd-item pd-item-danger" onclick="closeDrawer(); logoutIA();">
+        <span class="pd-icon">🚪</span><span class="pd-label">Log out</span>
+      </button>
+    </nav>
+    <div style="flex-shrink:0;padding:14px 20px;border-top:1px solid #eee;text-align:center;font-size:.7rem;color:#999;">IntentAmplify · Svaadh Kitchen</div>
+  </aside>
+
+  <!-- MANAGE ORDERS SHEET -->
+  <div class="mo-overlay" id="moOverlay" onclick="if(event.target===this)closeManageOrders()">
+    <div class="mo-sheet">
+      <div class="mo-h"><h2>🛒 My Orders</h2><button class="pd-x" style="background:#eee;color:#555;" onclick="closeManageOrders()">✕</button></div>
+      <div id="moList"><div class="sub" style="margin:0">Loading…</div></div>
+    </div>
   </div>
 
   <div class="progress-wrap">
@@ -310,6 +379,16 @@
       $("calPrev").onclick=()=>{ S.calM--; if(S.calM<0){S.calM=11;S.calY--;} renderCalendar(); };
       $("calNext").onclick=()=>{ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} renderCalendar(); };
       setInterval(tickCutoffs,1000);
+      // Persistent login — auto sign-in if we have saved creds (cookie-like, until Log out)
+      const sp=localStorage.getItem("ia_phone"), spin=localStorage.getItem("ia_pin");
+      if(sp&&spin){
+        try{
+          const lr=await api("ia_verifyLogin",{phone:sp,pin:spin});
+          if(lr.success){ S.phone=sp; S.pin=spin; S.name=lr.name||localStorage.getItem("ia_name")||"";
+            markLoggedIn(); renderCalendar(); show(1); return; }
+          localStorage.removeItem("ia_phone"); localStorage.removeItem("ia_pin"); // stale creds
+        }catch(_){}
+      }
       show(0);
     })();
 
@@ -377,6 +456,8 @@
       catch(e){ setBusy(false); toast("Network error — try again."); return; }
       if(!res.success){ setBusy(false); toast(res.error||"Could not continue."); return; }
       S.phone=phone; S.pin=pin; S.name=res.name||name;
+      try{ localStorage.setItem("ia_phone",S.phone); localStorage.setItem("ia_pin",S.pin); localStorage.setItem("ia_name",S.name); }catch(_){}
+      markLoggedIn();
       renderCalendar(); show(1);                  // show() clears busy + sets label
     }
     function setBusy(b,label){
@@ -550,6 +631,34 @@
         show(4);
       }
     }
+
+    // ── Profile drawer + persistent login ──
+    function initials(n){ const p=String(n||"").trim().split(/\s+/); const s=((p[0]||"")[0]||"")+((p[1]||"")[0]||""); return (s||"IA").toUpperCase(); }
+    function fmtPhone(p){ p=String(p||""); return p.length===10 ? ("+91 "+p.slice(0,5)+" "+p.slice(5)) : p; }
+    function markLoggedIn(){
+      const ini=initials(S.name);
+      $("avatarBtn").textContent=ini; $("avatarBtn").style.display="flex";
+      $("pdAvatar").textContent=ini; $("pdName").textContent=S.name||"IntentAmplify"; $("pdPhone").textContent=fmtPhone(S.phone);
+    }
+    function openDrawer(){ $("pdOverlay").style.display="block"; $("pdDrawer").classList.add("open"); }
+    function closeDrawer(){ $("pdOverlay").style.display="none"; $("pdDrawer").classList.remove("open"); }
+    function logoutIA(){
+      try{ localStorage.removeItem("ia_phone"); localStorage.removeItem("ia_pin"); localStorage.removeItem("ia_name"); }catch(_){}
+      location.reload();
+    }
+    async function showManageOrders(){
+      $("moOverlay").style.display="flex"; $("moList").innerHTML='<div class="sub" style="margin:0">Loading…</div>';
+      let r; try{ r=await api("ia_myOrders",{phone:S.phone}); }catch(e){ $("moList").innerHTML='<div class="sub" style="margin:0">Could not load orders.</div>'; return; }
+      const orders=(r.orders||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      if(!orders.length){ $("moList").innerHTML='<div class="sub" style="margin:0">No orders yet.</div>'; return; }
+      $("moList").innerHTML=orders.map(function(o){
+        const paid=String(o.payment_status).toLowerCase()==="paid";
+        const dd=new Date(o.date+"T00:00:00").toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+        return `<div class="mo-card"><div class="top"><span>${dd} · ${o.meal}</span><span class="mo-pill ${paid?'paid':'pend'}">${o.payment_status}</span></div>`+
+               `<div class="it">${o.summary||""} · ₹${o.subtotal}</div></div>`;
+      }).join("");
+    }
+    function closeManageOrders(){ $("moOverlay").style.display="none"; }
   </script>
 </body>
 </html>
