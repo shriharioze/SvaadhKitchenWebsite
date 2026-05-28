@@ -5,62 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IntentAmplify Meals · Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="images/svaadh-kitchen-hero.PNG">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    :root{
-      --ink:#1E1240; --ink2:#2D1A5E; --gold:#E8C840;
-      --cream:#fdf8f2; --line:#f0ebe6; --muted:#888;
-    }
+    :root{ --ink:#1E1240; --ink2:#2D1A5E; --gold:#E8C840; --cream:#fdf8f2; --line:#f0ebe6; --muted:#888; }
     body{font-family:'Poppins',sans-serif;background:var(--cream);color:#2d2d2d;min-height:100vh;}
 
-    /* HEADER */
+    /* HEADER + PROGRESS */
     .page-header{background:linear-gradient(135deg,#1E1240,#2D1A5E);color:#fff;padding:14px 20px;text-align:center;box-shadow:0 2px 10px rgba(30,18,64,.3);}
     .page-header h1{font-size:1.25rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;}
     .page-header p{font-size:.74rem;opacity:.85;margin-top:2px;}
-
-    /* PROGRESS */
     .progress-wrap{background:#fff;border-bottom:1px solid #eee;padding:10px 20px;position:sticky;top:0;z-index:10;}
     .progress-steps{display:flex;gap:4px;max-width:480px;margin:0 auto;}
     .step-dot{flex:1;height:5px;border-radius:99px;background:#e0d5cc;transition:background .3s;}
-    .step-dot.active{background:var(--ink2);}
-    .step-dot.done{background:var(--gold);}
+    .step-dot.active{background:var(--ink2);} .step-dot.done{background:var(--gold);}
     .step-label{text-align:center;font-size:.68rem;color:var(--muted);margin-top:6px;font-weight:500;}
 
-    /* CONTAINER + CARDS */
-    .container{max-width:520px;margin:0 auto;padding:18px 14px 100px;}
+    .container{max-width:520px;margin:0 auto;padding:18px 14px 110px;}
     .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.07);border:1px solid var(--line);}
     .card h2{font-size:.98rem;font-weight:600;color:var(--ink);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-    .sub{font-size:.78rem;color:var(--muted);margin-bottom:14px;margin-top:-8px;}
+    .sub{font-size:.78rem;color:var(--muted);margin-bottom:14px;margin-top:-8px;line-height:1.5;}
 
-    /* FORM */
     label{display:block;font-size:.78rem;font-weight:500;color:#555;margin-bottom:5px;}
     input{width:100%;padding:12px;border:1.5px solid #ddd;border-radius:10px;font-family:inherit;font-size:.95rem;background:#fafafa;transition:border-color .2s,box-shadow .2s;color:#2d2d2d;}
     input:focus{outline:none;border-color:var(--ink2);background:#fff;box-shadow:0 0 0 3px rgba(45,26,94,.1);}
-    .pininp{letter-spacing:.5em;text-align:center;font-size:1.2rem;font-weight:600;}
+    .pininp{letter-spacing:.55em;text-align:center;font-size:1.3rem;font-weight:700;}
     .hint{font-size:.72rem;color:var(--muted);margin-top:8px;}
     .fg{margin-bottom:14px;}
 
-    /* ADDRESS CHIP */
-    .addr{background:linear-gradient(135deg,#f3f0ff,#ede9fe);border:1px solid #ddd6fe;border-radius:12px;padding:12px 14px;font-size:.82rem;color:#4b3b86;font-weight:600;display:flex;align-items:center;gap:8px;}
+    /* CENTERED ACCOUNT STEP */
+    #s0.on{display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 210px);}
+    #s0 .card{width:100%;}
 
-    /* DATE GRID */
-    .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:9px;}
-    .dchip{border:1.5px solid #e8ddd7;border-radius:13px;padding:11px 6px;text-align:center;cursor:pointer;background:#fff;transition:.15s;position:relative;}
-    .dchip .dmon{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
-    .dchip .dn{font-size:1.35rem;font-weight:700;color:var(--ink);line-height:1.1;}
-    .dchip .dw{font-size:.66rem;color:var(--muted);text-transform:uppercase;}
-    .dchip.sel{border-color:var(--ink2);background:linear-gradient(135deg,#f3f0ff,#fff);box-shadow:0 3px 10px rgba(45,26,94,.15);}
-    .dchip.sel .dn{color:var(--ink2);}
-    .dchip.sel::after{content:"✓";position:absolute;top:-7px;right:-7px;width:20px;height:20px;background:var(--ink2);color:#fff;border-radius:50%;font-size:.7rem;display:flex;align-items:center;justify-content:center;font-weight:700;}
+    /* CALENDAR (mirrors live order page) */
+    .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .cal-head h3{font-size:.95rem;color:var(--ink);font-weight:600;}
+    .cal-nav{width:34px;height:34px;border-radius:9px;border:1.5px solid #e8ddd7;background:#fff;color:var(--ink2);font-size:1.2rem;cursor:pointer;line-height:1;}
+    .cal-nav:disabled{opacity:.35;cursor:not-allowed;}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+    .cal-day-name{text-align:center;font-size:.66rem;font-weight:600;color:#aaa;padding:3px 0;}
+    .cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:9px;font-size:.85rem;cursor:pointer;border:1.5px solid transparent;transition:.15s;font-weight:500;}
+    .cal-day.empty{cursor:default;}
+    .cal-day.today{border-color:var(--ink2);color:var(--ink2);font-weight:700;}
+    .cal-day.selected{background:var(--gold);color:#1a1400;border-color:#c9ab00;font-weight:700;}
+    .cal-day.disabled{color:#d4ccc4;cursor:not-allowed;}
+    .cal-day.weekend{color:#cbb9b0;background:#faf6f2;cursor:not-allowed;}
+    .cal-day:not(.disabled):not(.empty):not(.weekend):hover:not(.selected){background:#f3f0ff;border-color:#c7b8f0;}
+    .cal-legend{display:flex;gap:14px;justify-content:center;margin-top:12px;font-size:.68rem;color:var(--muted);}
+    .cal-legend span{display:inline-flex;align-items:center;gap:5px;}
+    .lg-dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+    .sel-summary{margin-top:12px;font-size:.78rem;color:#555;text-align:center;min-height:18px;}
+    .date-chip{display:inline-block;background:#f3f0ff;color:var(--ink2);font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:14px;margin:2px;}
 
-    /* MEALS + ITEMS */
+    /* MEAL ACCORDION */
     .daycard h2{justify-content:flex-start;}
-    .meal{border:1px solid var(--line);border-radius:13px;padding:14px;margin-bottom:12px;background:#fffdfb;}
-    .meal-h{font-size:.92rem;font-weight:600;color:var(--ink);margin-bottom:10px;display:flex;align-items:center;gap:7px;}
-    .meal-h .closed{margin-left:auto;font-size:.7rem;color:#c0392b;background:#fdecea;padding:3px 9px;border-radius:20px;font-weight:600;}
-    .item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px dashed #f0ece8;}
-    .item:last-child{border-bottom:none;}
+    .macc{border:1px solid var(--line);border-radius:13px;margin-bottom:10px;overflow:hidden;background:#fffdfb;}
+    .macc-h{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;}
+    .macc-h .ttl{font-size:.92rem;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:7px;}
+    .macc-h .meta{display:flex;align-items:center;gap:8px;font-size:.7rem;color:var(--muted);}
+    .macc-h .cutoff{background:#f3f0ff;color:var(--ink2);padding:3px 9px;border-radius:14px;font-weight:600;white-space:nowrap;}
+    .macc-h .cutoff.warn{background:#fff7ed;color:#c2410c;}
+    .macc-h .cnt{background:var(--gold);color:#1a1400;padding:2px 8px;border-radius:14px;font-weight:700;}
+    .macc-h .chev{transition:transform .2s;font-size:.8rem;color:#bbb;}
+    .macc.open .chev{transform:rotate(180deg);}
+    .macc-h .closed{background:#fdecea;color:#c0392b;padding:3px 9px;border-radius:14px;font-weight:600;}
+    .macc-body{display:none;padding:0 14px 8px;}
+    .macc.open .macc-body{display:block;}
+    .item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px dashed #f0ece8;}
     .item .nm{font-size:.86rem;font-weight:500;color:#333;}
     .item .pr{font-size:.74rem;color:var(--muted);margin-top:1px;}
     .stp{display:flex;align-items:center;gap:12px;}
@@ -70,14 +82,28 @@
     .stp .q.zero{color:#ccc;}
 
     /* REVIEW */
+    .addr{background:linear-gradient(135deg,#f3f0ff,#ede9fe);border:1px solid #ddd6fe;border-radius:12px;padding:12px 14px;font-size:.82rem;color:#4b3b86;font-weight:600;}
     .rev-line{display:flex;justify-content:space-between;gap:10px;font-size:.86rem;padding:10px 0;border-bottom:1px dashed #f0ece8;}
     .rev-line small{color:var(--muted);font-size:.74rem;}
     .rev-line .amt{font-weight:600;color:var(--ink);white-space:nowrap;}
     .total{display:flex;justify-content:space-between;font-size:1.15rem;font-weight:700;color:var(--ink);margin-top:12px;padding-top:12px;border-top:2px solid var(--line);}
-    .pay{background:linear-gradient(135deg,#fffbe8,#fff8d6);border:1px solid #f5e08a;border-radius:13px;padding:14px;margin-top:14px;font-size:.84rem;color:#6b5500;line-height:1.55;}
-    .pay .vpa{display:inline-block;background:#fff;border:1px dashed #d9b94a;border-radius:8px;padding:3px 10px;font-weight:700;color:#8a6d00;margin:4px 0;}
 
-    /* NAV */
+    /* UPI PAYMENT CARD (teal, mirrors live) */
+    .pay-card{border-radius:18px;overflow:hidden;box-shadow:0 4px 20px rgba(8,145,178,.12);margin-bottom:4px;}
+    .pay-top{background:linear-gradient(135deg,#0f766e,#0891b2);padding:20px;color:#fff;text-align:center;position:relative;overflow:hidden;}
+    .pay-top .lbl{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:.85;margin-bottom:4px;}
+    .pay-top .amt{font-size:2.3rem;font-weight:800;line-height:1;}
+    .pay-top .badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);border-radius:20px;padding:6px 16px;font-size:.78rem;font-weight:700;margin-top:10px;}
+    .pay-body{background:#fff;padding:18px 16px;}
+    .qr-wrap{display:flex;justify-content:center;margin-bottom:12px;}
+    #qrcode{border:4px solid #fff;box-shadow:0 4px 14px rgba(8,145,178,.13);border-radius:12px;width:fit-content;}
+    .upi-id{cursor:pointer;font-weight:700;color:#0f766e;font-size:.9rem;background:#ccfbf1;padding:7px 18px;border-radius:20px;display:inline-block;}
+    .pay-steps{background:#fff8e1;border:1.5px solid #f59e0b;border-radius:12px;padding:12px 14px;margin-top:14px;font-size:.76rem;color:#92400e;line-height:1.65;}
+    .pay-confirm{display:flex;align-items:flex-start;gap:10px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px;padding:12px;margin-top:12px;cursor:pointer;}
+    .pay-confirm input{width:18px;height:18px;flex-shrink:0;margin-top:1px;}
+    .pay-confirm span{font-size:.82rem;color:#0f766e;font-weight:600;}
+
+    /* NAV + MISC */
     .nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px;box-shadow:0 -2px 12px rgba(0,0,0,.05);}
     .nav-inner{max-width:520px;margin:0 auto;display:flex;gap:10px;}
     .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border:none;border-radius:12px;font-family:inherit;font-size:.95rem;font-weight:600;cursor:pointer;transition:transform .1s,box-shadow .2s;}
@@ -85,16 +111,16 @@
     .btn-primary{background:linear-gradient(135deg,#1E1240,#2D1A5E);color:#fff;box-shadow:0 4px 14px rgba(45,26,94,.4);}
     .btn-secondary{flex:.45;background:#f5f0eb;color:var(--ink);border:1.5px solid #e8ddd7;}
     .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;}
-
-    /* MISC */
     .scr{display:none;animation:fade .25s ease;} .scr.on{display:block;}
     @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
     .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:30px;font-size:.84rem;z-index:99;opacity:0;transition:.3s;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90%;text-align:center;}
     .toast.show{opacity:1;}
-    .ok{text-align:center;padding:30px 10px;}
-    .ok .big{width:80px;height:80px;margin:0 auto 16px;border-radius:50%;background:linear-gradient(135deg,#27ae60,#2ecc71);display:flex;align-items:center;justify-content:center;font-size:2.4rem;color:#fff;box-shadow:0 8px 24px rgba(46,204,113,.4);}
-    .ok h2{color:var(--ink);margin-bottom:8px;justify-content:center;}
-    .welcome-pill{display:inline-flex;align-items:center;gap:6px;background:#f3f0ff;color:var(--ink2);font-size:.78rem;font-weight:600;padding:7px 14px;border-radius:20px;margin-bottom:14px;}
+    .ok{text-align:center;padding:26px 10px;}
+    .ok .big{width:78px;height:78px;margin:0 auto 14px;border-radius:50%;background:linear-gradient(135deg,#27ae60,#2ecc71);display:flex;align-items:center;justify-content:center;font-size:2.3rem;color:#fff;box-shadow:0 8px 24px rgba(46,204,113,.4);}
+    .ok h2{color:var(--ink);margin-bottom:6px;justify-content:center;}
+    .ok-box{background:#fafafa;border:1px solid var(--line);border-radius:12px;padding:14px;margin:16px 0;text-align:left;}
+    .ok-box .oid{font-size:.72rem;color:var(--muted);margin-bottom:8px;}
+    .ok-pay{background:#fff8e1;border:1px solid #f5e08a;border-radius:10px;padding:10px 12px;font-size:.78rem;color:#6b5500;line-height:1.5;margin-top:6px;}
   </style>
 </head>
 <body>
@@ -114,7 +140,7 @@
     <div class="scr on" id="s0">
       <div class="card">
         <h2>👋 Welcome</h2>
-        <div class="sub">Order your office lunch & dinner in a few taps.</div>
+        <div class="sub">Order your office lunch &amp; dinner in a few taps.</div>
         <div class="fg">
           <label>Mobile Number</label>
           <input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit number" autocomplete="tel" />
@@ -126,7 +152,7 @@
           </div>
           <div class="fg">
             <label id="pinLabel">Set a 4-digit PIN</label>
-            <input id="pin" class="pininp" type="tel" inputmode="numeric" maxlength="4" placeholder="••••" />
+            <input id="pin" class="pininp" type="text" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off" />
             <div class="hint" id="pinHint">You'll use this PIN to log in next time.</div>
           </div>
         </div>
@@ -137,17 +163,27 @@
     <div class="scr" id="s1">
       <div class="card">
         <h2>🗓️ Select Date(s)</h2>
-        <div class="sub">Tap one or more days. Lunch closes 11:00 AM · Dinner closes 5:00 PM (same day).</div>
-        <div class="dgrid" id="dgrid"></div>
+        <div class="sub">Mon–Fri only. Lunch closes 11:00 AM · Dinner closes 5:00 PM (same day).</div>
+        <div class="cal-head">
+          <button class="cal-nav" id="calPrev">‹</button>
+          <h3 id="calTitle"></h3>
+          <button class="cal-nav" id="calNext">›</button>
+        </div>
+        <div class="cal-grid" id="calNames"></div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-legend">
+          <span><i class="lg-dot" style="background:#E8C840"></i> Selected</span>
+          <span><i class="lg-dot" style="border:1.5px solid #2D1A5E"></i> Today</span>
+          <span><i class="lg-dot" style="background:#faf6f2"></i> Weekend off</span>
+        </div>
+        <div class="sel-summary" id="selSummary">Tap dates to select (multiple OK)</div>
       </div>
     </div>
 
     <!-- STEP 2: ITEMS -->
-    <div class="scr" id="s2">
-      <div id="itemsArea"></div>
-    </div>
+    <div class="scr" id="s2"><div id="itemsArea"></div></div>
 
-    <!-- STEP 3: REVIEW -->
+    <!-- STEP 3: REVIEW + PAY -->
     <div class="scr" id="s3">
       <div class="card">
         <h2>🧾 Review your order</h2>
@@ -155,10 +191,30 @@
         <div style="height:14px;"></div>
         <div id="revLines"></div>
         <div class="total"><span>Total</span><span>₹<span id="revTotal">0</span></span></div>
-        <div class="pay" id="payBox">
-          Pay <b>₹<span id="payAmt">0</span></b> via UPI to<br>
-          <span class="vpa" id="payVpa"></span><br>
-          After paying, tap <b>Place Order</b>. We'll confirm once payment is verified. 🙏
+      </div>
+
+      <div class="pay-card" id="payCard">
+        <div class="pay-top">
+          <div class="lbl">UPI Payment</div>
+          <div class="amt">₹<span id="payAmt">0</span></div>
+          <div class="badge">📲 Scan · Tap · Pay</div>
+        </div>
+        <div class="pay-body">
+          <div class="qr-wrap"><div id="qrcode"></div></div>
+          <div style="text-align:center;">
+            <div class="upi-id" id="upiId" onclick="copyUpi()">—</div>
+            <div style="font-size:.7rem;color:#94a3b8;margin-top:5px;">tap to copy</div>
+          </div>
+          <div class="pay-steps">
+            <b>How to pay:</b><br>
+            1. Scan the QR (or copy the UPI ID) in GPay / PhonePe / Paytm<br>
+            2. Pay the exact amount shown above<br>
+            3. Tick the box below &amp; tap <b>Place Order</b>
+          </div>
+          <label class="pay-confirm">
+            <input type="checkbox" id="payConfirm" onchange="updatePlaceBtn()" />
+            <span>I have completed / will complete the UPI payment of ₹<span id="payAmt2">0</span>.</span>
+          </label>
         </div>
       </div>
     </div>
@@ -168,8 +224,13 @@
       <div class="card ok">
         <div class="big">✓</div>
         <h2>Order Placed!</h2>
-        <p id="okMsg" style="font-size:.88rem;color:#666;line-height:1.6;"></p>
-        <div style="height:18px;"></div>
+        <p style="font-size:.84rem;color:#666;">Thank you, <b id="okName"></b>. We've received your order.</p>
+        <div class="ok-box">
+          <div class="oid">Order ID: <b id="okId"></b></div>
+          <div id="okLines"></div>
+          <div class="total" style="font-size:1rem;margin-top:10px;padding-top:10px;"><span>Total</span><span>₹<span id="okTotal">0</span></span></div>
+          <div class="ok-pay" id="okPay"></div>
+        </div>
         <button class="btn btn-primary" onclick="location.reload()">Place Another Order</button>
       </div>
     </div>
@@ -188,205 +249,248 @@
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     const STEPS = ["Account","Dates","Meals","Pay"];
-
+    const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const $ = id => document.getElementById(id);
-    const S = { step:0, phone:"", pin:"", name:"", isNew:false, acctChecked:false,
-                dates:[], cfg:null, menu:{}, cart:{} };
+    const S = { step:0, phone:"", pinReal:"", name:"", isNew:false, acctChecked:false,
+                dates:[], calY:0, calM:0, cfg:null, menu:{}, cart:{}, open:{} };
 
     function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2800); }
+    async function api(action,params){ const u=new URL(API); u.searchParams.set("action",action); Object.entries(params||{}).forEach(([k,v])=>u.searchParams.set(k,v)); const r=await fetch(u); return r.json(); }
+    async function post(b){ const r=await fetch(API,{method:"POST",body:JSON.stringify(b)}); return r.json(); }
+    const isoOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const todayISO = () => isoOf(new Date());
+    function fmt12(h,m){ const ap=h<12?"AM":"PM"; const hh=((h+11)%12)+1; return `${hh}:${String(m).padStart(2,'0')} ${ap}`; }
+    function cutoffOf(meal){ const c=(S.cfg&&S.cfg.cutoffs&&S.cfg.cutoffs[meal])||(meal==="Lunch"?{h:11,m:0}:{h:17,m:0}); return c; }
 
-    async function api(action, params){
-      const u = new URL(API); u.searchParams.set("action", action);
-      Object.entries(params||{}).forEach(([k,v])=>u.searchParams.set(k,v));
-      const r = await fetch(u); return r.json();
-    }
-    async function post(body){ const r = await fetch(API,{method:"POST",body:JSON.stringify(body)}); return r.json(); }
-
-    // ── progress dots ──
-    (function initDots(){ $("dots").innerHTML = STEPS.map(()=>'<div class="step-dot"></div>').join(""); })();
+    (function(){ $("dots").innerHTML = STEPS.map(()=>'<div class="step-dot"></div>').join(""); })();
 
     function show(n){
       S.step=n;
       document.querySelectorAll(".scr").forEach((e,i)=>e.classList.toggle("on",i===n));
-      const ui = Math.min(n,3);
+      const ui=Math.min(n,3);
       [...$("dots").children].forEach((d,i)=>{ d.className="step-dot"+(i===ui?" active":i<ui?" done":""); });
       $("stepLabel").textContent = n>=4 ? "All done 🎉" : `Step ${ui+1} of 4 — ${STEPS[ui]}`;
-      $("back").style.display = (n>0 && n<4) ? "block" : "none";
-      $("nav").style.display = (n===4) ? "none" : "block";
-      const lbl = ["Continue →","Continue →","Review →","Place Order",""];
-      if(n!==0) $("next").textContent = lbl[n];
+      $("back").style.display=(n>0&&n<4)?"block":"none";
+      $("nav").style.display=(n===4)?"none":"block";
+      if(n!==0){ const lbl=["","Continue →","Review →","Place Order",""]; $("next").textContent=lbl[n]; }
+      if(n===3) updatePlaceBtn();
       window.scrollTo(0,0);
     }
 
     // ── init ──
     (async function(){
-      try{ S.cfg = await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"]}; }
-      const ph=$("phone");
-      ph.addEventListener("input", ()=>{
-        ph.value = ph.value.replace(/\D/g,"");
-        // editing the number after a check → reset to phone-entry state
-        if(S.acctChecked){ S.acctChecked=false; $("loginExtra").style.display="none"; $("next").textContent="Continue →"; }
-      });
-      $("pin").addEventListener("input",e=>{ e.target.value=e.target.value.replace(/\D/g,""); });
+      try{ S.cfg=await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"],cutoffs:{Lunch:{h:11,m:0},Dinner:{h:17,m:0}}}; }
+      const now=new Date(); S.calY=now.getFullYear(); S.calM=now.getMonth();
+      $("phone").addEventListener("input",e=>{ e.target.value=e.target.value.replace(/\D/g,"");
+        if(S.acctChecked){ S.acctChecked=false; S.pinReal=""; $("pin").value=""; $("loginExtra").style.display="none"; $("next").textContent="Continue →"; }});
+      setupPinMask();
+      $("calPrev").onclick=()=>{ S.calM--; if(S.calM<0){S.calM=11;S.calY--;} renderCalendar(); };
+      $("calNext").onclick=()=>{ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} renderCalendar(); };
+      setInterval(tickCutoffs,1000);
       show(0);
     })();
 
+    // ── PIN mask: reveal the typed digit briefly, then show • ──
+    function setupPinMask(){
+      const el=$("pin"); let revealTimer=null;
+      el.addEventListener("input",()=>{
+        const raw=el.value;
+        const newDigits=raw.replace(/[^0-9]/g,"");
+        if(newDigits) S.pinReal=(S.pinReal+newDigits).slice(0,4);
+        else S.pinReal=S.pinReal.slice(0,raw.length);   // backspace
+        const n=S.pinReal.length;
+        el.value = n ? ("•".repeat(n-1)+S.pinReal.slice(-1)) : "";
+        clearTimeout(revealTimer);
+        revealTimer=setTimeout(()=>{ el.value="•".repeat(S.pinReal.length); },700);
+      });
+    }
+
     async function goNext(){
       if(S.step===0) return stepAccount();
-      if(S.step===1){
-        if(!S.dates.length){ toast("Please pick at least one date."); return; }
-        await loadItems(); show(2); return;
-      }
-      if(S.step===2){
-        if(!cartHasItems()){ toast("Add at least one item to continue."); return; }
-        buildReview(); show(3); return;
-      }
+      if(S.step===1){ if(!S.dates.length){ toast("Please pick at least one date."); return; } await loadItems(); show(2); return; }
+      if(S.step===2){ if(!cartHasItems()){ toast("Add at least one item to continue."); return; } buildReview(); show(3); return; }
       if(S.step===3) return placeOrder();
     }
     function goBack(){ if(S.step>0) show(S.step-1); }
 
-    // Phase 1: verify the phone (checkPhone). Phase 2: PIN/name → login/register.
     async function stepAccount(){
-      const phone = $("phone").value.replace(/\D/g,"");
+      const phone=$("phone").value.replace(/\D/g,"");
       if(phone.length!==10){ toast("Enter a valid 10-digit number."); return; }
-
       if(!S.acctChecked){
         setBusy(true,"Checking…");
         try{
-          const r = await api("ia_checkPhone",{phone});
+          const r=await api("ia_checkPhone",{phone});
           if(r.error){ toast(r.error); return; }
-          S.isNew = !r.exists;
+          S.isNew=!r.exists;
           $("loginExtra").style.display="block";
-          $("nameWrap").style.display = S.isNew ? "block" : "none";
-          $("pinLabel").textContent = S.isNew ? "Set a 4-digit PIN" : "Enter your PIN";
-          $("pinHint").textContent = S.isNew ? "You'll use this PIN to log in next time."
-                                             : ("Welcome back" + (r.name ? ", "+r.name : "") + "! Enter your PIN.");
-          $("next").textContent = S.isNew ? "Set PIN & Continue →" : "Verify PIN & Continue →";
-          S.acctChecked = true;
-          setTimeout(()=>$("pin").focus(),100);
-        } finally { setBusy(false); }
+          $("nameWrap").style.display=S.isNew?"block":"none";
+          $("pinLabel").textContent=S.isNew?"Set a 4-digit PIN":"Enter your PIN";
+          $("pinHint").textContent=S.isNew?"You'll use this PIN to log in next time.":("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN.");
+          $("next").textContent=S.isNew?"Set PIN & Continue →":"Verify PIN & Continue →";
+          S.acctChecked=true; setTimeout(()=>$("pin").focus(),100);
+        } finally{ setBusy(false); }
         return;
       }
-
-      // Phase 2
-      const pin = $("pin").value.replace(/\D/g,"");
-      const name = $("name").value.trim();
+      const pin=S.pinReal, name=$("name").value.trim();
       if(pin.length!==4){ toast("PIN must be 4 digits."); return; }
       if(S.isNew && !name){ toast("Please enter your name."); return; }
-      setBusy(true, S.isNew ? "Creating…" : "Verifying…");
+      setBusy(true,S.isNew?"Creating…":"Verifying…");
       try{
-        const res = S.isNew ? await post({_action:"ia_register",phone,pin,name})
-                            : await api("ia_verifyLogin",{phone,pin});
+        const res=S.isNew?await post({_action:"ia_register",phone,pin,name}):await api("ia_verifyLogin",{phone,pin});
         if(!res.success){ toast(res.error||"Could not continue."); return; }
         S.phone=phone; S.pin=pin; S.name=res.name||name;
-        renderDates(); show(1);
-      } finally { setBusy(false); }
+        renderCalendar(); show(1);
+      } finally{ setBusy(false); }
     }
+    function setBusy(b,label){ const btn=$("next"); btn.disabled=b; if(b){ btn.dataset.t=btn.textContent; btn.textContent=label||"…"; } else if(btn.dataset.t){ btn.textContent=btn.dataset.t; delete btn.dataset.t; } }
 
-    function setBusy(b,label){
-      const btn=$("next"); btn.disabled=b;
-      if(b){ btn.dataset.t=btn.textContent; btn.textContent=label||"…"; }
-      else if(btn.dataset.t){ btn.textContent=btn.dataset.t; delete btn.dataset.t; }
-    }
-
-    // ── dates ──
-    function renderDates(){
-      const g=$("dgrid"); g.innerHTML="";
-      const now=new Date(); const wk=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-      const mon=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      let lastMon=-1;
-      for(let i=0;i<14;i++){
-        const d=new Date(now); d.setDate(now.getDate()+i);
-        const iso=d.toISOString().slice(0,10);
-        const el=document.createElement("div"); el.className="dchip"; el.dataset.iso=iso;
-        const showMon = d.getMonth()!==lastMon; lastMon=d.getMonth();
-        el.innerHTML=`<div class="dmon">${showMon?mon[d.getMonth()]:"&nbsp;"}</div>`+
-                     `<div class="dn">${d.getDate()}</div><div class="dw">${i===0?"Today":wk[d.getDay()]}</div>`;
-        el.onclick=()=>toggleDate(iso,el);
-        if(S.dates.includes(iso)) el.classList.add("sel");
-        g.appendChild(el);
+    // ── CALENDAR (weekends off) ──
+    function renderCalendar(){
+      $("calTitle").textContent=`${MONTHS[S.calM]} ${S.calY}`;
+      $("calNames").innerHTML=["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=>`<div class="cal-day-name">${d}</div>`).join("");
+      const today=todayISO();
+      const fd=new Date(S.calY,S.calM,1).getDay(), dim=new Date(S.calY,S.calM+1,0).getDate();
+      // disable prev nav for past months
+      const now=new Date();
+      $("calPrev").disabled = (S.calY<now.getFullYear()) || (S.calY===now.getFullYear() && S.calM<=now.getMonth());
+      let html="";
+      for(let i=0;i<fd;i++) html+=`<div class="cal-day empty"></div>`;
+      for(let d=1;d<=dim;d++){
+        const dt=new Date(S.calY,S.calM,d), ds=isoOf(dt), dow=dt.getDay();
+        const weekend=(dow===0||dow===6), past=ds<today, sel=S.dates.includes(ds);
+        let cls="cal-day";
+        if(weekend) cls+=" weekend";
+        else if(past) cls+=" disabled";
+        else if(sel) cls+=" selected";
+        else if(ds===today) cls+=" today";
+        const click=(!weekend && !past)?`onclick="toggleDate('${ds}')"`:"";
+        html+=`<div class="${cls}" ${click}>${d}</div>`;
       }
+      $("calGrid").innerHTML=html;
+      updateSel();
     }
-    function toggleDate(iso,el){
-      const i=S.dates.indexOf(iso);
-      if(i>=0){ S.dates.splice(i,1); el.classList.remove("sel"); delete S.cart[iso]; }
-      else { S.dates.push(iso); el.classList.add("sel"); }
-    }
+    function toggleDate(ds){ const i=S.dates.indexOf(ds); if(i>=0){ S.dates.splice(i,1); delete S.cart[ds]; } else { S.dates.push(ds); S.dates.sort(); } renderCalendar(); }
+    function updateSel(){ const el=$("selSummary"); if(!S.dates.length){ el.textContent="Tap dates to select (multiple OK)"; return; }
+      el.innerHTML=S.dates.map(d=>{ const x=new Date(d+"T00:00:00"); return `<span class="date-chip">${x.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>`; }).join(""); }
 
-    // ── items ──
+    // ── ITEMS (collapsible meals + cutoff timer) ──
     async function loadItems(){
-      const area=$("itemsArea");
-      area.innerHTML="<div class='card'><div class='sub' style='margin:0'>Loading menu…</div></div>";
-      const r=await api("ia_getMenu",{dates:S.dates.join(",")});
-      S.menu=r.menu||{};
+      const area=$("itemsArea"); area.innerHTML="<div class='card'><div class='sub' style='margin:0'>Loading menu…</div></div>";
+      const r=await api("ia_getMenu",{dates:S.dates.join(",")}); S.menu=r.menu||{}; S.open={};
       area.innerHTML="";
       S.dates.sort().forEach(date=>{
         const dd=new Date(date+"T00:00:00");
         const card=document.createElement("div"); card.className="card daycard";
         card.innerHTML=`<h2>🗓️ ${dd.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'})}</h2>`;
-        let hasOpen=false;
         (S.cfg.meals||["Lunch","Dinner"]).forEach(meal=>{
-          const info=(S.menu[date]&&S.menu[date][meal])||{items:[]};
-          const open=isOpen(date,meal);
-          const mdiv=document.createElement("div"); mdiv.className="meal";
-          mdiv.innerHTML=`<div class="meal-h">${meal==="Lunch"?"☀️":"🌙"} ${meal}${open?"":'<span class="closed">closed</span>'}</div>`;
-          if(open){
-            hasOpen=true;
-            info.items.forEach(it=>{
-              const qty=(S.cart[date]&&S.cart[date][meal]&&S.cart[date][meal][it.name])||0;
-              const row=document.createElement("div"); row.className="item";
-              row.innerHTML=`<div><div class="nm">${it.name}</div><div class="pr">₹${it.price}</div></div>`;
-              const stp=document.createElement("div"); stp.className="stp";
-              stp.innerHTML=`<button>−</button><span class="q${qty?"":" zero"}">${qty}</span><button>+</button>`;
-              const sp=stp.querySelector(".q");
-              stp.children[0].onclick=()=>chg(date,meal,it.name,-1,sp);
-              stp.children[2].onclick=()=>chg(date,meal,it.name,1,sp);
-              row.appendChild(stp); mdiv.appendChild(row);
-            });
-          }
-          card.appendChild(mdiv);
+          card.appendChild(buildMealBlock(date,meal));
         });
-        if(!hasOpen){
-          const note=document.createElement("div"); note.className="sub"; note.style.margin="0";
-          note.textContent="Ordering closed for this day's meals.";
-          card.appendChild(note);
-        }
         area.appendChild(card);
       });
+      tickCutoffs();
     }
+    function buildMealBlock(date,meal){
+      const info=(S.menu[date]&&S.menu[date][meal])||{items:[]};
+      const open=isOpen(date,meal);
+      const wrap=document.createElement("div"); wrap.className="macc"; wrap.id=`m-${date}-${meal}`;
+      const c=cutoffOf(meal);
+      const metaId=`cd-${date}-${meal}`;
+      const head=document.createElement("button"); head.className="macc-h"; head.type="button";
+      head.innerHTML=`<span class="ttl">${meal==="Lunch"?"☀️":"🌙"} ${meal}</span>`+
+        `<span class="meta">`+
+          (open?`<span class="cnt" style="display:none"></span><span class="cutoff" id="${metaId}">Closes ${fmt12(c.h,c.m)}</span><span class="chev">▾</span>`
+               :`<span class="closed">Closed</span>`)+
+        `</span>`;
+      if(open) head.onclick=()=>toggleMeal(date,meal);
+      wrap.appendChild(head);
+      const body=document.createElement("div"); body.className="macc-body";
+      if(open){
+        info.items.forEach(it=>{
+          const qty=(S.cart[date]&&S.cart[date][meal]&&S.cart[date][meal][it.name])||0;
+          const row=document.createElement("div"); row.className="item";
+          row.innerHTML=`<div><div class="nm">${it.name}</div><div class="pr">₹${it.price}</div></div>`;
+          const stp=document.createElement("div"); stp.className="stp";
+          stp.innerHTML=`<button>−</button><span class="q${qty?"":" zero"}">${qty}</span><button>+</button>`;
+          const sp=stp.querySelector(".q");
+          stp.children[0].onclick=()=>chg(date,meal,it.name,-1,sp);
+          stp.children[2].onclick=()=>chg(date,meal,it.name,1,sp);
+          row.appendChild(stp); body.appendChild(row);
+        });
+      }
+      wrap.appendChild(body);
+      return wrap;
+    }
+    function toggleMeal(date,meal){ const w=$(`m-${date}-${meal}`); if(!w) return; w.classList.toggle("open"); }
     function chg(date,meal,item,delta,sp){
       S.cart[date]=S.cart[date]||{}; S.cart[date][meal]=S.cart[date][meal]||{};
       let q=(S.cart[date][meal][item]||0)+delta; if(q<0)q=0;
       if(q===0) delete S.cart[date][meal][item]; else S.cart[date][meal][item]=q;
-      sp.textContent=q; sp.classList.toggle("zero",q===0);
+      sp.textContent=q; sp.classList.toggle("zero",q===0); updateMealCount(date,meal);
+    }
+    function updateMealCount(date,meal){
+      const w=$(`m-${date}-${meal}`); if(!w) return; const cnt=w.querySelector(".cnt"); if(!cnt) return;
+      const sel=(S.cart[date]&&S.cart[date][meal])||{}; const n=Object.values(sel).reduce((a,b)=>a+b,0);
+      if(n>0){ cnt.textContent=`${n} item${n>1?"s":""}`; cnt.style.display="inline-block"; } else cnt.style.display="none";
     }
     function cartHasItems(){ return Object.values(S.cart).some(m=>Object.values(m).some(o=>Object.keys(o).length)); }
-    function isOpen(date,meal){
-      const today=new Date().toISOString().slice(0,10);
-      if(date<today) return false; if(date>today) return true;
-      const c=(S.cfg.cutoffs&&S.cfg.cutoffs[meal])||(meal==="Lunch"?{h:11,m:0}:{h:17,m:0});
-      const n=new Date(); return n.getHours()<c.h || (n.getHours()===c.h&&n.getMinutes()<c.m);
+    function isOpen(date,meal){ const today=todayISO(); if(date<today) return false; if(date>today) return true;
+      const c=cutoffOf(meal); const n=new Date(); return n.getHours()<c.h || (n.getHours()===c.h && n.getMinutes()<c.m); }
+
+    // live cutoff countdown on the items step
+    function tickCutoffs(){
+      if(S.step!==2) return;
+      const today=todayISO(); const now=new Date();
+      S.dates.forEach(date=>{
+        if(date!==today) return;
+        (S.cfg.meals||["Lunch","Dinner"]).forEach(meal=>{
+          const el=$(`cd-${date}-${meal}`); if(!el) return;
+          const c=cutoffOf(meal); const cut=new Date(); cut.setHours(c.h,c.m,0,0);
+          let ms=cut-now;
+          if(ms<=0){ // just closed — flip block to closed
+            const w=$(`m-${date}-${meal}`); if(w){ w.classList.remove("open");
+              w.querySelector(".meta").innerHTML='<span class="closed">Closed</span>';
+              w.querySelector(".macc-h").onclick=null; w.querySelector(".macc-body").innerHTML=""; }
+            return;
+          }
+          const mins=ms/60000;
+          const totalSec=Math.ceil(ms/1000), hh=Math.floor(totalSec/3600), mm=Math.floor((totalSec%3600)/60), ssX=totalSec%60;
+          if(mins<=60){ el.classList.add("warn"); el.textContent=`⏰ Closes in ${String(mm).padStart(2,'0')}:${String(ssX).padStart(2,'0')}`; }
+          else { el.classList.remove("warn"); el.textContent=`Closes ${fmt12(c.h,c.m)}`; }
+        });
+      });
     }
 
-    // ── review ──
+    // ── REVIEW + PAY ──
     function buildReview(){
       $("revAddr").textContent=S.cfg.address||"S4 Towers, Magarpatta";
       let total=0; const lines=[];
       S.dates.sort().forEach(date=>{
         const dd=new Date(date+"T00:00:00").toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
         (S.cfg.meals||["Lunch","Dinner"]).forEach(meal=>{
-          const sel=(S.cart[date]&&S.cart[date][meal])||{};
-          const menu=((S.menu[date]&&S.menu[date][meal])||{items:[]}).items;
+          const sel=(S.cart[date]&&S.cart[date][meal])||{}; const menu=((S.menu[date]&&S.menu[date][meal])||{items:[]}).items;
           const price={}; menu.forEach(it=>price[it.name]=it.price);
           let sub=0; const parts=[];
           Object.entries(sel).forEach(([nm,q])=>{ const p=price[nm]||0; sub+=p*q; parts.push(`${q}× ${nm}`); });
           if(sub>0){ total+=sub; lines.push(`<div class="rev-line"><span>${dd} · ${meal}<br><small>${parts.join(", ")}</small></span><span class="amt">₹${sub}</span></div>`); }
         });
       });
-      $("revLines").innerHTML=lines.join("");
-      $("revTotal").textContent=total; $("payAmt").textContent=total;
-      if(S.cfg.upi){ $("payVpa").textContent=S.cfg.upi; $("payBox").style.display="block"; }
-      else $("payBox").style.display="none";
+      $("revLines").innerHTML=lines.join(""); S.total=total;
+      $("revTotal").textContent=total; $("payAmt").textContent=total; $("payAmt2").textContent=total;
+      if(S.cfg.upi){ $("payCard").style.display="block"; $("upiId").textContent=S.cfg.upi; renderQR(total); }
+      else { $("payCard").style.display="none"; }
+      $("payConfirm").checked=false; updatePlaceBtn();
+    }
+    function renderQR(amount){
+      const el=$("qrcode"); el.innerHTML="";
+      const str=`upi://pay?pa=${S.cfg.upi}&pn=${encodeURIComponent(S.cfg.upi_name||"Svaadh Kitchen")}&am=${Number(amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent("IntentAmplify Meal")}`;
+      try{ new QRCode(el,{text:str,width:172,height:172,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
+    }
+    function copyUpi(){ if(!S.cfg.upi) return; navigator.clipboard?.writeText(S.cfg.upi).then(()=>toast("📋 UPI ID copied!")).catch(()=>toast(S.cfg.upi)); }
+    function updatePlaceBtn(){
+      if(S.step!==3) return; const btn=$("next");
+      const need=!!S.cfg.upi;
+      const ok=!need || $("payConfirm").checked;
+      btn.disabled=!ok; btn.style.opacity=ok?"1":"0.5";
     }
 
     async function placeOrder(){
@@ -394,11 +498,14 @@
       try{
         const res=await post({_action:"ia_submitOrder",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart});
         if(!res.success){ toast(res.error||"Could not place order."); return; }
-        $("okMsg").innerHTML=`Order <b>${res.submission_id}</b> · <b>₹${res.total}</b><br>`+
-          (res.upi?`Pay to <b>${res.upi}</b> if you haven't already.<br>`:"")+
-          `We'll confirm once your payment is verified.`;
+        $("okName").textContent=S.name||"";
+        $("okId").textContent=res.submission_id;
+        $("okTotal").textContent=res.total;
+        $("okLines").innerHTML=$("revLines").innerHTML;
+        $("okPay").innerHTML=res.upi?`💳 Please pay <b>₹${res.total}</b> to <b>${res.upi}</b> if you haven't already. We'll confirm once verified.`
+                                    :`We'll confirm your order shortly.`;
         show(4);
-      } finally { setBusy(false); }
+      } finally{ setBusy(false); }
     }
   </script>
 </body>
