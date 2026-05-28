@@ -178,7 +178,6 @@
 
   function card(o,meal){
     const delivered=o.deliveryStatus==="Delivered";
-    const pay=String(o.paymentStatus).toLowerCase()==="paid";
     const statusPill = delivered?`<span class="delivered-time">✓ ${o.deliveredAt||"Delivered"}</span>`
                      : o.deliveryStatus==="EnRoute"?`<span class="enroute-time">🛵 En-route</span>`:"";
     return `<div class="order-card ${delivered?'delivered':''}">
@@ -187,7 +186,6 @@
       <div class="cust-phone">${o.phone}</div>
       <div class="address-box">📍 S4 Towers, Magarpatta</div>
       <div class="items-box">🍱 ${o.summary||""}</div>
-      <div class="amount-row"><span class="amount-badge">₹${o.amount}</span><span class="pill ${pay?'paid':'pend'}">${o.paymentStatus}</span></div>
       <div class="card-actions">
         <a class="btn-call" href="tel:${o.phone}">📞 Call</a>
         <a class="btn-maps" href="${MAPS}" target="_blank">🗺️ Maps</a>
