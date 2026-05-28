@@ -1,98 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IntentAmplify · Kitchen Prep</title>
-  <style>
-    :root{ --brand:#c0392b; --ink:#1E1240; }
-    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;}
-    body{background:#fff7f3;color:#222;padding-bottom:40px;}
-    .top{background:#1E1240;color:#fff;padding:14px 16px;text-align:center;}
-    .top h1{font-size:1.05rem;font-weight:800;}
-    .top p{font-size:.74rem;opacity:.8;margin-top:2px;}
-    .wrap{max-width:640px;margin:0 auto;padding:16px;}
-    .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 3px 14px rgba(0,0,0,.05);margin-bottom:14px;}
-    .gate{max-width:340px;margin:60px auto;text-align:center;}
-    input,select{padding:11px;border:1.5px solid #ddd;border-radius:10px;font-size:1rem;}
-    input:focus,select:focus{outline:none;border-color:var(--brand);}
-    .btn{padding:11px 16px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem;}
-    .btn-p{background:var(--brand);color:#fff;} .btn-s{background:#eee;color:#444;}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .meal-h{font-size:1.05rem;color:var(--brand);font-weight:800;margin:4px 0 8px;display:flex;justify-content:space-between;align-items:center;}
-    .meal-h .hc{font-size:.8rem;background:#fff0ec;color:#c0392b;padding:3px 10px;border-radius:20px;font-weight:700;}
-    .pitem{display:flex;justify-content:space-between;align-items:center;padding:11px 8px;border-bottom:1px dashed #f0eae6;font-size:1rem;}
-    .pitem:last-child{border-bottom:none;}
-    .pitem .q{font-size:1.4rem;font-weight:800;color:var(--ink);min-width:48px;text-align:right;}
-    .muted{color:#999;font-size:.84rem;}
-    .err{color:#c0392b;font-size:.82rem;margin-top:8px;}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IntentAmplify Kitchen</title>
+<link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#222;min-height:100vh;}
+
+  #loginWrap{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:100;}
+  .login-box{padding:32px 24px;width:100%;max-width:320px;text-align:center;}
+  .login-logo{font-size:2rem;margin-bottom:4px;}
+  .login-box h1{font-size:1.2rem;font-weight:700;color:#1E1240;margin-bottom:2px;}
+  .login-box p{font-size:.78rem;color:#999;margin-bottom:24px;}
+  .pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:24px;}
+  .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ddd;transition:all .15s;}
+  .pin-dot.filled{background:#1E1240;border-color:#1E1240;}
+  .pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto;}
+  .pk{background:#f5f5f5;border:none;color:#222;font-size:1.5rem;font-weight:600;border-radius:14px;padding:16px;cursor:pointer;}
+  .pk:active{background:#e0e0e0;} .pk.del{color:#999;font-size:1.2rem;} .pk.span2{grid-column:span 2;}
+  .login-err{color:#c0392b;font-size:.78rem;margin-top:14px;min-height:18px;}
+
+  #shell{display:none;padding-bottom:60px;} #shell.on{display:block;}
+  .topbar{background:#1E1240;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10;}
+  .topbar-row1{display:flex;align-items:center;justify-content:space-between;}
+  .topbar-title{font-size:1rem;font-weight:700;letter-spacing:.03em;}
+  .topbar-date{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .topbar-date input[type=date]{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 10px;border-radius:8px;font-size:.8rem;flex:1;}
+  .topbar-date input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);}
+  .load-btn{background:#fff;color:#1E1240;border:none;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.8rem;}
+
+  .tabs{display:flex;background:#fff;border-bottom:2px solid #eee;position:sticky;top:96px;z-index:9;}
+  .tab{flex:1;padding:12px 4px;text-align:center;font-size:.85rem;font-weight:600;color:#aaa;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;}
+  .tab.active{color:#1E1240;border-bottom-color:#1E1240;}
+
+  .wrap{padding:14px;}
+  .prep-card{background:#fff;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+  .prep-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .prep-title{font-size:1.05rem;font-weight:800;color:#1E1240;}
+  .prep-hc{font-size:.74rem;font-weight:700;background:#f3f0ff;color:#2D1A5E;padding:4px 12px;border-radius:99px;}
+  .prep-item{display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-top:1px dashed #f0ece8;font-size:1rem;}
+  .prep-item:first-of-type{border-top:none;}
+  .prep-item .nm{font-weight:500;color:#333;}
+  .prep-item .q{font-size:1.5rem;font-weight:800;color:#1E1240;min-width:44px;text-align:right;}
+  .empty{text-align:center;padding:48px 20px;color:#aaa;} .empty-icon{font-size:2.5rem;margin-bottom:8px;}
+  .spinner{width:28px;height:28px;border:3px solid #eee;border-top-color:#1E1240;border-radius:50%;animation:spin .7s linear infinite;margin:40px auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .addrline{font-size:.72rem;color:rgba(255,255,255,.8);margin-top:6px;}
+</style>
 </head>
 <body>
-  <div class="top"><h1>👨‍🍳 IntentAmplify Prep</h1><p>Cooking quantities only</p></div>
 
-  <div class="gate card" id="gate">
-    <h2 style="color:var(--ink);margin-bottom:12px;">Kitchen PIN</h2>
-    <input id="gpin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;margin-bottom:10px;" />
-    <button class="btn btn-p" style="width:100%;" onclick="unlock()">Unlock</button>
-    <div id="gerr" class="err"></div>
-  </div>
-
-  <div class="wrap" id="app" style="display:none;">
-    <div class="card">
-      <div class="row">
-        <input id="date" type="date" />
-        <select id="meal"><option value="">Both meals</option><option>Lunch</option><option>Dinner</option></select>
-        <button class="btn btn-s" onclick="load()">Refresh</button>
-      </div>
-      <div class="muted" id="addr" style="margin-top:8px;"></div>
+<div id="loginWrap">
+  <div class="login-box">
+    <div class="login-logo">🍽</div>
+    <h1>IntentAmplify Kitchen</h1>
+    <p>Enter PIN to view prep</p>
+    <div class="pin-dots">
+      <div class="pin-dot" id="kd0"></div><div class="pin-dot" id="kd1"></div>
+      <div class="pin-dot" id="kd2"></div><div class="pin-dot" id="kd3"></div>
     </div>
-    <div id="out"></div>
+    <div class="pin-grid">
+      <button class="pk" onclick="kp(1)">1</button><button class="pk" onclick="kp(2)">2</button><button class="pk" onclick="kp(3)">3</button>
+      <button class="pk" onclick="kp(4)">4</button><button class="pk" onclick="kp(5)">5</button><button class="pk" onclick="kp(6)">6</button>
+      <button class="pk" onclick="kp(7)">7</button><button class="pk" onclick="kp(8)">8</button><button class="pk" onclick="kp(9)">9</button>
+      <button class="pk span2" onclick="kp(0)">0</button><button class="pk del" onclick="kx()">⌫</button>
+    </div>
+    <div class="login-err" id="kErr"></div>
   </div>
+</div>
 
-  <script>
-    const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-    const $=id=>document.getElementById(id);
-    let PIN="";
-    const today=()=>new Date().toISOString().slice(0,10);
+<div id="shell">
+  <div class="topbar">
+    <div class="topbar-row1">
+      <div class="topbar-title">🍽 IntentAmplify Kitchen</div>
+      <button onclick="logout()" style="background:none;border:none;color:#fff;font-size:1.1rem;cursor:pointer;opacity:.8;" title="Logout">🔐</button>
+    </div>
+    <div class="topbar-date">
+      <input type="date" id="datePicker" onchange="loadPrep()">
+      <button class="load-btn" onclick="loadPrep()">↻ Refresh</button>
+    </div>
+    <div class="addrline">👨‍🍳 Cooking quantities for the IntentAmplify batch</div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tabBoth" onclick="setFilter('')">Both</button>
+    <button class="tab" id="tabLunch" onclick="setFilter('Lunch')">☀️ Lunch</button>
+    <button class="tab" id="tabDinner" onclick="setFilter('Dinner')">🌙 Dinner</button>
+  </div>
+  <div class="wrap" id="out"></div>
+</div>
 
-    async function api(action,params){
-      const u=new URL(API); u.searchParams.set("action",action);
-      Object.entries(params||{}).forEach(([k,v])=>{ if(v!=="") u.searchParams.set(k,v); });
-      const r=await fetch(u); return r.json();
-    }
+<script>
+  const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+  const $=id=>document.getElementById(id);
+  const today=()=>new Date().toISOString().slice(0,10);
+  let K={pin:"",sessionPin:"",filter:"",data:null};
 
-    async function unlock(){
-      const pin=$("gpin").value.trim();
-      const r=await api("ia_prep",{pin,date:today()});
-      if(r.error){ $("gerr").textContent=r.error; return; }
-      PIN=pin; $("gate").style.display="none"; $("app").style.display="block";
-      $("date").value=today(); render(r);
-    }
+  async function api(action,params){ const u=new URL(API); u.searchParams.set("action",action);
+    Object.entries(params||{}).forEach(([k,v])=>{ if(v!=="") u.searchParams.set(k,v); }); const r=await fetch(u); return r.json(); }
 
-    async function load(){
-      const r=await api("ia_prep",{pin:PIN,date:$("date").value,meal:$("meal").value});
-      if(r.error){ alert(r.error); return; }
-      render(r);
-    }
+  function renderDots(){ for(let i=0;i<4;i++) $("kd"+i).classList.toggle("filled", i<K.pin.length); }
+  function kp(n){ if(K.pin.length>=4) return; K.pin+=n; renderDots(); if(K.pin.length===4) verifyPin(); }
+  function kx(){ K.pin=K.pin.slice(0,-1); renderDots(); $("kErr").textContent=""; }
+  async function verifyPin(){
+    $("kErr").textContent="Checking…";
+    let r; try{ r=await api("ia_prep",{pin:K.pin,date:today()}); }catch(e){ $("kErr").textContent="Network error"; K.pin="";renderDots();return; }
+    if(r.error){ $("kErr").textContent="Incorrect PIN — try again"; K.pin="";renderDots();return; }
+    K.sessionPin=K.pin; $("loginWrap").style.display="none"; $("shell").classList.add("on");
+    $("datePicker").value=today(); $("kErr").textContent=""; render(r);
+  }
+  function logout(){ K={pin:"",sessionPin:"",filter:"",data:null}; renderDots(); $("shell").classList.remove("on"); $("loginWrap").style.display="flex"; }
 
-    function render(r){
-      $("addr").textContent="📍 "+(r.address||"S4 Towers, Magarpatta")+" · "+(r.date||"");
-      const out=$("out"); out.innerHTML="";
-      const meals=Object.keys(r.prep||{});
-      if(!meals.length){ out.innerHTML=`<div class="card muted">No orders for this day yet.</div>`; return; }
-      ["Lunch","Dinner"].forEach(meal=>{
-        if(!r.prep[meal]) return;
-        const items=r.prep[meal];
-        const card=document.createElement("div"); card.className="card";
-        const hc=(r.headcount&&r.headcount[meal])||0;
-        card.innerHTML=`<div class="meal-h">${meal==="Lunch"?"☀️ Lunch":"🌙 Dinner"}<span class="hc">${hc} order${hc===1?"":"s"}</span></div>`;
-        Object.keys(items).sort().forEach(nm=>{
-          card.innerHTML+=`<div class="pitem"><span>${nm}</span><span class="q">${items[nm]}</span></div>`;
-        });
-        out.appendChild(card);
-      });
-    }
-  </script>
+  function setFilter(f){
+    K.filter=f;
+    $("tabBoth").classList.toggle("active",f==="");
+    $("tabLunch").classList.toggle("active",f==="Lunch");
+    $("tabDinner").classList.toggle("active",f==="Dinner");
+    if(K.data) render(K.data);
+  }
+
+  async function loadPrep(){
+    $("out").innerHTML='<div class="spinner"></div>';
+    const r=await api("ia_prep",{pin:K.sessionPin,date:$("datePicker").value,meal:K.filter});
+    if(r.error){ alert(r.error); return; } render(r);
+  }
+
+  function render(r){
+    K.data=r; const out=$("out"); out.innerHTML="";
+    const prep=r.prep||{}; let any=false;
+    ["Lunch","Dinner"].forEach(meal=>{
+      if(K.filter && K.filter!==meal) return;
+      const items=prep[meal]; if(!items || !Object.keys(items).length) return; any=true;
+      const hc=(r.headcount&&r.headcount[meal])||0;
+      const card=document.createElement("div"); card.className="prep-card";
+      card.innerHTML=`<div class="prep-head"><span class="prep-title">${meal==="Lunch"?"☀️ Lunch":"🌙 Dinner"}</span>`+
+        `<span class="prep-hc">${hc} order${hc===1?"":"s"}</span></div>`+
+        Object.keys(items).sort().map(nm=>`<div class="prep-item"><span class="nm">${nm}</span><span class="q">${items[nm]}</span></div>`).join("");
+      out.appendChild(card);
+    });
+    if(!any) out.innerHTML='<div class="empty"><div class="empty-icon">🍽️</div>No orders to prep for this day.</div>';
+  }
+</script>
 </body>
 </html>
