@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IntentAmplify · Admin</title>
+  <style>
+    :root{ --brand:#c0392b; --ink:#1E1240; }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;}
+    body{background:#f4f5f9;color:#222;padding-bottom:40px;}
+    .top{background:#1E1240;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;}
+    .top h1{font-size:1rem;font-weight:800;}
+    .wrap{max-width:920px;margin:0 auto;padding:16px;}
+    .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 3px 14px rgba(0,0,0,.05);margin-bottom:14px;}
+    .gate{max-width:340px;margin:60px auto;text-align:center;}
+    input,select{padding:10px;border:1.5px solid #ddd;border-radius:9px;font-size:.92rem;}
+    input:focus,select:focus{outline:none;border-color:var(--brand);}
+    .btn{padding:10px 16px;border:none;border-radius:9px;font-weight:700;cursor:pointer;font-size:.88rem;}
+    .btn-p{background:var(--brand);color:#fff;} .btn-g{background:#2e7d32;color:#fff;} .btn-s{background:#eee;color:#444;}
+    .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+    .tab{padding:9px 14px;border-radius:9px;background:#fff;border:1px solid #e3e3e3;cursor:pointer;font-size:.85rem;font-weight:600;color:#555;}
+    .tab.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+    .pane{display:none;} .pane.on{display:block;}
+    table{width:100%;border-collapse:collapse;font-size:.82rem;}
+    th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #f0f0f0;}
+    th{color:#888;font-weight:700;font-size:.74rem;text-transform:uppercase;}
+    .pill{padding:2px 9px;border-radius:20px;font-size:.7rem;font-weight:700;}
+    .pill.pend{background:#fff3cd;color:#946200;} .pill.paid{background:#d7f5dd;color:#1c7a35;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+    .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;}
+    .kpi .b{background:#faf7ff;border:1px solid #ece4fb;border-radius:11px;padding:12px;}
+    .kpi .b .v{font-size:1.3rem;font-weight:800;color:var(--ink);} .kpi .b .l{font-size:.72rem;color:#888;}
+    .mi{display:flex;gap:8px;align-items:center;margin-bottom:6px;}
+    .mi input.nm{flex:1;} .mi input.pr{width:80px;}
+    .muted{color:#999;font-size:.8rem;}
+  </style>
+</head>
+<body>
+  <div class="top"><h1>🛠️ IntentAmplify Admin</h1><span id="who" class="muted" style="color:#cbb8ff;"></span></div>
+
+  <!-- GATE -->
+  <div class="gate card" id="gate">
+    <h2 style="color:var(--ink);margin-bottom:12px;">Enter Admin PIN</h2>
+    <input id="gpin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;margin-bottom:10px;" />
+    <button class="btn btn-p" style="width:100%;" onclick="unlock()">Unlock</button>
+    <div id="gerr" class="muted" style="color:#c0392b;margin-top:8px;"></div>
+  </div>
+
+  <div class="wrap" id="app" style="display:none;">
+    <div class="tabs">
+      <div class="tab on" data-t="menu" onclick="tab('menu')">📋 Set Menu</div>
+      <div class="tab" data-t="appr" onclick="tab('appr')">✅ Approvals</div>
+      <div class="tab" data-t="ord" onclick="tab('ord')">🧾 Orders</div>
+      <div class="tab" data-t="ana" onclick="tab('ana')">📊 Analytics</div>
+      <div class="tab" data-t="cust" onclick="tab('cust')">👥 Customers</div>
+    </div>
+
+    <!-- SET MENU -->
+    <div class="pane on" id="p-menu">
+      <div class="card">
+        <div class="row">
+          <input id="mDate" type="date" />
+          <select id="mMeal"><option>Lunch</option><option>Dinner</option></select>
+          <button class="btn btn-s" onclick="loadMenu()">Load</button>
+        </div>
+        <div id="menuItems"></div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btn-s" onclick="addItem('','')">+ Add Item</button>
+          <button class="btn btn-g" onclick="saveMenu()">Save Menu</button>
+        </div>
+        <div class="muted">If you don't set a menu for a day, the default Lunch/Dinner items apply automatically.</div>
+      </div>
+    </div>
+
+    <!-- APPROVALS -->
+    <div class="pane" id="p-appr">
+      <div class="card">
+        <div class="row"><b>Pending payments</b><button class="btn btn-s" onclick="loadAppr()">Refresh</button></div>
+        <table><thead><tr><th>Date</th><th>Meal</th><th>Customer</th><th>Items</th><th>₹</th><th></th></tr></thead>
+          <tbody id="apprBody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ORDERS -->
+    <div class="pane" id="p-ord">
+      <div class="card">
+        <div class="row">
+          <input id="oFrom" type="date" /><span>→</span><input id="oTo" type="date" />
+          <button class="btn btn-s" onclick="loadOrders()">Load</button>
+        </div>
+        <table><thead><tr><th>Date</th><th>Meal</th><th>Customer</th><th>Items</th><th>₹</th><th>Status</th></tr></thead>
+          <tbody id="ordBody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="pane" id="p-ana">
+      <div class="card">
+        <div class="row">
+          <input id="aFrom" type="date" /><span>→</span><input id="aTo" type="date" />
+          <button class="btn btn-s" onclick="loadAna()">Load</button>
+        </div>
+        <div class="kpi" id="anaKpi"></div>
+        <div style="margin-top:14px;"><b>Top items</b><table><tbody id="anaItems"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS -->
+    <div class="pane" id="p-cust">
+      <div class="card">
+        <div class="row"><b>Employees</b><button class="btn btn-s" onclick="loadCust()">Refresh</button></div>
+        <table><thead><tr><th>Name</th><th>Phone</th><th>Joined</th><th>Last order</th></tr></thead>
+          <tbody id="custBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+    const $=id=>document.getElementById(id);
+    let PIN="";
+
+    async function api(action,params){
+      const u=new URL(API); u.searchParams.set("action",action);
+      Object.entries(params||{}).forEach(([k,v])=>u.searchParams.set(k,v));
+      const r=await fetch(u); return r.json();
+    }
+    async function post(b){ const r=await fetch(API,{method:"POST",body:JSON.stringify(b)}); return r.json(); }
+    const today=()=>new Date().toISOString().slice(0,10);
+
+    async function unlock(){
+      const pin=$("gpin").value.trim();
+      const r=await api("ia_pendingApprovals",{pin});
+      if(r.error){ $("gerr").textContent=r.error; return; }
+      PIN=pin; $("gate").style.display="none"; $("app").style.display="block";
+      $("who").textContent="unlocked";
+      $("mDate").value=today(); $("oFrom").value=today(); $("oTo").value=today();
+      $("aFrom").value=today(); $("aTo").value=today();
+      loadMenu();
+    }
+
+    function tab(t){
+      document.querySelectorAll(".tab").forEach(e=>e.classList.toggle("on",e.dataset.t===t));
+      document.querySelectorAll(".pane").forEach(e=>e.classList.remove("on"));
+      $("p-"+t).classList.add("on");
+      if(t==="appr")loadAppr(); if(t==="cust")loadCust();
+    }
+
+    // ---- Set Menu ----
+    async function loadMenu(){
+      const r=await api("ia_getMenu",{dates:$("mDate").value});
+      const info=(r.menu&&r.menu[$("mDate").value]&&r.menu[$("mDate").value][$("mMeal").value])||{items:[]};
+      $("menuItems").innerHTML="";
+      info.items.forEach(it=>addItem(it.name,it.price));
+      if(!info.items.length) addItem("","");
+    }
+    function addItem(nm,pr){
+      const d=document.createElement("div"); d.className="mi";
+      d.innerHTML=`<input class="nm" placeholder="Item name" value="${nm||""}">
+                   <input class="pr" type="number" placeholder="₹" value="${pr||""}">
+                   <button class="btn btn-s" onclick="this.parentNode.remove()">✕</button>`;
+      $("menuItems").appendChild(d);
+    }
+    async function saveMenu(){
+      const items=[...document.querySelectorAll("#menuItems .mi")].map(r=>({
+        name:r.querySelector(".nm").value.trim(),
+        price:Number(r.querySelector(".pr").value)||0,
+        cat:"Item"
+      })).filter(i=>i.name && i.price>0);
+      const res=await post({_action:"ia_setMenu",pin:PIN,date:$("mDate").value,meal:$("mMeal").value,items_json:JSON.stringify(items)});
+      alert(res.success?"Menu saved.":(res.error||"Failed."));
+    }
+
+    // ---- Approvals ----
+    async function loadAppr(){
+      const r=await api("ia_pendingApprovals",{pin:PIN}); const b=$("apprBody"); b.innerHTML="";
+      (r.orders||[]).forEach(o=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${o.date}</td><td>${o.meal}</td><td>${o.name}<br><span class="muted">${o.phone}</span></td>
+          <td class="muted">${o.summary||""}</td><td>₹${o.subtotal}</td>
+          <td><button class="btn btn-g">Mark Paid</button></td>`;
+        tr.querySelector("button").onclick=async()=>{
+          const res=await post({_action:"ia_approve",pin:PIN,submission_id:o.submission_id,date:o.date,meal:o.meal,admin:"admin"});
+          if(res.success){ tr.remove(); } else alert(res.error||"Failed.");
+        };
+        b.appendChild(tr);
+      });
+      if(!b.children.length) b.innerHTML=`<tr><td colspan="6" class="muted">No pending payments.</td></tr>`;
+    }
+
+    // ---- Orders ----
+    async function loadOrders(){
+      const r=await api("ia_adminOrders",{pin:PIN,from:$("oFrom").value,to:$("oTo").value});
+      const b=$("ordBody"); b.innerHTML="";
+      (r.orders||[]).forEach(o=>{
+        const paid=String(o.payment_status).toLowerCase()==="paid";
+        b.innerHTML+=`<tr><td>${o.date}</td><td>${o.meal}</td><td>${o.name}<br><span class="muted">${o.phone}</span></td>
+          <td class="muted">${o.summary||""}</td><td>₹${o.subtotal}</td>
+          <td><span class="pill ${paid?"paid":"pend"}">${o.payment_status}</span></td></tr>`;
+      });
+      if(!b.children.length) b.innerHTML=`<tr><td colspan="6" class="muted">No orders.</td></tr>`;
+    }
+
+    // ---- Analytics ----
+    async function loadAna(){
+      const r=await api("ia_analytics",{pin:PIN,from:$("aFrom").value,to:$("aTo").value});
+      $("anaKpi").innerHTML=`
+        <div class="b"><div class="v">${r.order_count||0}</div><div class="l">Order lines</div></div>
+        <div class="b"><div class="v">${r.unique_customers||0}</div><div class="l">Customers</div></div>
+        <div class="b"><div class="v">₹${r.total_revenue||0}</div><div class="l">Total</div></div>
+        <div class="b"><div class="v">₹${r.paid_revenue||0}</div><div class="l">Paid</div></div>
+        <div class="b"><div class="v">₹${r.pending_revenue||0}</div><div class="l">Pending</div></div>
+        <div class="b"><div class="v">₹${(r.by_meal&&r.by_meal.Lunch)||0}/₹${(r.by_meal&&r.by_meal.Dinner)||0}</div><div class="l">Lunch / Dinner</div></div>`;
+      $("anaItems").innerHTML=(r.top_items||[]).map(i=>`<tr><td>${i.name}</td><td style="text-align:right;font-weight:700;">${i.qty}</td></tr>`).join("")
+        || `<tr><td class="muted">No data.</td></tr>`;
+    }
+
+    // ---- Customers ----
+    async function loadCust(){
+      const r=await api("ia_customers",{pin:PIN}); const b=$("custBody"); b.innerHTML="";
+      (r.customers||[]).forEach(c=>{
+        b.innerHTML+=`<tr><td>${c.name||""}</td><td>${c.phone}</td><td class="muted">${c.created_at||""}</td><td class="muted">${c.last_order||""}</td></tr>`;
+      });
+      if(!b.children.length) b.innerHTML=`<tr><td colspan="4" class="muted">No employees yet.</td></tr>`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IntentAmplify · Kitchen Prep</title>
+  <style>
+    :root{ --brand:#c0392b; --ink:#1E1240; }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;}
+    body{background:#fff7f3;color:#222;padding-bottom:40px;}
+    .top{background:#1E1240;color:#fff;padding:14px 16px;text-align:center;}
+    .top h1{font-size:1.05rem;font-weight:800;}
+    .top p{font-size:.74rem;opacity:.8;margin-top:2px;}
+    .wrap{max-width:640px;margin:0 auto;padding:16px;}
+    .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 3px 14px rgba(0,0,0,.05);margin-bottom:14px;}
+    .gate{max-width:340px;margin:60px auto;text-align:center;}
+    input,select{padding:11px;border:1.5px solid #ddd;border-radius:10px;font-size:1rem;}
+    input:focus,select:focus{outline:none;border-color:var(--brand);}
+    .btn{padding:11px 16px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.9rem;}
+    .btn-p{background:var(--brand);color:#fff;} .btn-s{background:#eee;color:#444;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .meal-h{font-size:1.05rem;color:var(--brand);font-weight:800;margin:4px 0 8px;display:flex;justify-content:space-between;align-items:center;}
+    .meal-h .hc{font-size:.8rem;background:#fff0ec;color:#c0392b;padding:3px 10px;border-radius:20px;font-weight:700;}
+    .pitem{display:flex;justify-content:space-between;align-items:center;padding:11px 8px;border-bottom:1px dashed #f0eae6;font-size:1rem;}
+    .pitem:last-child{border-bottom:none;}
+    .pitem .q{font-size:1.4rem;font-weight:800;color:var(--ink);min-width:48px;text-align:right;}
+    .muted{color:#999;font-size:.84rem;}
+    .err{color:#c0392b;font-size:.82rem;margin-top:8px;}
+  </style>
+</head>
+<body>
+  <div class="top"><h1>👨‍🍳 IntentAmplify Prep</h1><p>Cooking quantities only</p></div>
+
+  <div class="gate card" id="gate">
+    <h2 style="color:var(--ink);margin-bottom:12px;">Kitchen PIN</h2>
+    <input id="gpin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;margin-bottom:10px;" />
+    <button class="btn btn-p" style="width:100%;" onclick="unlock()">Unlock</button>
+    <div id="gerr" class="err"></div>
+  </div>
+
+  <div class="wrap" id="app" style="display:none;">
+    <div class="card">
+      <div class="row">
+        <input id="date" type="date" />
+        <select id="meal"><option value="">Both meals</option><option>Lunch</option><option>Dinner</option></select>
+        <button class="btn btn-s" onclick="load()">Refresh</button>
+      </div>
+      <div class="muted" id="addr" style="margin-top:8px;"></div>
+    </div>
+    <div id="out"></div>
+  </div>
+
+  <script>
+    const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+    const $=id=>document.getElementById(id);
+    let PIN="";
+    const today=()=>new Date().toISOString().slice(0,10);
+
+    async function api(action,params){
+      const u=new URL(API); u.searchParams.set("action",action);
+      Object.entries(params||{}).forEach(([k,v])=>{ if(v!=="") u.searchParams.set(k,v); });
+      const r=await fetch(u); return r.json();
+    }
+
+    async function unlock(){
+      const pin=$("gpin").value.trim();
+      const r=await api("ia_prep",{pin,date:today()});
+      if(r.error){ $("gerr").textContent=r.error; return; }
+      PIN=pin; $("gate").style.display="none"; $("app").style.display="block";
+      $("date").value=today(); render(r);
+    }
+
+    async function load(){
+      const r=await api("ia_prep",{pin:PIN,date:$("date").value,meal:$("meal").value});
+      if(r.error){ alert(r.error); return; }
+      render(r);
+    }
+
+    function render(r){
+      $("addr").textContent="📍 "+(r.address||"S4 Towers, Magarpatta")+" · "+(r.date||"");
+      const out=$("out"); out.innerHTML="";
+      const meals=Object.keys(r.prep||{});
+      if(!meals.length){ out.innerHTML=`<div class="card muted">No orders for this day yet.</div>`; return; }
+      ["Lunch","Dinner"].forEach(meal=>{
+        if(!r.prep[meal]) return;
+        const items=r.prep[meal];
+        const card=document.createElement("div"); card.className="card";
+        const hc=(r.headcount&&r.headcount[meal])||0;
+        card.innerHTML=`<div class="meal-h">${meal==="Lunch"?"☀️ Lunch":"🌙 Dinner"}<span class="hc">${hc} order${hc===1?"":"s"}</span></div>`;
+        Object.keys(items).sort().forEach(nm=>{
+          card.innerHTML+=`<div class="pitem"><span>${nm}</span><span class="q">${items[nm]}</span></div>`;
+        });
+        out.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>

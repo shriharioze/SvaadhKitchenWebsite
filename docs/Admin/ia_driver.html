@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IntentAmplify · Driver</title>
+  <style>
+    :root{ --brand:#c0392b; --ink:#1E1240; }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;}
+    body{background:#f4f5f9;color:#222;padding-bottom:40px;}
+    .top{background:#1E1240;color:#fff;padding:14px 16px;text-align:center;}
+    .top h1{font-size:1.05rem;font-weight:800;}
+    .top p{font-size:.74rem;opacity:.8;margin-top:2px;}
+    .wrap{max-width:640px;margin:0 auto;padding:16px;}
+    .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 3px 14px rgba(0,0,0,.05);margin-bottom:14px;}
+    .gate{max-width:340px;margin:60px auto;text-align:center;}
+    input,select{padding:11px;border:1.5px solid #ddd;border-radius:10px;font-size:1rem;}
+    input:focus,select:focus{outline:none;border-color:var(--brand);}
+    .btn{padding:10px 14px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.86rem;}
+    .btn-p{background:var(--brand);color:#fff;} .btn-g{background:#2e7d32;color:#fff;}
+    .btn-o{background:#ef6c00;color:#fff;} .btn-s{background:#eee;color:#444;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .meal-h{font-size:1.05rem;color:var(--brand);font-weight:800;margin:4px 0 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+    .meal-h .hc{font-size:.78rem;background:#fff0ec;color:#c0392b;padding:3px 10px;border-radius:20px;font-weight:700;}
+    .ord{border:1px solid #eee;border-radius:11px;padding:11px;margin-bottom:9px;}
+    .ord.done{background:#f3fbf4;border-color:#cdeccd;}
+    .ord .nm{font-weight:700;font-size:.95rem;}
+    .ord .it{font-size:.8rem;color:#666;margin:3px 0;}
+    .ord .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
+    a.call{color:#1a73e8;text-decoration:none;font-size:.82rem;font-weight:600;}
+    .pill{padding:2px 9px;border-radius:20px;font-size:.7rem;font-weight:700;}
+    .pill.paid{background:#d7f5dd;color:#1c7a35;} .pill.pend{background:#fff3cd;color:#946200;}
+    .pill.route{background:#fde6cf;color:#a85700;} .pill.deliv{background:#d7f5dd;color:#1c7a35;}
+    .muted{color:#999;font-size:.84rem;}
+    .err{color:#c0392b;font-size:.82rem;margin-top:8px;}
+  </style>
+</head>
+<body>
+  <div class="top"><h1>🛵 IntentAmplify Delivery</h1><p id="addrTop">S4 Towers, Magarpatta</p></div>
+
+  <div class="gate card" id="gate">
+    <h2 style="color:var(--ink);margin-bottom:12px;">Staff PIN</h2>
+    <input id="gpin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;margin-bottom:10px;" />
+    <button class="btn btn-p" style="width:100%;" onclick="unlock()">Unlock</button>
+    <div id="gerr" class="err"></div>
+  </div>
+
+  <div class="wrap" id="app" style="display:none;">
+    <div class="card">
+      <div class="row">
+        <input id="date" type="date" />
+        <button class="btn btn-s" onclick="load()">Refresh</button>
+      </div>
+      <div class="muted" id="addr" style="margin-top:8px;"></div>
+    </div>
+    <div id="out"></div>
+  </div>
+
+  <script>
+    const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+    const $=id=>document.getElementById(id);
+    let PIN="";
+    const today=()=>new Date().toISOString().slice(0,10);
+    const nowStamp=()=>{const d=new Date();const p=n=>String(n).padStart(2,"0");
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+
+    async function api(action,params){
+      const u=new URL(API); u.searchParams.set("action",action);
+      Object.entries(params||{}).forEach(([k,v])=>{ if(v!=="") u.searchParams.set(k,v); });
+      const r=await fetch(u); return r.json();
+    }
+    async function post(b){ const r=await fetch(API,{method:"POST",body:JSON.stringify(b)}); return r.json(); }
+
+    async function unlock(){
+      const pin=$("gpin").value.trim();
+      const r=await api("ia_getDriverOrders",{pin,date:today()});
+      if(r.error){ $("gerr").textContent=r.error; return; }
+      PIN=pin; $("gate").style.display="none"; $("app").style.display="block";
+      $("date").value=today(); render(r);
+    }
+    async function load(){
+      const r=await api("ia_getDriverOrders",{pin:PIN,date:$("date").value});
+      if(r.error){ alert(r.error); return; } render(r);
+    }
+
+    function render(r){
+      $("addr").textContent="📍 "+(r.address||"S4 Towers, Magarpatta")+" · "+(r.date||"");
+      const out=$("out"); out.innerHTML="";
+      const meals=r.meals||{};
+      let any=false;
+      ["Lunch","Dinner"].forEach(meal=>{
+        const list=meals[meal]||[]; if(!list.length) return; any=true;
+        const card=document.createElement("div"); card.className="card";
+        const pending=list.filter(o=>o.deliveryStatus!=="Delivered").length;
+        card.innerHTML=`<div class="meal-h">${meal==="Lunch"?"☀️ Lunch":"🌙 Dinner"}
+          <span class="hc">${list.length} order${list.length===1?"":"s"} · ${pending} left</span></div>`;
+        const rt=document.createElement("button"); rt.className="btn btn-o"; rt.style.marginBottom="10px";
+        rt.textContent="🛵 Mark all En-route"; rt.onclick=()=>batchEnRoute(meal,r.date);
+        card.appendChild(rt);
+        list.forEach(o=>{
+          const div=document.createElement("div"); div.className="ord"+(o.deliveryStatus==="Delivered"?" done":"");
+          const pay=String(o.paymentStatus).toLowerCase()==="paid";
+          const ds=o.deliveryStatus||"Pending";
+          const dpill = ds==="Delivered"?'<span class="pill deliv">Delivered</span>'
+                      : ds==="EnRoute"?'<span class="pill route">En-route</span>':'';
+          div.innerHTML=`<div class="nm">${o.name||""} ${dpill}</div>
+            <div class="it">${o.summary||""}</div>
+            <div class="meta">
+              <a class="call" href="tel:${o.phone}">📞 ${o.phone}</a>
+              <span><span class="pill ${pay?"paid":"pend"}">${o.paymentStatus}</span> &nbsp;₹${o.amount}</span>
+            </div>`;
+          const meta=div.querySelector(".meta");
+          if(ds!=="Delivered"){
+            const b=document.createElement("button"); b.className="btn btn-g"; b.textContent="✓ Delivered";
+            b.onclick=()=>markDelivered(o.submissionId,r.date,meal,b);
+            meta.appendChild(b);
+          }
+          card.appendChild(div);
+        });
+        out.appendChild(card);
+      });
+      if(!any) out.innerHTML=`<div class="card muted">No orders for this day yet.</div>`;
+    }
+
+    async function markDelivered(id,date,meal,btn){
+      btn.disabled=true; btn.textContent="…";
+      const res=await post({_action:"ia_markDelivered",pin:PIN,submission_id:id,date,meal,deliveredAt:nowStamp()});
+      if(res.success){ load(); } else { alert(res.error||"Failed."); btn.disabled=false; btn.textContent="✓ Delivered"; }
+    }
+    async function batchEnRoute(meal,date){
+      const res=await post({_action:"ia_batchMarkEnRoute",pin:PIN,date,meal,enRouteAt:nowStamp()});
+      if(res.success){ load(); } else alert(res.error||"Failed.");
+    }
+  </script>
+</body>
+</html>

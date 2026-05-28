@@ -470,6 +470,19 @@ function doGet(e) {
     if (action === "getWalletTransactions") return jsonRes(getWalletTransactions(p.phone));
     if (action === "getDayTotalsForDates") return jsonRes(getDayTotalsForDates(p.phone, p.dates));
 
+    // ── IntentAmplify (corporate channel) — GET ────────────────
+    if (action === "ia_config")          return jsonRes(ia_config());
+    if (action === "ia_checkPhone")      return jsonRes(ia_checkPhone(p.phone));
+    if (action === "ia_verifyLogin")     return jsonRes(ia_verifyLogin(p.phone, p.pin));
+    if (action === "ia_getMenu")         return jsonRes(ia_getMenuRange((p.dates||"").split(",").filter(Boolean), IA_MEALS));
+    if (action === "ia_myOrders")        return jsonRes(ia_myOrders(p.phone));
+    if (action === "ia_adminOrders")     return jsonRes(ia_adminOrders(p));
+    if (action === "ia_pendingApprovals")return jsonRes(ia_pendingApprovals(p));
+    if (action === "ia_customers")       return jsonRes(ia_customers(p));
+    if (action === "ia_analytics")       return jsonRes(ia_analytics(p));
+    if (action === "ia_prep")            return jsonRes(ia_prep(p));
+    if (action === "ia_getDriverOrders") return jsonRes(ia_getDriverOrders(p));
+
     return jsonRes({error:"Unknown action or Access Denied"});
   } catch(err) {
     return jsonRes({error: err.message});
@@ -807,6 +820,14 @@ function doPost(e) {
       return jsonRes(hdfc_verifyReturnPayload(body));
     }
     // ─────────────────────────────────────────────────────────
+
+    // ── IntentAmplify (corporate channel) — POST ───────────────
+    if (action === "ia_register")    return jsonRes(ia_register(body));
+    if (action === "ia_submitOrder") return jsonRes(ia_submitOrder(body));
+    if (action === "ia_setMenu")     return jsonRes(ia_setMenu(body));
+    if (action === "ia_approve")     return jsonRes(ia_approve(body));
+    if (action === "ia_markDelivered")    return jsonRes(ia_markDelivered(body));
+    if (action === "ia_batchMarkEnRoute") return jsonRes(ia_batchMarkEnRoute(body));
 
     // Regular order submission
     return jsonRes(submitOrder(body));

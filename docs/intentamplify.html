@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IntentAmplify · Svaadh Kitchen</title>
+  <style>
+    :root{ --brand:#c0392b; --ink:#1E1240; --cream:#fef9f6; --line:#eee; }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;}
+    body{background:var(--cream);color:#222;padding:0 0 90px;}
+    .top{background:linear-gradient(135deg,#1E1240,#3a2a6b);color:#fff;padding:18px 16px;text-align:center;}
+    .top h1{font-size:1.15rem;font-weight:800;letter-spacing:.3px;}
+    .top p{font-size:.78rem;opacity:.85;margin-top:3px;}
+    .wrap{max-width:520px;margin:0 auto;padding:16px;}
+    .card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:14px;}
+    .card h2{font-size:1rem;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+    label{font-size:.8rem;font-weight:600;color:#555;display:block;margin-bottom:5px;}
+    input{width:100%;padding:13px;border:1.5px solid #ddd;border-radius:11px;font-size:1rem;}
+    input:focus{outline:none;border-color:var(--brand);}
+    .hint{font-size:.72rem;color:#999;margin-top:6px;}
+    .addr{background:#f4f1fb;border:1px dashed #b9a9e6;border-radius:11px;padding:11px;font-size:.82rem;color:#4b3b86;font-weight:600;}
+    .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));gap:8px;}
+    .dchip{border:1.5px solid #ddd;border-radius:11px;padding:9px 6px;text-align:center;cursor:pointer;background:#fff;transition:.15s;}
+    .dchip .dn{font-size:1.15rem;font-weight:800;color:var(--ink);}
+    .dchip .dm{font-size:.66rem;color:#888;text-transform:uppercase;}
+    .dchip.sel{border-color:var(--brand);background:#fff0ec;}
+    .dchip.dis{opacity:.4;pointer-events:none;}
+    .meal{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;}
+    .meal h3{font-size:.9rem;color:var(--brand);margin-bottom:4px;}
+    .meal .closed{font-size:.72rem;color:#c0392b;font-weight:700;}
+    .item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #f0f0f0;}
+    .item:last-child{border-bottom:none;}
+    .item .nm{font-size:.85rem;}
+    .item .pr{font-size:.72rem;color:#999;}
+    .stp{display:flex;align-items:center;gap:10px;}
+    .stp button{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--brand);background:#fff;color:var(--brand);font-size:1.1rem;font-weight:800;cursor:pointer;line-height:1;}
+    .stp span{min-width:20px;text-align:center;font-weight:700;}
+    .rev-line{display:flex;justify-content:space-between;font-size:.85rem;padding:6px 0;border-bottom:1px dashed #f0f0f0;}
+    .total{display:flex;justify-content:space-between;font-size:1.1rem;font-weight:800;color:var(--ink);margin-top:10px;}
+    .pay{background:#fff8e1;border:1px solid #ffe082;border-radius:11px;padding:12px;margin-top:12px;font-size:.82rem;}
+    .pay b{color:#b26a00;}
+    .nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px;}
+    .nav-inner{max-width:520px;margin:0 auto;display:flex;gap:10px;}
+    .btn{flex:1;padding:14px;border:none;border-radius:12px;font-size:1rem;font-weight:800;cursor:pointer;}
+    .btn-p{background:var(--brand);color:#fff;}
+    .btn-s{flex:.4;background:#eee;color:#555;}
+    .btn:disabled{opacity:.45;cursor:not-allowed;}
+    .scr{display:none;} .scr.on{display:block;}
+    .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:#1E1240;color:#fff;padding:11px 18px;border-radius:30px;font-size:.82rem;z-index:99;opacity:0;transition:.3s;pointer-events:none;}
+    .toast.show{opacity:1;}
+    .ok{text-align:center;padding:24px 8px;}
+    .ok .big{font-size:3rem;}
+    .ok h2{color:#2e7d32;margin:10px 0;}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h1>🍱 IntentAmplify Meals</h1>
+    <p>Powered by Svaadh Kitchen</p>
+  </div>
+  <div class="wrap">
+
+    <!-- SCREEN 0: LOGIN -->
+    <div class="scr on" id="s0">
+      <div class="card">
+        <h2>👋 Welcome</h2>
+        <label>Mobile Number</label>
+        <input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit number" />
+        <div id="loginExtra" style="display:none;margin-top:12px;">
+          <div id="nameWrap" style="display:none;">
+            <label>Your Name</label>
+            <input id="name" type="text" placeholder="Full name" />
+            <div style="height:12px;"></div>
+          </div>
+          <label id="pinLabel">Set a 4-digit PIN</label>
+          <input id="pin" type="tel" inputmode="numeric" maxlength="4" placeholder="••••" />
+          <div class="hint" id="pinHint">You'll use this PIN next time.</div>
+        </div>
+        <div class="hint" id="phoneHint">Enter your number to continue.</div>
+      </div>
+    </div>
+
+    <!-- SCREEN 1: DATES -->
+    <div class="scr" id="s1">
+      <div class="card">
+        <h2>🗓️ Select Date(s)</h2>
+        <div class="dgrid" id="dgrid"></div>
+        <div class="hint">Lunch closes 11:00 AM · Dinner closes 5:00 PM (same day).</div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: ITEMS -->
+    <div class="scr" id="s2">
+      <div id="itemsArea"></div>
+    </div>
+
+    <!-- SCREEN 3: REVIEW -->
+    <div class="scr" id="s3">
+      <div class="card">
+        <h2>🧾 Review & Pay</h2>
+        <div class="addr">📍 Delivery: <span id="revAddr"></span></div>
+        <div style="height:12px;"></div>
+        <div id="revLines"></div>
+        <div class="total"><span>Total</span><span>₹<span id="revTotal">0</span></span></div>
+        <div class="pay" id="payBox">
+          <b>Pay ₹<span id="payAmt">0</span> via UPI</b> to <b id="payVpa"></b><br>
+          After paying, tap <b>Place Order</b>. Your order is confirmed once our team verifies payment.
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: DONE -->
+    <div class="scr" id="s4">
+      <div class="card ok">
+        <div class="big">✅</div>
+        <h2>Order Placed!</h2>
+        <p id="okMsg" style="font-size:.86rem;color:#555;"></p>
+        <div style="height:14px;"></div>
+        <button class="btn btn-p" onclick="location.reload()">Place Another Order</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="nav" id="nav">
+    <div class="nav-inner">
+      <button class="btn btn-s" id="back" style="display:none;" onclick="goBack()">← Back</button>
+      <button class="btn btn-p" id="next" onclick="goNext()">Continue →</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ⚠️ Set this to the IntentAmplify Apps Script Web App /exec URL after deploy.
+    const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+
+    const $ = id => document.getElementById(id);
+    const S = { step:0, phone:"", pin:"", name:"", isNew:false,
+                dates:[], cfg:null, menu:{}, cart:{} /* date -> meal -> {item:qty} */ };
+
+    function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2600); }
+
+    async function api(action, params){
+      const u = new URL(API); u.searchParams.set("action", action);
+      Object.entries(params||{}).forEach(([k,v])=>u.searchParams.set(k,v));
+      const r = await fetch(u); return r.json();
+    }
+    async function post(body){
+      const r = await fetch(API,{method:"POST",body:JSON.stringify(body)});
+      return r.json();
+    }
+
+    function show(n){
+      S.step=n;
+      document.querySelectorAll(".scr").forEach((e,i)=>e.classList.toggle("on",i===n));
+      $("back").style.display = (n>0 && n<4) ? "block" : "none";
+      $("nav").style.display = (n===4) ? "none" : "block";
+      const labels=["Continue →","Continue →","Review →","Place Order","",];
+      $("next").textContent = labels[n];
+      window.scrollTo(0,0);
+    }
+
+    // ---- init ----
+    (async function(){
+      try{ S.cfg = await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"]}; }
+      $("phone").addEventListener("input", onPhone);
+    })();
+
+    let phoneTimer=null;
+    function onPhone(){
+      const v=$("phone").value.replace(/\D/g,""); $("phone").value=v;
+      $("loginExtra").style.display="none";
+      if(v.length===10){
+        clearTimeout(phoneTimer);
+        phoneTimer=setTimeout(async()=>{
+          const r=await api("ia_checkPhone",{phone:v});
+          if(r.error){ toast(r.error); return; }
+          S.isNew = !r.exists;
+          $("loginExtra").style.display="block";
+          $("nameWrap").style.display = S.isNew ? "block" : "none";
+          $("pinLabel").textContent = S.isNew ? "Set a 4-digit PIN" : "Enter your PIN";
+          $("pinHint").textContent = S.isNew ? "You'll use this PIN next time." :
+            ("Welcome back" + (r.name?(", "+r.name):"") + "!");
+          $("pin").focus();
+        },350);
+      }
+    }
+
+    async function goNext(){
+      if(S.step===0) return doLogin();
+      if(S.step===1){
+        if(!S.dates.length){ toast("Pick at least one date."); return; }
+        await loadItems(); show(2); return;
+      }
+      if(S.step===2){
+        if(!cartHasItems()){ toast("Add at least one item."); return; }
+        buildReview(); show(3); return;
+      }
+      if(S.step===3) return placeOrder();
+    }
+    function goBack(){ if(S.step>0) show(S.step-1); }
+
+    async function doLogin(){
+      const phone=$("phone").value.replace(/\D/g,"");
+      const pin=$("pin").value.replace(/\D/g,"");
+      const name=$("name").value.trim();
+      if(phone.length!==10){ toast("Enter a valid 10-digit number."); return; }
+      if(pin.length!==4){ toast("PIN must be 4 digits."); return; }
+      if(S.isNew && !name){ toast("Please enter your name."); return; }
+      $("next").disabled=true;
+      try{
+        let res;
+        if(S.isNew){ res = await post({_action:"ia_register",phone,pin,name}); }
+        else { res = await api("ia_verifyLogin",{phone,pin}); }
+        if(!res.success){ toast(res.error||"Login failed."); return; }
+        S.phone=phone; S.pin=pin; S.name=res.name||name;
+        renderDates(); show(1);
+      } finally { $("next").disabled=false; }
+    }
+
+    // ---- dates ----
+    function renderDates(){
+      const g=$("dgrid"); g.innerHTML="";
+      const now=new Date(); const wk=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      for(let i=0;i<14;i++){
+        const d=new Date(now); d.setDate(now.getDate()+i);
+        const iso=d.toISOString().slice(0,10);
+        const el=document.createElement("div");
+        el.className="dchip"; el.dataset.iso=iso;
+        el.innerHTML=`<div class="dn">${d.getDate()}</div><div class="dm">${wk[d.getDay()]}</div>`;
+        el.onclick=()=>toggleDate(iso,el);
+        g.appendChild(el);
+      }
+    }
+    function toggleDate(iso,el){
+      const i=S.dates.indexOf(iso);
+      if(i>=0){ S.dates.splice(i,1); el.classList.remove("sel"); delete S.cart[iso]; }
+      else { S.dates.push(iso); el.classList.add("sel"); }
+    }
+
+    // ---- items ----
+    async function loadItems(){
+      const area=$("itemsArea"); area.innerHTML="<div class='card'>Loading menu…</div>";
+      const r=await api("ia_getMenu",{dates:S.dates.join(",")});
+      S.menu=r.menu||{};
+      area.innerHTML="";
+      S.dates.sort().forEach(date=>{
+        const card=document.createElement("div"); card.className="card";
+        const dd=new Date(date+"T00:00:00");
+        card.innerHTML=`<h2>🗓️ ${dd.toDateString()}</h2>`;
+        (S.cfg.meals||["Lunch","Dinner"]).forEach(meal=>{
+          const info=(S.menu[date]&&S.menu[date][meal])||{items:[]};
+          const open=isOpen(date,meal);
+          const mdiv=document.createElement("div"); mdiv.className="meal";
+          mdiv.innerHTML=`<h3>${meal==="Lunch"?"☀️":"🌙"} ${meal} ${open?"":"<span class='closed'>(closed)</span>"}</h3>`;
+          if(open){
+            info.items.forEach(it=>{
+              const row=document.createElement("div"); row.className="item";
+              const qty=(S.cart[date]&&S.cart[date][meal]&&S.cart[date][meal][it.name])||0;
+              row.innerHTML=`<div><div class="nm">${it.name}</div><div class="pr">₹${it.price}</div></div>`;
+              const stp=document.createElement("div"); stp.className="stp";
+              stp.innerHTML=`<button>−</button><span>${qty}</span><button>+</button>`;
+              const sp=stp.querySelector("span");
+              stp.children[0].onclick=()=>chg(date,meal,it.name,-1,sp);
+              stp.children[2].onclick=()=>chg(date,meal,it.name,1,sp);
+              row.appendChild(stp); mdiv.appendChild(row);
+            });
+          }
+          card.appendChild(mdiv);
+        });
+        area.appendChild(card);
+      });
+    }
+    function chg(date,meal,item,delta,sp){
+      S.cart[date]=S.cart[date]||{}; S.cart[date][meal]=S.cart[date][meal]||{};
+      let q=(S.cart[date][meal][item]||0)+delta; if(q<0)q=0;
+      if(q===0) delete S.cart[date][meal][item]; else S.cart[date][meal][item]=q;
+      sp.textContent=q;
+    }
+    function cartHasItems(){
+      return Object.values(S.cart).some(m=>Object.values(m).some(o=>Object.keys(o).length));
+    }
+    function isOpen(date,meal){
+      const today=new Date().toISOString().slice(0,10);
+      if(date<today) return false; if(date>today) return true;
+      const c=(S.cfg.cutoffs&&S.cfg.cutoffs[meal])|| (meal==="Lunch"?{h:11,m:0}:{h:17,m:0});
+      const n=new Date(); return n.getHours()<c.h || (n.getHours()===c.h&&n.getMinutes()<c.m);
+    }
+
+    // ---- review ----
+    function buildReview(){
+      $("revAddr").textContent=S.cfg.address||"S4 Towers, Magarpatta";
+      let total=0; const lines=[];
+      S.dates.sort().forEach(date=>{
+        (S.cfg.meals||["Lunch","Dinner"]).forEach(meal=>{
+          const sel=(S.cart[date]&&S.cart[date][meal])||{};
+          const menu=((S.menu[date]&&S.menu[date][meal])||{items:[]}).items;
+          const price={}; menu.forEach(it=>price[it.name]=it.price);
+          let sub=0; const parts=[];
+          Object.entries(sel).forEach(([nm,q])=>{ const p=price[nm]||0; sub+=p*q; parts.push(`${q}× ${nm}`); });
+          if(sub>0){ total+=sub; lines.push(`<div class="rev-line"><span>${date} ${meal}<br><small style="color:#999">${parts.join(", ")}</small></span><span>₹${sub}</span></div>`); }
+        });
+      });
+      $("revLines").innerHTML=lines.join("");
+      $("revTotal").textContent=total; $("payAmt").textContent=total;
+      $("payVpa").textContent=S.cfg.upi||"(UPI id)";
+      $("payBox").style.display=(S.cfg.upi)?"block":"none";
+    }
+
+    async function placeOrder(){
+      $("next").disabled=true;
+      try{
+        const res=await post({_action:"ia_submitOrder",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart});
+        if(!res.success){ toast(res.error||"Could not place order."); return; }
+        $("okMsg").innerHTML=`Order <b>${res.submission_id}</b> for <b>₹${res.total}</b>.<br>`+
+          (res.upi?`Pay to <b>${res.upi}</b> if you haven't yet. `:"")+
+          `We'll confirm once payment is verified.`;
+        show(4);
+      } finally { $("next").disabled=false; }
+    }
+  </script>
+</body>
+</html>
