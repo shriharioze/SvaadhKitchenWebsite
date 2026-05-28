@@ -560,6 +560,97 @@ function ia_batchMarkEnRoute(body) {
   }
 }
 
+// ── Kitchen Summary + Labels (clone of consumer shapes, from IA_Orders) ──
+// IntentAmplify stores items in Items_JSON; the cloned kitchen.html frontend
+// expects the consumer column layout. This maps IA item names → those columns
+// so the SAME frontend (units, recipe weights, Marathi, packing, labels) works.
+function ia_itemToCol(name) {
+  const map = {
+    "Chapati": "Chapati", "Without Oil Chapati": "Without_Oil_Chapati",
+    "Phulka": "Phulka", "Ghee Phulka": "Ghee_Phulka",
+    "Jowar Bhakri": "Jowar_Bhakri", "Bajra Bhakri": "Bajra_Bhakri",
+    "Dry Sabji Mini (100ml)": "Dry_Sabji_Mini", "Dry Sabji Full (250ml)": "Dry_Sabji_Full",
+    "Curry Sabji Mini (100ml)": "Curry_Sabji_Mini", "Curry Sabji Full (250ml)": "Curry_Sabji_Full",
+    "Dal (200ml)": "Dal", "Rice (100g)": "Rice", "Salad (40g)": "Salad", "Curd (50g)": "Curd"
+  };
+  return map[name] || null;
+}
+function ia_orderCols(itemsJson) {
+  const col = {};
+  try { JSON.parse(itemsJson || "[]").forEach(function (it) {
+    const c = ia_itemToCol(it.name); if (c) col[c] = (col[c] || 0) + (Number(it.qty) || 0);
+  }); } catch (e) {}
+  return col;
+}
+
+function ia_getKitchenSummary(p) {
+  if (!ia_canPrep(p.pin)) return { error: "Unauthorized." };
+  const date = ia_dateStr(p.date) || ia_todayStr();
+  const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+  const ROTI_COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri"];
+  const ROTI_LIMITS = { "Chapati":6,"Without_Oil_Chapati":6,"Phulka":12,"Ghee_Phulka":12,"Jowar_Bhakri":2,"Bajra_Bhakri":2 };
+  const meals = {}; const orders = [];
+
+  ia_rows(ws).forEach(function (r) {
+    if (ia_dateStr(r.Date) !== date) return;
+    const meal = String(r.Meal || ""); if (IA_MEALS.indexOf(meal) === -1) return;
+    if (!meals[meal]) meals[meal] = { count: 0 };
+    const m = meals[meal]; m.count++;
+    if (!m.rotis) m.rotis = {};
+    if (!m.rotiMatrix) { m.rotiMatrix = {}; ROTI_COLS.forEach(function (c) { m.rotiMatrix[c] = {}; }); }
+    if (!m.sabji) m.sabji = { dry_kg:0, curry_kg:0, dry_name:"Sabji (Dry)", curry_name:"Sabji (Curry)", dry_mini:0, dry_full:0, curry_mini:0, curry_full:0 };
+    if (!m.other) m.other = { Dal:{kg:0,count:0}, Rice:{count:0}, Salad:{count:0}, Curd:{count:0} };
+    if (!m.riceMatrix) m.riceMatrix = {}; if (!m.saladMatrix) m.saladMatrix = {}; if (!m.curdMatrix) m.curdMatrix = {};
+
+    const col = ia_orderCols(r.Items_JSON);
+    const parts = [];
+    ROTI_COLS.forEach(function (c) {
+      const q = col[c] || 0;
+      if (q > 0) { m.rotis[c] = (m.rotis[c] || 0) + q; parts.push(q + " " + c.replace(/_/g, " "));
+        calculatePackets(q, ROTI_LIMITS[c]).forEach(function (pk) { m.rotiMatrix[c][pk] = (m.rotiMatrix[c][pk] || 0) + 1; }); }
+    });
+    const dMini=col.Dry_Sabji_Mini||0, dFull=col.Dry_Sabji_Full||0, cMini=col.Curry_Sabji_Mini||0, cFull=col.Curry_Sabji_Full||0;
+    m.sabji.dry_mini+=dMini; m.sabji.dry_full+=dFull; m.sabji.curry_mini+=cMini; m.sabji.curry_full+=cFull;
+    if(dMini)parts.push(dMini+" Mini Dry"); if(dFull)parts.push(dFull+" Full Dry"); if(cMini)parts.push(cMini+" Mini Curry"); if(cFull)parts.push(cFull+" Full Curry");
+    const dalQ=col.Dal||0, riceQ=col.Rice||0, saladQ=col.Salad||0, curdQ=col.Curd||0;
+    m.other.Dal.kg+=dalQ*1.33; m.other.Dal.count+=dalQ; m.other.Rice.count+=riceQ; m.other.Salad.count+=saladQ; m.other.Curd.count+=curdQ;
+    if(riceQ>0) calculatePackets(riceQ,3).forEach(function(pk){ m.riceMatrix[pk]=(m.riceMatrix[pk]||0)+1; });
+    if(saladQ>0) calculatePackets(saladQ,4).forEach(function(pk){ m.saladMatrix[pk]=(m.saladMatrix[pk]||0)+1; });
+    if(curdQ>0) calculatePackets(curdQ,2).forEach(function(pk){ m.curdMatrix[pk]=(m.curdMatrix[pk]||0)+1; });
+    if(dalQ)parts.push(dalQ+" Dal"); if(riceQ)parts.push(riceQ+" Rice"); if(saladQ)parts.push(saladQ+" Salad"); if(curdQ)parts.push(curdQ+" Curd");
+
+    orders.push({
+      Submission_ID: String(r.Submission_ID||""), Customer_Name: String(r.Customer_Name||""), Meal_Type: meal,
+      summary: parts.join(", "),
+      items: { Chapati:col.Chapati||0, Without_Oil_Chapati:col.Without_Oil_Chapati||0, Phulka:col.Phulka||0, Ghee_Phulka:col.Ghee_Phulka||0,
+        Jowar_Bhakri:col.Jowar_Bhakri||0, Bajra_Bhakri:col.Bajra_Bhakri||0, Dry_Sabji_Mini:dMini, Dry_Sabji_Full:dFull,
+        Curry_Sabji_Mini:cMini, Curry_Sabji_Full:cFull, Dal:dalQ, Rice:riceQ, Salad:saladQ, Curd:curdQ },
+      Special_Notes_Kitchen: String(r.Notes||""), Special_Notes_Delivery: "", Delivery_Point: "", marathiNotes: "", Packed: false
+    });
+  });
+  ["Lunch","Dinner"].forEach(function(meal){ if(meals[meal]&&meals[meal].other&&meals[meal].other.Dal) meals[meal].other.Dal.kg=Math.round(meals[meal].other.Dal.kg*100)/100; });
+  return { date: date, meals: meals, orders: orders, cutoffs: {} };
+}
+
+function ia_getLabelOrders(p) {
+  if (!ia_canPrep(p.pin)) return { error: "Unauthorized." };
+  const date = ia_dateStr(p.date) || ia_todayStr();
+  const meal = String(p.meal || "");
+  const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+  const COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
+                "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Rice","Salad"];
+  const orders = ia_rows(ws)
+    .filter(function (r) { return ia_dateStr(r.Date) === date && String(r.Meal) === meal; })
+    .map(function (r) {
+      const col = ia_orderCols(r.Items_JSON);
+      const obj = { name: String(r.Customer_Name||""), area: IA_FIXED_ADDRESS, notes: String(r.Notes||""),
+        Curd: col.Curd || 0, Items_JSON: String(r.Items_JSON || "") };
+      COLS.forEach(function (c) { obj[c] = col[c] || 0; });
+      return obj;
+    });
+  return { orders: orders };
+}
+
 function ia_config() {
   return {
     company: IA_COMPANY_NAME,

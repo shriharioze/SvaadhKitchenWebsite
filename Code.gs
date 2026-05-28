@@ -482,6 +482,8 @@ function doGet(e) {
     if (action === "ia_analytics")       return jsonRes(ia_analytics(p));
     if (action === "ia_prep")            return jsonRes(ia_prep(p));
     if (action === "ia_getDriverOrders") return jsonRes(ia_getDriverOrders(p));
+    if (action === "ia_getKitchenSummary") return jsonRes(ia_getKitchenSummary(p));
+    if (action === "ia_getLabelOrders")    return jsonRes(ia_getLabelOrders(p));
 
     return jsonRes({error:"Unknown action or Access Denied"});
   } catch(err) {
