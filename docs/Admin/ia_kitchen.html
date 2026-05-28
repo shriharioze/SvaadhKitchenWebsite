@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.4">
+  <meta name="app-version" content="v2026.05.25.4">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -960,10 +960,16 @@
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     
-    // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
-    async function fetchWithTimeout(url, options = {}, timeoutMs) {
-      const fetchOpts = typeof options === 'number' ? {} : options;
-      return fetch(url, fetchOpts);
+    // ── FETCH WITH TIMEOUT (prevents GAS cold-start hangs) ──
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        return res;
+      } finally {
+        clearTimeout(id);
+      }
     }
 
     let K = { pin: "", sessionPin: "" };
@@ -1029,7 +1035,11 @@
         if (data.error) {
           if (!autoPin) {
             K.pin = ""; renderDots();
-            document.getElementById("kErr").textContent = "Incorrect PIN";
+            // Only call it a PIN problem when the backend actually says so.
+            // Otherwise surface the real error (e.g. "Unknown action" → backend
+            // not redeployed) instead of misleading "Incorrect PIN".
+            const isAuth = /unauthor|incorrect pin|invalid pin/i.test(String(data.error));
+            document.getElementById("kErr").textContent = isAuth ? "Incorrect PIN" : ("Backend: " + data.error);
           } else {
             localStorage.removeItem('sk-kitchen-pin');
           }
@@ -1123,8 +1133,6 @@
       try { localStorage.setItem(_autoLabelKey(date, meal), String(Date.now())); } catch(_) {}
     }
 
-    // Returns the local Date object for today @ (cutoffHours + 5min) IST.
-    // Assumes the kitchen device's local time is IST (which it always is).
     function _autoLabelTriggerAt(cutoffHours) {
       const total = cutoffHours + (AUTO_LABEL_DELAY_MIN / 60);
       const h = Math.floor(total);
@@ -1135,14 +1143,11 @@
     }
 
     function scheduleAutoLabels() {
-      // Clear any existing timers (we may be called multiple times per day)
       Object.values(_autoLabelTimers).forEach(t => { try { clearTimeout(t); } catch(_) {} });
       _autoLabelTimers = {};
 
       const today = todayIST();
       const datePicker = document.getElementById("datePicker");
-      // Only auto-fire if the kitchen view is on TODAY. If staff is browsing
-      // a future or past date, leave them alone — they're inspecting.
       if (datePicker && datePicker.value && datePicker.value !== today) {
         console.log("[AutoLabel] Date picker on " + datePicker.value + " (not today) — skipping schedule");
         return;
@@ -1162,8 +1167,6 @@
         const triggerAt = _autoLabelTriggerAt(cutoffs[meal]);
         const delay = triggerAt - now;
         if (delay <= 0) {
-          // Trigger time has already passed today but we haven't fired yet —
-          // catch up immediately (e.g., kitchen device was off at cutoff).
           console.log("[AutoLabel] " + meal + " trigger past (was at "
             + triggerAt.toTimeString().slice(0,5) + ") — firing now");
           autoFireLabel(today, meal);
@@ -1176,24 +1179,21 @@
     }
 
     async function autoFireLabel(date, meal) {
-      if (_autoLabelFiredAlready(date, meal)) return;  // double-guard
-      _autoLabelMarkFired(date, meal);                  // claim slot first to prevent races
+      if (_autoLabelFiredAlready(date, meal)) return;
+      _autoLabelMarkFired(date, meal);
 
       console.log("[AutoLabel] Firing " + meal + " for " + date);
 
-      // Remember where staff was BEFORE we hijack the view. We restore
-      // this tab once the auto-save finishes (success, no-orders, or
-      // failure) so a page refresh / scheduled fire doesn't leave them
-      // stranded on the Labels tab.
+      // Remember where staff was BEFORE we hijack the view, so we can
+      // restore it when done. A refresh after lunch/dinner cutoff used
+      // to leave them stranded on the Labels tab.
       const _prevTab = _currentTab;
       let _switchedAway = false;
 
       try {
-        // Switch to Labels tab so the form is rendered.
         if (typeof switchKTab === "function" && _currentTab !== "Labels") {
           switchKTab("Labels");
           _switchedAway = true;
-          // Let the tab finish rendering before we poke its inputs.
           await new Promise(r => setTimeout(r, 700));
         }
 
@@ -1208,9 +1208,8 @@
 
         dEl.value = date;
         mEl.value = meal;
-        if (modeEl) modeEl.value = "Actual"; // never auto-fire Test mode
+        if (modeEl) modeEl.value = "Actual";
 
-        // Generate (fetches orders + renders preview + populates _bulkLabelOrders)
         await generateBulkLabels();
 
         if (!_bulkLabelOrders || !_bulkLabelOrders.length) {
@@ -1219,12 +1218,9 @@
           return;
         }
 
-        // Save (builds PDF + uploads to Drive — same flow as the Save button)
         await saveBulkLabelsToDrive();
 
-        // Audible chime + visible toast
         try {
-          // Short pleasant beep (data-URI generated tone)
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
           const o = ctx.createOscillator();
           const g = ctx.createGain();
@@ -1233,18 +1229,14 @@
           o.connect(g); g.connect(ctx.destination);
           o.start(); o.stop(ctx.currentTime + 0.18);
           setTimeout(() => { try { ctx.close(); } catch(_){} }, 400);
-        } catch(_) { /* audio blocked — fine, toast still shows */ }
+        } catch(_) {}
         if (typeof toast === "function") toast("✅ " + meal + " labels auto-generated and saved to Drive", 7000);
       } catch (e) {
         console.error("[AutoLabel] Failed for " + date + " " + meal + ": " + (e && e.message));
-        // Clear the fired flag so the next loadKitchen tick (5-min auto-refresh)
-        // tries again. Staff also see a toast prompting manual generation.
         try { localStorage.removeItem(_autoLabelKey(date, meal)); } catch(_) {}
         if (typeof toast === "function") toast("⚠️ Auto-label failed for " + meal + " — please generate manually", 9000);
       } finally {
         // Restore the tab staff was on before we hijacked the view.
-        // Without this, a refresh after lunch/dinner cutoff would leave
-        // staff stranded on Labels even if they were viewing Summary.
         if (_switchedAway && _prevTab && _prevTab !== "Labels" && typeof switchKTab === "function") {
           try { switchKTab(_prevTab); } catch(_) {}
         }
@@ -1890,7 +1882,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.05.25.4";
+    const KITCHEN_VERSION = "v2026.05.25.4";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
@@ -1902,7 +1894,6 @@
         if (m && m[1] && m[1] !== KITCHEN_VERSION) {
           console.log("[Kitchen] Version mismatch: running=" + KITCHEN_VERSION
                       + ", latest=" + m[1] + " — reloading to pick up new build");
-          // Add cache buster to URL so the browser definitely fetches fresh.
           const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
           window.location.replace(window.location.href + sep + "_v=" + Date.now());
         }
@@ -1911,20 +1902,32 @@
 
     // ── INITIAL STATE ON LOAD ──
     (function () {
-      // ALWAYS reset to today's date on every page load / refresh.
-      // Previously this honoured a (never-written) sessionStorage key, but
-      // legacy storage from older builds could surface a stale date and
-      // kitchen staff occasionally prepared off the wrong day's order list.
-      // Forcing today on load is the safer default — staff can still pick
-      // a different date manually via the picker if they need to.
-      document.getElementById("datePicker").value = todayIST();
-      try { sessionStorage.removeItem('sk_kitchen_date'); } catch(_) {}
+      // ALWAYS reset to today's IST date on every page refresh, with no
+      // exceptions. Earlier this preserved a same-day saved date, but
+      // staff occasionally prepared meals against a stale picker value
+      // after a long-idle refresh. Forcing today on every load is the
+      // safer default — they can still pick a different date manually
+      // from the picker after load if they need to.
+      const today = todayIST();
+      document.getElementById("datePicker").value = today;
+      try {
+        sessionStorage.setItem('sk_kitchen_date',        today);
+        sessionStorage.setItem('sk_kitchen_date_anchor', today);
+      } catch (_) {}
 
       const savedTab = sessionStorage.getItem('sk_kitchen_tab');
       if (savedTab) _currentTab = savedTab;
 
       const savedMeal = sessionStorage.getItem('sk_kitchen_meal');
       if (savedMeal) _manualMeal = savedMeal;
+
+      // Persist any manual date-picker change with a today-anchor so the
+      // next page load can decide whether it's still relevant.
+      const dpEl = document.getElementById("datePicker");
+      if (dpEl) dpEl.addEventListener("change", () => {
+        sessionStorage.setItem('sk_kitchen_date', dpEl.value);
+        sessionStorage.setItem('sk_kitchen_date_anchor', todayIST());
+      });
 
       // Auto-Login
       const savedPin = localStorage.getItem('sk-kitchen-pin');
@@ -1948,6 +1951,20 @@
       }
 
       function doRefresh() {
+        // If the calendar day has rolled over while the tab was idle,
+        // snap the date picker forward to the new today and refresh
+        // its anchor — only if the staff hasn't manually picked a
+        // different date during the current session.
+        try {
+          const dp     = document.getElementById("datePicker");
+          const today  = todayIST();
+          const anchor = sessionStorage.getItem('sk_kitchen_date_anchor');
+          if (dp && anchor && anchor !== today && dp.value !== today) {
+            dp.value = today;
+            sessionStorage.setItem('sk_kitchen_date',        today);
+            sessionStorage.setItem('sk_kitchen_date_anchor', today);
+          }
+        } catch (_) {}
         loadKitchen();
       }
 
@@ -2133,8 +2150,7 @@
     // Server-shared label gap (mm). Populated by fetchLabelGap() on kitchen
     // login. Replaces the per-device localStorage value so every device
     // (kitchen tablet, admin laptop, etc.) prints with the same spacing.
-    // localStorage stays only as an offline fallback if the network call
-    // fails on a particular device.
+    // localStorage stays only as an offline fallback.
     let _serverLabelGap = null;
 
     async function fetchLabelGap() {
@@ -2144,9 +2160,7 @@
         const data = await res.json();
         if (data && !data.error && typeof data.gap_mm === "number") {
           _serverLabelGap = data.gap_mm;
-          // Cache as local fallback for next offline session.
           try { localStorage.setItem("sk-label-gap", String(data.gap_mm)); } catch(_) {}
-          // If the labels tab is currently rendered, update the visible input.
           const el = document.getElementById("bulkLabelGap");
           if (el && document.activeElement !== el) el.value = String(data.gap_mm);
         }
@@ -2155,9 +2169,7 @@
 
     async function saveLabelGap(rawValue) {
       const v = parseFloat(rawValue);
-      if (!isFinite(v) || v < 0 || v > 20) return; // input box constraints catch this
-      // Update local fallback immediately so the value persists if the
-      // network call below fails.
+      if (!isFinite(v) || v < 0 || v > 20) return;
       try { localStorage.setItem("sk-label-gap", String(v)); } catch(_) {}
       _serverLabelGap = v;
       try {
