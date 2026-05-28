@@ -99,6 +99,14 @@ function ia_normPhone(p) {
 }
 function ia_now() { return new Date(); }
 function ia_todayStr() { return Utilities.formatDate(ia_now(), IA_TZ, "yyyy-MM-dd"); }
+
+// Normalize a sheet cell that may be a Date object OR a string into a
+// canonical "yyyy-MM-dd" string. Sheets often coerces a written date string
+// into a Date serial, so String(cell) would no longer equal "2026-05-29".
+function ia_dateStr(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, IA_TZ, "yyyy-MM-dd");
+  return String(v == null ? "" : v).trim().slice(0, 10);
+}
 function ia_genId() {
   return "IA" + Utilities.formatDate(ia_now(), IA_TZ, "yyMMddHHmmss") +
     Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -174,7 +182,7 @@ function ia_register(body) {
 function ia_getMenu(dateStr, meal) {
   const ws = ia_getTab(IA_TAB_MENU, IA_MENU_HEADERS);
   const row = ia_rows(ws).find(function (r) {
-    return String(r.Date) === dateStr && String(r.Meal) === meal;
+    return ia_dateStr(r.Date) === dateStr && String(r.Meal) === meal;
   });
   if (row && row.Items_JSON) {
     try {
@@ -208,7 +216,7 @@ function ia_setMenu(body) {
   try {
     const ws = ia_getTab(IA_TAB_MENU, IA_MENU_HEADERS);
     const existing = ia_rows(ws).find(function (r) {
-      return String(r.Date) === dateStr && String(r.Meal) === meal;
+      return ia_dateStr(r.Date) === dateStr && String(r.Meal) === meal;
     });
     const payload = JSON.stringify(items);
     if (existing) {
@@ -321,7 +329,7 @@ function ia_myOrders(phone) {
 function ia_orderView(r) {
   return {
     submission_id: r.Submission_ID,
-    date: String(r.Date),
+    date: ia_dateStr(r.Date),
     meal: r.Meal,
     phone: ia_normPhone(r.Phone),
     name: r.Customer_Name,
@@ -339,8 +347,8 @@ function ia_adminOrders(body) {
   const from = body.from || "", to = body.to || "";
   const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
   let rows = ia_rows(ws);
-  if (from) rows = rows.filter(function (r) { return String(r.Date) >= from; });
-  if (to)   rows = rows.filter(function (r) { return String(r.Date) <= to; });
+  if (from) rows = rows.filter(function (r) { return ia_dateStr(r.Date) >= from; });
+  if (to)   rows = rows.filter(function (r) { return ia_dateStr(r.Date) <= to; });
   return { orders: rows.map(ia_orderView) };
 }
 
@@ -368,7 +376,7 @@ function ia_approve(body) {
     ia_rows(ws).forEach(function (r) {
       if (String(r.Submission_ID) !== id) return;
       if (meal && String(r.Meal) !== meal) return;
-      if (date && String(r.Date) !== date) return;
+      if (date && ia_dateStr(r.Date) !== date) return;
       ws.getRange(r._row, 10).setValue("Paid");
       ws.getRange(r._row, 11).setValue(body.ref || "");
       ws.getRange(r._row, 12).setValue(body.admin || "admin");
@@ -402,8 +410,8 @@ function ia_analytics(body) {
   const from = body.from || "", to = body.to || "";
   const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
   let rows = ia_rows(ws);
-  if (from) rows = rows.filter(function (r) { return String(r.Date) >= from; });
-  if (to)   rows = rows.filter(function (r) { return String(r.Date) <= to; });
+  if (from) rows = rows.filter(function (r) { return ia_dateStr(r.Date) >= from; });
+  if (to)   rows = rows.filter(function (r) { return ia_dateStr(r.Date) <= to; });
 
   let totalRevenue = 0, paidRevenue = 0, pendingRevenue = 0;
   const byMeal = { Lunch: 0, Dinner: 0 };
@@ -414,7 +422,7 @@ function ia_analytics(body) {
     totalRevenue += sub;
     if (String(r.Payment_Status).toLowerCase() === "paid") paidRevenue += sub; else pendingRevenue += sub;
     if (byMeal[r.Meal] !== undefined) byMeal[r.Meal] += sub;
-    byDate[r.Date] = (byDate[r.Date] || 0) + sub;
+    byDate[ia_dateStr(r.Date)] = (byDate[ia_dateStr(r.Date)] || 0) + sub;
     customers[ia_normPhone(r.Phone)] = true;
     try {
       JSON.parse(r.Items_JSON || "[]").forEach(function (it) {
@@ -448,7 +456,7 @@ function ia_prep(body) {
   const meal = body.meal ? String(body.meal) : null;
   const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
   const rows = ia_rows(ws).filter(function (r) {
-    if (String(r.Date) !== date) return false;
+    if (ia_dateStr(r.Date) !== date) return false;
     if (meal && String(r.Meal) !== meal) return false;
     return true;
   });
@@ -478,7 +486,7 @@ function ia_getDriverOrders(body) {
   const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
   const meals = { Lunch: [], Dinner: [] };
   ia_rows(ws).forEach(function (r) {
-    if (String(r.Date) !== date) return;
+    if (ia_dateStr(r.Date) !== date) return;
     if (!meals[r.Meal]) return;
     meals[r.Meal].push({
       submissionId:   r.Submission_ID,
@@ -510,7 +518,7 @@ function ia_markDelivered(body) {
     let n = 0;
     ia_rows(ws).forEach(function (r) {
       if (String(r.Submission_ID) !== id) return;
-      if (date && String(r.Date) !== date) return;
+      if (date && ia_dateStr(r.Date) !== date) return;
       if (meal && String(r.Meal) !== meal) return;
       ws.getRange(r._row, ia_colIndex("Delivery_Status")).setValue("Delivered");
       ws.getRange(r._row, ia_colIndex("Delivered_At")).setValue(when);
@@ -537,7 +545,7 @@ function ia_batchMarkEnRoute(body) {
     ia_rows(ws).forEach(function (r) {
       if (ids) { if (ids.indexOf(String(r.Submission_ID)) === -1) return; }
       else {
-        if (date && String(r.Date) !== date) return;
+        if (date && ia_dateStr(r.Date) !== date) return;
         if (meal && String(r.Meal) !== meal) return;
         if (!date && !meal) return;
       }
