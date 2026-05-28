@@ -65,8 +65,18 @@ function ia_getTab(name, headers) {
     ws = ss.insertSheet(name);
     ws.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
     ws.setFrozenRows(1);
+    if (name === IA_TAB_CUSTOMERS) ia_forceTextCols(ws); // keep PIN/phone leading zeros
   }
   return ws;
+}
+
+// Force the Phone (A) and PIN (C) columns to TEXT so Sheets never coerces
+// "0001" → 1 (dropping leading zeros). Safe to call repeatedly.
+function ia_forceTextCols(ws) {
+  try {
+    ws.getRange("A2:A").setNumberFormat("@");
+    ws.getRange("C2:C").setNumberFormat("@");
+  } catch (e) {}
 }
 
 function ia_rows(ws) {
@@ -144,7 +154,12 @@ function ia_register(body) {
       if (String(existing.PIN) !== pin) return { error: "Account exists. Enter your PIN to continue." };
       return { success: true, name: existing.Name || name };
     }
+    ia_forceTextCols(ws);
     ws.appendRow([p, name, pin, ia_now(), "", "active"]);
+    // Bulletproof: re-write phone + PIN cells as explicit text on the new row
+    const r = ws.getLastRow();
+    ws.getRange(r, 1).setNumberFormat("@").setValue(p);
+    ws.getRange(r, 3).setNumberFormat("@").setValue(pin);
     return { success: true, name: name };
   } finally {
     lock.releaseLock();
@@ -546,8 +561,9 @@ function ia_config() {
 
 // One-time: run from the editor to create the IA_ tabs.
 function ia_setup() {
-  ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
+  const cust = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
+  ia_forceTextCols(cust); // apply text format to existing tab too
   ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
   ia_getTab(IA_TAB_MENU, IA_MENU_HEADERS);
-  Logger.log("IntentAmplify IA_ tabs ready.");
+  Logger.log("IntentAmplify IA_ tabs ready (PIN/phone columns set to text).");
 }
