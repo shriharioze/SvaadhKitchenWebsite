@@ -285,13 +285,14 @@
 
     function show(n){
       S.step=n;
+      const b=$("next"); S.busy=false; delete b.dataset.t; b.disabled=false; b.style.opacity="1";
       document.querySelectorAll(".scr").forEach((e,i)=>e.classList.toggle("on",i===n));
       const ui=Math.min(n,3);
       [...$("dots").children].forEach((d,i)=>{ d.className="step-dot"+(i===ui?" active":i<ui?" done":""); });
       $("stepLabel").textContent = n>=4 ? "All done 🎉" : `Step ${ui+1} of 4 — ${STEPS[ui]}`;
       $("back").style.display=(n>0&&n<4)?"block":"none";
       $("nav").style.display=(n===4)?"none":"block";
-      if(n!==0){ const lbl=["","Continue →","Review →","Place Order",""]; $("next").textContent=lbl[n]; }
+      if(n!==0){ const lbl=["","Continue →","Review →","Place Order",""]; b.textContent=lbl[n]; }
       if(n===3) updatePlaceBtn();
       window.scrollTo(0,0);
     }
@@ -330,50 +331,63 @@
     }
 
     async function goNext(){
+      if(S.busy) return;                       // ignore taps while an action is running
       if(S.step===0) return stepAccount();
-      if(S.step===1){ if(!S.dates.length){ toast("Please pick at least one date."); return; } await loadItems(); show(2); return; }
+      if(S.step===1){
+        if(!S.dates.length){ toast("Please pick at least one date."); return; }
+        setBusy(true,"Loading menu…");
+        try{ await loadItems(); }catch(e){ setBusy(false); toast("Could not load menu. Try again."); return; }
+        show(2); return;
+      }
       if(S.step===2){ if(!cartHasItems()){ toast("Add at least one item to continue."); return; } buildReview(); show(3); return; }
       if(S.step===3) return placeOrder();
     }
-    function goBack(){ if(S.step>0) show(S.step-1); }
+    function goBack(){ if(!S.busy && S.step>0) show(S.step-1); }
 
     async function stepAccount(){
       const phone=$("phone").value.replace(/\D/g,"");
       if(phone.length!==10){ toast("Enter a valid 10-digit number."); return; }
       if(!S.acctChecked){
         setBusy(true,"Checking…");
-        try{
-          const r=await api("ia_checkPhone",{phone});
-          if(r.error){ toast(r.error); return; }
-          S.isNew=!r.exists;
-          $("loginExtra").style.display="block";
-          $("nameWrap").style.display=S.isNew?"block":"none";
-          $("pinLabel").textContent=S.isNew?"Set a 4-digit PIN":"Enter your PIN";
-          $("pinHint").textContent=S.isNew?"You'll use this PIN to log in next time.":("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN.");
-          $("next").textContent=S.isNew?"Set PIN & Continue →":"Verify PIN & Continue →";
-          S.acctChecked=true; setTimeout(()=>$("pin").focus(),100);
-        } finally{ setBusy(false); }
+        let r;
+        try{ r=await api("ia_checkPhone",{phone}); }
+        catch(e){ setBusy(false); toast("Network error — try again."); return; }
+        setBusy(false);                          // restores "Continue →"
+        if(r.error){ toast(r.error); return; }
+        S.isNew=!r.exists;
+        $("loginExtra").style.display="block";
+        $("nameWrap").style.display=S.isNew?"block":"none";
+        $("pinLabel").textContent=S.isNew?"Set a 4-digit PIN":"Enter your PIN";
+        $("pinHint").textContent=S.isNew?"You'll use this PIN to log in next time.":("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN.");
+        $("next").textContent=S.isNew?"Set PIN & Continue →":"Verify PIN & Continue →";  // set AFTER busy clears
+        S.acctChecked=true; setTimeout(()=>$("pin").focus(),100);
         return;
       }
       const pin=S.pinReal, name=$("name").value.trim();
       if(pin.length!==4){ toast("PIN must be 4 digits."); return; }
       if(S.isNew && !name){ toast("Please enter your name."); return; }
       setBusy(true,S.isNew?"Creating…":"Verifying…");
-      try{
-        const res=S.isNew?await post({_action:"ia_register",phone,pin,name}):await api("ia_verifyLogin",{phone,pin});
-        if(!res.success){ toast(res.error||"Could not continue."); return; }
-        S.phone=phone; S.pin=pin; S.name=res.name||name;
-        renderCalendar(); show(1);
-      } finally{ setBusy(false); }
+      let res;
+      try{ res=S.isNew?await post({_action:"ia_register",phone,pin,name}):await api("ia_verifyLogin",{phone,pin}); }
+      catch(e){ setBusy(false); toast("Network error — try again."); return; }
+      if(!res.success){ setBusy(false); toast(res.error||"Could not continue."); return; }
+      S.phone=phone; S.pin=pin; S.name=res.name||name;
+      renderCalendar(); show(1);                  // show() clears busy + sets label
     }
-    function setBusy(b,label){ const btn=$("next"); btn.disabled=b; if(b){ btn.dataset.t=btn.textContent; btn.textContent=label||"…"; } else if(btn.dataset.t){ btn.textContent=btn.dataset.t; delete btn.dataset.t; } }
+    function setBusy(b,label){
+      S.busy=b; const btn=$("next");
+      btn.disabled=b; btn.style.opacity=b?"0.6":"1";
+      if(b){ if(btn.dataset.t===undefined) btn.dataset.t=btn.textContent; btn.textContent=label||"…"; }
+      else if(btn.dataset.t!==undefined){ btn.textContent=btn.dataset.t; delete btn.dataset.t; }
+    }
 
     // ── CALENDAR (weekends off) ──
     function renderCalendar(){
       $("calTitle").textContent=`${MONTHS[S.calM]} ${S.calY}`;
-      $("calNames").innerHTML=["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=>`<div class="cal-day-name">${d}</div>`).join("");
+      $("calNames").innerHTML=["Mo","Tu","We","Th","Fr","Sa","Su"].map(d=>`<div class="cal-day-name">${d}</div>`).join("");
       const today=todayISO();
-      const fd=new Date(S.calY,S.calM,1).getDay(), dim=new Date(S.calY,S.calM+1,0).getDate();
+      // Monday-first: shift Sunday(0) to the end so the grid starts on Monday.
+      const fd=(new Date(S.calY,S.calM,1).getDay()+6)%7, dim=new Date(S.calY,S.calM+1,0).getDate();
       // disable prev nav for past months
       const now=new Date();
       $("calPrev").disabled = (S.calY<now.getFullYear()) || (S.calY===now.getFullYear() && S.calM<=now.getMonth());
@@ -518,16 +532,18 @@
 
     async function placeOrder(){
       setBusy(true,"Placing…");
-      try{
-        const res=await post({_action:"ia_submitOrder",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart});
-        if(!res.success){ toast(res.error||"Could not place order."); return; }
+      let res;
+      try{ res=await post({_action:"ia_submitOrder",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart}); }
+      catch(e){ setBusy(false); toast("Network error — try again."); return; }
+      {
+        if(!res.success){ setBusy(false); toast(res.error||"Could not place order."); return; }
         $("okName").textContent=S.name||"";
         $("okId").textContent=res.submission_id;
         $("okTotal").textContent=res.total;
         $("okLines").innerHTML=$("revLines").innerHTML;
         $("okPay").innerHTML=`💳 Please pay <b>₹${res.total}</b> to <b>${UPI_VPA}</b> now if you haven't already. We'll confirm once verified.`;
         show(4);
-      } finally{ setBusy(false); }
+      }
     }
   </script>
 </body>
