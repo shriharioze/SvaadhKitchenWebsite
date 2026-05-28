@@ -153,7 +153,10 @@
           <div class="fg">
             <label id="pinLabel">Set a 4-digit PIN</label>
             <input id="pin" class="pininp" type="text" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off" />
-            <div class="hint" id="pinHint">You'll use this PIN to log in next time.</div>
+            <div class="hint" id="pinHint">💡 Make it memorable — try your birthday (DDMM). You'll use this PIN every time you log in.</div>
+            <a id="forgotPin" href="https://wa.me/919322246765?text=Hi,%20I%20forgot%20my%20IntentAmplify%20PIN.%20Please%20clear%20it%20so%20I%20can%20reset%20it." target="_blank" rel="noopener"
+               style="display:none;margin-top:10px;font-size:.78rem;font-weight:600;color:var(--ink2);text-decoration:none;background:#f3f0ff;padding:8px 12px;border-radius:10px;text-align:center;">
+              🔑 Forgot PIN? Message us to reset</a>
           </div>
         </div>
       </div>
@@ -358,7 +361,9 @@
         $("loginExtra").style.display="block";
         $("nameWrap").style.display=S.isNew?"block":"none";
         $("pinLabel").textContent=S.isNew?"Set a 4-digit PIN":"Enter your PIN";
-        $("pinHint").textContent=S.isNew?"You'll use this PIN to log in next time.":("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN.");
+        $("pinHint").textContent=S.isNew?"💡 Make it memorable — try your birthday (DDMM). You'll use this PIN every time you log in."
+                                        :("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN.");
+        $("forgotPin").style.display=S.isNew?"none":"block";   // only returning users can forget
         $("next").textContent=S.isNew?"Set PIN & Continue →":"Verify PIN & Continue →";  // set AFTER busy clears
         S.acctChecked=true; setTimeout(()=>$("pin").focus(),100);
         return;
