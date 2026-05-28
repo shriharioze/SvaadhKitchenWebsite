@@ -1,136 +1,218 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IntentAmplify · Driver</title>
-  <style>
-    :root{ --brand:#c0392b; --ink:#1E1240; }
-    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;}
-    body{background:#f4f5f9;color:#222;padding-bottom:40px;}
-    .top{background:#1E1240;color:#fff;padding:14px 16px;text-align:center;}
-    .top h1{font-size:1.05rem;font-weight:800;}
-    .top p{font-size:.74rem;opacity:.8;margin-top:2px;}
-    .wrap{max-width:640px;margin:0 auto;padding:16px;}
-    .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 3px 14px rgba(0,0,0,.05);margin-bottom:14px;}
-    .gate{max-width:340px;margin:60px auto;text-align:center;}
-    input,select{padding:11px;border:1.5px solid #ddd;border-radius:10px;font-size:1rem;}
-    input:focus,select:focus{outline:none;border-color:var(--brand);}
-    .btn{padding:10px 14px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.86rem;}
-    .btn-p{background:var(--brand);color:#fff;} .btn-g{background:#2e7d32;color:#fff;}
-    .btn-o{background:#ef6c00;color:#fff;} .btn-s{background:#eee;color:#444;}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .meal-h{font-size:1.05rem;color:var(--brand);font-weight:800;margin:4px 0 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
-    .meal-h .hc{font-size:.78rem;background:#fff0ec;color:#c0392b;padding:3px 10px;border-radius:20px;font-weight:700;}
-    .ord{border:1px solid #eee;border-radius:11px;padding:11px;margin-bottom:9px;}
-    .ord.done{background:#f3fbf4;border-color:#cdeccd;}
-    .ord .nm{font-weight:700;font-size:.95rem;}
-    .ord .it{font-size:.8rem;color:#666;margin:3px 0;}
-    .ord .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
-    a.call{color:#1a73e8;text-decoration:none;font-size:.82rem;font-weight:600;}
-    .pill{padding:2px 9px;border-radius:20px;font-size:.7rem;font-weight:700;}
-    .pill.paid{background:#d7f5dd;color:#1c7a35;} .pill.pend{background:#fff3cd;color:#946200;}
-    .pill.route{background:#fde6cf;color:#a85700;} .pill.deliv{background:#d7f5dd;color:#1c7a35;}
-    .muted{color:#999;font-size:.84rem;}
-    .err{color:#c0392b;font-size:.82rem;margin-top:8px;}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IntentAmplify Delivery</title>
+<link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#222;min-height:100vh;}
+
+  /* LOGIN */
+  #loginWrap{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:100;}
+  .login-box{padding:32px 24px;width:100%;max-width:320px;text-align:center;}
+  .login-logo{font-size:2rem;margin-bottom:4px;}
+  .login-box h1{font-size:1.2rem;font-weight:700;color:#1E1240;margin-bottom:2px;}
+  .login-box p{font-size:.78rem;color:#999;margin-bottom:24px;}
+  .pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:24px;}
+  .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ddd;transition:all .15s;}
+  .pin-dot.filled{background:#1E1240;border-color:#1E1240;}
+  .pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto;}
+  .pk{background:#f5f5f5;border:none;color:#222;font-size:1.5rem;font-weight:600;border-radius:14px;padding:16px;cursor:pointer;}
+  .pk:active{background:#e0e0e0;} .pk.del{color:#999;font-size:1.2rem;} .pk.span2{grid-column:span 2;}
+  .login-err{color:#c0392b;font-size:.78rem;margin-top:14px;min-height:18px;}
+
+  /* SHELL */
+  #shell{display:none;padding-bottom:60px;} #shell.on{display:block;}
+  .topbar{background:#1E1240;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10;}
+  .topbar-row1{display:flex;align-items:center;justify-content:space-between;}
+  .topbar-title{font-size:1rem;font-weight:700;letter-spacing:.03em;}
+  .topbar-date{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .topbar-date input[type=date]{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 10px;border-radius:8px;font-size:.8rem;flex:1;}
+  .topbar-date input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);}
+  .load-btn{background:#fff;color:#1E1240;border:none;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:.8rem;}
+  .addrline{font-size:.72rem;color:rgba(255,255,255,.8);margin-top:6px;}
+
+  .tabs{display:flex;background:#fff;border-bottom:2px solid #eee;position:sticky;top:96px;z-index:9;}
+  .tab{flex:1;padding:12px 4px;text-align:center;font-size:.85rem;font-weight:600;color:#aaa;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;}
+  .tab.active{color:#1E1240;border-bottom-color:#1E1240;}
+  .tab-count{display:inline-block;background:#f0f0f0;color:#888;font-size:.65rem;padding:1px 6px;border-radius:10px;margin-left:4px;}
+  .tab.active .tab-count{background:#fde8e8;color:#1E1240;}
+
+  .route-bar{background:#fff;border-bottom:1px solid #eee;padding:8px 14px;display:flex;align-items:center;gap:10px;}
+  .route-btn{background:#ef6c00;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:.78rem;font-weight:700;cursor:pointer;}
+  .route-btn:active{background:#c95a00;}
+  .progress-strip{flex:1;display:flex;align-items:center;gap:8px;}
+  .progress-bar-wrap{flex:1;height:6px;background:#eee;border-radius:99px;overflow:hidden;}
+  .progress-bar-fill{height:100%;background:#27ae60;border-radius:99px;transition:width .4s ease;}
+  .progress-text{font-size:.72rem;font-weight:700;color:#555;white-space:nowrap;}
+
+  .meal-panel{display:none;padding:12px 14px;} .meal-panel.active{display:block;}
+  .order-card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid transparent;}
+  .order-card.delivered{border-left-color:#27ae60;opacity:.72;}
+  .order-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .order-num{font-size:.65rem;font-weight:700;color:#1E1240;letter-spacing:.05em;}
+  .delivered-time{font-size:.68rem;font-weight:700;color:#27ae60;background:#eafaf1;padding:2px 8px;border-radius:99px;}
+  .enroute-time{font-size:.68rem;font-weight:700;color:#a85700;background:#fde6cf;padding:2px 8px;border-radius:99px;}
+  .cust-name{font-size:1.05rem;font-weight:700;color:#111;margin-bottom:2px;}
+  .cust-phone{font-size:.85rem;color:#666;margin-bottom:10px;}
+  .address-box{background:#f9f9f9;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:.82rem;color:#444;line-height:1.5;}
+  .items-box{font-size:.82rem;color:#444;margin-bottom:10px;}
+  .amount-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+  .amount-badge{font-size:.82rem;font-weight:700;padding:5px 12px;border-radius:8px;background:#eafaf1;color:#27ae60;}
+  .pill{font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:99px;}
+  .pill.paid{background:#d7f5dd;color:#1c7a35;} .pill.pend{background:#fff3cd;color:#946200;}
+  .card-actions{display:flex;gap:8px;margin-bottom:10px;}
+  .btn-call{flex:1;background:#27ae60;color:#fff;border:none;border-radius:10px;padding:11px;font-size:.85rem;font-weight:700;text-decoration:none;text-align:center;}
+  .btn-maps{flex:1;background:#1a73e8;color:#fff;border:none;border-radius:10px;padding:11px;font-size:.85rem;font-weight:700;text-decoration:none;text-align:center;}
+  .btn-delivered{width:100%;padding:12px;border-radius:10px;border:2px dashed #ccc;background:#fafafa;color:#888;font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .btn-delivered.done{border:2px solid #27ae60;background:#eafaf1;color:#27ae60;cursor:default;}
+  .empty{text-align:center;padding:48px 20px;color:#aaa;} .empty-icon{font-size:2.5rem;margin-bottom:8px;}
+  .spinner{width:28px;height:28px;border:3px solid #eee;border-top-color:#1E1240;border-radius:50%;animation:spin .7s linear infinite;margin:40px auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
 </head>
 <body>
-  <div class="top"><h1>🛵 IntentAmplify Delivery</h1><p id="addrTop">S4 Towers, Magarpatta</p></div>
 
-  <div class="gate card" id="gate">
-    <h2 style="color:var(--ink);margin-bottom:12px;">Staff PIN</h2>
-    <input id="gpin" type="password" inputmode="numeric" placeholder="PIN" style="width:100%;margin-bottom:10px;" />
-    <button class="btn btn-p" style="width:100%;" onclick="unlock()">Unlock</button>
-    <div id="gerr" class="err"></div>
-  </div>
-
-  <div class="wrap" id="app" style="display:none;">
-    <div class="card">
-      <div class="row">
-        <input id="date" type="date" />
-        <button class="btn btn-s" onclick="load()">Refresh</button>
-      </div>
-      <div class="muted" id="addr" style="margin-top:8px;"></div>
+<!-- LOGIN -->
+<div id="loginWrap">
+  <div class="login-box">
+    <div class="login-logo">🛵</div>
+    <h1>IntentAmplify Delivery</h1>
+    <p>Enter PIN to view deliveries</p>
+    <div class="pin-dots">
+      <div class="pin-dot" id="dd0"></div><div class="pin-dot" id="dd1"></div>
+      <div class="pin-dot" id="dd2"></div><div class="pin-dot" id="dd3"></div>
     </div>
-    <div id="out"></div>
+    <div class="pin-grid">
+      <button class="pk" onclick="dp(1)">1</button><button class="pk" onclick="dp(2)">2</button><button class="pk" onclick="dp(3)">3</button>
+      <button class="pk" onclick="dp(4)">4</button><button class="pk" onclick="dp(5)">5</button><button class="pk" onclick="dp(6)">6</button>
+      <button class="pk" onclick="dp(7)">7</button><button class="pk" onclick="dp(8)">8</button><button class="pk" onclick="dp(9)">9</button>
+      <button class="pk span2" onclick="dp(0)">0</button><button class="pk del" onclick="dx()">⌫</button>
+    </div>
+    <div class="login-err" id="dErr"></div>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="shell">
+  <div class="topbar">
+    <div class="topbar-row1">
+      <div class="topbar-title">🛵 IntentAmplify Delivery</div>
+      <button onclick="logout()" style="background:none;border:none;color:#fff;font-size:1.1rem;cursor:pointer;opacity:.8;" title="Logout">🔐</button>
+    </div>
+    <div class="topbar-date">
+      <input type="date" id="datePicker" onchange="loadOrders()">
+      <button class="load-btn" onclick="loadOrders()">↻ Refresh</button>
+    </div>
+    <div class="addrline">📍 All deliveries to S4 Towers, Magarpatta</div>
   </div>
 
-  <script>
-    const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-    const $=id=>document.getElementById(id);
-    let PIN="";
-    const today=()=>new Date().toISOString().slice(0,10);
-    const nowStamp=()=>{const d=new Date();const p=n=>String(n).padStart(2,"0");
-      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+  <div class="tabs">
+    <button class="tab active" id="tabLunch" onclick="switchTab('Lunch')">☀️ Lunch <span class="tab-count" id="cntLunch">0</span></button>
+    <button class="tab" id="tabDinner" onclick="switchTab('Dinner')">🌙 Dinner <span class="tab-count" id="cntDinner">0</span></button>
+  </div>
 
-    async function api(action,params){
-      const u=new URL(API); u.searchParams.set("action",action);
-      Object.entries(params||{}).forEach(([k,v])=>{ if(v!=="") u.searchParams.set(k,v); });
-      const r=await fetch(u); return r.json();
-    }
-    async function post(b){ const r=await fetch(API,{method:"POST",body:JSON.stringify(b)}); return r.json(); }
+  <div class="route-bar">
+    <button class="route-btn" onclick="batchEnRoute()">🛵 Mark all En-route</button>
+    <div class="progress-strip">
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="pbar" style="width:0%"></div></div>
+      <div class="progress-text" id="ptext">0/0</div>
+    </div>
+  </div>
 
-    async function unlock(){
-      const pin=$("gpin").value.trim();
-      const r=await api("ia_getDriverOrders",{pin,date:today()});
-      if(r.error){ $("gerr").textContent=r.error; return; }
-      PIN=pin; $("gate").style.display="none"; $("app").style.display="block";
-      $("date").value=today(); render(r);
-    }
-    async function load(){
-      const r=await api("ia_getDriverOrders",{pin:PIN,date:$("date").value});
-      if(r.error){ alert(r.error); return; } render(r);
-    }
+  <div class="meal-panel active" id="panelLunch"></div>
+  <div class="meal-panel" id="panelDinner"></div>
+</div>
 
-    function render(r){
-      $("addr").textContent="📍 "+(r.address||"S4 Towers, Magarpatta")+" · "+(r.date||"");
-      const out=$("out"); out.innerHTML="";
-      const meals=r.meals||{};
-      let any=false;
-      ["Lunch","Dinner"].forEach(meal=>{
-        const list=meals[meal]||[]; if(!list.length) return; any=true;
-        const card=document.createElement("div"); card.className="card";
-        const pending=list.filter(o=>o.deliveryStatus!=="Delivered").length;
-        card.innerHTML=`<div class="meal-h">${meal==="Lunch"?"☀️ Lunch":"🌙 Dinner"}
-          <span class="hc">${list.length} order${list.length===1?"":"s"} · ${pending} left</span></div>`;
-        const rt=document.createElement("button"); rt.className="btn btn-o"; rt.style.marginBottom="10px";
-        rt.textContent="🛵 Mark all En-route"; rt.onclick=()=>batchEnRoute(meal,r.date);
-        card.appendChild(rt);
-        list.forEach(o=>{
-          const div=document.createElement("div"); div.className="ord"+(o.deliveryStatus==="Delivered"?" done":"");
-          const pay=String(o.paymentStatus).toLowerCase()==="paid";
-          const ds=o.deliveryStatus||"Pending";
-          const dpill = ds==="Delivered"?'<span class="pill deliv">Delivered</span>'
-                      : ds==="EnRoute"?'<span class="pill route">En-route</span>':'';
-          div.innerHTML=`<div class="nm">${o.name||""} ${dpill}</div>
-            <div class="it">${o.summary||""}</div>
-            <div class="meta">
-              <a class="call" href="tel:${o.phone}">📞 ${o.phone}</a>
-              <span><span class="pill ${pay?"paid":"pend"}">${o.paymentStatus}</span> &nbsp;₹${o.amount}</span>
-            </div>`;
-          const meta=div.querySelector(".meta");
-          if(ds!=="Delivered"){
-            const b=document.createElement("button"); b.className="btn btn-g"; b.textContent="✓ Delivered";
-            b.onclick=()=>markDelivered(o.submissionId,r.date,meal,b);
-            meta.appendChild(b);
-          }
-          card.appendChild(div);
-        });
-        out.appendChild(card);
-      });
-      if(!any) out.innerHTML=`<div class="card muted">No orders for this day yet.</div>`;
-    }
+<script>
+  const API="https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+  const $=id=>document.getElementById(id);
+  const today=()=>new Date().toISOString().slice(0,10);
+  const MAPS="https://www.google.com/maps/search/?api=1&query=S4+Towers+Magarpatta+Pune";
+  const nowStamp=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+  let D={pin:"",sessionPin:"",data:null,tab:"Lunch"};
 
-    async function markDelivered(id,date,meal,btn){
-      btn.disabled=true; btn.textContent="…";
-      const res=await post({_action:"ia_markDelivered",pin:PIN,submission_id:id,date,meal,deliveredAt:nowStamp()});
-      if(res.success){ load(); } else { alert(res.error||"Failed."); btn.disabled=false; btn.textContent="✓ Delivered"; }
-    }
-    async function batchEnRoute(meal,date){
-      const res=await post({_action:"ia_batchMarkEnRoute",pin:PIN,date,meal,enRouteAt:nowStamp()});
-      if(res.success){ load(); } else alert(res.error||"Failed.");
-    }
-  </script>
+  async function api(action,params){ const u=new URL(API); u.searchParams.set("action",action);
+    Object.entries(params||{}).forEach(([k,v])=>{ if(v!=="") u.searchParams.set(k,v); }); const r=await fetch(u); return r.json(); }
+  async function post(b){ const r=await fetch(API,{method:"POST",body:JSON.stringify(b)}); return r.json(); }
+
+  // PIN keypad
+  function renderDots(){ for(let i=0;i<4;i++) $("dd"+i).classList.toggle("filled", i<D.pin.length); }
+  function dp(n){ if(D.pin.length>=4) return; D.pin+=n; renderDots(); if(D.pin.length===4) verifyPin(); }
+  function dx(){ D.pin=D.pin.slice(0,-1); renderDots(); $("dErr").textContent=""; }
+  async function verifyPin(){
+    $("dErr").textContent="Checking…";
+    let r; try{ r=await api("ia_getDriverOrders",{pin:D.pin,date:today()}); }catch(e){ $("dErr").textContent="Network error"; D.pin="";renderDots();return; }
+    if(r.error){ $("dErr").textContent="Incorrect PIN — try again"; D.pin="";renderDots();return; }
+    D.sessionPin=D.pin; $("loginWrap").style.display="none"; $("shell").classList.add("on");
+    $("datePicker").value=today(); $("dErr").textContent=""; render(r);
+  }
+  function logout(){ D={pin:"",sessionPin:"",data:null,tab:"Lunch"}; renderDots(); $("shell").classList.remove("on"); $("loginWrap").style.display="flex"; }
+
+  async function loadOrders(){
+    $("panelLunch").innerHTML='<div class="spinner"></div>'; $("panelDinner").innerHTML="";
+    const r=await api("ia_getDriverOrders",{pin:D.sessionPin,date:$("datePicker").value});
+    if(r.error){ alert(r.error); return; } render(r);
+  }
+
+  function switchTab(meal){
+    D.tab=meal;
+    $("tabLunch").classList.toggle("active",meal==="Lunch"); $("tabDinner").classList.toggle("active",meal==="Dinner");
+    $("panelLunch").classList.toggle("active",meal==="Lunch"); $("panelDinner").classList.toggle("active",meal==="Dinner");
+    updateProgress();
+  }
+
+  function render(r){
+    D.data=r; const meals=r.meals||{};
+    $("cntLunch").textContent=(meals.Lunch||[]).length;
+    $("cntDinner").textContent=(meals.Dinner||[]).length;
+    ["Lunch","Dinner"].forEach(meal=>{
+      const panel=$("panel"+meal); const list=meals[meal]||[];
+      if(!list.length){ panel.innerHTML='<div class="empty"><div class="empty-icon">🍽️</div>No '+meal.toLowerCase()+' orders for this day.</div>'; return; }
+      panel.innerHTML=list.map(o=>card(o,meal)).join("");
+    });
+    updateProgress();
+  }
+
+  function card(o,meal){
+    const delivered=o.deliveryStatus==="Delivered";
+    const pay=String(o.paymentStatus).toLowerCase()==="paid";
+    const statusPill = delivered?`<span class="delivered-time">✓ ${o.deliveredAt||"Delivered"}</span>`
+                     : o.deliveryStatus==="EnRoute"?`<span class="enroute-time">🛵 En-route</span>`:"";
+    return `<div class="order-card ${delivered?'delivered':''}">
+      <div class="order-header"><span class="order-num">${o.submissionId}</span>${statusPill}</div>
+      <div class="cust-name">${o.name||""}</div>
+      <div class="cust-phone">${o.phone}</div>
+      <div class="address-box">📍 S4 Towers, Magarpatta</div>
+      <div class="items-box">🍱 ${o.summary||""}</div>
+      <div class="amount-row"><span class="amount-badge">₹${o.amount}</span><span class="pill ${pay?'paid':'pend'}">${o.paymentStatus}</span></div>
+      <div class="card-actions">
+        <a class="btn-call" href="tel:${o.phone}">📞 Call</a>
+        <a class="btn-maps" href="${MAPS}" target="_blank">🗺️ Maps</a>
+      </div>
+      ${delivered ? `<button class="btn-delivered done">✓ Delivered</button>`
+                  : `<button class="btn-delivered" onclick="markDelivered('${o.submissionId}','${o.date||$("datePicker").value}','${meal}',this)">Mark Delivered</button>`}
+    </div>`;
+  }
+
+  function updateProgress(){
+    const list=((D.data&&D.data.meals&&D.data.meals[D.tab])||[]);
+    const total=list.length, done=list.filter(o=>o.deliveryStatus==="Delivered").length;
+    const pct=total?Math.round(done/total*100):0;
+    $("pbar").style.width=pct+"%"; $("ptext").textContent=`${done}/${total}`;
+  }
+
+  async function markDelivered(id,date,meal,btn){
+    btn.disabled=true; btn.textContent="…";
+    const res=await post({_action:"ia_markDelivered",pin:D.sessionPin,submission_id:id,date,meal,deliveredAt:nowStamp()});
+    if(res.success) loadOrders(); else { alert(res.error||"Failed."); btn.disabled=false; btn.textContent="Mark Delivered"; }
+  }
+  async function batchEnRoute(){
+    const res=await post({_action:"ia_batchMarkEnRoute",pin:D.sessionPin,date:$("datePicker").value,meal:D.tab,enRouteAt:nowStamp()});
+    if(res.success) loadOrders(); else alert(res.error||"Failed.");
+  }
+</script>
 </body>
 </html>
