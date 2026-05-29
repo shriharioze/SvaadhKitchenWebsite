@@ -8596,8 +8596,19 @@
 
       const isConsecutive = (d1, d2) => {
         let date1 = new Date(d1 + "T12:00:00"), date2 = new Date(d2 + "T12:00:00");
-        let diff = (date2 - date1) / 86400000;
-        return (diff === 1) || (diff === 2 && date1.getDay() === 6);
+        let diff = Math.round((date2 - date1) / 86400000);
+        if (diff <= 0) return false;
+        if (diff === 1) return true;
+        // Longer gap is still "consecutive" only if EVERY in-between day is a
+        // Sunday or an admin-marked day off — those never break the streak.
+        const closed = new Set(S.kitchenClosedDates || []);
+        let cur = new Date(date1); cur.setDate(cur.getDate() + 1);
+        while (cur < date2) {
+          const iso = cur.toISOString().split('T')[0];
+          if (cur.getDay() !== 0 && !closed.has(iso)) return false; // real ordering gap
+          cur.setDate(cur.getDate() + 1);
+        }
+        return true;
       };
 
       sortedDates.forEach(dStr => {
