@@ -179,6 +179,18 @@ function ia_register(body) {
 }
 
 // ── Menu ─────────────────────────────────────────────────────
+// Fixed (non-sabji) items, each tagged with its canonical kitchen column.
+function ia_baseFixedItems() {
+  return IA_FIXED_ITEMS
+    .filter(function (it) { return it.cat !== "Sabji"; })
+    .map(function (it) { return { name: it.name, price: it.price, cat: it.cat, col: ia_itemToCol(it.name) }; });
+}
+
+// Menu priority:
+//   1. Admin override for this date+meal in IA_Daily_Menu (IA Set Menu), else
+//   2. The MAIN consumer menu (SK_Daily_Menu) for this date — fixed items +
+//      the day's actual Dry/Curry sabji (named), else
+//   3. Generic fixed items as a last-resort fallback.
 function ia_getMenu(dateStr, meal) {
   const ws = ia_getTab(IA_TAB_MENU, IA_MENU_HEADERS);
   const row = ia_rows(ws).find(function (r) {
@@ -187,10 +199,28 @@ function ia_getMenu(dateStr, meal) {
   if (row && row.Items_JSON) {
     try {
       const items = JSON.parse(row.Items_JSON);
-      if (Array.isArray(items) && items.length) return { items: items, custom: true };
+      if (Array.isArray(items) && items.length) return { items: items, custom: true, source: "ia_override" };
     } catch (e) {}
   }
-  return { items: IA_FIXED_ITEMS.slice(), custom: false };
+
+  // Build from the main daily menu for this date.
+  try {
+    const main = getMenu(dateStr); // consumer menu — has lunch/dinner dry & curry sabji names
+    const items = ia_baseFixedItems();
+    const dryName   = meal === "Lunch" ? main.lunch_dry   : main.dinner_dry;
+    const curryName = meal === "Lunch" ? main.lunch_curry : main.dinner_curry;
+    if (dryName) {
+      items.push({ name: dryName + " (Dry · 100ml)", price: 22, cat: "Sabji", col: "Dry_Sabji_Mini" });
+      items.push({ name: dryName + " (Dry · 250ml)", price: 45, cat: "Sabji", col: "Dry_Sabji_Full" });
+    }
+    if (curryName) {
+      items.push({ name: curryName + " (Curry · 100ml)", price: 22, cat: "Sabji", col: "Curry_Sabji_Mini" });
+      items.push({ name: curryName + " (Curry · 250ml)", price: 45, cat: "Sabji", col: "Curry_Sabji_Full" });
+    }
+    return { items: items, custom: false, source: "main_menu" };
+  } catch (e) {
+    return { items: IA_FIXED_ITEMS.slice(), custom: false, source: "fallback" };
+  }
 }
 
 function ia_getMenuRange(dates, meals) {
@@ -266,8 +296,8 @@ function ia_submitOrder(body) {
         }
 
         const menu = ia_getMenu(d, meal).items;
-        const priceOf = {};
-        menu.forEach(function (it) { priceOf[it.name] = Number(it.price) || 0; });
+        const priceOf = {}, colOf = {};
+        menu.forEach(function (it) { priceOf[it.name] = Number(it.price) || 0; colOf[it.name] = it.col || null; });
 
         let sub = 0;
         const lineItems = [];
@@ -278,7 +308,7 @@ function ia_submitOrder(body) {
           const price = priceOf[itemName];
           if (price === undefined) return;
           sub += price * qty;
-          lineItems.push({ name: itemName, qty: qty, price: price });
+          lineItems.push({ name: itemName, qty: qty, price: price, col: colOf[itemName] || ia_itemToCol(itemName) });
           summary.push(qty + "× " + itemName);
         });
         if (sub <= 0) continue;
@@ -578,7 +608,10 @@ function ia_itemToCol(name) {
 function ia_orderCols(itemsJson) {
   const col = {};
   try { JSON.parse(itemsJson || "[]").forEach(function (it) {
-    const c = ia_itemToCol(it.name); if (c) col[c] = (col[c] || 0) + (Number(it.qty) || 0);
+    // Prefer the canonical column stored on the line (named sabji from the main
+    // menu carries it); fall back to mapping the name for legacy/generic items.
+    const c = it.col || ia_itemToCol(it.name);
+    if (c) col[c] = (col[c] || 0) + (Number(it.qty) || 0);
   }); } catch (e) {}
   return col;
 }
@@ -590,6 +623,9 @@ function ia_getKitchenSummary(p) {
   const ROTI_COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri"];
   const ROTI_LIMITS = { "Chapati":6,"Without_Oil_Chapati":6,"Phulka":12,"Ghee_Phulka":12,"Jowar_Bhakri":2,"Bajra_Bhakri":2 };
   const meals = {}; const orders = [];
+  // Pull the day's sabji names from the main menu so prep shows the real dish
+  // (and the frontend recipe-weight cards light up).
+  let mainMenu = {}; try { mainMenu = getMenu(date) || {}; } catch (e) {}
 
   ia_rows(ws).forEach(function (r) {
     if (ia_dateStr(r.Date) !== date) return;
@@ -598,7 +634,10 @@ function ia_getKitchenSummary(p) {
     const m = meals[meal]; m.count++;
     if (!m.rotis) m.rotis = {};
     if (!m.rotiMatrix) { m.rotiMatrix = {}; ROTI_COLS.forEach(function (c) { m.rotiMatrix[c] = {}; }); }
-    if (!m.sabji) m.sabji = { dry_kg:0, curry_kg:0, dry_name:"Sabji (Dry)", curry_name:"Sabji (Curry)", dry_mini:0, dry_full:0, curry_mini:0, curry_full:0 };
+    if (!m.sabji) m.sabji = { dry_kg:0, curry_kg:0,
+      dry_name:   (meal === "Lunch" ? mainMenu.lunch_dry   : mainMenu.dinner_dry)   || "Sabji (Dry)",
+      curry_name: (meal === "Lunch" ? mainMenu.lunch_curry : mainMenu.dinner_curry) || "Sabji (Curry)",
+      dry_mini:0, dry_full:0, curry_mini:0, curry_full:0 };
     if (!m.other) m.other = { Dal:{kg:0,count:0}, Rice:{count:0}, Salad:{count:0}, Curd:{count:0} };
     if (!m.riceMatrix) m.riceMatrix = {}; if (!m.saladMatrix) m.saladMatrix = {}; if (!m.curdMatrix) m.curdMatrix = {};
 
