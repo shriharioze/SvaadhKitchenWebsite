@@ -7702,6 +7702,14 @@
         $("btnNext").style.pointerEvents = "auto";
         if (data.success) {
           S.isPlaced = true;
+          // Server-authoritative grand total — refresh the displayed payment amount
+          // and regenerate the UPI QR so the customer always pays exactly what's
+          // recorded as Net_Total. Closes any promo/rounding gap between the
+          // frontend's pre-submit estimate and the server's recompute.
+          if (typeof data.grand_total === "number" && data.grand_total >= 0) {
+            S.grandTotal = data.grand_total;
+            try { setupUPI(data.grand_total); } catch (_) {}
+          }
           if (isFreeOrder) {
             const bonus = data.wallet_bonus || payload.wallet_bonus || 0;
             await sAlert(`🎉 Your order is placed — completely free thanks to your 6-day loyalty streak!\n\n💳 ₹${bonus} has been credited to your Svaadh Wallet.`, "Free Order Placed!", "🏆");

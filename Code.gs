@@ -2017,6 +2017,7 @@ function _submitOrderInternal(body) {
   const _FIVE_MIN_MS = 5 * 60 * 1000;
   const _normPhone = _normalizePhone(profile.phone);
   let loyaltyExcessCredit = 0; // accumulates surplus when 6th-day discount exceeds the bill
+  let grandNetTotal = 0;       // sum of all per-meal Net_Totals — returned so the UPI QR matches what's recorded
   // Normalize an items object to a stable JSON signature (sorted keys)
   const _itemsSig = (obj) => JSON.stringify(
     Object.keys(obj).sort().reduce((a, k) => { a[k] = obj[k]; return a; }, {})
@@ -2226,6 +2227,7 @@ function _submitOrderInternal(body) {
         set("Review_Discount",   meal._reviewDiscount || 0);
       }
       set("Net_Total",           netTotal);
+      grandNetTotal += netTotal;   // authoritative running total — drives the post-place QR
 
       // ════ DUPLICATE CHECK — must run BEFORE wallet deduction ════
       // Three layers of protection (any one catching is enough):
@@ -2455,7 +2457,7 @@ function _submitOrderInternal(body) {
     _invalidateCache(...submissionDates.map(d => "menu_v2_" + d));
   }
 
-  return {success: true, submissionId: submissionIds[0] || "", wallet_bonus: loyaltyExcessCredit};
+  return {success: true, submissionId: submissionIds[0] || "", wallet_bonus: loyaltyExcessCredit, grand_total: grandNetTotal};
 }
 
 
