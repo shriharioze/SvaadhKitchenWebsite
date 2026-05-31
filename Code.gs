@@ -2252,8 +2252,14 @@ function _submitOrderInternal(body) {
         continue;
       }
 
-      // Layer 2 + 3: fresh sheet re-read (covers cache eviction edge cases)
-      const _freshRows  = getAllRows(ordersWs);
+      // Layer 2 + 3: reuse the upfront snapshot instead of re-reading the whole
+      // sheet per meal. allOrderRows was read AFTER acquiring the global lock, so
+      // it already includes every committed row from any prior order; the lock
+      // blocks concurrent writers; and this execution's own earlier-meal rows
+      // can't be duplicates of the current meal (each cart date+meal is unique).
+      // Same-request retries are caught by the CacheService layer above. This
+      // removes N expensive full-sheet reads per order (the main latency source).
+      const _freshRows  = allOrderRows;
       const _nowMsFresh = Date.now();
       const _dupRow = _freshRows.find(r => {
         if (_normalizePhone(r.Phone) !== _normPhone) return false;
