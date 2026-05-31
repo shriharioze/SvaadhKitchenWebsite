@@ -4600,7 +4600,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.05.31.1";
+    const APP_VERSION = "v26.05.31.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4619,20 +4619,20 @@
     const MAX_RETRIES       = 3;
     const RETRY_DELAYS_MS   = [2000, 4000, 8000]; // wait between retries
 
-    async function apiFetch(urlOrOpts, fetchOpts = {}, { silent = false } = {}) {
+    async function apiFetch(urlOrOpts, fetchOpts = {}, { silent = false, timeout = FETCH_TIMEOUT_MS, maxRetries = MAX_RETRIES } = {}) {
       // Accepts either a URL string (GET) or an object { url, ...fetchOpts }
       const url     = typeof urlOrOpts === "string" ? urlOrOpts : urlOrOpts.url;
       const options = typeof urlOrOpts === "object" ? { ...urlOrOpts, url: undefined } : fetchOpts;
       delete options.url;
 
       let lastErr;
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
         // Show "taking longer" hint after first failure
         if (attempt === 1 && !silent) {
           _showSlowBanner(true);
         }
         const ctrl    = new AbortController();
-        const tid     = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+        const tid     = setTimeout(() => ctrl.abort(), timeout);
         const t0      = Date.now();
         try {
           const res  = await fetch(url, { ...options, signal: ctrl.signal });
@@ -4652,8 +4652,8 @@
             ms:      Date.now() - t0,
             msg:     err.message || "unknown"
           });
-          if (attempt < MAX_RETRIES - 1) {
-            await _sleep(RETRY_DELAYS_MS[attempt]);
+          if (attempt < maxRetries - 1) {
+            await _sleep(RETRY_DELAYS_MS[attempt] || 8000);
           }
         }
       }
@@ -7695,7 +7695,12 @@
       const _preSubmitRowIds = new Set((S.existingOrders || []).map(o => o.rowId));
 
       try {
-        const res = await apiPost(payload);
+        // Order submit: ONE attempt, longer 40s timeout, NO auto-retry.
+        // Auto-retrying a submit during peak load amplifies backend saturation
+        // (each timed-out order would fire 3 POSTs). The post-timeout
+        // verification below already recovers a slow-but-successful order, and
+        // the server-side request_id makes any recovery idempotent.
+        const res = await apiPost(payload, { timeout: 40000, maxRetries: 1 });
         const data = await res.json();
         sBtnLoading($("btnNext"), false);
         S.isPlacingOrder = false;
