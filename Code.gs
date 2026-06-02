@@ -4064,7 +4064,8 @@ function calculatePackets(total, max) {
 function getKitchenSummary(date) {
   var ss = getSpreadsheet();
   var ws = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows = getRecentRows(ws, 1500);
+  // Merge IntentAmplify orders (tagged [IA], S4 address) into the same prep view.
+  var rows = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
 
   var dayRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
@@ -4257,7 +4258,8 @@ function getKitchenSummary(date) {
 function getDriverOrders(date) {
   var ss   = getSpreadsheet();
   var ws   = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows = getRecentRows(ws, 1500);
+  // Merge IntentAmplify orders (tagged [IA], S4 delivery) into the driver view.
+  var rows = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
   var meals = {Breakfast: [], Lunch: [], Dinner: []};
 
   // Load delivery status from SK_Deliveries tab (both EnRoute_At and Delivered_At)
@@ -4389,7 +4391,8 @@ function createDeliverySheet(date, meal) {
 function getOrderSummary(date) {
   var ss = getSpreadsheet();
   var ws = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows = getAllRows(ws);
+  // Merge IntentAmplify orders (tagged [IA]) into the admin daily summary.
+  var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
 
   var dayRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
@@ -4487,7 +4490,8 @@ function getOrderSummary(date) {
 function getLabelOrders(date, meal) {
   var ss = getSpreadsheet();
   var ws = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows = getAllRows(ws);
+  // Merge IntentAmplify orders so their labels print too (name prefixed [IA]).
+  var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
   var COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
               "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Rice","Salad"];
 
@@ -4937,7 +4941,8 @@ function getOrderHistory(p) {
 
   var ss   = getSpreadsheet();
   var ws   = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  var rows = getAllRows(ws);
+  // Merge IntentAmplify orders (tagged [IA]) into the admin order history.
+  var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
 
   var fmtDate = function(v) {
     return v instanceof Date ? Utilities.formatDate(v,"Asia/Kolkata","yyyy-MM-dd") : String(v).trim();
@@ -5447,6 +5452,16 @@ function getAnalytics(p) {
   // overlap this date range. 10-min CacheService cache keeps repeat
   // queries fast.
   var combined = getOrdersInRangeWithArchive(dateFrom, dateTo);
+  // Merge IntentAmplify orders in range into combined analytics revenue.
+  try {
+    if (typeof ia_rowsAsSK === "function") {
+      var _iaInRange = ia_rowsAsSK().filter(function(r) {
+        var d = fmtDate(r.Order_Date);
+        return d >= dateFrom && d <= dateTo;
+      });
+      combined = combined.concat(_iaInRange);
+    }
+  } catch(_) {}
   var rows = combined.filter(function(r) {
     return !_isOrderCancelled(r.Payment_Status);
   });

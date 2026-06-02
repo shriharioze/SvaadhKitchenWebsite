@@ -616,6 +616,61 @@ function ia_orderCols(itemsJson) {
   return col;
 }
 
+// ── UNIFIED OPS: expose IA_Orders as SK_Orders-shaped rows ──────────
+// Lets the consumer kitchen / driver / label / admin functions process
+// IntentAmplify orders alongside regular orders with no per-function rewrite.
+// Every IA order is tagged "[IA] " on the name, delivers to the fixed S4
+// address, and has its items mapped into the consumer column layout so the
+// existing prep/label/packing math just works. Returns plain row objects
+// (same field names getRecentRows/getAllRows produce for SK_Orders).
+function ia_rowsAsSK() {
+  try {
+    const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+    return ia_rows(ws).map(function (r) {
+      const col = ia_orderCols(r.Items_JSON);
+      // Items_JSON in SK style: { itemName: qty } (descriptive names are fine for labels)
+      const itemsObj = {};
+      try { JSON.parse(r.Items_JSON || "[]").forEach(function (it) {
+        itemsObj[it.name] = (itemsObj[it.name] || 0) + (Number(it.qty) || 0);
+      }); } catch (e) {}
+      return {
+        Submission_ID:  String(r.Submission_ID || ""),
+        Submitted_At:   r.Timestamp ? String(r.Timestamp) : "",
+        Order_Date:     ia_dateStr(r.Date),
+        Meal_Type:      String(r.Meal || ""),
+        Customer_Name:  "[IA] " + String(r.Customer_Name || ""),
+        Phone:          String(r.Phone || ""),
+        Area:           "S4 Towers, Magarpatta",
+        Wing: "", Flat: "", Floor: "", Society: "S4 Towers, Magarpatta",
+        Full_Address:   "S4 Towers, Magarpatta",
+        Maps_Link:      "https://maps.app.goo.gl/wEndRh6jnkjL1GRC9",
+        Landmark:       "IntentAmplify (corporate)",
+        Delivery_Point: "Handover at Office Reception",
+        Items_JSON:     JSON.stringify(itemsObj),
+        // Item columns the consumer prep/label math reads:
+        Chapati: col.Chapati || 0, Without_Oil_Chapati: col.Without_Oil_Chapati || 0,
+        Phulka: col.Phulka || 0, Ghee_Phulka: col.Ghee_Phulka || 0,
+        Jowar_Bhakri: col.Jowar_Bhakri || 0, Bajra_Bhakri: col.Bajra_Bhakri || 0,
+        Dry_Sabji_Mini: col.Dry_Sabji_Mini || 0, Dry_Sabji_Full: col.Dry_Sabji_Full || 0,
+        Curry_Sabji_Mini: col.Curry_Sabji_Mini || 0, Curry_Sabji_Full: col.Curry_Sabji_Full || 0,
+        Dal: col.Dal || 0, Rice: col.Rice || 0, Salad: col.Salad || 0, Curd: col.Curd || 0,
+        // Money — IA has no delivery/surcharge/discounts:
+        Food_Subtotal:      Number(r.Subtotal) || 0,
+        Net_Total:          Number(r.Subtotal) || 0,
+        Delivery_Charge:    0, Small_Order_Fee: 0, Inflation_Surcharge: 0,
+        Discount_Amount:    0, Review_Discount: 0, Loyalty_Discount: "No",
+        Payment_Status:     String(r.Payment_Status || "Pending"),
+        Special_Notes:        String(r.Notes || ""),
+        Special_Notes_Kitchen:String(r.Notes || ""),
+        Special_Notes_Delivery: "",
+        marathiNotes: "",
+        Packed: false,
+        _isIA: true
+      };
+    });
+  } catch (e) { return []; }
+}
+
 function ia_getKitchenSummary(p) {
   if (!ia_canPrep(p.pin)) return { error: "Unauthorized." };
   const date = ia_dateStr(p.date) || ia_todayStr();

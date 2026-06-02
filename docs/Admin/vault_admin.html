@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.2">
+  <meta name="app-version" content="v26.06.01.1">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1736,6 +1736,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           <button class="approvals-tab active" id="tabRefunds" onclick="switchApprovalTab('refunds')">💸 Refunds</button>
           <button class="approvals-tab" id="tabPayments" onclick="switchApprovalTab('payments')">💳 UPI Payments</button>
           <button class="approvals-tab" id="tabWallet" onclick="switchApprovalTab('wallet')">💳 Wallet / Bill Payments</button>
+          <button class="approvals-tab" id="tabIA" onclick="switchApprovalTab('ia')">🍱 IntentAmplify</button>
         </div>
 
         <!-- SUB-PAGE: REFUNDS -->
@@ -1786,6 +1787,17 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           </div>
           <div id="pendingRechargesContent">
             <div class="empty-msg">Click Refresh to load pending recharges</div>
+          </div>
+        </div>
+
+        <!-- SUB-PAGE: INTENTAMPLIFY (corporate orders awaiting payment) -->
+        <div class="approval-panel" id="panelIA">
+          <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn-primary" onclick="loadIAPayments()">↺ Refresh IntentAmplify</button>
+            <div style="font-size:0.75rem; color:var(--muted);">IntentAmplify corporate orders awaiting payment verification</div>
+          </div>
+          <div id="iaPaymentsContent">
+            <div class="empty-msg">Click Refresh to load IntentAmplify pending payments</div>
           </div>
         </div>
       </div><!-- /pageApprovals -->
@@ -2097,7 +2109,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.05.25.2";
+    const ADMIN_VERSION = "v26.06.01.1";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -5927,7 +5939,45 @@ function switchApprovalTab(tab) {
     document.getElementById("tabWallet").classList.add("active");
     document.getElementById("panelWallet").classList.add("active");
     loadPendingRecharges();
+  } else if (tab === "ia") {
+    document.getElementById("tabIA").classList.add("active");
+    document.getElementById("panelIA").classList.add("active");
+    loadIAPayments();
   }
+}
+
+// ── IntentAmplify payment approvals (folded into the main Approvals Center) ──
+async function loadIAPayments() {
+  const wrap = document.getElementById("iaPaymentsContent");
+  wrap.innerHTML = '<div class="empty-msg">Loading…</div>';
+  try {
+    const res  = await fetch(`${APPS_SCRIPT_URL}?action=ia_pendingApprovals&pin=${S.sessionPin}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const orders = data.orders || [];
+    if (!orders.length) { wrap.innerHTML = '<div class="empty-msg">No IntentAmplify payments to verify. ✅</div>'; return; }
+    let html = '<div class="pay-table-wrap"><table class="pay-table"><thead><tr>'
+      + '<th>Date</th><th>Meal</th><th>Employee</th><th>Items</th><th>Amount</th><th>Action</th>'
+      + '</tr></thead><tbody>';
+    orders.forEach(o => {
+      html += `<tr><td>${o.date}</td><td>${o.meal}</td>`
+        + `<td>${o.name||''}<br><small style="color:var(--muted)">${o.phone}</small></td>`
+        + `<td><small style="color:var(--muted)">${o.summary||''}</small></td>`
+        + `<td>₹${o.subtotal}</td>`
+        + `<td><button class="approve-row-btn" onclick="approveIA('${o.submission_id}','${o.date}','${o.meal}',this)">✅ Mark Paid</button></td></tr>`;
+    });
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+  } catch (e) { wrap.innerHTML = `<div class="empty-msg">Error: ${e.message}</div>`; }
+}
+async function approveIA(id, date, meal, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res  = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:id, date, meal, admin:'admin' }) });
+    const data = await res.json();
+    if (data.success) { const tr = btn.closest('tr'); if (tr) tr.remove(); }
+    else { alert(data.error || 'Failed'); btn.disabled=false; btn.textContent='✅ Mark Paid'; }
+  } catch (e) { alert('Failed: ' + e.message); btn.disabled=false; btn.textContent='✅ Mark Paid'; }
 }
 
 // ── UPI PAYMENTS APPROVAL ──
