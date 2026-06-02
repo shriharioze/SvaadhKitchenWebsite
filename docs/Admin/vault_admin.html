@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.01.1">
+  <meta name="app-version" content="v26.06.01.2">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1793,7 +1793,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
         <!-- SUB-PAGE: INTENTAMPLIFY (corporate orders awaiting payment) -->
         <div class="approval-panel" id="panelIA">
           <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
-            <button class="btn-primary" onclick="loadIAPayments()">↺ Refresh IntentAmplify</button>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <button class="btn-primary" onclick="loadIAPayments()">↺ Refresh IntentAmplify</button>
+              <div id="batchIa" class="batch-actions-bar">
+                <span class="batch-count" id="batchIaCount">0 items selected</span>
+                <button class="approve-row-btn" onclick="approveIASelected()">✅ Approve Selected</button>
+              </div>
+            </div>
             <div style="font-size:0.75rem; color:var(--muted);">IntentAmplify corporate orders awaiting payment verification</div>
           </div>
           <div id="iaPaymentsContent">
@@ -2109,7 +2115,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.01.1";
+    const ADMIN_VERSION = "v26.06.01.2";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -5955,12 +5961,15 @@ async function loadIAPayments() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     const orders = data.orders || [];
-    if (!orders.length) { wrap.innerHTML = '<div class="empty-msg">No IntentAmplify payments to verify. ✅</div>'; return; }
+    if (!orders.length) { wrap.innerHTML = '<div class="empty-msg">No IntentAmplify payments to verify. ✅</div>'; updateBatchBar('ia'); return; }
     let html = '<div class="pay-table-wrap"><table class="pay-table"><thead><tr>'
+      + '<th style="width:40px;"><input type="checkbox" id="selectAllIa" onclick="toggleSelectAll(\'ia\')"></th>'
       + '<th>Date</th><th>Meal</th><th>Employee</th><th>Items</th><th>Amount</th><th>Action</th>'
       + '</tr></thead><tbody>';
     orders.forEach(o => {
-      html += `<tr><td>${o.date}</td><td>${o.meal}</td>`
+      html += `<tr>`
+        + `<td><input type="checkbox" class="ia-check" data-id="${o.submission_id}" data-date="${o.date}" data-meal="${o.meal}" onclick="updateBatchBar('ia')"></td>`
+        + `<td>${o.date}</td><td>${o.meal}</td>`
         + `<td>${o.name||''}<br><small style="color:var(--muted)">${o.phone}</small></td>`
         + `<td><small style="color:var(--muted)">${o.summary||''}</small></td>`
         + `<td>₹${o.subtotal}</td>`
@@ -5968,6 +5977,7 @@ async function loadIAPayments() {
     });
     html += '</tbody></table></div>';
     wrap.innerHTML = html;
+    updateBatchBar('ia');
   } catch (e) { wrap.innerHTML = `<div class="empty-msg">Error: ${e.message}</div>`; }
 }
 async function approveIA(id, date, meal, btn) {
@@ -5975,9 +5985,27 @@ async function approveIA(id, date, meal, btn) {
   try {
     const res  = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:id, date, meal, admin:'admin' }) });
     const data = await res.json();
-    if (data.success) { const tr = btn.closest('tr'); if (tr) tr.remove(); }
+    if (data.success) { const tr = btn.closest('tr'); if (tr) tr.remove(); updateBatchBar('ia'); }
     else { alert(data.error || 'Failed'); btn.disabled=false; btn.textContent='✅ Mark Paid'; }
   } catch (e) { alert('Failed: ' + e.message); btn.disabled=false; btn.textContent='✅ Mark Paid'; }
+}
+// Batch approve selected IntentAmplify payments (reuses ia_approve per row).
+async function approveIASelected() {
+  const checks = Array.from(document.querySelectorAll('.ia-check')).filter(c => c.checked);
+  if (!checks.length) return;
+  if (!(await showUIConfirm(`Mark ${checks.length} selected IntentAmplify payment(s) as Paid?`, 'Batch Approve', '✅'))) return;
+  sLoading(true, `Approving ${checks.length}…`);
+  let ok = 0;
+  for (const c of checks) {
+    try {
+      const res  = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:c.dataset.id, date:c.dataset.date, meal:c.dataset.meal, admin:'admin' }) });
+      const data = await res.json();
+      if (data.success) ok++;
+    } catch (e) {}
+  }
+  sLoading(false);
+  toast(`${ok} of ${checks.length} approved ✅`);
+  await loadIAPayments();
 }
 
 // ── UPI PAYMENTS APPROVAL ──
