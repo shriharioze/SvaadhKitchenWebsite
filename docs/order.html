@@ -4603,7 +4603,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.01.2";
+    const APP_VERSION = "v26.06.01.3";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7851,15 +7851,16 @@
           S.isPlacingOrder = false;
           $("btnNext").style.pointerEvents = "auto";
         }
-        // Could not confirm — show manual fallback
-        await sAlert(
-          `The server took too long to respond — this can happen occasionally.\n\n` +
-          `<b>Before placing the order again:</b>\n` +
-          `👉 Go to <b>Manage Orders</b> and check if your order already appears there.\n\n` +
-          `✅ <b>Order visible?</b> You're all set — do NOT place it again.\n` +
-          `❌ <b>Order not visible?</b> Go ahead and place it again.`,
-          "Request Timed Out", "⏱️"
+        // Could not confirm — show the same one-tap verify prompt as the success page
+        const _goManage = await sConfirm(
+          `Please tap <b>Manage Orders</b> below to check if this order shows up in your list:<br><br>` +
+          `✅ <b>If it's there</b> — you're all set, your meal is confirmed!<br>` +
+          `❌ <b>If it's missing</b> — please place the order once more. You'll <b>only ever be charged once</b>.<br><br>` +
+          `<span style="color:#64748b;font-style:italic;">Apologies for the inconvenience — we're actively working to make this smoother. 🙏</span>`,
+          "Request Timed Out", "⏱️", "",
+          { confirmLabel: "🔍 Manage Orders", cancelLabel: "Close" }
         );
+        if (_goManage) showManageOrders();
       }
     }
 
