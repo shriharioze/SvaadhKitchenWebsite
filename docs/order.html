@@ -4603,7 +4603,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.03.1";
+    const APP_VERSION = "v26.06.03.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7851,16 +7851,8 @@
           S.isPlacingOrder = false;
           $("btnNext").style.pointerEvents = "auto";
         }
-        // Could not confirm — show the same one-tap verify prompt as the success page
-        const _goManage = await sConfirm(
-          `Please tap <b>Manage Orders</b> below to check if this order shows up in your list:<br><br>` +
-          `✅ <b>If it's there</b> — you're all set, your meal is confirmed!<br>` +
-          `❌ <b>If it's missing</b> — please place the order once more. You'll <b>only ever be charged once</b>.<br><br>` +
-          `<span style="color:#64748b;font-style:italic;">Apologies for the inconvenience — we're actively working to make this smoother. 🙏</span>`,
-          "Request Timed Out", "⏱️", "",
-          { confirmLabel: "🔍 Manage Orders", cancelLabel: "Close" }
-        );
-        if (_goManage) showManageOrders();
+        // Could not confirm — force the same blocking verify modal (no escape).
+        showOrderVerifyModal();
       }
     }
 
@@ -8005,6 +7997,38 @@
       S.selectedDates = [];
       if (typeof renderCalendar === 'function') renderCalendar();
       if (typeof updateDateSummary === 'function') updateDateSummary();
+
+      // Force the order-verification popup — the customer MUST tap Manage Orders
+      // to cross-check the order landed. No overlay-click / X / Esc to dismiss.
+      showOrderVerifyModal();
+    }
+
+    // Blocking verification modal — only the Manage Orders button closes it.
+    function showOrderVerifyModal() {
+      const ex = document.getElementById("orderVerifyModal");
+      if (ex) ex.remove();
+      const overlay = document.createElement("div");
+      overlay.id = "orderVerifyModal";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:20px;";
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);">' +
+          '<div style="font-size:2.4rem;margin-bottom:8px;">🛡️</div>' +
+          '<div style="font-size:1.1rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Quick check — confirm your order landed</div>' +
+          '<div style="font-size:0.85rem;color:#075985;line-height:1.6;text-align:left;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:8px;">' +
+            'Please tap the button below to make sure this order shows up in your orders list:<br><br>' +
+            '✅ <b>If it\'s there</b> — you\'re all set, your meal is confirmed!<br>' +
+            '❌ <b>If it\'s missing</b> — please place the order once more. You\'ll <b>only ever be charged once</b>.' +
+          '</div>' +
+          '<div style="font-size:0.75rem;color:#64748b;font-style:italic;margin-bottom:18px;">Apologies for the inconvenience — we\'re actively working to make this smoother. 🙏</div>' +
+          '<button id="orderVerifyBtn" style="width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);display:flex;align-items:center;justify-content:center;gap:8px;">🔍 Manage Orders — Check My Order</button>' +
+        '</div>';
+      // No dismiss on overlay click — swallow it so there's no escape.
+      overlay.addEventListener("click", function(e){ if (e.target === overlay) { e.stopPropagation(); e.preventDefault(); } });
+      document.body.appendChild(overlay);
+      document.getElementById("orderVerifyBtn").addEventListener("click", function(){
+        overlay.remove();
+        showManageOrders();
+      });
     }
 
     function renderSuccessSummary() {
