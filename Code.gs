@@ -6113,6 +6113,23 @@ function archiveMonth(year, month) {
     var snapshotCount   = 0;
     log.push("Wallet NOT archived — full ledger kept in master for balance integrity ✓");
 
+    // ── WALLET BACKUP (non-destructive snapshot) ────────────────────────────
+    // Write a FULL copy of the current SK_Wallet into this monthly archive file
+    // as a safety net for cross-checking / recovery. Nothing is deleted from the
+    // live wallet — this is purely a backup snapshot of the whole ledger.
+    try {
+      var walletWsSnap   = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+      var walletSnapData = walletWsSnap.getDataRange().getValues();
+      if (walletSnapData.length > 0) {
+        var snapSheet = archiveSS.insertSheet("SK_Wallet_Snapshot");
+        snapSheet.getRange(1, 1, walletSnapData.length, walletSnapData[0].length).setValues(walletSnapData);
+        SpreadsheetApp.flush();
+        log.push((walletSnapData.length - 1) + " wallet rows backed up (snapshot, not deleted) ✓");
+      }
+    } catch (snapErr) {
+      log.push("Wallet snapshot skipped: " + snapErr.message);
+    }
+
     // ── STEP 7: REBUILD live sheets atomically ──────────────────────────────
     // Critical fix for the "half-deleted" bug: clear data range and re-write
     // only kept rows in one operation instead of N deleteRow() calls.

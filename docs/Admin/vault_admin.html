@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.03.1">
+  <meta name="app-version" content="v26.06.03.2">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1210,7 +1210,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
             </select>
           </div>
 
-          <button class="save-hero-btn" onclick="loadPackaging()">🔍 Load</button>
+          <button class="save-hero-btn" onclick="loadPackaging(true)">🔍 Load</button>
         </div>
 
         <div id="packagingContent">
@@ -2115,7 +2115,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.03.1";
+    const ADMIN_VERSION = "v26.06.03.2";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -3360,12 +3360,12 @@ function toast(msg, ms=2500) {
 let _pkgMode = "day";   // "day" | "range"
 let _pkgData = null;    // last fetched data (for re-sort)
 
-function pkgISO(d) { return d.toISOString().slice(0,10); }
+function pkgISO(d) { return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function pkgAddDays(d, n) { const r=new Date(d); r.setDate(r.getDate()+n); return r; }
 
 function pkgSetRange(mode) {
   _pkgMode = mode;
-  const now = new Date();
+  const now = getIST();
   const toISO = d => pkgISO(d);
   const single = document.getElementById("pkgSingleWrap");
   const range  = document.getElementById("pkgRangeWrap");
