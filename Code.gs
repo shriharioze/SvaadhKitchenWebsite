@@ -6100,73 +6100,18 @@ function archiveMonth(year, month) {
       log.push("No orders found for this month.");
     }
 
-    // ── STEP 4: Read live SK_Wallet into memory ─────────────────────────────
-    var walletWs      = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
-    var allWalletData = walletWs.getDataRange().getValues();
-    var wHeaders      = allWalletData[0];
-    var wTsIdx        = wHeaders.indexOf("Timestamp");
-    var wPhoneIdx     = wHeaders.indexOf("Phone");
-    var wNameIdx      = wHeaders.indexOf("Customer_Name");
-
+    // ── STEPS 4–6: WALLET IS INTENTIONALLY *NOT* ARCHIVED ───────────────────
+    // The wallet is a cumulative ledger — every credit/debit must stay in the
+    // master forever, or _calculateWalletBalance() breaks. Archiving an old
+    // recharge (e.g. ₹2000 on 30 Mar) while keeping later debits (April)
+    // produced a NEGATIVE balance. A "carry-forward" snapshot is fragile and
+    // already corrupted balances once, so we keep the wallet whole instead.
+    // SK_Wallet is tiny + low-volume, so this costs nothing in sheet size.
+    // These vars stay empty so STEP 5/7 wallet blocks below are skipped.
     var toArchiveWallet = [];
-    var keepWallet      = [];
-    for (var j = 1; j < allWalletData.length; j++) {
-      var ts = allWalletData[j][wTsIdx];
-      var wd = fmtDate(ts instanceof Date ? ts : new Date(ts));
-      if (wd >= qr.from && wd <= qr.to) {
-        toArchiveWallet.push(allWalletData[j]);
-      } else {
-        keepWallet.push(allWalletData[j]);
-      }
-    }
-
-    // ── STEP 5: Write SK_Wallet to archive (verify) ─────────────────────────
-    if (toArchiveWallet.length > 0) {
-      var archiveWalletSheet = archiveSS.insertSheet("SK_Wallet");
-      archiveWalletSheet.getRange(1, 1, 1, wHeaders.length).setValues([wHeaders]);
-      archiveWalletSheet.getRange(2, 1, toArchiveWallet.length, wHeaders.length)
-                        .setValues(toArchiveWallet);
-      SpreadsheetApp.flush();
-      var wWritten = archiveWalletSheet.getLastRow() - 1;
-      if (wWritten !== toArchiveWallet.length) {
-        return {success:false, error:"Wallet archive verification failed. Expected "
-          + toArchiveWallet.length + ", got " + wWritten + ". Nothing deleted from live sheet."};
-      }
-      log.push(toArchiveWallet.length + " wallet transactions archived ✓");
-    } else {
-      log.push("No wallet transactions found for this month.");
-    }
-
-    // ── STEP 6: Compute Balance Carry-Forward (BEFORE wallet rebuild) ───────
-    var activePhones = {};
-    toArchiveWallet.forEach(function(row) {
-      var ph   = String(row[wPhoneIdx] || "").trim();
-      var name = String(row[wNameIdx]  || "").trim();
-      if (ph) activePhones[ph] = name;
-    });
-
-    var snapshotCount = 0;
-    var snapTime      = new Date();
-    var refId         = "ARCHIVE-" + year + "-" + pad(month);
-    var carryFwdRows  = [];
-    Object.keys(activePhones).forEach(function(ph) {
-      var balance = _calculateWalletBalance(ph);
-      if (balance > 0) {
-        var newRow = new Array(wHeaders.length).fill("");
-        wHeaders.forEach(function(h, idx) {
-          if (h === "Phone")          newRow[idx] = ph;
-          else if (h === "Customer_Name") newRow[idx] = activePhones[ph];
-          else if (h === "Txn_Type")  newRow[idx] = "Balance Carry Forward";
-          else if (h === "Amount")    newRow[idx] = balance;
-          else if (h === "Verified")  newRow[idx] = "TRUE";
-          else if (h === "Reference_ID") newRow[idx] = refId;
-          else if (h === "Timestamp") newRow[idx] = snapTime;
-        });
-        carryFwdRows.push(newRow);
-        snapshotCount++;
-      }
-    });
-    if (snapshotCount > 0) log.push(snapshotCount + " balance snapshots prepared ✓");
+    var carryFwdRows    = [];
+    var snapshotCount   = 0;
+    log.push("Wallet NOT archived — full ledger kept in master for balance integrity ✓");
 
     // ── STEP 7: REBUILD live sheets atomically ──────────────────────────────
     // Critical fix for the "half-deleted" bug: clear data range and re-write
@@ -6199,16 +6144,7 @@ function archiveMonth(year, month) {
       log.push(toArchiveOrders.length + " order rows removed from live sheet ✓");
     }
 
-    if (toArchiveWallet.length > 0 || carryFwdRows.length > 0) {
-      var wRebuild = rebuildSheet(walletWs, wHeaders, keepWallet, carryFwdRows);
-      if (!wRebuild.success) {
-        return {success:false,
-          error:"Wallet rebuild verification failed. Expected " + wRebuild.expected
-                + ", got " + wRebuild.actual + ". Archive file IS created — please verify manually before retrying.",
-          archiveUrl: archiveSS.getUrl()};
-      }
-      log.push(toArchiveWallet.length + " wallet rows removed + " + carryFwdRows.length + " carry-forward rows added ✓");
-    }
+    // (Wallet rebuild removed — wallet is never archived; see STEPS 4–6 above.)
 
     return {
       success:        true,
