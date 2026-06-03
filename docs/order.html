@@ -4128,12 +4128,12 @@
             <div style="display:flex;align-items:flex-start;gap:12px;">
               <div style="font-size:1.6rem;line-height:1;flex-shrink:0;">🛡️</div>
               <div style="flex:1;">
-                <div style="font-size:0.9rem;font-weight:800;color:#0369a1;margin-bottom:6px;">Quick check — confirm your order landed</div>
+                <div style="font-size:0.9rem;font-weight:800;color:#0369a1;margin-bottom:6px;">Quick check</div>
                 <div style="font-size:0.8rem;color:#075985;line-height:1.6;">
                   Please tap the button below to make sure this order shows up in your orders list:
                   <div style="margin-top:10px;background:rgba(255,255,255,0.6);border-radius:10px;padding:10px;">
                     ✅ <strong style="color:#0284c7;">If it's there</strong> — you're all set, your meal is confirmed!<br>
-                    ❌ <strong style="color:#b91c1c;">If it's missing</strong> — please place the order once more. You'll <strong>only ever be charged once</strong>.
+                    ❌ <strong style="color:#b91c1c;">If it's missing</strong> — please place the order once more. <strong>Payment only once</strong>.
                   </div>
                   <div style="font-size:0.75rem;color:#64748b;margin-top:8px;font-style:italic;">
                     Apologies for the inconvenience — we're actively working to make this smoother. 🙏
@@ -4603,7 +4603,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.03.2";
+    const APP_VERSION = "v26.06.03.3";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8013,11 +8013,11 @@
       overlay.innerHTML =
         '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);">' +
           '<div style="font-size:2.4rem;margin-bottom:8px;">🛡️</div>' +
-          '<div style="font-size:1.1rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Quick check — confirm your order landed</div>' +
+          '<div style="font-size:1.1rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Quick check</div>' +
           '<div style="font-size:0.85rem;color:#075985;line-height:1.6;text-align:left;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:8px;">' +
             'Please tap the button below to make sure this order shows up in your orders list:<br><br>' +
             '✅ <b>If it\'s there</b> — you\'re all set, your meal is confirmed!<br>' +
-            '❌ <b>If it\'s missing</b> — please place the order once more. You\'ll <b>only ever be charged once</b>.' +
+            '❌ <b>If it\'s missing</b> — please place the order once more. <b>Payment only once</b>.' +
           '</div>' +
           '<div style="font-size:0.75rem;color:#64748b;font-style:italic;margin-bottom:18px;">Apologies for the inconvenience — we\'re actively working to make this smoother. 🙏</div>' +
           '<button id="orderVerifyBtn" style="width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);display:flex;align-items:center;justify-content:center;gap:8px;">🔍 Manage Orders — Check My Order</button>' +
