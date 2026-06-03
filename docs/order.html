@@ -4603,7 +4603,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.03.3";
+    const APP_VERSION = "v26.06.03.4";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8993,7 +8993,11 @@
         </div>`;
           }).join("");
         }
-        pastWrap.innerHTML = pastHeaderHtml + `<div id="pastContent" class="collapsible-content ${window.orderViewState.past ? "open" : ""}">${pastRowsHtml}</div>`;
+        const archiveNoteHtml = `
+      <div style="margin-top:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;font-size:0.74rem;color:#64748b;line-height:1.55;">
+        📦 <strong style="color:#475569;">Don't see some older orders?</strong> To keep the app fast and reliable as our records grow, we periodically move older orders into a secure archive. Nothing is lost — your full history is safely stored on our side. Need an older order? Just <a href="https://wa.me/919322246765" target="_blank" rel="noopener" style="color:#0284c7;font-weight:600;">message us</a> and we'll pull it up. 🙏
+      </div>`;
+        pastWrap.innerHTML = pastHeaderHtml + `<div id="pastContent" class="collapsible-content ${window.orderViewState.past ? "open" : ""}">${pastRowsHtml}${archiveNoteHtml}</div>`;
       } catch (err) { upcomingWrap.innerHTML = `<p style="font-size:0.82rem;color:#1E1240;text-align:center;">Error: ${err.message}</p>`; }
     }
 
