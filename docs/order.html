@@ -4128,23 +4128,26 @@
             <div style="display:flex;align-items:flex-start;gap:12px;">
               <div style="font-size:1.6rem;line-height:1;flex-shrink:0;">🛡️</div>
               <div style="flex:1;">
-                <div style="font-size:0.9rem;font-weight:800;color:#0369a1;margin-bottom:6px;">Important: Double-Check Your Order</div>
+                <div style="font-size:0.9rem;font-weight:800;color:#0369a1;margin-bottom:6px;">Quick check — confirm your order landed</div>
                 <div style="font-size:0.8rem;color:#075985;line-height:1.6;">
-                  To ensure your order is 100% confirmed in our system, please take 5 seconds to do this:
+                  Please tap the button below to make sure this order shows up in your orders list:
                   <div style="margin-top:10px;background:rgba(255,255,255,0.6);border-radius:10px;padding:10px;">
-                    1️⃣ Tap the <strong style="color:#0284c7;">profile avatar</strong> at the top-right, then choose <strong style="color:#0284c7;">"Manage Orders"</strong> from the menu.<br>
-                    2️⃣ Verify your latest order is visible in the <strong style="color:#0284c7;">"Upcoming"</strong> list.<br>
-                    3️⃣ If it shows there, your meal is 100% locked in! ✅
+                    ✅ <strong style="color:#0284c7;">If it's there</strong> — you're all set, your meal is confirmed!<br>
+                    ❌ <strong style="color:#b91c1c;">If it's missing</strong> — please place the order once more. You'll <strong>only ever be charged once</strong>.
                   </div>
-                  <div style="margin-top:10px;font-weight:700;color:#b91c1c;">
-                    ⚠️ If it's NOT showing in the list:
-                  </div>
-                  <div style="font-size:0.75rem;color:#7f1d1d;margin-top:4px;">
-                    Please place the order again immediately. <strong>Do not pay again</strong> — simply select "Already Paid" during checkout if you've already completed the payment.
+                  <div style="font-size:0.75rem;color:#64748b;margin-top:8px;font-style:italic;">
+                    Apologies for the inconvenience — we're actively working to make this smoother. 🙏
                   </div>
                 </div>
               </div>
             </div>
+            <button type="button" onclick="showManageOrders()"
+                    style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;
+                           background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:0.95rem;
+                           font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);
+                           display:flex;align-items:center;justify-content:center;gap:8px;">
+              🔍 Manage Orders — Check My Order
+            </button>
           </div>
 
           <!-- Delivery Heads-Up card — permanent -->
@@ -4600,7 +4603,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.01.1";
+    const APP_VERSION = "v26.06.01.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
