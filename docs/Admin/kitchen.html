@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.4">
+  <meta name="app-version" content="v26.06.04.1">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1311,6 +1311,26 @@
       const normalized = normalizeName(name);
       const totalUnits = ((mini || 0) * 0.6) + ((full || 0) * 1.4);
 
+      // ── KOFTA: special per-size kofta-count model (not the generic unit-weight) ──
+      // Each mini portion = 1.5 koftas, each full = 3 koftas (round each size, then sum).
+      // 100 g दुधी yields 10 koftas → 10 g दुधी per kofta.
+      //   e.g. 11 mini, 9 full → round(11×1.5)=17 + round(9×3)=27 = 44 koftas → 440 g दुधी.
+      if (normalized === "kofta") {
+        const koftas = Math.round((mini || 0) * 1.5) + Math.round((full || 0) * 3);
+        const dudhiG = koftas * 10;
+        const rows = [
+          `<div style="font-size:1.6rem; line-height:1.2; margin-bottom:4px; white-space:nowrap;">
+            <span style="color:#aaa; font-size:1.1rem; display:block; margin-bottom:-5px;">दुधी:</span>
+            <span style="font-weight:700;">${dudhiG} g</span>
+          </div>`,
+          `<div style="font-size:1.6rem; line-height:1.2; margin-bottom:4px; white-space:nowrap;">
+            <span style="color:#aaa; font-size:1.1rem; display:block; margin-bottom:-5px;">कोफ्ता गोळे:</span>
+            <span style="font-weight:700;">${koftas} नग</span>
+          </div>`
+        ];
+        return { val: rows.join(""), unit: "एकूण वजन (तयार करण्यासाठी)" };
+      }
+
       let w = null;
       for (let key in SABJI_WEIGHTS) {
         if (normalizeName(key) === normalized) {
@@ -1890,7 +1910,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.05.25.4";
+    const KITCHEN_VERSION = "v26.06.04.1";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
