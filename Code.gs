@@ -4357,6 +4357,12 @@ function _routeSocietyKey(r) {
 var ROUTE_MEALS = ["Breakfast", "Lunch", "Dinner"];
 function _routeTabName(meal) { return "SK_Delivery_Route_" + meal; }
 
+// Trusted data window for route learning (by Order_Date, inclusive). Deliveries
+// OUTSIDE this range are ignored — data before 5 Jun 2026 was unreliable and
+// would corrupt the learned route. Update these two dates to shift the window.
+var ROUTE_DATA_FROM = "2026-06-05";
+var ROUTE_DATA_TO   = "2026-07-04";
+
 // Rebuild the SK_Delivery_Route config from the last `days` (default 30) of
 // delivered orders. Non-destructive to orders; only rewrites the route tab.
 function buildDeliveryRoute(days) {
@@ -4376,15 +4382,14 @@ function buildDeliveryRoute(days) {
       if (!isNaN(ms)) delMap[sid] = ms;
     });
 
-    var now      = getISTDate();
-    var cutoffMs = now.getTime() - days * 86400000;
+    var now = getISTDate();
 
     // meal → orderDate → [{ soc, t }]
     var byMealDay = {};
     getAllRows(ordersWs).forEach(function (r) {
       var sid = String(r.Submission_ID || "").trim();
       var t   = delMap[sid];
-      if (!t || t < cutoffMs) return;
+      if (!t) return; // must have been delivered (has a Delivered_At timestamp)
       if (_isOrderCancelled(r.Payment_Status)) return;
       var meal = String(r.Meal_Type || "").trim();
       if (!meal) return;
@@ -4393,6 +4398,8 @@ function buildDeliveryRoute(days) {
       var od = (r.Order_Date instanceof Date)
         ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
         : String(r.Order_Date).trim();
+      // Only learn from the trusted data window — ignore earlier (bad) data.
+      if (od < ROUTE_DATA_FROM || od > ROUTE_DATA_TO) return;
       byMealDay[meal] = byMealDay[meal] || {};
       byMealDay[meal][od] = byMealDay[meal][od] || [];
       byMealDay[meal][od].push({ soc: soc, t: t });
@@ -4445,7 +4452,7 @@ function buildDeliveryRoute(days) {
       perMeal[meal] = out.length;
     });
 
-    return { success: true, days: days, count: total, perMeal: perMeal, updated: stamp };
+    return { success: true, from: ROUTE_DATA_FROM, to: ROUTE_DATA_TO, count: total, perMeal: perMeal, updated: stamp };
   } catch (e) {
     return { success: false, error: String(e) };
   }

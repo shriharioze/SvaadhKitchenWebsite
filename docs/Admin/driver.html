@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.4">
+  <meta name="app-version" content="v26.06.04.5">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -326,7 +326,7 @@ function clearDriverSearch(meal) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.06.04.4";
+    const DRIVER_VERSION = "v26.06.04.5";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -568,14 +568,14 @@ function updateRouteStatus() {
 }
 
 async function rebuildRoute() {
-  if (!confirm("Re-learn the delivery route from the last 30 days of your delivered orders?\n\nThis reads the order in which you marked deliveries and sorts each meal's stops by building. You can run this anytime.")) return;
+  if (!confirm("Re-learn the delivery route from your delivered orders (data window: 5 Jun – 4 Jul 2026)?\n\nThis reads the order in which you marked deliveries and sorts each meal's stops by building. You can run this anytime.")) return;
   sLoading(true, "Learning route from last 30 days…");
   try {
     const res  = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=buildDeliveryRoute&days=30&pin=${D.sessionPin}&_t=${Date.now()}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Could not build route");
     if (!data.count) {
-      alert("ℹ️ Nothing to learn yet.\n\nThe route is built from DELIVERED orders in the last 30 days that have a building/society name. Mark a few deliveries (in the order you actually stop), then tap this again.");
+      alert("ℹ️ Nothing to learn yet.\n\nThe route is built from DELIVERED orders dated 5 Jun – 4 Jul 2026 that have a building/society name. Mark a few deliveries (in the order you actually stop), then tap this again.");
     } else {
       const pm = data.perMeal || {};
       const breakdown = ["Breakfast", "Lunch", "Dinner"].map(m => `${m}: ${pm[m] || 0}`).join("  ·  ");
