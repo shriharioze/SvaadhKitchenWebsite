@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.1">
+  <meta name="app-version" content="v26.06.04.2">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -202,7 +202,14 @@
       <button class="export-btn" onclick="openExportModal()">⬇ Export</button>
       <button class="export-btn" onclick="rebuildRoute()" title="Learn the best stop order from the last 30 days of deliveries">🧭 Optimize route</button>
     </div>
-    <div id="routeStatus" style="font-size:0.62rem;color:rgba(255,255,255,0.55);padding:2px 4px 0;"></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 4px 0;flex-wrap:wrap;">
+      <span style="font-size:0.66rem;color:rgba(255,255,255,0.6);">Sort by:</span>
+      <div style="display:inline-flex;border:1px solid rgba(255,255,255,0.25);border-radius:99px;overflow:hidden;">
+        <button id="sortBtnRoute" onclick="setSortMode('route')" style="background:none;border:none;color:#fff;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;">🧭 Route</button>
+        <button id="sortBtnName" onclick="setSortMode('name')" style="background:none;border:none;color:#fff;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;">🔤 A–Z</button>
+      </div>
+      <span id="routeStatus" style="font-size:0.62rem;color:rgba(255,255,255,0.55);"></span>
+    </div>
   </div>
 
   <!-- EXPORT MODAL -->
@@ -275,6 +282,9 @@ let _pollTimer  = null;
 // Learned delivery route: { meal: { societyKey: rank } } — drives undelivered sort.
 let _deliveryRoute = {};
 let _routeUpdated  = "";
+let _lastData      = null; // last driver payload, for re-render on sort toggle
+// Undelivered sort mode: "route" (learned building order) or "name" (A–Z). Persisted.
+let _sortMode      = localStorage.getItem("sk_driver_sort") || "route";
 let _routeDists = { Breakfast: null, Lunch: null, Dinner: null };
 // Per-meal search query — kept independent so searching in Lunch never
 // leaks into Breakfast/Dinner panels.
@@ -316,7 +326,7 @@ function clearDriverSearch(meal) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.06.04.1";
+    const DRIVER_VERSION = "v26.06.04.2";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -470,6 +480,7 @@ async function loadOrders() {
       } catch (e) {}
     }
     updateRouteStatus();
+    updateSortToggleUI();
     renderAll(data);
     setSyncBadge();
     stopPoll(); startPoll();
@@ -528,6 +539,23 @@ function setSyncBadge() {
     `Synced ${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,"0")}`;
 }
 
+// ── SORT MODE TOGGLE ────────────────────────────────────────────────────────
+function setSortMode(mode) {
+  _sortMode = (mode === "name") ? "name" : "route";
+  localStorage.setItem("sk_driver_sort", _sortMode);
+  updateSortToggleUI();
+  if (_lastData) renderAll(_lastData);
+}
+
+function updateSortToggleUI() {
+  const on  = "background:#fff;color:#1a8c4a;";
+  const off = "background:none;color:#fff;";
+  const r = document.getElementById("sortBtnRoute");
+  const n = document.getElementById("sortBtnName");
+  if (r) r.style.cssText = "border:none;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;" + (_sortMode === "route" ? on : off);
+  if (n) n.style.cssText = "border:none;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;" + (_sortMode === "name" ? on : off);
+}
+
 // ── DELIVERY ROUTE ──────────────────────────────────────────────────────────
 function updateRouteStatus() {
   const el = document.getElementById("routeStatus");
@@ -557,19 +585,21 @@ async function rebuildRoute() {
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function renderAll(data) {
+  _lastData = data; // remember for re-render when the sort toggle changes
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const raw = ((data.meals || {})[meal] || []);
-    // Undelivered (top): by the LEARNED route order (society/building grouped in
-    //   the driver's preferred stop sequence). Buildings with no data yet sink to
-    //   the bottom, grouped alphabetically, until they earn a rank next rebuild.
-    //   Within a building: wing → flat → name.
-    // Delivered (bottom): by time delivered (oldest→newest) — a running log.
+    // Undelivered (top) sort depends on the driver's chosen mode:
+    //   "route" → learned building order (society grouped in his preferred stop
+    //             sequence; unknown buildings sink to bottom; within: wing→flat→name)
+    //   "name"  → simple A–Z by customer name (helpful early, before route is learned)
+    // Delivered (bottom): always by time delivered (oldest→newest) — a running log.
     const routeMap = _deliveryRoute[meal] || {};
     const socKey = (o) => String(o.society || o.area || "").trim().toLowerCase().replace(/\s+/g, " ");
     const routeRank = (o) => {
       const r = routeMap[socKey(o)];
       return (typeof r === "number" && r > 0) ? r : 9999; // unknown → bottom
     };
+    const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
     const byRoute = (a, b) => {
       const ra = routeRank(a), rb = routeRank(b);
       if (ra !== rb) return ra - rb;
@@ -580,15 +610,16 @@ function renderAll(data) {
       if (wa !== wb) return wa.localeCompare(wb);
       const fa = parseInt(a.flat, 10) || 0, fb = parseInt(b.flat, 10) || 0;
       if (fa !== fb) return fa - fb;
-      return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+      return byName(a, b);
     };
     const byDeliveredTime = (a, b) => {
       const ta = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
       const tb = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
       return ta - tb;
     };
+    const undeliveredSort = (_sortMode === "name") ? byName : byRoute;
     const orders = [
-      ...raw.filter(o => !o.deliveredAt).sort(byRoute),
+      ...raw.filter(o => !o.deliveredAt).sort(undeliveredSort),
       ...raw.filter(o => o.deliveredAt).sort(byDeliveredTime)
     ];
     _ordersData[meal] = orders;
