@@ -4523,8 +4523,10 @@ function createDeliverySheet(date, meal) {
 function getOrderSummary(date) {
   var ss = getSpreadsheet();
   var ws = getOrCreateTab(ss, TAB_ORDERS, []);
-  // Merge IntentAmplify orders (tagged [IA]) into the admin daily summary.
-  var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  // Live + archived orders for this date (archive opened only if the date is
+  // in an archived month), plus IntentAmplify orders (tagged [IA]).
+  var rows = getOrdersInRangeWithArchive(date, date)
+               .concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
 
   var dayRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
@@ -4672,9 +4674,8 @@ var PKG_UNIT_COSTS = {
 };
 
 function getPackagingExpenses(date) {
-  var ss = getSpreadsheet();
-  var ws = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows = getAllRows(ws);
+  // Live + archived orders for this date (archive opened only for archived months).
+  var rows = getOrdersInRangeWithArchive(date, date);
 
   var dayRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
@@ -4733,9 +4734,8 @@ function getPackagingExpenses(date) {
 
 // ── PACKAGING EXPENSES — RANGE ───────────────────────────────
 function getPackagingExpensesRange(from, to) {
-  var ss = getSpreadsheet();
-  var ws = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows = getAllRows(ws);
+  // Live + archived orders for the range (archives opened only for archived months).
+  var rows = getOrdersInRangeWithArchive(from, to);
 
   var rangeRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
@@ -5073,8 +5073,10 @@ function getOrderHistory(p) {
 
   var ss   = getSpreadsheet();
   var ws   = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  // Merge IntentAmplify orders (tagged [IA]) into the admin order history.
-  var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  // Live + archived orders for the range (archives opened only when the range
+  // overlaps an archived month), plus IntentAmplify orders (tagged [IA]).
+  var rows = getOrdersInRangeWithArchive(dateFrom, dateTo)
+               .concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
 
   var fmtDate = function(v) {
     return v instanceof Date ? Utilities.formatDate(v,"Asia/Kolkata","yyyy-MM-dd") : String(v).trim();

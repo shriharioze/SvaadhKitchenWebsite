@@ -1941,8 +1941,9 @@
     }
 
     [data-theme="dark"] .omr-del-btn {
-      background: #2a1010;
-      border-color: #4a2020;
+      background: #3a1414;
+      border-color: #7a3030;
+      color: #ff9a8d;
     }
 
     [data-theme="dark"] .omr-inline-edit {
@@ -4615,7 +4616,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.04.3";
+    const APP_VERSION = "v26.06.04.4";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7948,6 +7949,20 @@
     }
 
     function showSuccess(id) {
+      // Record what was just placed so Manage Orders can confirm it shows up —
+      // and re-read if Google Sheets hasn't propagated the write yet. This kills
+      // the "I don't see my order → place it again → duplicate warning" loop.
+      try {
+        S.justPlaced = (S.justPlaced || []).filter(j => Date.now() - j.ts < 120000);
+        for (const date of (S.selectedDates || [])) {
+          ["Breakfast", "Lunch", "Dinner"].forEach(meal => {
+            const mObj = S.orders?.[date]?.[meal];
+            if (mObj && mObj.subtotal > 0) S.justPlaced.push({ date: String(date), meal, ts: Date.now() });
+          });
+        }
+        S._reloadRetries = 0;
+      } catch (e) {}
+
       // ── GA4 E-COMMERCE TRACKING (Monetisation) ──
       try {
         const gaItems = [];
@@ -8945,6 +8960,28 @@
       if (S.step === 3) renderStreakBanner("streakBannerMeals");
     }
 
+    // Read-after-write guard for Manage Orders. If an order the customer JUST
+    // placed isn't in the freshly-read list yet (Google Sheets write→read
+    // propagation lag), show a "syncing" note and re-fetch shortly. Prevents
+    // them thinking it failed and re-ordering (which triggers the dup warning).
+    function _checkJustPlacedSync(phone, upcomingWrap) {
+      const now = Date.now();
+      S.justPlaced = (S.justPlaced || []).filter(j => now - j.ts < 120000);
+      if (!S.justPlaced.length) { S._reloadRetries = 0; return; }
+      const list = S.existingOrders || [];
+      const missing = S.justPlaced.filter(j =>
+        !list.some(o => String(o.date) === String(j.date) && String(o.meal) === String(j.meal)));
+      if (!missing.length) { S._reloadRetries = 0; return; }
+      S._reloadRetries = S._reloadRetries || 0;
+      if (S._reloadRetries >= 4) return; // give up after ~6s — avoid endless retry
+      S._reloadRetries++;
+      if (upcomingWrap && !document.getElementById("syncNote")) {
+        upcomingWrap.insertAdjacentHTML("afterbegin",
+          '<div id="syncNote" style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.8rem;color:#8a6d00;text-align:center;font-weight:600;">⏳ Your latest order is being synced… this list will refresh in a moment.</div>');
+      }
+      setTimeout(() => loadExistingOrders(phone), 1500);
+    }
+
     async function loadExistingOrders(phone) {
       const upcomingWrap = $("manageOrdersList");
       const cancelledWrap = $("cancelledOrdersList");
@@ -9164,6 +9201,7 @@
           }).join("");
         }
         upcomingWrap.innerHTML = upcomingHeaderHtml + `<div id="upcomingContent" class="collapsible-content ${window.orderViewState.upcoming ? "open" : ""}">${upcomingRowsHtml}</div>`;
+        _checkJustPlacedSync(phone, upcomingWrap);
 
         // ── RENDER CANCELLED ──
         const cancelledHeaderHtml = `
