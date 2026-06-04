@@ -3188,6 +3188,14 @@
 
       <div class="pd-sep"></div>
 
+      <!-- App version status -->
+      <button type="button" class="pd-item" id="pdVersionItem" onclick="onVersionItemClick()">
+        <span class="pd-icon" id="pdVersionIcon">🔄</span>
+        <span class="pd-label" id="pdVersionLabel">Checking for updates…</span>
+      </button>
+
+      <div class="pd-sep"></div>
+
       <!-- Sign out -->
       <button type="button" class="pd-item pd-item-danger" onclick="closeProfileDrawer(); logoutCustomer();">
         <span class="pd-icon">🚪</span><span class="pd-label">Log out</span>
@@ -4603,7 +4611,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.03.4";
+    const APP_VERSION = "v26.06.03.5";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8159,8 +8167,50 @@
       const vEl = document.getElementById("profileDrawerVersion");
       if (vEl) vEl.textContent = (typeof APP_VERSION === "string" ? APP_VERSION : "v—");
     }
+    // ── App-version check (drawer) ───────────────────────────────
+    // Compares the running APP_VERSION against the freshly-fetched deployed
+    // file so customers can see if they're current and one-tap update.
+    let _updateAvailable = null; // null = unknown/error, false = current, true = update ready
+    async function checkAppVersion() {
+      const icon  = document.getElementById("pdVersionIcon");
+      const label = document.getElementById("pdVersionLabel");
+      if (label) label.textContent = "Checking for updates…";
+      if (icon)  icon.textContent  = "🔄";
+      try {
+        const res  = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+        const html = await res.text();
+        const m    = html.match(/const APP_VERSION = "([^"]+)"/);
+        const latest = m ? m[1] : null;
+        if (latest && latest !== APP_VERSION) {
+          _updateAvailable = true;
+          if (icon)  icon.textContent = "⬆️";
+          if (label) label.innerHTML  = `<strong style="color:#c0392b;">Update available</strong> — tap to refresh`;
+        } else {
+          _updateAvailable = false;
+          if (icon)  icon.textContent = "✅";
+          if (label) label.innerHTML  = `You're on the latest version`;
+        }
+      } catch (e) {
+        _updateAvailable = null;
+        if (icon)  icon.textContent = "📶";
+        if (label) label.textContent = "Couldn't check — tap to retry";
+      }
+    }
+    function onVersionItemClick() {
+      if (_updateAvailable === true) {
+        const base = window.location.href.split("#")[0];
+        const sep  = base.indexOf("?") === -1 ? "?" : "&";
+        window.location.replace(base + sep + "_v=" + Date.now());  // hard refresh to new build
+      } else if (_updateAvailable === null) {
+        checkAppVersion(); // retry after a failed check
+      } else {
+        toast("✓ You're already on the latest version");
+      }
+    }
+
     function openProfileDrawer() {
       _refreshProfileAvatar();
+      checkAppVersion();
       const overlay = document.getElementById("profileDrawerOverlay");
       const drawer  = document.getElementById("profileDrawer");
       if (!overlay || !drawer) return;
