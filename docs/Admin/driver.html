@@ -516,12 +516,17 @@ function setSyncBadge() {
 function renderAll(data) {
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const raw = ((data.meals || {})[meal] || []);
-    // Sort alphabetically by customer name within each group so drivers can
-    // scan the list faster. Undelivered first, then Delivered (alpha too).
+    // Undelivered (top): alphabetical by name — drivers scan the list faster.
+    // Delivered (bottom): by time delivered (most recent last) — a running log.
     const byName = (a, b) => String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity: "base" });
+    const byDeliveredTime = (a, b) => {
+      const ta = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
+      const tb = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
+      return ta - tb;
+    };
     const orders = [
       ...raw.filter(o => !o.deliveredAt).sort(byName),
-      ...raw.filter(o => o.deliveredAt).sort(byName)
+      ...raw.filter(o => o.deliveredAt).sort(byDeliveredTime)
     ];
     _ordersData[meal] = orders;
     document.getElementById("cnt_"+meal).textContent = orders.length;

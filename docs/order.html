@@ -207,7 +207,7 @@
       "name": "What payment methods are accepted?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "We accept UPI payments and Svaadh Wallet (prepaid credits for 1-tap instant ordering). Regular customers can also use On Account billing with daily, weekly, or monthly settlement."
+        "text": "We accept UPI payments and Svaadh Wallet (prepaid credits for 1-tap instant ordering). Regular customers can also use On Account billing with daily or monthly settlement."
       }
     },
     {
@@ -3169,6 +3169,9 @@
       <button type="button" class="pd-item" onclick="closeProfileDrawer(); showManageOrders();">
         <span class="pd-icon">🛒</span><span class="pd-label">Manage Orders</span>
       </button>
+      <button type="button" class="pd-item" id="pdBillItem" style="display:none;" onclick="closeProfileDrawer(); showOnAccountBillModal();">
+        <span class="pd-icon">🧾</span><span class="pd-label">My Bill <span id="pdBillBadge" style="font-size:0.7rem; color:#fff; font-weight:700; background:#dc2626; border-radius:99px; padding:1px 8px; margin-left:4px;">due</span></span>
+      </button>
       <button type="button" class="pd-item" onclick="closeProfileDrawer(); openWalletTxn();">
         <span class="pd-icon">💳</span><span class="pd-label">Wallet <span style="font-size:0.7rem; color:#888; font-weight:500;">(transactions)</span></span>
       </button>
@@ -4611,7 +4614,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.04.1";
+    const APP_VERSION = "v26.06.04.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5803,6 +5806,10 @@
         };
         S.walletBalance = wb;
         S.walletMode = true; // Everyone is on wallet/prepaid mode now
+
+        // Monthly On-Account customers: check for an unpaid previous-month bill
+        // and surface a skippable "settle your bill" modal (once per session).
+        maybeShowOnAccountBill();
 
         trackGA("login", {
           method: "PIN",
@@ -8037,6 +8044,145 @@
         overlay.remove();
         showManageOrders();
       });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ON-ACCOUNT MONTHLY BILL  (customer-facing, skippable)
+    // ═══════════════════════════════════════════════════════════
+    // Only Monthly On-Account customers with an unpaid previous-month
+    // balance see this. Daily customers are handled by admin from the
+    // backend; Weekly is retired. The bill clears automatically when the
+    // admin runs "Mark Collected" (orders flip out of On Account status).
+    async function maybeShowOnAccountBill() {
+      try {
+        if (!S.phone) return;
+        if (!(S.profile && S.profile.onAccount === "Yes" &&
+              String(S.profile.billingCycle || "").toLowerCase() === "monthly")) return;
+
+        const res = await apiFetch(
+          `${APPS_SCRIPT_URL}?action=getOnAccountBill&phone=${encodeURIComponent(S.phone)}&_t=${Date.now()}`,
+          {}, { silent: true });
+        const data = await res.json();
+        if (!data || !data.due) { S.onAccountBill = null; return; }
+
+        S.onAccountBill = data;
+
+        // Reveal the drawer "My Bill" entry so they can reopen any time.
+        const billItem = document.getElementById("pdBillItem");
+        if (billItem) billItem.style.display = "";
+
+        // Auto-open once per browser session per billing period (skippable —
+        // we don't nag on every reload).
+        const seenKey = `sk_bill_seen_${S.phone}_${data.periodLabel}`;
+        if (!sessionStorage.getItem(seenKey)) {
+          sessionStorage.setItem(seenKey, "1");
+          showOnAccountBillModal();
+        }
+      } catch (e) { /* non-blocking — bill is optional UX */ }
+    }
+
+    function showOnAccountBillModal() {
+      const data = S.onAccountBill;
+      if (!data || !data.due) { toast("No pending bill 🎉"); return; }
+
+      const ex = document.getElementById("onAccountBillModal");
+      if (ex) ex.remove();
+
+      const amt  = Number(data.total).toFixed(2);
+      const vpa  = "9819969682@hdfc";
+      const note = `Svaadh ${S.phone.slice(-4)}`;
+      const upiStr = `upi://pay?pa=${vpa}&am=${amt}&tn=${encodeURIComponent(note)}&cu=INR`;
+
+      const overlay = document.createElement("div");
+      overlay.id = "onAccountBillModal";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto;";
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:20px;max-width:420px;width:100%;padding:22px 20px;box-shadow:0 12px 40px rgba(0,0,0,0.3);max-height:92vh;overflow-y:auto;">' +
+          '<div style="text-align:center;">' +
+            '<div style="font-size:2.2rem;margin-bottom:4px;">🧾</div>' +
+            '<div style="font-size:1.15rem;font-weight:800;color:#0369a1;">Your monthly bill</div>' +
+            `<div style="font-size:0.8rem;color:#64748b;margin-top:2px;">${data.periodLabel} · ${data.orders.length} order${data.orders.length>1?'s':''}</div>` +
+          '</div>' +
+          '<div style="background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border-radius:14px;padding:16px;margin:14px 0;text-align:center;">' +
+            '<div style="font-size:0.72rem;opacity:0.85;text-transform:uppercase;letter-spacing:0.6px;">Amount due</div>' +
+            `<div style="font-size:2rem;font-weight:800;line-height:1.2;">₹${amt}</div>` +
+          '</div>' +
+          '<div style="text-align:center;font-size:0.8rem;color:#334e68;margin-bottom:8px;">Scan to pay via any UPI app</div>' +
+          '<div id="onAccountBillQr" style="width:fit-content;margin:0 auto 10px;border:4px solid #fff;box-shadow:0 4px 14px rgba(8,145,178,0.13);border-radius:12px;"></div>' +
+          `<div style="text-align:center;font-size:0.82rem;color:#0a2540;margin-bottom:4px;">UPI ID: <b>${vpa}</b></div>` +
+          `<div style="text-align:center;font-size:0.72rem;color:#888;margin-bottom:14px;">Payment note: ${note}</div>` +
+          '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:0.76rem;color:#92400e;line-height:1.5;margin-bottom:14px;">' +
+            '✅ <b>Already paid?</b> Please ignore this — we\'ll verify and update it from our end shortly.' +
+          '</div>' +
+          '<button id="onAccountBillPdfBtn" style="width:100%;padding:12px;border:1.5px solid #0284c7;border-radius:12px;background:#f0f9ff;color:#0369a1;font-size:0.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📄 View / Download bill (PDF)</button>' +
+          '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>' +
+        '</div>';
+
+      document.body.appendChild(overlay);
+
+      // QR
+      try {
+        new QRCode(document.getElementById("onAccountBillQr"),
+          { text: upiStr, width: 168, height: 168, correctLevel: QRCode.CorrectLevel.M });
+      } catch (e) {}
+
+      // Skippable: tapping the dim backdrop closes it too.
+      overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
+      document.getElementById("onAccountBillLaterBtn").addEventListener("click", function () { overlay.remove(); });
+      document.getElementById("onAccountBillPdfBtn").addEventListener("click", openOnAccountBillPdf);
+    }
+
+    function openOnAccountBillPdf() {
+      const data = S.onAccountBill;
+      if (!data || !data.due) return;
+
+      const MEAL_ICONS = { Breakfast: "🌅", Lunch: "☀️", Dinner: "🌙" };
+      const fmt = (ds) => {
+        const p = String(ds).split("-");
+        if (p.length !== 3) return ds;
+        const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+      };
+
+      let rows = "";
+      (data.orders || []).forEach(function (o) {
+        rows +=
+          '<tr>' +
+            `<td style="padding:7px 10px;border-bottom:1px solid #eee;">${fmt(o.date)}</td>` +
+            `<td style="padding:7px 10px;border-bottom:1px solid #eee;">${MEAL_ICONS[o.meal] || ""} ${o.meal}</td>` +
+            `<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;">₹${Number(o.net).toFixed(2)}</td>` +
+          '</tr>';
+      });
+
+      const html =
+        '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+        `<title>Svaadh Kitchen — Bill ${data.periodLabel}</title>` +
+        '<style>body{font-family:Arial,Helvetica,sans-serif;color:#1a252f;margin:0;padding:24px;}' +
+        '.wrap{max-width:640px;margin:0 auto;}h1{font-size:1.3rem;margin:0;color:#0369a1;}' +
+        'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:0.9rem;}' +
+        'th{text-align:left;padding:8px 10px;background:#f0f9ff;color:#0369a1;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.5px;}' +
+        '.tot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding:14px;background:#0369a1;color:#fff;border-radius:10px;font-size:1.05rem;font-weight:800;}' +
+        '.muted{color:#64748b;font-size:0.8rem;}@media print{.noprint{display:none;}}' +
+        '.btn{margin-top:18px;padding:12px 18px;border:none;border-radius:10px;background:#0284c7;color:#fff;font-weight:700;font-size:0.95rem;cursor:pointer;}</style></head><body><div class="wrap">' +
+        '<h1>🍱 Svaadh Kitchen</h1>' +
+        '<div class="muted">Home-style vegetarian meals · Hadapsar, Pune</div>' +
+        `<div style="margin-top:14px;font-weight:700;">Monthly Bill — ${data.periodLabel}</div>` +
+        `<div class="muted">${data.name || ""} · ${S.phone}</div>` +
+        `<div class="muted">Orders from ${fmt(data.fromDate)} to ${fmt(data.toDate)}</div>` +
+        '<table><thead><tr><th>Date</th><th>Meal</th><th style="text-align:right;">Amount</th></tr></thead><tbody>' +
+        rows +
+        '</tbody></table>' +
+        `<div class="tot"><span>Total due</span><span>₹${Number(data.total).toFixed(2)}</span></div>` +
+        '<div class="muted" style="margin-top:14px;">Pay via UPI: <b>9819969682@hdfc</b>. Already paid? Please ignore — we update on our end after verification.</div>' +
+        '<button class="btn noprint" onclick="window.print()">📄 Save as PDF / Print</button>' +
+        '</div></body></html>';
+
+      const w = window.open("", "_blank");
+      if (!w) { toast("Please allow pop-ups to view the bill PDF"); return; }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
     }
 
     function renderSuccessSummary() {

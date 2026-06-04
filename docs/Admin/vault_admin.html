@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.03.2">
+  <meta name="app-version" content="v26.06.04.1">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1829,11 +1829,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
       <!-- ════ PAGE: ON ACCOUNT BILLING ════ -->
       <div class="page" id="pageBilling">
         <div class="page-header">
-          <div class="page-title">📋 On Account Billing <small>Deferred payments — Daily, Weekly &amp; Monthly</small></div>
+          <div class="page-title">📋 On Account Billing <small>Deferred payments — Daily &amp; Monthly</small></div>
         </div>
         <div class="billing-cycle-nav">
           <button class="billing-cycle-tab active" id="billingTabDaily"   onclick="switchBillingTab('Daily')">📅 Daily</button>
-          <button class="billing-cycle-tab"         id="billingTabWeekly"  onclick="switchBillingTab('Weekly')">📆 Weekly</button>
           <button class="billing-cycle-tab"         id="billingTabMonthly" onclick="switchBillingTab('Monthly')">🗓️ Monthly</button>
         </div>
         
@@ -1842,11 +1841,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           <!-- Daily Filter: no date picker for Daily (shows all pending) -->
           <div id="bf_Daily" class="billing-filter-group" style="align-items:center;gap:10px;">
             <span style="font-size:.8rem;color:var(--muted);font-style:italic;">Showing all pending On Account orders</span>
-          </div>
-          <!-- Weekly Filter -->
-          <div id="bf_Weekly" class="billing-filter-group" style="display:none;">
-            <input type="date" id="bf_weekly_date" class="billing-input" onchange="loadBillingTab('Weekly')">
-            <span style="font-size: 0.75rem; color: var(--muted);">(Select any date in the week)</span>
           </div>
           <!-- Monthly Filter -->
           <div id="bf_Monthly" class="billing-filter-group" style="display:none;">
@@ -1960,7 +1954,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
                 <label style="display:block;font-size:0.75rem;font-weight:700;color:var(--muted);margin-bottom:6px;">Billing Cycle</label>
                 <select id="manualBillingCycle" class="billing-input" style="width:100%;">
                   <option value="Daily">📅 Daily</option>
-                  <option value="Weekly">📆 Weekly</option>
                   <option value="Monthly">🗓️ Monthly</option>
                 </select>
               </div>
@@ -2115,7 +2108,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.03.2";
+    const ADMIN_VERSION = "v26.06.04.1";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2400,9 +2393,7 @@ async function _pingGAS() {
 
 function initBillingFilters() {
   const ist = getIST();
-  const dateStr = toISO(ist);
   // Daily tab no longer needs a date filter (shows all pending orders)
-  if ($('bf_weekly_date')) $('bf_weekly_date').value = dateStr;
   if ($('bf_monthly_select')) $('bf_monthly_select').value = ist.getMonth();
 }
 
@@ -5133,10 +5124,9 @@ async function whitelistNewVIP() {
 async function toggleOnAccount(phone, status) {
   let cycle = "Daily";
   if (status) {
-    const choice = prompt("Select billing cycle:\n1: Daily\n2: Weekly\n3: Monthly", "1");
+    const choice = prompt("Select billing cycle:\n1: Daily\n2: Monthly", "1");
     if (!choice) return;
-    if (choice === "2") cycle = "Weekly";
-    else if (choice === "3") cycle = "Monthly";
+    if (choice === "2") cycle = "Monthly";
     else cycle = "Daily";
   }
 
@@ -5168,11 +5158,10 @@ async function whitelistOnAccount() {
   const phone = prompt("Enter the phone number to authorize for 'On Account':");
   if (!phone || phone.length < 10) return;
   
-  const choice = prompt("Select billing cycle:\n1: Daily\n2: Weekly\n3: Monthly", "1");
+  const choice = prompt("Select billing cycle:\n1: Daily\n2: Monthly", "1");
   if (!choice) return;
   let cycle = "Daily";
-  if (choice === "2") cycle = "Weekly";
-  else if (choice === "3") cycle = "Monthly";
+  if (choice === "2") cycle = "Monthly";
 
   if (!(await showUIConfirm(`Authorize ${phone} for 'On Account' payments (${cycle})? Even if they aren't registered yet, it will apply when they first login.`, "Manage On Account", "💳"))) return;
   
@@ -5571,7 +5560,7 @@ let _currentBillingCycle = 'Daily';
 
 function switchBillingTab(cycle) {
   _currentBillingCycle = cycle;
-  ['Daily','Weekly','Monthly'].forEach(c => {
+  ['Daily','Monthly'].forEach(c => {
     const el = document.getElementById(`billingTab${c}`);
     if (el) el.classList.toggle('active', c === cycle);
     const filter = document.getElementById(`bf_${c}`);
@@ -5586,8 +5575,7 @@ async function loadBillingTab(cycle) {
   
   let filterValue = '';
   // Daily no longer needs a date filter — shows all pending orders
-  if (cycle === 'Weekly') filterValue = $('bf_weekly_date').value;
-  else if (cycle === 'Monthly') filterValue = $('bf_monthly_select').value;
+  if (cycle === 'Monthly') filterValue = $('bf_monthly_select').value;
 
   content.innerHTML = `<div style="text-align:center;padding:32px;"><div class="spinner"></div><p style="font-size:.78rem;color:#888;margin-top:8px;">Loading ${cycle} billing data…</p></div>`;
   try {
@@ -5605,9 +5593,6 @@ async function loadBillingTab(cycle) {
         ? `📋 All pending On Account orders &nbsp;·&nbsp; <strong>${cnt}</strong> order${cnt!==1?'s':''} &nbsp;·&nbsp; Total due: <strong>₹${total.toFixed(2)}</strong>`
         : `📋 All pending On Account orders`;
       content.innerHTML = renderDailyFlatList(data.flat_orders || []);
-    } else if (cycle === 'Weekly') {
-      label.textContent = `📆 Week (Mon-Sat): ${fmtDate(data.from)} — ${fmtDate(data.to)}`;
-      content.innerHTML = renderBillingCards(data.customers, cycle);
     } else {
       label.textContent = `🗓️ Month: ${fmtDate(data.from)} — ${fmtDate(data.to)}`;
       content.innerHTML = renderBillingCards(data.customers, cycle);
@@ -5848,8 +5833,6 @@ function generateBillPDF(cust) {
   const addrParts = [cust.wing&&`Wing ${cust.wing}`,cust.flat&&`Flat ${cust.flat}`,cust.floor&&`${cust.floor} Floor`,cust.society,cust.area].filter(Boolean).join(', ');
   const cycleLabel = cust.billing_cycle === 'Daily'
     ? `Daily Bill — ${fmtDateFull(cust.from)}`
-    : cust.billing_cycle === 'Weekly'
-    ? `Weekly Bill — ${fmtDateFull(cust.from)} to ${fmtDateFull(cust.to)}`
     : `Monthly Bill — ${fmtDateFull(cust.from)} to ${fmtDateFull(cust.to)}`;
 
   const orderRows = orders.map(o => `

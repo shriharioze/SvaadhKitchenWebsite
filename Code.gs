@@ -330,7 +330,8 @@ function doGet(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(markOnAccount(p.phone, p.cycle, p.status));
     }
-    
+    if (action === "getOnAccountBill") return jsonRes(getOnAccountBill(p.phone));
+
     // KITCHEN & DRIVER ACCESS (Staff PIN ONLY)
     if (action === "getKitchenSummary") {
       if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
@@ -7257,21 +7258,8 @@ function getBillingData(cycle, filterValue) {
     const last  = new Date(now.getFullYear(), mIdx + 1, 0);
     fromStr = Utilities.formatDate(first, 'Asia/Kolkata', 'yyyy-MM-dd');
     toStr   = Utilities.formatDate(last, 'Asia/Kolkata', 'yyyy-MM-dd');
-  } else if (cycle === 'Weekly') {
-    // filterValue is a date string YYYY-MM-DD
-    let baseDate = parseYMD(filterValue) || now;
-    
-    // Find Monday of this week (Mon-Sat cycle)
-    const day = baseDate.getDay(); // 0=Sun, 1=Mon...
-    const diff = (day === 0 ? -6 : 1 - day); // Distance to Monday
-    const mon = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + diff);
-    
-    // Saturday is Monday + 5 days
-    const sat = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 5);
-    
-    fromStr = Utilities.formatDate(mon, 'Asia/Kolkata', 'yyyy-MM-dd');
-    toStr   = Utilities.formatDate(sat, 'Asia/Kolkata', 'yyyy-MM-dd');
   } else {
+    // Weekly billing retired — any non-Daily/Monthly falls back to "today".
     fromStr = Utilities.formatDate(now, 'Asia/Kolkata', 'yyyy-MM-dd');
     toStr   = fromStr;
   }
@@ -7364,6 +7352,88 @@ function getBillingData(cycle, filterValue) {
   }
 
   return { success: true, cycle, from: fromStr, to: toStr, customers, flat_orders };
+}
+
+// ── ON-ACCOUNT MONTHLY BILL (customer-facing) ────────────────────────
+// Returns the previous-month (plus any older carry-forward) UNPAID
+// On Account balance for a MONTHLY billing customer, so the order page
+// can surface a skippable "settle your bill" modal from the 1st onward.
+// Daily customers are handled by the admin from the backend → not surfaced.
+// Weekly is retired, so only "monthly" qualifies here.
+// "Paid" is implicit: when admin uses Mark Collected, those orders flip
+// out of "On Account" status and stop counting → the bill disappears.
+function getOnAccountBill(phone) {
+  try {
+    const phoneStr = _normalizePhone(phone);
+    if (!phoneStr) return { due: false };
+
+    const ss = getSpreadsheet();
+
+    // Resolve customer profile
+    const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+    const custs  = getAllRows(custWs);
+    let prof = null;
+    for (let i = 0; i < custs.length; i++) {
+      if (_normalizePhone(custs[i].Phone) === phoneStr) { prof = custs[i]; break; }
+    }
+    if (!prof) return { due: false };
+
+    const isOnAccount = String(prof.On_Account || "").trim().toLowerCase() === "yes";
+    const cycle       = String(prof.Billing_Cycle || "Daily").trim().toLowerCase();
+    if (!isOnAccount || cycle !== "monthly") return { due: false };
+
+    // Cutoff = first day of the current IST month. Anything strictly BEFORE
+    // this date that is still "On Account" is what the customer owes. This
+    // naturally surfaces last month's bill on the 1st and also catches any
+    // older carry-forward the admin hasn't collected yet.
+    const now    = getISTDate();
+    const cutoff = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), 'Asia/Kolkata', 'yyyy-MM-dd');
+
+    const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    const rows     = getAllRows(ordersWs);
+
+    const orders = [];
+    let total = 0;
+    let earliest = null;
+    rows.forEach(function (r) {
+      if (_normalizePhone(r.Phone) !== phoneStr) return;
+      if (String(r.Payment_Status || "").trim().toLowerCase() !== "on account") return;
+      const ds = r.Order_Date instanceof Date
+        ? Utilities.formatDate(r.Order_Date, 'Asia/Kolkata', 'yyyy-MM-dd')
+        : String(r.Order_Date).trim();
+      if (!ds || ds >= cutoff) return; // current month is not billed yet
+      const net = Number(r.Net_Total || 0);
+      total += net;
+      if (!earliest || ds < earliest) earliest = ds;
+      orders.push({
+        date:  ds,
+        meal:  String(r.Meal_Type || ""),
+        items: String(r.Items_JSON || "{}"),
+        net:   net
+      });
+    });
+
+    if (orders.length === 0 || total <= 0) return { due: false };
+
+    orders.sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+    const prevMonth   = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const periodLabel = Utilities.formatDate(prevMonth, 'Asia/Kolkata', 'MMMM yyyy');
+    const lastDayPrev = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 0), 'Asia/Kolkata', 'yyyy-MM-dd');
+
+    return {
+      due:         true,
+      phone:       phoneStr,
+      name:        prof.Customer_Name || "",
+      total:       Math.round(total * 100) / 100,
+      periodLabel: periodLabel,
+      fromDate:    earliest,
+      toDate:      lastDayPrev,
+      orders:      orders
+    };
+  } catch (e) {
+    return { due: false, error: String(e) };
+  }
 }
 
 function markBillingCollected(submissionIds) {
