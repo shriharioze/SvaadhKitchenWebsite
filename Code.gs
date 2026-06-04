@@ -5294,7 +5294,10 @@ function getCustomerHistory(phone) {
     return v instanceof Date ? Utilities.formatDate(v,"Asia/Kolkata","yyyy-MM-dd") : String(v).trim();
   };
 
-  var rows = getAllRows(ws).filter(function(r){return String(r.Phone||"").trim()===phone;});
+  // Live + archived (all-time) so a customer's older orders survive archiving.
+  var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  var rows = getOrdersInRangeWithArchive("2024-01-01", today)
+               .filter(function(r){return String(r.Phone||"").trim()===phone;});
 
   var orders = rows.map(function(r) {
     return {
@@ -5356,7 +5359,9 @@ function getDatePayments(date) {
     return v instanceof Date ? Utilities.formatDate(v,"Asia/Kolkata","yyyy-MM-dd") : String(v).trim();
   };
 
-  var rows = getAllRows(ws).filter(function(r){return fmtDate(r.Order_Date)===date && !_isOrderCancelled(r.Payment_Status);});
+  // Live + archived for this date (archive opened only if the date is archived).
+  var rows = getOrdersInRangeWithArchive(date, date)
+               .filter(function(r){return fmtDate(r.Order_Date)===date && !_isOrderCancelled(r.Payment_Status);});
 
   var map = {};
   rows.forEach(function(r) {
@@ -7350,7 +7355,7 @@ function getBillingData(cycle, filterValue) {
   const ss = getSpreadsheet();
   const ordersWs  = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const custWs    = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
-  const allOrders = getAllRows(ordersWs);
+  let   allOrders = getAllRows(ordersWs);
   const allCusts  = getAllRows(custWs);
 
   // Build customer map: phone → { billing_cycle, address, name }
@@ -7395,6 +7400,18 @@ function getBillingData(cycle, filterValue) {
     // Weekly billing retired — any non-Daily/Monthly falls back to "today".
     fromStr = Utilities.formatDate(now, 'Asia/Kolkata', 'yyyy-MM-dd');
     toStr   = fromStr;
+  }
+
+  // For Monthly, the selected month may already be archived — merge in archived
+  // orders for that range so the Billing tab still shows it. (Daily = current
+  // pending collection, stays live-only.)
+  if (cycle === 'Monthly' && fromStr && toStr) {
+    const seenIds = {};
+    allOrders.forEach(r => { const id = String(r.Submission_ID || '').trim(); if (id) seenIds[id] = true; });
+    _readArchivedOrdersInRange(fromStr, toStr).forEach(r => {
+      const id = String(r.Submission_ID || '').trim();
+      if (!id || !seenIds[id]) allOrders.push(r);
+    });
   }
 
   // Filter On Account orders within cycle date range

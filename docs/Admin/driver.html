@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.2">
+  <meta name="app-version" content="v26.06.04.3">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -326,7 +326,7 @@ function clearDriverSearch(meal) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.06.04.2";
+    const DRIVER_VERSION = "v26.06.04.3";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -574,7 +574,11 @@ async function rebuildRoute() {
     const res  = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=buildDeliveryRoute&days=30&pin=${D.sessionPin}&_t=${Date.now()}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Could not build route");
-    alert(`✅ Route updated — ${data.count} building-stops learned across meals.\nReloading the list in route order.`);
+    if (!data.count) {
+      alert("ℹ️ Nothing to learn yet.\n\nThe route is built from DELIVERED orders in the last 30 days that have a building/society name. Mark a few deliveries (in the order you actually stop), then tap this again.");
+    } else {
+      alert(`✅ Route updated — ${data.count} building-stops learned across meals.\nReloading the list in route order.`);
+    }
     await loadOrders();
   } catch (e) {
     alert("⚠️ " + e.message);
