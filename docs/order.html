@@ -3761,9 +3761,10 @@
           <div style="position:absolute;top:-18px;right:-18px;width:80px;height:80px;background:rgba(255,255,255,0.08);border-radius:50%;pointer-events:none;"></div>
           <div style="position:absolute;bottom:-22px;left:-22px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;pointer-events:none;"></div>
           <div style="font-size:0.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;opacity:0.8;margin-bottom:6px;">UPI Payment</div>
-          <div class="upi-amount" id="upiAmountDisplay" style="font-size:2.4rem;font-weight:900;letter-spacing:-1px;line-height:1;color:#fff;margin-bottom:12px;">₹0</div>
+          <div class="upi-amount" id="upiAmountDisplay" onclick="copyPayAmount('upiAmountDisplay')" title="Tap to copy amount" style="font-size:2.4rem;font-weight:900;letter-spacing:-1px;line-height:1;color:#fff;margin-bottom:6px;cursor:pointer;">₹0</div>
+          <div style="font-size:0.72rem;font-weight:700;color:#fff;opacity:0.9;margin-bottom:12px;">⌨️ Enter this exact amount in your UPI app · tap to copy</div>
           <div style="background:rgba(255,255,255,0.18);border-radius:20px;padding:6px 18px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;">
-            <span>📲</span><span>Scan · Tap · Pay</span>
+            <span>📲</span><span>Scan · Enter amount · Pay</span>
           </div>
         </div>
 
@@ -4614,7 +4615,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.04.2";
+    const APP_VERSION = "v26.06.04.3";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5056,6 +5057,28 @@
     // (e.g. some banks reject the primary intermittently). User must tap to copy.
     const UPI_VPA_BACKUP = "shriharioze07-1@okhdfcbank";
     function copyBackupUPI() { copyUPI(UPI_VPA_BACKUP); trackGA("upi_backup_id_copied"); }
+
+    // Generic clipboard copy with a custom toast (UPI ids in the bill modal, amounts).
+    function copyToClip(text, msg) {
+      text = String(text);
+      const done = () => toast(msg || "📋 Copied!", 3500);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => {
+          const el = document.createElement("input"); el.value = text; document.body.appendChild(el);
+          el.select(); document.execCommand("copy"); document.body.removeChild(el); done();
+        });
+      } else {
+        const el = document.createElement("input"); el.value = text; document.body.appendChild(el);
+        el.select(); document.execCommand("copy"); document.body.removeChild(el); done();
+      }
+    }
+    // QRs no longer pre-fill the amount, so let the customer copy the exact figure to type.
+    function copyPayAmount(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const num = String(el.textContent || "").replace(/[^\d.]/g, "");
+      if (num) copyToClip(num, `📋 Amount ₹${num} copied — enter this in your UPI app`);
+    }
 
     let _lastWalletSync = 0;
     async function syncWalletValue(force) {
@@ -7505,7 +7528,9 @@
       if ($(noteId)) $(noteId).textContent = note;
 
       const hdfcVpa = "9819969682@hdfc";
-      const qrUpiStr = `upi://pay?pa=${hdfcVpa}&am=${Number(amount).toFixed(2)}&tn=${encodeURIComponent(note)}&cu=INR`;
+      // No &am= — the customer enters the amount themselves so it always matches
+      // the actual total shown above (avoids any stale/underpaid amount on the QR).
+      const qrUpiStr = `upi://pay?pa=${hdfcVpa}&tn=${encodeURIComponent(note)}&cu=INR`;
 
       const qrEl = $(qid);
       qrEl.innerHTML = "";
@@ -7519,7 +7544,8 @@
     function setupSplitUPI(amount) {
       const hdfcVpa  = "9819969682@hdfc";
       const note     = `Svaadh ${S.phone.slice(-4)}`;
-      const qrUpiStr = `upi://pay?pa=${hdfcVpa}&am=${Number(amount).toFixed(2)}&tn=${encodeURIComponent(note)}&cu=INR`;
+      // No &am= — customer enters the amount themselves (always matches the shown total).
+      const qrUpiStr = `upi://pay?pa=${hdfcVpa}&tn=${encodeURIComponent(note)}&cu=INR`;
 
       ["splitUpiQrAmt","splitUpiAmtDisplay","splitUpiDeepLinkAmt"].forEach(id => {
         if ($(id)) $(id).textContent = amount;
@@ -8090,8 +8116,10 @@
 
       const amt  = Number(data.total).toFixed(2);
       const vpa  = "9819969682@hdfc";
+      const vpaBackup = UPI_VPA_BACKUP;
       const note = `Svaadh ${S.phone.slice(-4)}`;
-      const upiStr = `upi://pay?pa=${vpa}&am=${amt}&tn=${encodeURIComponent(note)}&cu=INR`;
+      // No &am= — customer enters the amount themselves so it always matches the bill.
+      const upiStr = `upi://pay?pa=${vpa}&tn=${encodeURIComponent(note)}&cu=INR`;
 
       const overlay = document.createElement("div");
       overlay.id = "onAccountBillModal";
@@ -8105,11 +8133,18 @@
           '</div>' +
           '<div style="background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border-radius:14px;padding:16px;margin:14px 0;text-align:center;">' +
             '<div style="font-size:0.72rem;opacity:0.85;text-transform:uppercase;letter-spacing:0.6px;">Amount due</div>' +
-            `<div style="font-size:2rem;font-weight:800;line-height:1.2;">₹${amt}</div>` +
+            `<div onclick="copyToClip('${amt}','📋 Amount ₹${amt} copied — enter this in your UPI app')" title="Tap to copy amount" style="font-size:2rem;font-weight:800;line-height:1.2;cursor:pointer;">₹${amt}</div>` +
+            '<div style="font-size:0.66rem;opacity:0.9;margin-top:2px;">⌨️ Enter this amount in your UPI app · tap to copy</div>' +
           '</div>' +
-          '<div style="text-align:center;font-size:0.8rem;color:#334e68;margin-bottom:8px;">Scan to pay via any UPI app</div>' +
+          '<div style="text-align:center;font-size:0.8rem;color:#334e68;margin-bottom:8px;">Scan to pay via any UPI app, then enter the amount above</div>' +
           '<div id="onAccountBillQr" style="width:fit-content;margin:0 auto 10px;border:4px solid #fff;box-shadow:0 4px 14px rgba(8,145,178,0.13);border-radius:12px;"></div>' +
-          `<div style="text-align:center;font-size:0.82rem;color:#0a2540;margin-bottom:4px;">UPI ID: <b>${vpa}</b></div>` +
+          `<div onclick="copyToClip('${vpa}','📋 UPI ID copied! Paste it in your payment app.')" title="Tap to copy UPI ID" style="cursor:pointer;text-align:center;font-weight:700;color:#0f766e;background:#ccfbf1;padding:6px 16px;border-radius:20px;display:block;width:fit-content;margin:0 auto 2px;font-size:0.85rem;">${vpa}</div>` +
+          '<div style="text-align:center;font-size:0.66rem;color:#94a3b8;margin-bottom:10px;">tap to copy</div>' +
+          '<div style="text-align:center;margin-bottom:12px;padding:8px 10px;background:#f9fafb;border:1px dashed #cbd5e1;border-radius:10px;">' +
+            '<div style="font-size:0.62rem;color:#64748b;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.2px;">Alternate UPI ID (Backup)</div>' +
+            `<div onclick="copyToClip('${vpaBackup}','📋 Backup UPI ID copied!')" title="Tap to copy backup UPI ID" style="cursor:pointer;font-weight:600;color:#475569;background:#fff;border:1px solid #e2e8f0;padding:4px 12px;border-radius:16px;display:inline-block;font-size:0.78rem;">${vpaBackup}</div>` +
+            '<div style="font-size:0.62rem;color:#94a3b8;margin-top:4px;">Use only if the primary UPI ID doesn\'t work</div>' +
+          '</div>' +
           `<div style="text-align:center;font-size:0.72rem;color:#888;margin-bottom:14px;">Payment note: ${note}</div>` +
           '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:0.76rem;color:#92400e;line-height:1.5;margin-bottom:14px;">' +
             '✅ <b>Already paid?</b> Please ignore this — we\'ll verify and update it from our end shortly.' +
