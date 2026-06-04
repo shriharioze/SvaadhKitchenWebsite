@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.05.25.1">
+  <meta name="app-version" content="v26.06.04.1">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -200,7 +200,9 @@
       <input type="date" id="datePicker" onchange="loadOrders()">
       <button class="load-btn" onclick="loadOrders()">↻ Refresh</button>
       <button class="export-btn" onclick="openExportModal()">⬇ Export</button>
+      <button class="export-btn" onclick="rebuildRoute()" title="Learn the best stop order from the last 30 days of deliveries">🧭 Optimize route</button>
     </div>
+    <div id="routeStatus" style="font-size:0.62rem;color:rgba(255,255,255,0.55);padding:2px 4px 0;"></div>
   </div>
 
   <!-- EXPORT MODAL -->
@@ -270,6 +272,9 @@ const KITCHEN = { lat: 18.5034868, lng: 73.9337571 };
 let D = { pin: "", sessionPin: "" };
 let _ordersData = { Breakfast: [], Lunch: [], Dinner: [] };
 let _pollTimer  = null;
+// Learned delivery route: { meal: { societyKey: rank } } — drives undelivered sort.
+let _deliveryRoute = {};
+let _routeUpdated  = "";
 let _routeDists = { Breakfast: null, Lunch: null, Dinner: null };
 // Per-meal search query — kept independent so searching in Lunch never
 // leaks into Breakfast/Dinner panels.
@@ -311,7 +316,7 @@ function clearDriverSearch(meal) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.05.25.1";
+    const DRIVER_VERSION = "v26.06.04.1";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -451,9 +456,20 @@ async function loadOrders() {
     document.getElementById("panel_"+m).innerHTML = `<div class="spinner"></div>`;
   });
   try {
-    const res  = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${date}&pin=${D.sessionPin}&_t=${Date.now()}`);
+    // Fetch orders + the learned delivery route together.
+    const [res, routeRes] = await Promise.all([
+      fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${date}&pin=${D.sessionPin}&_t=${Date.now()}`),
+      fetch(`${APPS_SCRIPT_URL}?action=getDeliveryRoute&pin=${D.sessionPin}&_t=${Date.now()}`).catch(() => null)
+    ]);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    if (routeRes) {
+      try {
+        const rd = await routeRes.json();
+        if (rd && rd.success) { _deliveryRoute = rd.route || {}; _routeUpdated = rd.updated || ""; }
+      } catch (e) {}
+    }
+    updateRouteStatus();
     renderAll(data);
     setSyncBadge();
     stopPoll(); startPoll();
@@ -512,20 +528,67 @@ function setSyncBadge() {
     `Synced ${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,"0")}`;
 }
 
+// ── DELIVERY ROUTE ──────────────────────────────────────────────────────────
+function updateRouteStatus() {
+  const el = document.getElementById("routeStatus");
+  if (!el) return;
+  const buildings = Object.keys((_deliveryRoute && _deliveryRoute.Lunch) || {}).length
+                 || Object.keys((_deliveryRoute && _deliveryRoute.Dinner) || {}).length;
+  el.textContent = _routeUpdated
+    ? `🧭 Route: ${buildings} building(s) · learned ${_routeUpdated}`
+    : `🧭 Route: not learned yet — tap "Optimize route" after a few days of deliveries`;
+}
+
+async function rebuildRoute() {
+  if (!confirm("Re-learn the delivery route from the last 30 days of your delivered orders?\n\nThis reads the order in which you marked deliveries and sorts each meal's stops by building. You can run this anytime.")) return;
+  sLoading(true, "Learning route from last 30 days…");
+  try {
+    const res  = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=buildDeliveryRoute&days=30&pin=${D.sessionPin}&_t=${Date.now()}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Could not build route");
+    alert(`✅ Route updated — ${data.count} building-stops learned across meals.\nReloading the list in route order.`);
+    await loadOrders();
+  } catch (e) {
+    alert("⚠️ " + e.message);
+  } finally {
+    sLoading(false);
+  }
+}
+
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function renderAll(data) {
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const raw = ((data.meals || {})[meal] || []);
-    // Undelivered (top): alphabetical by name — drivers scan the list faster.
-    // Delivered (bottom): by time delivered (most recent last) — a running log.
-    const byName = (a, b) => String(a.name||"").localeCompare(String(b.name||""), undefined, { sensitivity: "base" });
+    // Undelivered (top): by the LEARNED route order (society/building grouped in
+    //   the driver's preferred stop sequence). Buildings with no data yet sink to
+    //   the bottom, grouped alphabetically, until they earn a rank next rebuild.
+    //   Within a building: wing → flat → name.
+    // Delivered (bottom): by time delivered (oldest→newest) — a running log.
+    const routeMap = _deliveryRoute[meal] || {};
+    const socKey = (o) => String(o.society || o.area || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const routeRank = (o) => {
+      const r = routeMap[socKey(o)];
+      return (typeof r === "number" && r > 0) ? r : 9999; // unknown → bottom
+    };
+    const byRoute = (a, b) => {
+      const ra = routeRank(a), rb = routeRank(b);
+      if (ra !== rb) return ra - rb;
+      // Tie → keep buildings together (alphabetical society), then wing/flat/name.
+      const sa = socKey(a), sb = socKey(b);
+      if (sa !== sb) return sa.localeCompare(sb);
+      const wa = String(a.wing || "").toLowerCase(), wb = String(b.wing || "").toLowerCase();
+      if (wa !== wb) return wa.localeCompare(wb);
+      const fa = parseInt(a.flat, 10) || 0, fb = parseInt(b.flat, 10) || 0;
+      if (fa !== fb) return fa - fb;
+      return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+    };
     const byDeliveredTime = (a, b) => {
       const ta = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
       const tb = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
       return ta - tb;
     };
     const orders = [
-      ...raw.filter(o => !o.deliveredAt).sort(byName),
+      ...raw.filter(o => !o.deliveredAt).sort(byRoute),
       ...raw.filter(o => o.deliveredAt).sort(byDeliveredTime)
     ];
     _ordersData[meal] = orders;

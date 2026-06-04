@@ -341,6 +341,14 @@ function doGet(e) {
       if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
       return jsonRes(getDriverOrders(p.date));
     }
+    if (action === "getDeliveryRoute") {
+      if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
+      return jsonRes(getDeliveryRoute());
+    }
+    if (action === "buildDeliveryRoute") {
+      if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
+      return jsonRes(buildDeliveryRoute(p.days));
+    }
     if (action === "createDeliverySheet") {
       if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
       return jsonRes(createDeliverySheet(p.date, p.meal));
@@ -4308,6 +4316,9 @@ function getDriverOrders(date) {
       name:          String(r.Customer_Name || ""),
       phone:         String(r.Phone || ""),
       area:          area,
+      society:       String(r.Society || ""),
+      wing:          String(r.Wing || ""),
+      flat:          String(r.Flat || ""),
       address:       String(r.Full_Address || ""),
       landmark:      String(r.Landmark || ""),
       deliveryPoint: String(r.Delivery_Point || ""),
@@ -4324,6 +4335,126 @@ function getDriverOrders(date) {
 
 
   return {date: date, meals: meals};
+}
+
+// ════════════════════════════════════════════════════════════════════
+// DELIVERY ROUTE LEARNING
+// Learns the driver's preferred stop order from the sequence in which he
+// marks orders delivered (SK_Deliveries.Delivered_At timestamps), grouped
+// by Society/building, separately per meal. The driver page then sorts
+// undelivered orders by this learned order so deliveries follow his route.
+// ════════════════════════════════════════════════════════════════════
+
+// Canonical grouping key for an order row: Society, falling back to Area.
+function _routeSocietyKey(r) {
+  var s = String((r && (r.Society !== undefined ? r.Society : r.society)) || "").trim();
+  if (!s) s = String((r && (r.Area !== undefined ? r.Area : r.area)) || "").trim();
+  return s.toLowerCase().replace(/\s+/g, " ");
+}
+
+// Rebuild the SK_Delivery_Route config from the last `days` (default 30) of
+// delivered orders. Non-destructive to orders; only rewrites the route tab.
+function buildDeliveryRoute(days) {
+  try {
+    days = Number(days) > 0 ? Number(days) : 30;
+    var ss = getSpreadsheet();
+    var ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    var delWs    = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID", "Delivered_At", "EnRoute_At"]);
+
+    // submissionId → deliveredAt (ms)
+    var delMap = {};
+    getAllRows(delWs).forEach(function (d) {
+      var sid = String(d.Submission_ID || "").trim();
+      var da  = d.Delivered_At;
+      if (!sid || !da) return;
+      var ms = (da instanceof Date) ? da.getTime() : new Date(da).getTime();
+      if (!isNaN(ms)) delMap[sid] = ms;
+    });
+
+    var now      = getISTDate();
+    var cutoffMs = now.getTime() - days * 86400000;
+
+    // meal → orderDate → [{ soc, t }]
+    var byMealDay = {};
+    getAllRows(ordersWs).forEach(function (r) {
+      var sid = String(r.Submission_ID || "").trim();
+      var t   = delMap[sid];
+      if (!t || t < cutoffMs) return;
+      if (_isOrderCancelled(r.Payment_Status)) return;
+      var meal = String(r.Meal_Type || "").trim();
+      if (!meal) return;
+      var soc = _routeSocietyKey(r);
+      if (!soc) return;
+      var od = (r.Order_Date instanceof Date)
+        ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(r.Order_Date).trim();
+      byMealDay[meal] = byMealDay[meal] || {};
+      byMealDay[meal][od] = byMealDay[meal][od] || [];
+      byMealDay[meal][od].push({ soc: soc, t: t });
+    });
+
+    var routeRows = [];
+    Object.keys(byMealDay).forEach(function (meal) {
+      var posAcc = {}; // soc → [normalized positions 0..1]
+      var daysObj = byMealDay[meal];
+      Object.keys(daysObj).forEach(function (od) {
+        var list = daysObj[od].slice().sort(function (a, b) { return a.t - b.t; });
+        var n = list.length;
+        // First occurrence position per society that day (dedupe repeats).
+        var seen = {};
+        list.forEach(function (item, idx) {
+          if (seen[item.soc] === undefined) seen[item.soc] = (n > 1) ? idx / (n - 1) : 0;
+        });
+        Object.keys(seen).forEach(function (soc) {
+          (posAcc[soc] = posAcc[soc] || []).push(seen[soc]);
+        });
+      });
+      var stats = Object.keys(posAcc).map(function (soc) {
+        var arr = posAcc[soc].slice().sort(function (a, b) { return a - b; });
+        var mid = Math.floor(arr.length / 2);
+        var med = (arr.length % 2) ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
+        return { soc: soc, med: med, samples: arr.length };
+      });
+      // Earlier median position → earlier in route. Ties: more samples first.
+      stats.sort(function (a, b) { return (a.med - b.med) || (b.samples - a.samples); });
+      stats.forEach(function (s, i) {
+        routeRows.push([meal, s.soc, i + 1, Math.round(s.med * 1000) / 1000, s.samples]);
+      });
+    });
+
+    var headers = ["Meal", "Society", "Rank", "Avg_Position", "Samples", "Updated"];
+    var ws = getOrCreateTab(ss, "SK_Delivery_Route", headers);
+    if (ws.getLastRow() > 1) ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).clearContent();
+    var stamp = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd HH:mm");
+    var out = routeRows.map(function (row) { return row.concat([stamp]); });
+    if (out.length) ws.getRange(2, 1, out.length, headers.length).setValues(out);
+
+    return { success: true, days: days, count: out.length, updated: stamp };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
+// Returns the learned route as { meal: { societyKey: rank } } for the driver page.
+function getDeliveryRoute() {
+  try {
+    var ss = getSpreadsheet();
+    var ws = getOrCreateTab(ss, "SK_Delivery_Route", ["Meal", "Society", "Rank", "Avg_Position", "Samples", "Updated"]);
+    var map = {};
+    var updated = "";
+    getAllRows(ws).forEach(function (r) {
+      var meal = String(r.Meal || "").trim();
+      var soc  = String(r.Society || "").trim().toLowerCase().replace(/\s+/g, " ");
+      var rank = Number(r.Rank || 0);
+      if (!meal || !soc || !rank) return;
+      map[meal] = map[meal] || {};
+      map[meal][soc] = rank;
+      if (r.Updated) updated = String(r.Updated);
+    });
+    return { success: true, route: map, updated: updated };
+  } catch (e) {
+    return { success: false, route: {}, error: String(e) };
+  }
 }
 
 /**
