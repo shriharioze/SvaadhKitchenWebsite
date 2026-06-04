@@ -4352,6 +4352,11 @@ function _routeSocietyKey(r) {
   return s.toLowerCase().replace(/\s+/g, " ");
 }
 
+// Each meal stores its learned route in its OWN tab, since the driver can take a
+// different route for Breakfast vs Lunch vs Dinner.
+var ROUTE_MEALS = ["Breakfast", "Lunch", "Dinner"];
+function _routeTabName(meal) { return "SK_Delivery_Route_" + meal; }
+
 // Rebuild the SK_Delivery_Route config from the last `days` (default 30) of
 // delivered orders. Non-destructive to orders; only rewrites the route tab.
 function buildDeliveryRoute(days) {
@@ -4393,7 +4398,8 @@ function buildDeliveryRoute(days) {
       byMealDay[meal][od].push({ soc: soc, t: t });
     });
 
-    var routeRows = [];
+    // Per-meal rows: meal → [ [Society, Rank, Avg_Position, Samples], ... ]
+    var byMealRows = {};
     Object.keys(byMealDay).forEach(function (meal) {
       var posAcc = {}; // soc → [normalized positions 0..1]
       var daysObj = byMealDay[meal];
@@ -4417,39 +4423,52 @@ function buildDeliveryRoute(days) {
       });
       // Earlier median position → earlier in route. Ties: more samples first.
       stats.sort(function (a, b) { return (a.med - b.med) || (b.samples - a.samples); });
-      stats.forEach(function (s, i) {
-        routeRows.push([meal, s.soc, i + 1, Math.round(s.med * 1000) / 1000, s.samples]);
+      byMealRows[meal] = stats.map(function (s, i) {
+        return [s.soc, i + 1, Math.round(s.med * 1000) / 1000, s.samples];
       });
     });
 
-    var headers = ["Meal", "Society", "Rank", "Avg_Position", "Samples", "Updated"];
-    var ws = getOrCreateTab(ss, "SK_Delivery_Route", headers);
-    if (ws.getLastRow() > 1) ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).clearContent();
+    // Write each meal to ITS OWN tab (SK_Delivery_Route_Breakfast/_Lunch/_Dinner).
+    // One common rebuild, but stored & retrieved per meal type. Empty meals are
+    // cleared too, so a meal with no recent deliveries shows a blank tab.
+    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated"];
     var stamp = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd HH:mm");
-    var out = routeRows.map(function (row) { return row.concat([stamp]); });
-    if (out.length) ws.getRange(2, 1, out.length, headers.length).setValues(out);
+    var total = 0;
+    var perMeal = {};
+    ROUTE_MEALS.forEach(function (meal) {
+      var ws = getOrCreateTab(ss, _routeTabName(meal), headers);
+      if (ws.getLastRow() > 1) ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).clearContent();
+      var rows = byMealRows[meal] || [];
+      var out = rows.map(function (row) { return row.concat([stamp]); });
+      if (out.length) ws.getRange(2, 1, out.length, headers.length).setValues(out);
+      total += out.length;
+      perMeal[meal] = out.length;
+    });
 
-    return { success: true, days: days, count: out.length, updated: stamp };
+    return { success: true, days: days, count: total, perMeal: perMeal, updated: stamp };
   } catch (e) {
     return { success: false, error: String(e) };
   }
 }
 
-// Returns the learned route as { meal: { societyKey: rank } } for the driver page.
+// Returns the learned route as { meal: { societyKey: rank } } for the driver page,
+// reading each meal from its own per-meal tab.
 function getDeliveryRoute() {
   try {
     var ss = getSpreadsheet();
-    var ws = getOrCreateTab(ss, "SK_Delivery_Route", ["Meal", "Society", "Rank", "Avg_Position", "Samples", "Updated"]);
+    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated"];
     var map = {};
     var updated = "";
-    getAllRows(ws).forEach(function (r) {
-      var meal = String(r.Meal || "").trim();
-      var soc  = String(r.Society || "").trim().toLowerCase().replace(/\s+/g, " ");
-      var rank = Number(r.Rank || 0);
-      if (!meal || !soc || !rank) return;
-      map[meal] = map[meal] || {};
-      map[meal][soc] = rank;
-      if (r.Updated) updated = String(r.Updated);
+    ROUTE_MEALS.forEach(function (meal) {
+      var ws = getOrCreateTab(ss, _routeTabName(meal), headers);
+      map[meal] = {};
+      getAllRows(ws).forEach(function (r) {
+        var soc  = String(r.Society || "").trim().toLowerCase().replace(/\s+/g, " ");
+        var rank = Number(r.Rank || 0);
+        if (!soc || !rank) return;
+        map[meal][soc] = rank;
+        if (r.Updated) updated = String(r.Updated);
+      });
     });
     return { success: true, route: map, updated: updated };
   } catch (e) {
