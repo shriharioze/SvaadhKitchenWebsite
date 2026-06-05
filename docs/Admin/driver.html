@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.5">
+  <meta name="app-version" content="v26.06.04.6">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -326,7 +326,7 @@ function clearDriverSearch(meal) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.06.04.5";
+    const DRIVER_VERSION = "v26.06.04.6";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -763,7 +763,7 @@ function renderCard(o, i, meal) {
   const hasMap      = o.maps && o.maps.startsWith("http");
   const hasPhone    = o.phone && o.phone.length >= 10;
   const isDelivered = !!o.deliveredAt;
-  const waText      = encodeURIComponent(`✅ Hi ${o.name}! Your ${meal} has been delivered. Thank you! 🙏`);
+  const waText      = encodeURIComponent(`✅ Hi ${o.name}! Your ${meal} has been delivered. 🙏 If you don't see it at your door, please check the bag kept outside — that's where we place it. 🛍️ (Keeping a bag out helps us deliver everyone's meals faster!) Thank you!`);
   const waNum       = hasPhone ? "91" + o.phone.replace(/\D/g,"").slice(-10) : "";
 
   // ── DYNAMIC ADDRESS OVERRIDE ──
