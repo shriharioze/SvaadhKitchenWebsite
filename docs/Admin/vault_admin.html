@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.1">
+  <meta name="app-version" content="v26.06.04.2">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -899,6 +899,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
       <button class="topbar-btn" id="navManual" onclick="switchPage('manual')">➕ Manual Entry</button>
       <button class="topbar-btn" id="navBilling" onclick="switchPage('billing')">📋 On Account Billing</button>
       <button class="topbar-btn" id="navReconcile" onclick="switchPage('reconcile')">🏦 Reconciliation</button>
+      <button class="topbar-btn" id="navAttendance" onclick="switchPage('attendance')">🧑‍🍳 Attendance</button>
     </div>
     <div class="topbar-right">
       <button id="darkToggleBtn" onclick="toggleDarkMode()" title="Toggle dark mode" style="margin-right:6px;font-size:1rem;background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:inherit;opacity:0.8;">🌙</button>
@@ -1857,6 +1858,25 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
         <div id="billingContent"><p class="billing-empty">Select a tab above to load billing data.</p></div>
       </div><!-- /pageBilling -->
 
+      <!-- PAGE: ATTENDANCE & SALARY -->
+      <div class="page" id="pageAttendance">
+        <div class="page-header">
+          <div class="page-title">🧑‍🍳 Staff Attendance &amp; Salary <small>auto-present · mark leaves · incentives · pay alerts</small></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+          <label style="font-size:0.8rem;color:var(--muted);font-weight:700;">Month
+            <input type="month" id="attMonth" onchange="loadAttendance()" style="margin-left:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;">
+          </label>
+          <label style="font-size:0.8rem;color:var(--muted);font-weight:700;">Staff
+            <select id="attStaffFilter" onchange="renderAttendance()" style="margin-left:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;"><option value="">All staff</option></select>
+          </label>
+          <button onclick="loadAttendance()" style="padding:7px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-weight:700;cursor:pointer;">↻ Refresh</button>
+        </div>
+        <div id="attAlerts"></div>
+        <div id="attToday"></div>
+        <div id="attTable"></div>
+      </div><!-- /pageAttendance -->
+
       <!-- PAGE: RECONCILIATION -->
       <div class="page" id="pageReconcile">
         <div class="page-header">
@@ -2108,7 +2128,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.04.1";
+    const ADMIN_VERSION = "v26.06.04.2";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2395,6 +2415,131 @@ function initBillingFilters() {
   const ist = getIST();
   // Daily tab no longer needs a date filter (shows all pending orders)
   if ($('bf_monthly_select')) $('bf_monthly_select').value = ist.getMonth();
+}
+
+// ════════════════════════════════════════════════════════
+// STAFF ATTENDANCE & SALARY
+// ════════════════════════════════════════════════════════
+let _attData = null;
+const _attInr = n => "₹" + Number(n || 0).toLocaleString('en-IN');
+
+async function loadAttendance() {
+  const mEl = document.getElementById("attMonth");
+  if (!mEl.value) { const n = getIST(); mEl.value = n.getUTCFullYear() + "-" + String(n.getUTCMonth() + 1).padStart(2, "0"); }
+  document.getElementById("attAlerts").innerHTML = "";
+  document.getElementById("attToday").innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner"></div></div>`;
+  document.getElementById("attTable").innerHTML = "";
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "getAttendanceData", pin: S.sessionPin, month: mEl.value }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed to load");
+    _attData = data;
+    const sf = document.getElementById("attStaffFilter");
+    const cur = sf.value;
+    sf.innerHTML = '<option value="">All staff</option>' + data.staff.map(s => `<option value="${s.name}">${s.name}</option>`).join("");
+    sf.value = cur;
+    renderAttendance();
+  } catch (e) {
+    document.getElementById("attToday").innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${e.message}</p>`;
+  }
+}
+
+function renderAttendance() {
+  if (!_attData) return;
+  const d = _attData;
+  const filter = document.getElementById("attStaffFilter").value;
+  const list = d.staff.filter(s => !filter || s.name === filter);
+
+  // ── Salary alerts ──
+  let aHtml;
+  if (d.alerts.length) {
+    aHtml = d.alerts.filter(a => !filter || a.name === filter).map(a => `
+      <div style="background:linear-gradient(135deg,#fff8e1,#ffecb3);border:1px solid #ffd54f;border-radius:12px;padding:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:800;color:#e65100;font-size:0.95rem;">💰 Credit ${_attInr(a.amount)} to ${a.name}</div>
+          <div style="font-size:0.72rem;color:#8a6d00;margin-top:2px;">${a.label} · base ${_attInr(a.base)}${a.deduction ? ` − leave deduct ${_attInr(a.deduction)}` : ""}${a.incentive ? ` + incentive ${_attInr(a.incentive)}` : ""}</div>
+        </div>
+        <button onclick="markCredited('${a.name.replace(/'/g,"\\'")}','${a.period}',${a.amount})" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;white-space:nowrap;">✓ Mark Credited</button>
+      </div>`).join("");
+  }
+  document.getElementById("attAlerts").innerHTML = (aHtml && aHtml.trim())
+    ? `<div style="margin-bottom:16px;">${aHtml}</div>`
+    : `<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:0.82rem;color:#2e7d32;">✅ No salary/wage due right now.</div>`;
+
+  // ── Today's roster ──
+  let tHtml = `<div style="font-weight:700;margin:6px 0 10px;font-size:0.9rem;color:var(--text,#1a252f);">📋 Today · ${d.today} — auto-present; tap to mark leave or add incentive</div>`;
+  list.forEach(s => {
+    const present = s.present_today;
+    tHtml += `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:12px 14px;margin-bottom:8px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700;">${s.name} <span style="font-size:0.66rem;color:#888;font-weight:500;">(${s.type === "daily" ? "daily wage" : "monthly"})</span></div>
+          <div style="font-size:0.72rem;margin-top:2px;">${present ? '<span style="color:#2e7d32;font-weight:700;">● Present</span>' : '<span style="color:#c62828;font-weight:700;">● Absent (leave)</span>'}${s.today_incentive ? ` · <span style="color:#5b21b6;font-weight:700;">incentive ${_attInr(s.today_incentive)}</span>` : ""}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="toggleAbsent('${s.name.replace(/'/g,"\\'")}',${present})" style="border:1px solid ${present ? '#ef9a9a' : '#a5d6a7'};background:${present ? '#fff5f5' : '#f1f8e9'};color:${present ? '#c62828' : '#2e7d32'};border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">${present ? 'Mark Absent' : 'Mark Present'}</button>
+          <button onclick="addIncentivePrompt('${s.name.replace(/'/g,"\\'")}')" style="border:1px solid #b39ddb;background:#f5f0ff;color:#5b21b6;border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">+ Incentive</button>
+        </div>
+      </div>`;
+  });
+  document.getElementById("attToday").innerHTML = tHtml;
+
+  // ── Monthly summary table ──
+  const rows = list.map(s => {
+    const daily = s.type === "daily";
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);font-weight:600;">${s.name}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);">${daily ? "Daily wage" : _attInr(s.monthly_salary)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;">${daily ? "Sat (weekly)" : s.pay_day}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;">${s.leave_days || 0}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;">${daily ? "—" : _attInr(s.per_day)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;color:#c62828;">${s.deduction ? ("−" + _attInr(s.deduction)) : "—"}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;color:#2e7d32;">${s.incentive_total ? ("+" + _attInr(s.incentive_total)) : "—"}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;font-weight:800;">${_attInr(s.net_salary)}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("attTable").innerHTML = `
+    <div style="font-weight:700;margin:18px 0 8px;font-size:0.9rem;color:var(--text,#1a252f);">🗓️ ${d.month} summary <span style="font-size:0.7rem;color:#888;font-weight:500;">(${d.days_in_month} days)</span></div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.4px;">
+        <th style="padding:8px 10px;">Staff</th><th style="padding:8px 10px;">Base</th><th style="padding:8px 10px;text-align:center;">Pay day</th>
+        <th style="padding:8px 10px;text-align:center;">Leaves</th><th style="padding:8px 10px;text-align:right;">Per day</th>
+        <th style="padding:8px 10px;text-align:right;">Deduction</th><th style="padding:8px 10px;text-align:right;">Incentive</th><th style="padding:8px 10px;text-align:right;">Net pay</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="font-size:0.7rem;color:#888;margin-top:8px;line-height:1.5;">Monthly: per-day = salary ÷ ${d.days_in_month}; each non-Sunday leave deducts one per-day. &nbsp;|&nbsp; Abhijeet (daily): weekday ₹700 · Saturday ₹600 · Sunday off, paid weekly. Net = month-to-date earned + incentive.</div>`;
+}
+
+async function toggleAbsent(name, present) {
+  if (present && !(await showUIConfirm(`Mark ${name} ABSENT (on leave) for today (${_attData.today})?`, "Mark Absent", "🚫"))) return;
+  await _attPost("markAttendance", { name, date: _attData.today, status: present ? "Absent" : "Present" });
+}
+
+async function addIncentivePrompt(name) {
+  const amt = prompt(`Incentive amount for ${name} today (${_attData.today}):`, "");
+  if (amt === null) return;
+  const a = Number(amt);
+  if (isNaN(a) || a < 0) { sAlert("Please enter a valid amount."); return; }
+  const note = prompt("Note for this incentive (optional):", "") || "";
+  await _attPost("addIncentive", { name, date: _attData.today, amount: a, note });
+}
+
+async function markCredited(name, period, amount) {
+  if (!(await showUIConfirm(`Mark ${_attInr(amount)} as CREDITED to ${name}?\nThis just records that you've paid it and clears the alert — it does not move any money.`, "Mark Credited", "💰"))) return;
+  await _attPost("markSalaryCredited", { name, period, amount });
+}
+
+async function _attPost(action, extra) {
+  sLoading(true, "Updating attendance...");
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: action, pin: S.sessionPin, ...extra }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed");
+    await loadAttendance();
+  } catch (e) {
+    sAlert("Error: " + e.message);
+  } finally {
+    sLoading(false);
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -3190,6 +3335,7 @@ async function switchPage(page) {
   document.getElementById("pageBilling").classList.toggle("on", page==="billing");
   document.getElementById("pageManual").classList.toggle("on", page==="manual");
   document.getElementById("pageReconcile").classList.toggle("on", page==="reconcile");
+  document.getElementById("pageAttendance").classList.toggle("on", page==="attendance");
   document.getElementById("navMenu").classList.toggle("active", page==="menu");
   document.getElementById("navManage").classList.toggle("active", page==="manage");
   document.getElementById("navOrders").classList.toggle("active", page==="orders");
@@ -3206,7 +3352,9 @@ async function switchPage(page) {
   document.getElementById("navManual").classList.toggle("active", page==="manual");
   document.getElementById("navBilling").classList.toggle("active", page==="billing");
   document.getElementById("navReconcile").classList.toggle("active", page==="reconcile");
-  
+  document.getElementById("navAttendance").classList.toggle("active", page==="attendance");
+
+  if (page==="attendance") loadAttendance();
   if (page==="billing") switchBillingTab('Daily');
   if (page==="approvals") {
     refreshApprovalCounts();
