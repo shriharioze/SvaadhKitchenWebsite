@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.3">
+  <meta name="app-version" content="v26.06.04.4">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1864,8 +1864,8 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           <div class="page-title">🧑‍🍳 Staff Attendance &amp; Salary <small>auto-present · mark leaves · incentives · pay alerts</small></div>
         </div>
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-          <label style="font-size:0.8rem;color:var(--muted);font-weight:700;">Month
-            <input type="month" id="attMonth" onchange="loadAttendance()" style="margin-left:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;">
+          <label style="font-size:0.8rem;color:var(--muted);font-weight:700;">Date
+            <input type="date" id="attDate" onchange="loadAttendance()" style="margin-left:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;">
           </label>
           <label style="font-size:0.8rem;color:var(--muted);font-weight:700;">Staff
             <select id="attStaffFilter" onchange="renderAttendance()" style="margin-left:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;"><option value="">All staff</option></select>
@@ -2128,7 +2128,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.04.3";
+    const ADMIN_VERSION = "v26.06.04.4";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2424,13 +2424,13 @@ let _attData = null;
 const _attInr = n => "₹" + Number(n || 0).toLocaleString('en-IN');
 
 async function loadAttendance() {
-  const mEl = document.getElementById("attMonth");
-  if (!mEl.value) { const n = getIST(); mEl.value = n.getUTCFullYear() + "-" + String(n.getUTCMonth() + 1).padStart(2, "0"); }
+  const dEl = document.getElementById("attDate");
+  if (!dEl.value) { dEl.value = toISO(getIST()); }
   document.getElementById("attAlerts").innerHTML = "";
   document.getElementById("attToday").innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner"></div></div>`;
   document.getElementById("attTable").innerHTML = "";
   try {
-    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "getAttendanceData", pin: S.sessionPin, month: mEl.value }) });
+    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "getAttendanceData", pin: S.sessionPin, date: dEl.value }) });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed to load");
     _attData = data;
@@ -2467,14 +2467,14 @@ function renderAttendance() {
     : `<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:0.82rem;color:#2e7d32;">✅ No salary/wage due right now.</div>`;
 
   // ── Today's roster ──
-  let tHtml = `<div style="font-weight:700;margin:6px 0 10px;font-size:0.9rem;color:var(--text,#1a252f);">📋 Today · ${d.today} — auto-present; tap to mark leave or add incentive</div>`;
+  let tHtml = `<div style="font-weight:700;margin:6px 0 10px;font-size:0.9rem;color:var(--text,#1a252f);">📋 ${d.roster_date}${d.roster_date === d.today ? ' (today)' : ''} — auto-present; tap to mark leave or add incentive</div>`;
   list.forEach(s => {
-    const present = s.present_today;
+    const present = s.present_sel;
     tHtml += `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:12px 14px;margin-bottom:8px;flex-wrap:wrap;">
         <div>
           <div style="font-weight:700;">${s.name} <span style="font-size:0.66rem;color:#888;font-weight:500;">(${s.type === "daily" ? "daily wage" : "monthly"})</span></div>
-          <div style="font-size:0.72rem;margin-top:2px;">${present ? '<span style="color:#2e7d32;font-weight:700;">● Present</span>' : '<span style="color:#c62828;font-weight:700;">● Absent (leave)</span>'}${s.today_incentive ? ` · <span style="color:#5b21b6;font-weight:700;">incentive ${_attInr(s.today_incentive)}</span>` : ""}</div>
+          <div style="font-size:0.72rem;margin-top:2px;">${present ? '<span style="color:#2e7d32;font-weight:700;">● Present</span>' : '<span style="color:#c62828;font-weight:700;">● Absent (leave)</span>'}${s.sel_incentive ? ` · <span style="color:#5b21b6;font-weight:700;">incentive ${_attInr(s.sel_incentive)}</span>` : ""}</div>
         </div>
         <div style="display:flex;gap:6px;">
           <button onclick="toggleAbsent('${s.name.replace(/'/g,"\\'")}',${present})" style="border:1px solid ${present ? '#ef9a9a' : '#a5d6a7'};background:${present ? '#fff5f5' : '#f1f8e9'};color:${present ? '#c62828' : '#2e7d32'};border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">${present ? 'Mark Absent' : 'Mark Present'}</button>
@@ -2511,17 +2511,17 @@ function renderAttendance() {
 }
 
 async function toggleAbsent(name, present) {
-  if (present && !(await showUIConfirm(`Mark ${name} ABSENT (on leave) for today (${_attData.today})?`, "Mark Absent", "🚫"))) return;
-  await _attPost("markAttendance", { name, date: _attData.today, status: present ? "Absent" : "Present" });
+  if (present && !(await showUIConfirm(`Mark ${name} ABSENT (on leave) for ${_attData.roster_date}?`, "Mark Absent", "🚫"))) return;
+  await _attPost("markAttendance", { name, date: _attData.roster_date, status: present ? "Absent" : "Present" });
 }
 
 async function addIncentivePrompt(name) {
-  const amt = prompt(`Incentive amount for ${name} today (${_attData.today}):`, "");
+  const amt = prompt(`Incentive amount for ${name} on ${_attData.roster_date}:`, "");
   if (amt === null) return;
   const a = Number(amt);
   if (isNaN(a) || a < 0) { sAlert("Please enter a valid amount."); return; }
   const note = prompt("Note for this incentive (optional):", "") || "";
-  await _attPost("addIncentive", { name, date: _attData.today, amount: a, note });
+  await _attPost("addIncentive", { name, date: _attData.roster_date, amount: a, note });
 }
 
 async function markCredited(name, period, amount) {

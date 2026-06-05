@@ -697,7 +697,7 @@ function doPost(e) {
     }
     if (action === "getAttendanceData") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
-      return jsonRes(getAttendanceData(body.month));
+      return jsonRes(getAttendanceData(body.month, body.date));
     }
     if (action === "markAttendance") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
@@ -4564,7 +4564,7 @@ function _attPad(n) { return (n < 10 ? "0" : "") + n; }
 function _attDateStr(v) { return v instanceof Date ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd") : String(v || "").trim(); }
 function _attDow(ds) { return new Date(ds + "T12:00:00+05:30").getDay(); } // 0 Sun .. 6 Sat
 
-function getAttendanceData(month) {
+function getAttendanceData(month, selDate) {
   try {
     var ss = getSpreadsheet();
     var staffWs = _attSeed(ss);
@@ -4577,6 +4577,10 @@ function getAttendanceData(month) {
     var now = getISTDate();
     var today = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd");
     var curMonth = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM");
+    // The "roster date" is the calendar day being marked (past/today/future).
+    // The month summary follows that date's month.
+    var rosterDate = (selDate && /^\d{4}-\d{2}-\d{2}$/.test(selDate)) ? selDate : today;
+    if (selDate && /^\d{4}-\d{2}-\d{2}$/.test(selDate)) month = rosterDate.slice(0, 7);
     var y, m;
     if (month && /^\d{4}-\d{2}$/.test(month)) { y = +month.slice(0, 4); m = +month.slice(5, 7); }
     else { y = now.getFullYear(); m = now.getMonth() + 1; }
@@ -4614,9 +4618,9 @@ function getAttendanceData(month) {
       var wk = Number(st.Weekday_Rate || 0), sat = Number(st.Saturday_Rate || 0), sun = Number(st.Sunday_Rate || 0);
       var myRecs = byStaff[name] || [];
 
-      var todayRec = null; myRecs.forEach(function (r) { if (r.date === today) todayRec = r; });
-      var presentToday = !(todayRec && todayRec.status === "absent");
-      var todayIncentive = todayRec ? todayRec.incentive : 0;
+      var selRec = null; myRecs.forEach(function (r) { if (r.date === rosterDate) selRec = r; });
+      var presentSel = !(selRec && selRec.status === "absent");
+      var selIncentive = selRec ? selRec.incentive : 0;
 
       var incentiveTotal = 0, leaveDays = 0, absentDates = [], incentives = [];
       myRecs.forEach(function (r) {
@@ -4626,7 +4630,7 @@ function getAttendanceData(month) {
 
       var out = { name: name, type: type, monthly_salary: mySal, pay_day: payDay, pay_cycle: String(st.Pay_Cycle || "Monthly"),
         weekday_rate: wk, saturday_rate: sat, sunday_rate: sun,
-        present_today: presentToday, today_incentive: todayIncentive,
+        present_sel: presentSel, sel_incentive: selIncentive,
         absent_dates: absentDates, incentives: incentives, incentive_total: incentiveTotal, leave_days: leaveDays };
 
       if (type === "daily") {
@@ -4658,14 +4662,16 @@ function getAttendanceData(month) {
         var deduction = Math.round(perDay * leaveDays);
         out.per_day = Math.round(perDay * 100) / 100; out.deduction = deduction;
         out.net_salary = mySal - deduction + incentiveTotal;
-        out.pay_period = monthStr; out.credited = paid.hasOwnProperty(name + "|" + monthStr);
+        // Prefix "M" so the period (e.g. "M2026-06") is never auto-parsed as a date.
+        var monthPeriod = "M" + monthStr;
+        out.pay_period = monthPeriod; out.credited = paid.hasOwnProperty(name + "|" + monthPeriod);
         out.pay_due = (monthStr === curMonth) && (now.getDate() >= payDay) && !out.credited;
-        if (out.pay_due) alerts.push({ name: name, amount: out.net_salary, period: monthStr, label: "Salary (pay day " + payDay + ")", base: mySal, deduction: deduction, incentive: incentiveTotal, cycle: "Monthly" });
+        if (out.pay_due) alerts.push({ name: name, amount: out.net_salary, period: monthPeriod, label: "Salary (pay day " + payDay + ")", base: mySal, deduction: deduction, incentive: incentiveTotal, cycle: "Monthly" });
       }
       return out;
     });
 
-    return { success: true, month: monthStr, days_in_month: dim, today: today, today_dow: dow, staff: staffOut, alerts: alerts };
+    return { success: true, month: monthStr, days_in_month: dim, today: today, roster_date: rosterDate, today_dow: dow, staff: staffOut, alerts: alerts };
   } catch (e) { return { success: false, error: String(e) }; }
 }
 
@@ -4702,6 +4708,8 @@ function markSalaryCredited(name, period, amount) {
   if (!name || !period) return { success: false, error: "name and period required" };
   var ws = getOrCreateTab(getSpreadsheet(), ATT_SAL_TAB, ATT_SAL_HEADERS);
   ws.appendRow([String(name).trim(), String(period).trim(), Number(amount || 0), Utilities.formatDate(getISTDate(), "Asia/Kolkata", "yyyy-MM-dd HH:mm")]);
+  // Force Period to plain text so values are never auto-converted to dates/numbers.
+  try { ws.getRange(ws.getLastRow(), 2).setNumberFormat("@").setValue(String(period).trim()); } catch (e) {}
   return { success: true };
 }
 
