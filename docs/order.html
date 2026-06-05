@@ -4135,32 +4135,26 @@
             <div id="successSummary"></div>
           </div>
 
-          <!-- Double-Check Confirmation Card -->
-          <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1.5px solid #7dd3fc;
-                      border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 4px 15px rgba(14,165,233,0.1);">
-            <div style="display:flex;align-items:flex-start;gap:12px;">
-              <div style="font-size:1.6rem;line-height:1;flex-shrink:0;">🛡️</div>
-              <div style="flex:1;">
-                <div style="font-size:0.9rem;font-weight:800;color:#0369a1;margin-bottom:6px;">Quick check</div>
-                <div style="font-size:0.8rem;color:#075985;line-height:1.6;">
-                  Please tap the button below to make sure this order shows up in your orders list:
-                  <div style="margin-top:10px;background:rgba(255,255,255,0.6);border-radius:10px;padding:10px;">
-                    ✅ <strong style="color:#0284c7;">If it's there</strong> — you're all set, your meal is confirmed!<br>
-                    ❌ <strong style="color:#b91c1c;">If it's missing</strong> — please place the order once more. <strong>Payment only once</strong>.
-                  </div>
-                  <div style="font-size:0.75rem;color:#64748b;margin-top:8px;font-style:italic;">
-                    Apologies for the inconvenience — we're actively working to make this smoother. 🙏
-                  </div>
-                </div>
+          <!-- UPI IDs — pay / re-copy. (Order check is already handled by the
+               forced "Quick check" popup, so no redundant check card here.) -->
+          <div style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1.5px solid #5eead4;
+                      border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 4px 15px rgba(13,148,136,0.08);">
+            <div style="font-size:0.9rem;font-weight:800;color:#0f766e;margin-bottom:10px;text-align:center;">📲 Pay via UPI</div>
+            <div style="text-align:center;">
+              <div class="upi-id" onclick="copyUPI()" title="Tap to copy UPI ID"
+                   style="cursor:pointer;font-weight:700;color:#0f766e;font-size:0.9rem;letter-spacing:0.3px;display:inline-block;background:#ccfbf1;padding:7px 18px;border-radius:20px;">
+                9819969682@hdfc
               </div>
+              <div style="font-size:0.7rem;color:#64748b;margin-top:4px;">tap to copy</div>
             </div>
-            <button type="button" onclick="showManageOrders()"
-                    style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;
-                           background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:0.95rem;
-                           font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);
-                           display:flex;align-items:center;justify-content:center;gap:8px;">
-              🔍 Manage Orders — Check My Order
-            </button>
+            <div style="text-align:center;margin-top:12px;padding:8px 10px;background:#f9fafb;border:1px dashed #cbd5e1;border-radius:10px;">
+              <div style="font-size:0.66rem;color:#64748b;margin-bottom:4px;font-weight:600;letter-spacing:0.2px;text-transform:uppercase;">Alternate UPI ID (Backup)</div>
+              <div class="upi-id" onclick="copyBackupUPI()" title="Tap to copy backup UPI ID"
+                   style="cursor:pointer;font-weight:600;color:#475569;font-size:0.82rem;letter-spacing:0.3px;display:inline-block;background:#fff;padding:5px 14px;border-radius:16px;border:1px solid #e2e8f0;">
+                shriharioze07-1@okhdfcbank
+              </div>
+              <div style="font-size:0.64rem;color:#94a3b8;margin-top:4px;">Use only if the primary UPI ID doesn't work</div>
+            </div>
           </div>
 
           <!-- Delivery Heads-Up card — permanent -->
@@ -4616,7 +4610,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.04.4";
+    const APP_VERSION = "v26.06.04.5";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9074,6 +9068,9 @@
         const istNow = getIST();
         const hNow = istNow.getUTCHours() + istNow.getUTCMinutes() / 60;
         const MEAL_ORDER = { Breakfast: 1, Lunch: 2, Dinner: 3 };
+        // Latest (override-aware) cutoffs for today, from the server. Falls back
+        // to the local defaults. Used to disable Cancel once a meal's cutoff passed.
+        const todayCutoffs = data.today_cutoffs || CUTOFFS;
 
         const processGroup = (orderArray) => {
           const groups = {};
@@ -9102,18 +9099,15 @@
         const activeUpcoming = allUpcoming.filter(o => !isCanc(o));
         const activePast = allPast.filter(o => !isCanc(o));
 
-        // Smart Bucketing for active orders: Move 'today cutoff' orders to past
+        // Bucketing: an order stays in UPCOMING (today + future) until it is
+        // marked DELIVERED — only then does it move to Past. (Cutoff no longer
+        // pushes today's order to Past; instead it just disables Cancel below.)
         const upcomingFiltered = [];
         const extraPast = [];
 
         activeUpcoming.forEach(o => {
-          if (o.date === today) {
-            const cutoff = CUTOFFS[o.meal] ?? 23;
-            if (hNow >= cutoff) { extraPast.push(o); }
-            else { upcomingFiltered.push(o); }
-          } else {
-            upcomingFiltered.push(o);
-          }
+          if (o.deliveredAt) { extraPast.push(o); }   // delivered → Past (even today)
+          else { upcomingFiltered.push(o); }          // not delivered → Upcoming
         });
 
         const upcoming = processGroup(upcomingFiltered).sort((a, b) => {
@@ -9183,6 +9177,13 @@
               payChip = `<div style="display:inline-block;background:#f3e5f5;color:#6a1b9a;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #d1c4e9;margin-top:5px;vertical-align:middle;">📱 UPI</div>`;
             }
 
+            // Cancel allowed only before this meal's cutoff (today). Future-dated
+            // orders are always cancellable; today's lock once the cutoff passes.
+            const cutoffH = (todayCutoffs[o.meal] ?? CUTOFFS[o.meal] ?? 23);
+            const cutoffCrossed = (o.date === today) && (hNow >= cutoffH);
+            const delBtnHtml = cutoffCrossed
+              ? `<button class="omr-del-btn" style="opacity:0.55;border-style:dashed;cursor:not-allowed;" onclick="cancelBlockedMsg()" title="Cutoff crossed — no cancellation allowed">🔒 Cancellation closed</button>`
+              : `<button class="omr-del-btn" onclick="deleteOrder('${o.rowId}','${o.date}','${o.meal}')">🗑 Delete</button>`;
             return `<div class="order-manage-row">
           <div class="omr-top">
             <div class="omr-info">
@@ -9194,7 +9195,7 @@
               </div>
             </div>
             <div class="omr-actions">
-              <button class="omr-del-btn" onclick="deleteOrder('${o.rowId}','${o.date}','${o.meal}')">🗑 Delete</button>
+              ${delBtnHtml}
             </div>
           </div>
         </div>`;
@@ -9300,6 +9301,11 @@
     }
 
     let currentDeleteData = null; // { rowId, date, meal, allIds, totalPaid, isWalletPaid }
+
+    // Shown when the customer taps the disabled Cancel button after cutoff.
+    function cancelBlockedMsg() {
+      toast("🔒 Cutoff crossed — no cancellation allowed for this order.", 3500);
+    }
 
     async function deleteOrder(rowId, date, meal) {
       const cached = orderDataCache[rowId] || {};

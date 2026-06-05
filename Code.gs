@@ -2967,12 +2967,38 @@ function getCustomerOrders(phone) {
     past_orders: past,
     wallet_balance: _calculateWalletBalance(phone),
     on_account_balance: onAccountBalance,
+    // Today's effective (override-aware) cutoff hours so Manage Orders can
+    // disable the Cancel button once a meal's cutoff has passed.
+    today_cutoffs: _effectiveCutoffsForDate(today),
     month_summary: {
       month: monthName,
       total: monthTotal,
       count: monthCount
     }
   };
+}
+
+// Effective cancel/order cutoff HOURS (IST, since midnight) for a date —
+// the admin's per-date override from SK_Daily_Menu if set, else the defaults.
+function _effectiveCutoffsForDate(date) {
+  var cutoffs = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+  try {
+    var ss = getSpreadsheet();
+    var ws = getOrCreateTab(ss, TAB_MENU, []);
+    var rows = getAllRows(ws);
+    for (var i = 0; i < rows.length; i++) {
+      var d = rows[i].Date instanceof Date
+        ? Utilities.formatDate(rows[i].Date, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(rows[i].Date).trim();
+      if (d === date) {
+        if (rows[i].Cutoff_Breakfast) cutoffs.Breakfast = Number(rows[i].Cutoff_Breakfast);
+        if (rows[i].Cutoff_Lunch)     cutoffs.Lunch     = Number(rows[i].Cutoff_Lunch);
+        if (rows[i].Cutoff_Dinner)    cutoffs.Dinner    = Number(rows[i].Cutoff_Dinner);
+        break;
+      }
+    }
+  } catch (e) {}
+  return cutoffs;
 }
 
 function _buildSummary(r) {
@@ -3062,7 +3088,9 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   const mealNorm = String(r.Meal_Type || "").trim().toLowerCase();
   const mealKey  = mealNorm.charAt(0).toUpperCase() + mealNorm.slice(1);
   if (orderDateStr === today) {
-    const cutoffHour = CUTOFFS[mealKey];
+    // Use the latest (override-aware) cutoff for this date, not a stale default.
+    const effCutoffs = _effectiveCutoffsForDate(orderDateStr);
+    const cutoffHour = effCutoffs[mealKey];
     if (cutoffHour !== undefined && hourIST >= cutoffHour) {
       return {success: false, error: `Cutoff for ${mealKey} has already passed`};
     }
