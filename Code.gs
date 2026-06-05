@@ -711,6 +711,10 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(markSalaryCredited(body.name, body.period, body.amount));
     }
+    if (action === "updateStaff") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(updateStaff(body.name, body.fields));
+    }
     if (action === "undoMarkPaid") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(undoMarkPaid(body.submissionIds));
@@ -4699,6 +4703,27 @@ function markSalaryCredited(name, period, amount) {
   var ws = getOrCreateTab(getSpreadsheet(), ATT_SAL_TAB, ATT_SAL_HEADERS);
   ws.appendRow([String(name).trim(), String(period).trim(), Number(amount || 0), Utilities.formatDate(getISTDate(), "Asia/Kolkata", "yyyy-MM-dd HH:mm")]);
   return { success: true };
+}
+
+// Edit a staff member's pay config in SK_Staff (salary, pay day, daily rates,
+// active). Name and Type are NOT editable here — attendance/incentive records
+// are keyed by Name, so renaming would orphan them.
+function updateStaff(name, fields) {
+  if (!name) return { success: false, error: "name required" };
+  var EDITABLE = { Monthly_Salary: 1, Pay_Day: 1, Weekday_Rate: 1, Saturday_Rate: 1, Sunday_Rate: 1, Active: 1 };
+  var ss = getSpreadsheet();
+  var ws = getOrCreateTab(ss, ATT_STAFF_TAB, ATT_STAFF_HEADERS);
+  var hIdx = headerIndex(ws);
+  var data = ws.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0] || "").trim() === String(name).trim()) {
+      Object.keys(fields || {}).forEach(function (k) {
+        if (EDITABLE[k] && hIdx[k]) ws.getRange(i + 1, hIdx[k]).setValue(fields[k]);
+      });
+      return { success: true };
+    }
+  }
+  return { success: false, error: "Staff not found: " + name };
 }
 
 /**

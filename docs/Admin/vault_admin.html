@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.2">
+  <meta name="app-version" content="v26.06.04.3">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2128,7 +2128,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.04.2";
+    const ADMIN_VERSION = "v26.06.04.3";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2479,6 +2479,7 @@ function renderAttendance() {
         <div style="display:flex;gap:6px;">
           <button onclick="toggleAbsent('${s.name.replace(/'/g,"\\'")}',${present})" style="border:1px solid ${present ? '#ef9a9a' : '#a5d6a7'};background:${present ? '#fff5f5' : '#f1f8e9'};color:${present ? '#c62828' : '#2e7d32'};border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">${present ? 'Mark Absent' : 'Mark Present'}</button>
           <button onclick="addIncentivePrompt('${s.name.replace(/'/g,"\\'")}')" style="border:1px solid #b39ddb;background:#f5f0ff;color:#5b21b6;border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">+ Incentive</button>
+          <button onclick="editStaffPrompt('${s.name.replace(/'/g,"\\'")}')" title="Edit salary / rates / pay day" style="border:1px solid #90caf9;background:#e3f2fd;color:#1565c0;border-radius:8px;padding:6px 10px;font-weight:700;font-size:0.78rem;cursor:pointer;">✏️ Edit</button>
         </div>
       </div>`;
   });
@@ -2526,6 +2527,31 @@ async function addIncentivePrompt(name) {
 async function markCredited(name, period, amount) {
   if (!(await showUIConfirm(`Mark ${_attInr(amount)} as CREDITED to ${name}?\nThis just records that you've paid it and clears the alert — it does not move any money.`, "Mark Credited", "💰"))) return;
   await _attPost("markSalaryCredited", { name, period, amount });
+}
+
+// Edit pay config inline. Monthly → salary + pay day; Daily → weekday + Sat rate.
+async function editStaffPrompt(name) {
+  const s = (_attData.staff || []).find(x => x.name === name);
+  if (!s) return;
+  const fields = {};
+  if (s.type === "daily") {
+    const wk = prompt(`${name} — weekday rate (₹ per day, Mon–Fri):`, s.weekday_rate);
+    if (wk === null) return;
+    const sat = prompt(`${name} — Saturday rate (₹ per day):`, s.saturday_rate);
+    if (sat === null) return;
+    if (isNaN(Number(wk)) || isNaN(Number(sat))) { sAlert("Please enter valid amounts."); return; }
+    fields.Weekday_Rate = Number(wk);
+    fields.Saturday_Rate = Number(sat);
+  } else {
+    const sal = prompt(`${name} — monthly salary (₹):`, s.monthly_salary);
+    if (sal === null) return;
+    const pd = prompt(`${name} — pay day of month (1–28):`, s.pay_day);
+    if (pd === null) return;
+    if (isNaN(Number(sal)) || isNaN(Number(pd)) || Number(pd) < 1 || Number(pd) > 28) { sAlert("Enter a valid salary and pay day (1–28)."); return; }
+    fields.Monthly_Salary = Number(sal);
+    fields.Pay_Day = Number(pd);
+  }
+  await _attPost("updateStaff", { name, fields });
 }
 
 async function _attPost(action, extra) {
