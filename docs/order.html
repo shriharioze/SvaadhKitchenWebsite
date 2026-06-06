@@ -3173,6 +3173,9 @@
       <button type="button" class="pd-item" id="pdBillItem" style="display:none;" onclick="closeProfileDrawer(); showOnAccountBillModal();">
         <span class="pd-icon">🧾</span><span class="pd-label">My Bill <span id="pdBillBadge" style="font-size:0.7rem; color:#fff; font-weight:700; background:#dc2626; border-radius:99px; padding:1px 8px; margin-left:4px;">due</span></span>
       </button>
+      <button type="button" class="pd-item" onclick="closeProfileDrawer(); showUpiModal();">
+        <span class="pd-icon">📲</span><span class="pd-label">Pay via UPI <span style="font-size:0.7rem; color:#888; font-weight:500;">(ID &amp; QR)</span></span>
+      </button>
       <button type="button" class="pd-item" onclick="closeProfileDrawer(); openWalletTxn();">
         <span class="pd-icon">💳</span><span class="pd-label">Wallet <span style="font-size:0.7rem; color:#888; font-weight:500;">(transactions)</span></span>
       </button>
@@ -3811,7 +3814,8 @@
                 1. Tap the UPI ID above to <strong>copy</strong> it<br>
                 2. <strong>Note down the amount</strong> shown in your bill<br>
                 3. Tick <strong>"Will complete payment"</strong> below &amp; tap <strong>Place Order</strong> first<br>
-                4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em>
+                4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em><br>
+                5. Need the UPI ID or QR again? Open the <strong>menu (☰) → Pay via UPI</strong> anytime.
               </div>
               <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
                 💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
@@ -4011,7 +4015,8 @@
                 1. Tap the UPI ID above to <strong>copy</strong> it<br>
                 2. <strong>Note down ₹<span id="splitUpiDeepLinkAmt">0</span></strong> (the UPI portion to pay)<br>
                 3. Tick <strong>"Will complete payment"</strong> below &amp; tap <strong>Place Order</strong> first<br>
-                4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em>
+                4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em><br>
+                5. Need the UPI ID or QR again? Open the <strong>menu (☰) → Pay via UPI</strong> anytime.
               </div>
               <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
                 💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
@@ -4613,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.04.6";
+    const APP_VERSION = "v26.06.04.7";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5055,6 +5060,40 @@
     // (e.g. some banks reject the primary intermittently). User must tap to copy.
     const UPI_VPA_BACKUP = "shriharioze07-1@okhdfcbank";
     function copyBackupUPI() { copyUPI(UPI_VPA_BACKUP); trackGA("upi_backup_id_copied"); }
+
+    // Drawer → "Pay via UPI": shows the main UPI ID + QR (amount-less, you enter
+    // the amount) and the backup ID, all tap-to-copy. Accessible any time.
+    function showUpiModal() {
+      const ex = document.getElementById("upiInfoModal");
+      if (ex) ex.remove();
+      const note = `Svaadh ${(S.phone || "").slice(-4)}`.trim();
+      const upiStr = `upi://pay?pa=${UPI_VPA}&tn=${encodeURIComponent(note)}&cu=INR`;
+      const overlay = document.createElement("div");
+      overlay.id = "upiInfoModal";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:60000;display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto;";
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:22px 20px;box-shadow:0 12px 40px rgba(0,0,0,0.3);max-height:92vh;overflow-y:auto;text-align:center;">' +
+          '<div style="font-size:1.7rem;margin-bottom:2px;">📲</div>' +
+          '<div style="font-size:1.1rem;font-weight:800;color:#0f766e;margin-bottom:2px;">Pay via UPI</div>' +
+          '<div style="font-size:0.74rem;color:#64748b;margin-bottom:14px;">Scan the QR, then enter the amount yourself.</div>' +
+          '<div id="upiInfoQr" style="width:fit-content;margin:0 auto 12px;border:4px solid #fff;box-shadow:0 4px 14px rgba(8,145,178,0.13);border-radius:12px;"></div>' +
+          `<div onclick="copyToClip('${UPI_VPA}','📋 UPI ID copied! Paste it in your payment app.')" title="Tap to copy UPI ID" style="cursor:pointer;font-weight:700;color:#0f766e;background:#ccfbf1;padding:7px 18px;border-radius:20px;display:block;width:fit-content;margin:0 auto 2px;font-size:0.9rem;">${UPI_VPA}</div>` +
+          '<div style="font-size:0.66rem;color:#94a3b8;margin-bottom:12px;">tap to copy</div>' +
+          '<div style="text-align:center;margin-bottom:14px;padding:8px 10px;background:#f9fafb;border:1px dashed #cbd5e1;border-radius:10px;">' +
+            '<div style="font-size:0.62rem;color:#64748b;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.2px;">Alternate UPI ID (Backup)</div>' +
+            `<div onclick="copyToClip('${UPI_VPA_BACKUP}','📋 Backup UPI ID copied!')" title="Tap to copy backup UPI ID" style="cursor:pointer;font-weight:600;color:#475569;background:#fff;border:1px solid #e2e8f0;padding:4px 12px;border-radius:16px;display:inline-block;font-size:0.78rem;">${UPI_VPA_BACKUP}</div>` +
+            '<div style="font-size:0.62rem;color:#94a3b8;margin-top:4px;">Use only if the primary UPI ID doesn\'t work</div>' +
+          '</div>' +
+          '<button id="upiInfoCloseBtn" style="width:100%;padding:12px;border:none;border-radius:12px;background:#0f766e;color:#fff;font-size:0.92rem;font-weight:700;cursor:pointer;">Done</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      try {
+        new QRCode(document.getElementById("upiInfoQr"), { text: upiStr, width: 176, height: 176, correctLevel: QRCode.CorrectLevel.M });
+      } catch (e) {}
+      overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
+      document.getElementById("upiInfoCloseBtn").addEventListener("click", function () { overlay.remove(); });
+      trackGA("upi_modal_opened");
+    }
 
     // Generic clipboard copy with a custom toast (UPI ids in the bill modal, amounts).
     function copyToClip(text, msg) {
