@@ -3815,7 +3815,7 @@
                 2. <strong>Note down the amount</strong> shown in your bill<br>
                 3. Tick <strong>"Will complete payment"</strong> below &amp; tap <strong>Place Order</strong> first<br>
                 4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em><br>
-                5. Need the UPI ID or QR again? Open the <strong>menu (☰) → Pay via UPI</strong> anytime.
+                5. Need the UPI ID or QR again? Open the <strong>menu (top-right ☰ button) → Pay via UPI</strong> anytime.
               </div>
               <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
                 💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
@@ -4016,7 +4016,7 @@
                 2. <strong>Note down ₹<span id="splitUpiDeepLinkAmt">0</span></strong> (the UPI portion to pay)<br>
                 3. Tick <strong>"Will complete payment"</strong> below &amp; tap <strong>Place Order</strong> first<br>
                 4. Make the payment via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the Success screen loads</em><br>
-                5. Need the UPI ID or QR again? Open the <strong>menu (☰) → Pay via UPI</strong> anytime.
+                5. Need the UPI ID or QR again? Open the <strong>menu (top-right ☰ button) → Pay via UPI</strong> anytime.
               </div>
               <div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-size:0.72rem;color:#9a3412;line-height:1.5;text-align:left;">
                 💡 <strong>Why submit first?</strong> On some phones, the app pauses in the background while you're in the UPI app and the order may not get placed. Submitting first guarantees your order is saved — payment can safely follow.
@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.04.7";
+    const APP_VERSION = "v26.06.04.8";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9435,14 +9435,23 @@
         }
 
         sLoading(false);
-        const success = results.every(res => res.success);
+        // "Already cancelled" is a benign / idempotent outcome — the order IS
+        // cancelled, which is what the customer wanted. Treat it as success and
+        // just refresh, instead of throwing a scary red Failure.
+        const isAlreadyCancelled = (res) => !res.success && /already/i.test(res.error || "") && /cancel/i.test(res.error || "");
+        const success = results.every(res => res.success || isAlreadyCancelled(res));
         if (success) {
+          const newlyCancelled = results.some(res => res.success);
           // Use the server's breakdown message if available (contains clawback detail)
           const serverMsg = results.map(r => r.message).filter(Boolean).join("\n\n");
           const hasClawback = serverMsg.includes("streak") || serverMsg.includes("loyalty");
           const hasCharge   = serverMsg.includes("charged to your Wallet");
 
-          if (hasCharge) {
+          if (!newlyCancelled) {
+            // Stale view — it was already cancelled (e.g. on another device / a
+            // double-tap). Refresh quietly so it moves to the Cancelled tab.
+            await sAlert("This order was already cancelled — we've refreshed your orders.", "Already Cancelled", "↩️");
+          } else if (hasCharge) {
             // Wallet went negative — show clear explanation
             await sAlert(
               serverMsg || "Your order has been cancelled. A cancellation charge has been applied to your Svaadh Wallet due to a loyalty reward reversal — this will be collected on your next order.",
