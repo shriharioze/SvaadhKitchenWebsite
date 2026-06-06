@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.06.1";
+    const APP_VERSION = "v26.06.06.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5354,6 +5354,13 @@
       const s = S.step;
       const STEPS = t('steps');
       if (s >= 2) syncWalletValue(); // Refresh balance on steps where wallet chip is visible (debounced)
+      // Restore flow chrome if we arrived from the Success screen (which hides the
+      // bottom nav + sets inline display:none on the flow screens). Without this,
+      // opening e.g. "Addresses" from the drawer after placing an order showed the
+      // form with NO Save & Continue button.
+      $("successCard").style.display = "none";
+      $("bottomNav").style.display = "block";
+      document.querySelectorAll(".screen").forEach(el => { if (el.id !== "successCard") el.style.display = ""; });
       document.querySelectorAll(".screen").forEach((el, i) => el.classList.toggle("active", i === s));
       document.querySelectorAll(".step-dot").forEach((d, i) => { d.classList.remove("active", "done"); if (i === s) d.classList.add("active"); else if (i < s) d.classList.add("done"); });
       $("stepLabel").textContent = `Step ${s + 1} of 5 — ${STEPS[s]}`;
