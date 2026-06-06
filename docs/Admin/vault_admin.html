@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.04.4">
+  <meta name="app-version" content="v26.06.04.5">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2128,7 +2128,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.04.4";
+    const ADMIN_VERSION = "v26.06.04.5";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2422,6 +2422,12 @@ function initBillingFilters() {
 // ════════════════════════════════════════════════════════
 let _attData = null;
 const _attInr = n => "₹" + Number(n || 0).toLocaleString('en-IN');
+const _attEsc = s => String(s == null ? "" : s).replace(/'/g, "\\'");
+function _attFmtDate(ds) {
+  const p = String(ds).split("-"); if (p.length !== 3) return ds;
+  return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+function _attStaff(name) { return ((_attData && _attData.staff) || []).find(x => x.name === name); }
 
 async function loadAttendance() {
   const dEl = document.getElementById("attDate");
@@ -2450,73 +2456,100 @@ function renderAttendance() {
   const filter = document.getElementById("attStaffFilter").value;
   const list = d.staff.filter(s => !filter || s.name === filter);
 
+  // ── Total payroll banner ──
+  document.getElementById("attAlerts").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(135deg,#ede7f6,#f3e5f5);border:1px solid #d1c4e9;border-radius:12px;padding:12px 16px;margin-bottom:12px;">
+      <div style="font-size:0.8rem;color:#4527a0;font-weight:600;">🗓️ ${d.month} total payroll (net)</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#311b92;">${_attInr(d.total_payroll)}</div>
+    </div>`;
+
   // ── Salary alerts ──
-  let aHtml;
+  let aHtml = "";
   if (d.alerts.length) {
     aHtml = d.alerts.filter(a => !filter || a.name === filter).map(a => `
       <div style="background:linear-gradient(135deg,#fff8e1,#ffecb3);border:1px solid #ffd54f;border-radius:12px;padding:14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div>
           <div style="font-weight:800;color:#e65100;font-size:0.95rem;">💰 Credit ${_attInr(a.amount)} to ${a.name}</div>
-          <div style="font-size:0.72rem;color:#8a6d00;margin-top:2px;">${a.label} · base ${_attInr(a.base)}${a.deduction ? ` − leave deduct ${_attInr(a.deduction)}` : ""}${a.incentive ? ` + incentive ${_attInr(a.incentive)}` : ""}</div>
+          <div style="font-size:0.72rem;color:#8a6d00;margin-top:2px;">${a.label} · base ${_attInr(a.base)}${a.deduction ? ` − leave ${_attInr(a.deduction)}` : ""}${a.adj ? ` − adv/fine ${_attInr(a.adj)}` : ""}${a.incentive ? ` + incentive ${_attInr(a.incentive)}` : ""}</div>
         </div>
-        <button onclick="markCredited('${a.name.replace(/'/g,"\\'")}','${a.period}',${a.amount})" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;white-space:nowrap;">✓ Mark Credited</button>
+        <button onclick="markCredited('${_attEsc(a.name)}','${a.period}',${a.amount})" style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;white-space:nowrap;">✓ Mark Credited</button>
       </div>`).join("");
   }
-  document.getElementById("attAlerts").innerHTML = (aHtml && aHtml.trim())
+  document.getElementById("attAlerts").innerHTML += (aHtml && aHtml.trim())
     ? `<div style="margin-bottom:16px;">${aHtml}</div>`
     : `<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:0.82rem;color:#2e7d32;">✅ No salary/wage due right now.</div>`;
 
-  // ── Today's roster ──
-  let tHtml = `<div style="font-weight:700;margin:6px 0 10px;font-size:0.9rem;color:var(--text,#1a252f);">📋 ${d.roster_date}${d.roster_date === d.today ? ' (today)' : ''} — auto-present; tap to mark leave or add incentive</div>`;
+  // ── Roster for the selected date ──
+  let tHtml = `<div style="font-weight:700;margin:6px 0 10px;font-size:0.9rem;color:var(--text,#1a252f);">📋 ${d.roster_date}${d.roster_date === d.today ? ' (today)' : ''} — auto-present; tap to mark leave, incentive or advance/fine</div>`;
   list.forEach(s => {
     const present = s.present_sel;
+    const trendChip = (s.trend && s.trend.up)
+      ? ` <span title="Leaves trending up vs last 3 months" style="font-size:0.62rem;font-weight:700;color:#b71c1c;background:#ffebee;border:1px solid #ffcdd2;border-radius:99px;padding:1px 7px;">⬆ leaves up (${s.trend.current} vs avg ${s.trend.avg3})</span>` : "";
     tHtml += `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:12px 14px;margin-bottom:8px;flex-wrap:wrap;">
         <div>
-          <div style="font-weight:700;">${s.name} <span style="font-size:0.66rem;color:#888;font-weight:500;">(${s.type === "daily" ? "daily wage" : "monthly"})</span></div>
-          <div style="font-size:0.72rem;margin-top:2px;">${present ? '<span style="color:#2e7d32;font-weight:700;">● Present</span>' : '<span style="color:#c62828;font-weight:700;">● Absent (leave)</span>'}${s.sel_incentive ? ` · <span style="color:#5b21b6;font-weight:700;">incentive ${_attInr(s.sel_incentive)}</span>` : ""}</div>
+          <div style="font-weight:700;">${s.name} <span style="font-size:0.66rem;color:#888;font-weight:500;">(${s.type === "daily" ? "daily wage" : "monthly"})</span>${trendChip}</div>
+          <div style="font-size:0.72rem;margin-top:2px;">${present ? '<span style="color:#2e7d32;font-weight:700;">● Present</span>' : '<span style="color:#c62828;font-weight:700;">● Absent (leave)</span>'}${s.sel_incentive ? ` · <span style="color:#5b21b6;font-weight:700;">+incentive ${_attInr(s.sel_incentive)}</span>` : ""}${s.sel_deduction ? ` · <span style="color:#c62828;font-weight:700;">−adv/fine ${_attInr(s.sel_deduction)}</span>` : ""}</div>
         </div>
-        <div style="display:flex;gap:6px;">
-          <button onclick="toggleAbsent('${s.name.replace(/'/g,"\\'")}',${present})" style="border:1px solid ${present ? '#ef9a9a' : '#a5d6a7'};background:${present ? '#fff5f5' : '#f1f8e9'};color:${present ? '#c62828' : '#2e7d32'};border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">${present ? 'Mark Absent' : 'Mark Present'}</button>
-          <button onclick="addIncentivePrompt('${s.name.replace(/'/g,"\\'")}')" style="border:1px solid #b39ddb;background:#f5f0ff;color:#5b21b6;border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">+ Incentive</button>
-          <button onclick="editStaffPrompt('${s.name.replace(/'/g,"\\'")}')" title="Edit salary / rates / pay day" style="border:1px solid #90caf9;background:#e3f2fd;color:#1565c0;border-radius:8px;padding:6px 10px;font-weight:700;font-size:0.78rem;cursor:pointer;">✏️ Edit</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="toggleAbsent('${_attEsc(s.name)}',${present})" style="border:1px solid ${present ? '#ef9a9a' : '#a5d6a7'};background:${present ? '#fff5f5' : '#f1f8e9'};color:${present ? '#c62828' : '#2e7d32'};border-radius:8px;padding:6px 12px;font-weight:700;font-size:0.78rem;cursor:pointer;">${present ? 'Mark Absent' : 'Mark Present'}</button>
+          <button onclick="addIncentivePrompt('${_attEsc(s.name)}')" style="border:1px solid #b39ddb;background:#f5f0ff;color:#5b21b6;border-radius:8px;padding:6px 10px;font-weight:700;font-size:0.78rem;cursor:pointer;">+ Incentive</button>
+          <button onclick="addDeductionPrompt('${_attEsc(s.name)}')" title="Advance taken / fine / breakage" style="border:1px solid #ef9a9a;background:#fff5f5;color:#c62828;border-radius:8px;padding:6px 10px;font-weight:700;font-size:0.78rem;cursor:pointer;">− Adv/Fine</button>
+          <button onclick="showStaffDetail('${_attEsc(s.name)}')" style="border:1px solid #90caf9;background:#e3f2fd;color:#1565c0;border-radius:8px;padding:6px 10px;font-weight:700;font-size:0.78rem;cursor:pointer;">🔍 Details</button>
+          <button onclick="editStaffPrompt('${_attEsc(s.name)}')" title="Edit salary / rates / pay day / paid leaves" style="border:1px solid #cbd5e1;background:#f8fafc;color:#475569;border-radius:8px;padding:6px 10px;font-weight:700;font-size:0.78rem;cursor:pointer;">✏️ Edit</button>
         </div>
       </div>`;
   });
   document.getElementById("attToday").innerHTML = tHtml;
 
   // ── Monthly summary table ──
+  let totNet = 0, totDed = 0, totInc = 0, totAdj = 0;
   const rows = list.map(s => {
     const daily = s.type === "daily";
+    totNet += s.net_salary; totDed += (s.deduction || 0); totInc += (s.incentive_total || 0); totAdj += (s.deduction_total || 0);
+    const leavesCell = daily ? "—"
+      : `${s.leave_days || 0}${s.leave_days ? ` <span style="color:#888;font-size:0.92em;">(${s.free_used} free, ${s.deductible_leaves} cut)</span>` : ""}${(s.trend && s.trend.up) ? ' <span title="up vs 3-mo avg" style="color:#c62828;">⬆</span>' : ""}`;
     return `<tr>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);font-weight:600;">${s.name}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);">${daily ? "Daily wage" : _attInr(s.monthly_salary)}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;">${daily ? "Sat (weekly)" : s.pay_day}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;">${s.leave_days || 0}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;">${daily ? "—" : _attInr(s.per_day)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);font-weight:600;">${s.name}<br><span style="font-size:0.66rem;color:#888;font-weight:500;">${daily ? "daily wage" : "pay day " + s.pay_day}</span></td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);">${daily ? "Daily" : _attInr(s.monthly_salary)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;">${s.present_days}/${s.working_days}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;">${leavesCell}</td>
       <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;color:#c62828;">${s.deduction ? ("−" + _attInr(s.deduction)) : "—"}</td>
       <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;color:#2e7d32;">${s.incentive_total ? ("+" + _attInr(s.incentive_total)) : "—"}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;color:#c62828;">${s.deduction_total ? ("−" + _attInr(s.deduction_total)) : "—"}</td>
       <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:right;font-weight:800;">${_attInr(s.net_salary)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border,#eee);text-align:center;white-space:nowrap;"><a href="#" onclick="showStaffDetail('${_attEsc(s.name)}');return false;" style="color:#1565c0;font-weight:600;">Details</a> · <a href="#" onclick="openPayslip('${_attEsc(s.name)}');return false;" style="color:#5b21b6;font-weight:600;">Payslip</a></td>
     </tr>`;
   }).join("");
   document.getElementById("attTable").innerHTML = `
     <div style="font-weight:700;margin:18px 0 8px;font-size:0.9rem;color:var(--text,#1a252f);">🗓️ ${d.month} summary <span style="font-size:0.7rem;color:#888;font-weight:500;">(${d.days_in_month} days)</span></div>
     <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
       <thead><tr style="text-align:left;color:var(--muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.4px;">
-        <th style="padding:8px 10px;">Staff</th><th style="padding:8px 10px;">Base</th><th style="padding:8px 10px;text-align:center;">Pay day</th>
-        <th style="padding:8px 10px;text-align:center;">Leaves</th><th style="padding:8px 10px;text-align:right;">Per day</th>
-        <th style="padding:8px 10px;text-align:right;">Deduction</th><th style="padding:8px 10px;text-align:right;">Incentive</th><th style="padding:8px 10px;text-align:right;">Net pay</th>
-      </tr></thead><tbody>${rows}</tbody></table></div>
-    <div style="font-size:0.7rem;color:#888;margin-top:8px;line-height:1.5;">Monthly: per-day = salary ÷ ${d.days_in_month}; each non-Sunday leave deducts one per-day. &nbsp;|&nbsp; Abhijeet (daily): weekday ₹700 · Saturday ₹600 · Sunday off, paid weekly. Net = month-to-date earned + incentive.</div>`;
+        <th style="padding:8px 10px;">Staff</th><th style="padding:8px 10px;">Base</th><th style="padding:8px 10px;text-align:center;">Present</th>
+        <th style="padding:8px 10px;text-align:center;">Leaves</th><th style="padding:8px 10px;text-align:right;">Leave cut</th>
+        <th style="padding:8px 10px;text-align:right;">Incentive</th><th style="padding:8px 10px;text-align:right;">Adv/Fine</th><th style="padding:8px 10px;text-align:right;">Net pay</th><th style="padding:8px 10px;text-align:center;">View</th>
+      </tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr style="font-weight:800;border-top:2px solid var(--border,#ddd);">
+        <td style="padding:9px 10px;">TOTAL</td><td></td><td></td><td></td>
+        <td style="padding:9px 10px;text-align:right;color:#c62828;">${totDed ? ("−" + _attInr(totDed)) : "—"}</td>
+        <td style="padding:9px 10px;text-align:right;color:#2e7d32;">${totInc ? ("+" + _attInr(totInc)) : "—"}</td>
+        <td style="padding:9px 10px;text-align:right;color:#c62828;">${totAdj ? ("−" + _attInr(totAdj)) : "—"}</td>
+        <td style="padding:9px 10px;text-align:right;">${_attInr(totNet)}</td><td></td>
+      </tr></tfoot></table></div>
+    <div style="font-size:0.7rem;color:#888;margin-top:8px;line-height:1.5;">Monthly: per-day = salary ÷ ${d.days_in_month}; non-Sunday leaves <b>beyond the paid-leave allowance</b> each deduct one per-day. Sundays never deduct. &nbsp;|&nbsp; Daily (Abhijeet): weekday ₹700 · Sat ₹600 · Sun off, paid weekly. &nbsp;|&nbsp; "Present" = days worked / working days so far.</div>`;
 }
 
 async function toggleAbsent(name, present) {
-  if (present && !(await showUIConfirm(`Mark ${name} ABSENT (on leave) for ${_attData.roster_date}?`, "Mark Absent", "🚫"))) return;
-  await _attPost("markAttendance", { name, date: _attData.roster_date, status: present ? "Absent" : "Present" });
+  let reason = "";
+  if (present) {
+    if (!(await showUIConfirm(`Mark ${name} ABSENT (on leave) for ${_attData.roster_date}?`, "Mark Absent", "🚫"))) return;
+    reason = prompt("Reason for leave (optional — e.g. sick, personal):", "") || "";
+  }
+  await _attPost("markAttendance", { name, date: _attData.roster_date, status: present ? "Absent" : "Present", reason });
 }
 
 async function addIncentivePrompt(name) {
-  const amt = prompt(`Incentive amount for ${name} on ${_attData.roster_date}:`, "");
+  const amt = prompt(`Incentive / bonus amount for ${name} on ${_attData.roster_date}:`, "");
   if (amt === null) return;
   const a = Number(amt);
   if (isNaN(a) || a < 0) { sAlert("Please enter a valid amount."); return; }
@@ -2524,14 +2557,23 @@ async function addIncentivePrompt(name) {
   await _attPost("addIncentive", { name, date: _attData.roster_date, amount: a, note });
 }
 
+async function addDeductionPrompt(name) {
+  const amt = prompt(`Deduction for ${name} on ${_attData.roster_date} (salary advance taken, fine, breakage…):`, "");
+  if (amt === null) return;
+  const a = Number(amt);
+  if (isNaN(a) || a < 0) { sAlert("Please enter a valid amount."); return; }
+  const note = prompt("Reason (e.g. advance, fine):", "") || "";
+  await _attPost("addDeduction", { name, date: _attData.roster_date, amount: a, note });
+}
+
 async function markCredited(name, period, amount) {
   if (!(await showUIConfirm(`Mark ${_attInr(amount)} as CREDITED to ${name}?\nThis just records that you've paid it and clears the alert — it does not move any money.`, "Mark Credited", "💰"))) return;
   await _attPost("markSalaryCredited", { name, period, amount });
 }
 
-// Edit pay config inline. Monthly → salary + pay day; Daily → weekday + Sat rate.
+// Edit pay config inline. Monthly → salary, pay day, paid-leave allowance; Daily → weekday + Sat rate.
 async function editStaffPrompt(name) {
-  const s = (_attData.staff || []).find(x => x.name === name);
+  const s = _attStaff(name);
   if (!s) return;
   const fields = {};
   if (s.type === "daily") {
@@ -2547,11 +2589,105 @@ async function editStaffPrompt(name) {
     if (sal === null) return;
     const pd = prompt(`${name} — pay day of month (1–28):`, s.pay_day);
     if (pd === null) return;
-    if (isNaN(Number(sal)) || isNaN(Number(pd)) || Number(pd) < 1 || Number(pd) > 28) { sAlert("Enter a valid salary and pay day (1–28)."); return; }
+    const pl = prompt(`${name} — free (paid) leaves allowed per month before deductions:\n(0 = strict, every non-Sunday leave is cut)`, s.paid_leaves);
+    if (pl === null) return;
+    if (isNaN(Number(sal)) || isNaN(Number(pd)) || Number(pd) < 1 || Number(pd) > 28 || isNaN(Number(pl)) || Number(pl) < 0) { sAlert("Enter a valid salary, pay day (1–28) and paid-leave count."); return; }
     fields.Monthly_Salary = Number(sal);
     fields.Pay_Day = Number(pd);
+    fields.Paid_Leaves = Number(pl);
   }
   await _attPost("updateStaff", { name, fields });
+}
+
+// ── Per-staff detail drill-down (modal) ──
+function showStaffDetail(name) {
+  const s = _attStaff(name);
+  if (!s) return;
+  const d = _attData;
+  const daily = s.type === "daily";
+  const leaveRows = (s.leave_list || []).length
+    ? s.leave_list.map(lv => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #f1f1f1;font-size:0.8rem;">
+        <span>${_attFmtDate(lv.date)}${lv.sunday ? ' <span style="color:#888;">(Sunday · no cut)</span>' : (lv.deductible ? ' <span style="color:#c62828;font-weight:700;">(deducted)</span>' : ' <span style="color:#2e7d32;">(free leave)</span>')}</span>
+        <span style="color:#888;">${lv.reason || ""}</span></div>`).join("")
+    : `<div style="font-size:0.8rem;color:#888;padding:4px 0;">No leaves this month 👍</div>`;
+  const incRows = (s.incentives || []).length
+    ? s.incentives.map(i => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #f1f1f1;font-size:0.8rem;"><span>${_attFmtDate(i.date)} <span style="color:#888;">${i.note || ""}</span></span><span style="color:#2e7d32;font-weight:700;">+${_attInr(i.amount)}</span></div>`).join("")
+    : `<div style="font-size:0.8rem;color:#888;padding:4px 0;">None</div>`;
+  const dedRows = (s.deductions || []).length
+    ? s.deductions.map(i => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #f1f1f1;font-size:0.8rem;"><span>${_attFmtDate(i.date)} <span style="color:#888;">${i.note || ""}</span></span><span style="color:#c62828;font-weight:700;">−${_attInr(i.amount)}</span></div>`).join("")
+    : `<div style="font-size:0.8rem;color:#888;padding:4px 0;">None</div>`;
+  const t = s.trend || { current: 0, prev: [0, 0, 0], prev_keys: [], avg3: 0 };
+  const trendRow = `${d.month}: <b>${t.current}</b> &nbsp;·&nbsp; ${(t.prev_keys || []).map((k, i) => `${k}: ${t.prev[i]}`).join(" · ")} &nbsp;·&nbsp; 3-mo avg <b>${t.avg3}</b> ${t.up ? '<span style="color:#c62828;font-weight:700;">⬆ trending up</span>' : ''}`;
+  const salHist = (s.salary_history || []).length
+    ? s.salary_history.map(h => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #f1f1f1;font-size:0.8rem;"><span>${h.period} <span style="color:#888;">${h.at}</span></span><span style="font-weight:700;">${_attInr(h.amount)}</span></div>`).join("")
+    : `<div style="font-size:0.8rem;color:#888;padding:4px 0;">No payments recorded yet.</div>`;
+
+  const ex = document.getElementById("attDetailModal"); if (ex) ex.remove();
+  const ov = document.createElement("div");
+  ov.id = "attDetailModal";
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:70000;display:flex;align-items:center;justify-content:center;padding:18px;";
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,0.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:1.1rem;font-weight:800;color:#1a252f;">${s.name} <span style="font-size:0.7rem;color:#888;font-weight:500;">· ${daily ? "daily wage" : "monthly"}</span></div>
+        <button onclick="document.getElementById('attDetailModal').remove()" style="border:none;background:#eee;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:1rem;">✕</button>
+      </div>
+      <div style="font-size:0.78rem;color:#555;margin-bottom:12px;">${d.month} · ${daily ? `weekday ${_attInr(s.weekday_rate)} / Sat ${_attInr(s.saturday_rate)}` : `salary ${_attInr(s.monthly_salary)} · pay day ${s.pay_day} · ${s.paid_leaves} free leave(s)/mo`}</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="background:#f1f8e9;border-radius:10px;padding:10px;"><div style="font-size:0.66rem;color:#558b2f;text-transform:uppercase;">Present</div><div style="font-weight:800;">${s.present_days}/${s.working_days} days</div></div>
+        <div style="background:#fff5f5;border-radius:10px;padding:10px;"><div style="font-size:0.66rem;color:#c62828;text-transform:uppercase;">Leaves (cut)</div><div style="font-weight:800;">${s.leave_days} (${s.deductible_leaves})</div></div>
+        <div style="background:#f5f0ff;border-radius:10px;padding:10px;"><div style="font-size:0.66rem;color:#5b21b6;text-transform:uppercase;">Incentive</div><div style="font-weight:800;">+${_attInr(s.incentive_total)}</div></div>
+        <div style="background:#eef2ff;border-radius:10px;padding:10px;"><div style="font-size:0.66rem;color:#3949ab;text-transform:uppercase;">Net pay</div><div style="font-weight:800;">${_attInr(s.net_salary)}</div></div>
+      </div>
+
+      <div style="font-size:0.72rem;font-weight:700;color:#c62828;text-transform:uppercase;margin-bottom:2px;">🏖️ Leaves</div>${leaveRows}
+      <div style="font-size:0.72rem;font-weight:700;color:#2e7d32;text-transform:uppercase;margin:12px 0 2px;">🎁 Incentives</div>${incRows}
+      <div style="font-size:0.72rem;font-weight:700;color:#c62828;text-transform:uppercase;margin:12px 0 2px;">➖ Advances / Fines</div>${dedRows}
+      <div style="font-size:0.72rem;font-weight:700;color:#6a1b9a;text-transform:uppercase;margin:12px 0 2px;">📈 Leave trend</div>
+      <div style="font-size:0.8rem;padding:4px 0;">${trendRow}</div>
+      <div style="font-size:0.72rem;font-weight:700;color:#1565c0;text-transform:uppercase;margin:12px 0 2px;">💳 Pay history (credited)</div>${salHist}
+
+      <button onclick="openPayslip('${_attEsc(s.name)}')" style="width:100%;margin-top:16px;padding:11px;border:none;border-radius:10px;background:#5b21b6;color:#fff;font-weight:700;cursor:pointer;">🧾 Open / print payslip</button>
+    </div>`;
+  ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// ── Printable payslip ──
+function openPayslip(name) {
+  const s = _attStaff(name); if (!s) return;
+  const d = _attData;
+  const daily = s.type === "daily";
+  const row = (label, val, color) => `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee;">${label}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right;${color ? "color:" + color + ";" : ""}">${val}</td></tr>`;
+  let body = "";
+  if (daily) {
+    body += row("Base earned (month-to-date)", _attInr(s.base_earned));
+  } else {
+    body += row("Monthly salary", _attInr(s.monthly_salary));
+    body += row(`Leaves (${s.leave_days} taken · ${s.free_used} free · ${s.deductible_leaves} cut)`, s.deduction ? "−" + _attInr(s.deduction) : "—", s.deduction ? "#c62828" : "");
+  }
+  body += row("Incentives / bonus", s.incentive_total ? "+" + _attInr(s.incentive_total) : "—", s.incentive_total ? "#2e7d32" : "");
+  body += row("Advances / fines", s.deduction_total ? "−" + _attInr(s.deduction_total) : "—", s.deduction_total ? "#c62828" : "");
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    `<title>Payslip — ${s.name} — ${d.month}</title>` +
+    '<style>body{font-family:Arial,Helvetica,sans-serif;color:#1a252f;margin:0;padding:24px;}.wrap{max-width:560px;margin:0 auto;}' +
+    'h1{font-size:1.2rem;margin:0;color:#5b21b6;}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:0.92rem;}' +
+    '.tot{display:flex;justify-content:space-between;margin-top:14px;padding:14px;background:#5b21b6;color:#fff;border-radius:10px;font-size:1.1rem;font-weight:800;}' +
+    '.muted{color:#777;font-size:0.8rem;}@media print{.noprint{display:none;}}.btn{margin-top:18px;padding:12px 18px;border:none;border-radius:10px;background:#5b21b6;color:#fff;font-weight:700;cursor:pointer;}</style></head><body><div class="wrap">' +
+    '<h1>🍱 Svaadh Kitchen — Payslip</h1>' +
+    `<div class="muted">${s.name} · ${daily ? "Daily wage" : "Monthly"} · ${d.month}</div>` +
+    (daily ? `<div class="muted">Weekday ${_attInr(s.weekday_rate)} · Sat ${_attInr(s.saturday_rate)} · Sun off · Present ${s.present_days}/${s.working_days}</div>`
+           : `<div class="muted">Salary ${_attInr(s.monthly_salary)} · Pay day ${s.pay_day} · Present ${s.present_days}/${s.working_days} · Paid-leave allowance ${s.paid_leaves}</div>`) +
+    `<table><tbody>${body}</tbody></table>` +
+    `<div class="tot"><span>Net payable</span><span>${_attInr(s.net_salary)}</span></div>` +
+    `<div class="muted" style="margin-top:12px;">Generated ${d.today}. For internal records.</div>` +
+    '<button class="btn noprint" onclick="window.print()">🖨️ Print / Save PDF</button>' +
+    '</div></body></html>';
+  const w = window.open("", "_blank");
+  if (!w) { sAlert("Please allow pop-ups to open the payslip."); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 async function _attPost(action, extra) {
@@ -2560,6 +2696,7 @@ async function _attPost(action, extra) {
     const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: action, pin: S.sessionPin, ...extra }) });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed");
+    const dm = document.getElementById("attDetailModal"); if (dm) dm.remove();
     await loadAttendance();
   } catch (e) {
     sAlert("Error: " + e.message);
