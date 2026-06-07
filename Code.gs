@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 14.9; // Soft-cancel: orders are never deleted, marked with status remark for audit trail
+const CODE_VERSION   = 15.0; // 2026-06-07: FIX admin approval display — 6-day loyalty reward was recomputed per-meal (showed full day reward on each meal = looked 3×). Now shows stored Net_Total/Discount (display-only; no financial impact)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -7317,34 +7317,17 @@ function getPendingUPIPayments() {
                const storedLoyaltyDiscount = Number(r.Discount_Amount) || 0;
                const isLoyalty             = String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes";
 
-               // ── Loyalty admin-display correction ────────────────────────
-               // The row's stored Discount_Amount may be too small if any
-               // past-streak row had a missing Inflation_Surcharge column.
-               // Recompute the correct waiver on-the-fly and override the
-               // displayed amount + loyalty_discount so admin sees what
-               // the customer actually paid (after full loyalty), not the
-               // wrongly-stored Net_Total.
-               let displayAmount   = isSplit ? Math.max(0, (Number(r.Net_Total) || 0) - walletCredit) : (Number(r.Net_Total) || 0);
-               let displayLoyalty  = isLoyalty ? storedLoyaltyDiscount : 0;
-               let loyaltyCorrected = false;
-               let loyaltyStoredVal = storedLoyaltyDiscount;
-
-               if (isLoyalty) {
-                 const correctedWaiver = _recomputeLoyaltyWaiverForRow(r, rows);
-                 if (correctedWaiver > storedLoyaltyDiscount) {
-                   // Stored waiver was understated. Re-derive the true Net_Total:
-                   //   food + delivery + small_fee + surcharge - corrected_waiver - review_discount
-                   const food   = Number(r.Food_Subtotal) || 0;
-                   const surch  = Math.max(Number(r.Inflation_Surcharge) || 0, Math.ceil(food * 0.06));
-                   const del    = Number(r.Delivery_Charge) || 0;
-                   const sFee   = Number(r.Small_Order_Fee) || 0;
-                   const review = Number(r.Review_Discount) || 0;
-                   const correctedNet = Math.max(0, food + del + sFee + surch - correctedWaiver - review);
-                   displayAmount    = isSplit ? Math.max(0, correctedNet - walletCredit) : correctedNet;
-                   displayLoyalty   = correctedWaiver;
-                   loyaltyCorrected = true;
-                 }
-               }
+               // Show EXACTLY what was stored / charged — never recompute the
+               // loyalty waiver per meal. The 6-day reward is a single per-DAY
+               // value (the accumulated prior-day surcharges); recomputing it for
+               // each meal made all of a day's meals display the FULL day reward,
+               // so a 3-meal day looked like the reward was given 3×. The stored
+               // Net_Total + Discount_Amount already encode the correct, single
+               // application (overflow goes to wallet at submit time), so trust them.
+               const displayAmount    = isSplit ? Math.max(0, (Number(r.Net_Total) || 0) - walletCredit) : (Number(r.Net_Total) || 0);
+               const displayLoyalty   = isLoyalty ? storedLoyaltyDiscount : 0;
+               const loyaltyCorrected = false;
+               const loyaltyStoredVal = storedLoyaltyDiscount;
 
                return {
                  id: r.Submission_ID,
