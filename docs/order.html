@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.08.1";
+    const APP_VERSION = "v26.06.08.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5579,6 +5579,28 @@
       }
       if (S.step === 2) {
         if (!S.selectedDates.length) { toast(t('toast_select_date')); return; }
+        // ── REORDER: copy the saved meal items to EVERY selected date and jump
+        //    straight to Review (skip the meal-selection step). ──
+        if (S.reorderPending) {
+          const _reMeal = S.reorderPending.meal;
+          sBtnLoading($("btnNext"), true, t('loading_loading'));
+          await loadMealScreen();                      // fetch menu + init S.orders for the picked dates
+          const _rr = _applyReorderToSelectedDates();  // copy items into each date
+          S.reorderPending = null;
+          if (!_rr.applied) {
+            sBtnLoading($("btnNext"), false);
+            toast(`None of the picked date(s) have your ${_reMeal} item(s) on the menu. Pick other date(s).`, 5000);
+            return;
+          }
+          S.step = 4;
+          updateNav();
+          delete $("btnNext").dataset.origHtml;
+          window.scrollTo(0, 0);
+          try { await buildBillScreen(); } catch (e) { toast("Error building bill: " + e.message); }
+          sBtnLoading($("btnNext"), false);
+          if (_rr.skippedDates) toast(`Reordered to ${_rr.applied} date(s). ${_rr.skippedDates} skipped — those days didn't have your ${_reMeal} item(s) on the menu.`, 5500);
+          return;
+        }
         sBtnLoading($("btnNext"), true, t('loading_loading'));
         await loadMealScreen();
         sBtnLoading($("btnNext"), false);
@@ -6700,25 +6722,46 @@
     // ── ORDER AGAIN ─────────────────────────────────────────────
     // items_raw: {itemName: qty} from past order (Items_JSON).
     // Maps item names back to colKeys and pre-fills the cart for a chosen date.
-    function _reorderMeal(meal, itemsRawJson) {
+    // ── REORDER FLOW ─────────────────────────────────────────────────────────
+    // User taps Reorder → picks date(s) on the calendar → on Continue the exact
+    // same meal items are copied to EVERY selected date and they land straight on
+    // the Review page (meal-selection step is skipped). Held in S.reorderPending,
+    // consumed by goNext() at step 2.
+    async function _startReorder(meal, itemsRawJson) {
       let itemsRaw;
       try { itemsRaw = JSON.parse(itemsRawJson); } catch(e) { toast("Could not read order data."); return; }
+      if (!itemsRaw || !Object.keys(itemsRaw).length) { toast("No items found to reorder."); return; }
 
-      // Ask the user which date they want to reorder for (from currently selected dates)
-      const eligible = S.selectedDates.filter(d => {
-        const avail = getMealAvailability(d);
-        return avail[meal];
-      });
-      if (!eligible.length) {
-        toast(`No available ${meal} dates selected. Go back and select dates first.`, 3500); return;
+      // If the cart already has items, warn first — reordering starts fresh.
+      if (typeof hasAnyOrder === "function" && hasAnyOrder()) {
+        const ok = await sConfirm(
+          "You already have items in your cart. Reordering will <b>clear your current cart</b> and start fresh with this order.<br><br>Continue?",
+          "Replace current cart?", "🛒",
+          "तुमच्या कार्टमध्ये आधीच पदार्थ आहेत. पुन्हा ऑर्डर केल्यास सध्याची कार्ट रिकामी होईल. पुढे जायचे का?",
+          { confirmLabel: "Yes, reorder", cancelLabel: "Keep my cart" }
+        );
+        if (!ok) return;
       }
 
-      // If only one eligible date, use it; otherwise pick first (can be extended to a picker)
-      const targetDate = eligible[0];
+      S.reorderPending = { meal: meal, items: itemsRaw };
+      // Start a CLEAN reorder cart so the dates the user picks define the order.
+      S.selectedDates = [];
+      S.orders = {};
+      $("manageOrdersPanel").style.display = "none";
+      goToStep(2);
+      if (typeof renderCalendar === "function") renderCalendar();
+      toast(`📅 Reordering your ${meal} — pick the date(s), then tap Continue.`, 5000);
+    }
 
-      // Build colKey mapping: item name → colKey
-      // For Breakfast: use BREAKFAST_COL_MAP (name→colKey) + B_CURD
-      // For Lunch/Dinner: use FIXED_MEAL_ITEMS colKey directly
+    // Copies the pending reorder's items into EVERY selected date for that meal.
+    // For Breakfast, only copies items actually on that date's menu (everyday
+    // items like Poha/Upma are on every day; specials like Aloo Paratha only on
+    // their set days; Curd is always available). Lunch/Dinner items are fixed.
+    function _applyReorderToSelectedDates() {
+      if (!S.reorderPending) return { applied: 0, skippedDates: 0 };
+      const meal  = S.reorderPending.meal;
+      const items = S.reorderPending.items;
+
       const nameToColKey = {};
       if (meal === "Breakfast") {
         Object.entries(BREAKFAST_COL_MAP || {}).forEach(([name, ck]) => { nameToColKey[name] = ck; });
@@ -6730,25 +6773,35 @@
         );
       }
 
-      let filled = 0;
-      if (!S.orders[targetDate]) S.orders[targetDate] = { Breakfast:{items:{},notes:"",subtotal:0}, Lunch:{items:{},notes:"",subtotal:0}, Dinner:{items:{},notes:"",subtotal:0} };
-      const mObj = S.orders[targetDate][meal];
-      if (!mObj) { toast("Could not find meal slot."); return; }
+      let applied = 0, skippedDates = 0;
+      S.selectedDates.forEach(date => {
+        const avail = getMealAvailability(date);
+        if (!avail || !avail[meal]) { skippedDates++; return; }
+        if (!S.orders[date]) S.orders[date] = { Breakfast:{items:{},notes:"",subtotal:0}, Lunch:{items:{},notes:"",subtotal:0}, Dinner:{items:{},notes:"",subtotal:0} };
+        const mObj = S.orders[date][meal];
+        if (!mObj) { skippedDates++; return; }
 
-      Object.entries(itemsRaw).forEach(([name, qty]) => {
-        const ck = nameToColKey[name] || name;
-        if (qty > 0) { mObj.items[ck] = (mObj.items[ck] || 0) + Number(qty); filled++; }
+        // Breakfast: only items present on THIS date's menu are valid (Curd always ok).
+        const bfNames = (meal === "Breakfast")
+          ? new Set(((S.menuCache[date] && S.menuCache[date].breakfast) || []).map(b => b.name))
+          : null;
+
+        const newItems = {};
+        let copiedAny = false;
+        Object.entries(items).forEach(([name, qty]) => {
+          if (!(qty > 0)) return;
+          const ck = nameToColKey[name] || name;
+          if (meal === "Breakfast" && ck !== "B_CURD" && bfNames && !bfNames.has(name)) return;
+          newItems[ck] = Number(qty);
+          copiedAny = true;
+        });
+
+        if (!copiedAny) { skippedDates++; return; }
+        mObj.items = newItems; // exact copy — replace whatever was there
+        recalcSubtotal(date, meal);
+        applied++;
       });
-
-      if (!filled) { toast("No matching items found for reorder."); return; }
-      recalcSubtotal(targetDate, meal);
-
-      // Close manage orders panel and jump to meal screen
-      $("manageOrdersPanel").style.display = "none";
-      S.selectedDates = [...new Set([targetDate, ...S.selectedDates])];
-      goToStep(3);
-      setTimeout(() => { buildDateTabs(); renderMealContent(targetDate); }, 200);
-      toast(`✅ ${meal} items from past order added to ${formatDate(targetDate)}`, 3500);
+      return { applied, skippedDates };
     }
     function getPrice(colKey, meal, date) {
       if (meal === "Breakfast") {
@@ -9350,7 +9403,7 @@
                 ${o.payment_method?.toLowerCase().includes("wallet") ?
                 `<div style="display:inline-block;background:#f9fafb;color:#666;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #ddd;">💳 Wallet</div>` :
                 `<div style="display:inline-block;background:#f9fafb;color:#666;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #ddd;">📱 UPI</div>`}
-                ${o.items_raw ? `<button onclick='_reorderMeal("${o.meal}", this.dataset.items)' ${itemsRawAttr}
+                ${o.items_raw ? `<button onclick='_startReorder("${o.meal}", this.dataset.items)' ${itemsRawAttr}
                   style="font-size:0.65rem;font-weight:700;padding:2px 9px;border-radius:99px;border:1.5px solid #1E1240;color:#1E1240;background:#fff5f4;cursor:pointer;">📋 Reorder</button>` : ''}
               </div>
             </div>
