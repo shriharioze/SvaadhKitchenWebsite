@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.08.3";
+    const APP_VERSION = "v26.06.08.4";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5587,6 +5587,7 @@
           await loadMealScreen();                      // fetch menu + init S.orders for the picked dates
           const _rr = _applyReorderToSelectedDates();  // copy items into each date
           S.reorderPending = null;
+          S.reorderDateFilter = null;
           if (!_rr.applied) {
             sBtnLoading($("btnNext"), false);
             toast(`None of the picked date(s) have your ${_reMeal} item(s) on the menu. Pick other date(s).`, 5000);
@@ -5651,6 +5652,9 @@
       S.step++; updateNav(); window.scrollTo(0, 0);
     }
     function goToStep(s) {
+      // Leaving the calendar back toward the start abandons any pending reorder,
+      // so drop the special-breakfast date restriction.
+      if (s <= 1) { S.reorderPending = null; S.reorderDateFilter = null; }
       S.step = s;
       updateNav();
       window.scrollTo(0, 0);
@@ -6298,7 +6302,9 @@
         // Issue 3: disable today if all meal cutoffs have already passed
         const avail = getMealAvailability(ds);
         const allCutoffPassed = ds === today && !avail.Breakfast && !avail.Lunch && !avail.Dinner;
-        const disabled = isSun || past || allCutoffPassed || isKitchenClosed;
+        // Reorder of a special breakfast item → only its valid dates are selectable.
+        const reorderBlocked = !isSun && !past && S.reorderDateFilter && !S.reorderDateFilter.has(ds);
+        const disabled = isSun || past || allCutoffPassed || isKitchenClosed || reorderBlocked;
         let cls = "cal-day";
         if (disabled) cls += " disabled"; else if (sel) cls += " selected";
         if (ds === today && !sel && !disabled) cls += " today";
@@ -6747,6 +6753,32 @@
       // Start a CLEAN reorder cart so the dates the user picks define the order.
       S.selectedDates = [];
       S.orders = {};
+      S.reorderDateFilter = null;
+
+      // For Breakfast, restrict the calendar to dates that actually carry the
+      // reordered items. Everyday items (Poha/Upma) → no restriction; specials
+      // (e.g. Aloo Paratha) → only their set days are selectable.
+      if (meal === "Breakfast") {
+        const bfItemNames = Object.keys(itemsRaw)
+          .filter(k => k !== "B_CURD")
+          .map(k => (itemsRaw[k] && itemsRaw[k].name) || "")
+          .filter(Boolean);
+        if (bfItemNames.length) {
+          try {
+            const resp = await apiFetch(`${APPS_SCRIPT_URL}?action=getBreakfastItemDates&items=${encodeURIComponent(bfItemNames.join(","))}`, {}, { silent: true });
+            const res = await resp.json();
+            if (res && res.restrict) {
+              S.reorderDateFilter = new Set(res.dates || []);
+              if (!S.reorderDateFilter.size) {
+                toast("That breakfast item isn't on any upcoming menu to reorder.", 6000);
+                S.reorderPending = null;
+                return;
+              }
+            }
+          } catch (e) { /* on failure, fall back to no restriction */ }
+        }
+      }
+
       $("manageOrdersPanel").style.display = "none";
       goToStep(2);
       if (typeof renderCalendar === "function") renderCalendar();
