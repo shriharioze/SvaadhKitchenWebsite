@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.07.1";
+    const APP_VERSION = "v26.06.08.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6911,6 +6911,7 @@
       {
         let _psc = S.loyaltyInfo?.count || 0, _pps = S.loyaltyInfo?.surcharge || 0, _ppt = promoTracker;
         if (_psc >= 6) { _psc = 0; _pps = 0; }
+        let _prevDate = S.loyaltyInfo?.end || null; // for streak gap detection (mirrors main loop)
         const _dayNets = {}; // date → net day total (before carry-back)
         const _dateOrder = [];
         for (const _d of S.selectedDates) {
@@ -6919,6 +6920,8 @@
           ["Breakfast","Lunch","Dinner"].forEach(m => _dft += _do[m]?.subtotal || 0);
           if (_dft === 0) continue;
           _dateOrder.push(_d);
+          // Streak gap guard: non-consecutive date breaks the streak — restart.
+          if (_prevDate && !_streakConsecutive(_prevDate, _d)) { _psc = 0; _pps = 0; }
           const _ex = existingDayTotals[_d] || {};
           const _exft = Object.values(_ex).reduce((s,m) => s+(m.subtotal||0), 0);
           const _cdt = _dft + _exft;
@@ -6967,6 +6970,7 @@
           if (_hasExisting) { /* no streak state change */ }
           else if (_is6)    { _psc = 0; _pps = 0; }
           else              { _psc++; _pps += Math.ceil(_dft*0.06); }
+          _prevDate = _d;
         }
         // Find streak day surplus and carry backwards
         let _surplus = 0;
@@ -6987,11 +6991,20 @@
       }
       // ── End pre-compute pass ──
 
+      let prevStreakDate = S.loyaltyInfo?.end || null; // last ordered day (past or earlier cart date) — for gap detection
       for (const date of S.selectedDates) {
         const dayOrders = S.orders[date] || {};
         let dayFoodTotal = 0;
         ["Breakfast", "Lunch", "Dinner"].forEach(m => { dayFoodTotal += dayOrders[m]?.subtotal || 0; });
         if (dayFoodTotal === 0) continue;
+
+        // Streak gap guard: if this date is NOT consecutive with the previous
+        // ordered day, the streak is broken — restart the projected count so the
+        // 6th-day reward cannot fire across a real ordering gap.
+        if (prevStreakDate && !_streakConsecutive(prevStreakDate, date)) {
+          virtualStreakCount = 0;
+          virtualPastSurcharge = 0;
+        }
 
         // Combined day total includes previously placed orders for this date
         const existDay = existingDayTotals[date] || {};
@@ -7227,6 +7240,7 @@
           virtualStreakCount++;
           virtualPastSurcharge += daySurcharge;
         }
+        prevStreakDate = date; // this date is now an ordered day — track it for the next gap check
 
         html += `<div style="margin-top:18px; padding-top:12px; border-top: 1.5px dashed #eee;">`;
 
@@ -8892,6 +8906,26 @@
      * Calculates the current consecutive ordering streak and total past surcharges.
      * Skips Sundays.
      */
+    // Shared streak consecutiveness check: two ordered days are "consecutive"
+    // only if every in-between day is a Sunday or an admin-closed day (those
+    // never break a streak). Used by BOTH calculateLoyaltyStreak and the cart
+    // bill builder so the 6th-day reward never fires across a real ordering gap.
+    function _streakConsecutive(d1, d2) {
+      if (!d1 || !d2) return false;
+      const date1 = new Date(d1 + "T12:00:00"), date2 = new Date(d2 + "T12:00:00");
+      const diff = Math.round((date2 - date1) / 86400000);
+      if (diff <= 0) return false;
+      if (diff === 1) return true;
+      const closed = new Set(S.kitchenClosedDates || []);
+      let cur = new Date(date1); cur.setDate(cur.getDate() + 1);
+      while (cur < date2) {
+        const iso = cur.toISOString().split('T')[0];
+        if (cur.getDay() !== 0 && !closed.has(iso)) return false; // real ordering gap
+        cur.setDate(cur.getDate() + 1);
+      }
+      return true;
+    }
+
     function calculateLoyaltyStreak(pastOrders, cartDates = []) {
       const dailyTotals = {};
       const isPastReward = new Set();

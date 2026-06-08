@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.0; // 2026-06-07: FIX admin approval display — 6-day loyalty reward was recomputed per-meal (showed full day reward on each meal = looked 3×). Now shows stored Net_Total/Discount (display-only; no financial impact)
+const CODE_VERSION   = 15.1; // 2026-06-08: FIX loyalty streak carrying across ordering gaps (gap guard in cart + submitOrder)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -2062,8 +2062,43 @@ function _submitOrderInternal(body) {
     return String(d).trim().substring(0, 10);
   };
 
+  // ── Streak gap guard (mirrors the frontend fix) ──────────────────────────
+  // The projected streak must NOT carry across a real ordering gap. Build the
+  // set of ALL the customer's ordered days (past rows + this submission) so an
+  // in-between day that actually has an order — or a Sunday / admin-closed day —
+  // is NOT treated as a gap (and a real gap correctly resets the streak).
+  let prevStreakDate = initialStreakInfo.end || null;
+  const _closedSetSO = _kitchenClosedSet();
+  const _orderedDaysSO = new Set();
+  (allOrderRows || []).forEach(function(r) {
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    const dd = _normDate(r.Order_Date);
+    if (dd) _orderedDaysSO.add(dd);
+  });
+  (orders || []).forEach(function(o) { if (o && o.date) _orderedDaysSO.add(_normDate(o.date)); });
+  const _soStreakConsecutive = function(d1, d2) {
+    if (!d1 || !d2) return false;
+    const a = new Date(d1 + "T12:00:00"), b = new Date(d2 + "T12:00:00");
+    const diff = Math.round((b - a) / 86400000);
+    if (diff <= 0) return false;
+    if (diff === 1) return true;
+    let cur = new Date(a); cur.setDate(cur.getDate() + 1);
+    while (cur < b) {
+      const iso = Utilities.formatDate(cur, "Asia/Kolkata", "yyyy-MM-dd");
+      if (cur.getDay() !== 0 && !_closedSetSO[iso] && !_orderedDaysSO.has(iso)) return false; // real gap
+      cur.setDate(cur.getDate() + 1);
+    }
+    return true;
+  };
+
   for (const order of orders) {
     const orderDate = order.date;
+    // Gap guard: a date not consecutive with the previous ordered day breaks the
+    // streak — restart so the 6th-day reward can't fire across a real gap.
+    if (prevStreakDate && !_soStreakConsecutive(prevStreakDate, _normDate(orderDate))) {
+      virtualStreakCount = 0;
+      virtualPastSurcharge = 0;
+    }
     const is6thDay = (virtualStreakCount === 5); // Hits 6 on this day
     const existingDateInfo = (existingDayTotals[orderDate] || {});
 
@@ -2111,6 +2146,7 @@ function _submitOrderInternal(body) {
       virtualStreakCount++;
       virtualPastSurcharge += currentDaySurcharge;
     }
+    prevStreakDate = _normDate(orderDate); // this date is now an ordered day — track for the next gap check
 
     for (const meal of order.meals) {
       const sid = generateSubmissionID();
@@ -2785,6 +2821,7 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
 
   let streakCount = 0;
   let accumulatedSurcharge = 0;
+  let streakEndDate = null; // most-recent counted day = the streak's end (used for gap checks at submit time)
 
   const closedSet = _kitchenClosedSet(); // admin days-off — skipped like Sundays, never break the streak
   let d = new Date(); d.setDate(d.getDate() - 1); // start from yesterday
@@ -2803,6 +2840,7 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
         break;
       }
       streakCount++;
+      if (!streakEndDate) streakEndDate = iso; // walking backward → first counted day is the most recent
       accumulatedSurcharge += dailyTotals[iso];
     } else {
       break; // gap in ordering — streak broken
@@ -2814,7 +2852,7 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
   // first and marked Loyalty_Discount=Yes), treat it as a cycle already reset —
   // return streak=0 so any subsequent meal on the same day doesn't get a double reward.
   if (rewardDays.has(todayISO)) {
-    return { streak: 0, pastSurcharge: 0 };
+    return { streak: 0, pastSurcharge: 0, end: null };
   }
 
   // Anomaly logging — if the customer hit a full 5-day streak but the
@@ -2830,7 +2868,7 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
       + " dailyTotals=" + JSON.stringify(dailyTotals));
   }
 
-  return { streak: streakCount, pastSurcharge: accumulatedSurcharge };
+  return { streak: streakCount, pastSurcharge: accumulatedSurcharge, end: streakEndDate };
 }
 
 // ── VERIFY ORDER PLACED (timeout recovery) ───────────────────
