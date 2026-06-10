@@ -137,7 +137,10 @@ function ia_checkPhone(phone) {
   const ws = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
   const row = ia_rows(ws).find(function (r) { return ia_normPhone(r.Phone) === p; });
   if (!row) return { exists: false };
-  return { exists: true, name: row.Name || "", status: row.Status || "active" };
+  // PIN cleared by admin (the "forgot PIN" reset) → account exists but needs a
+  // fresh PIN. Frontend uses pin_reset to route to the "set new PIN" screen.
+  const pinReset = String(row.PIN || "").trim() === "";
+  return { exists: true, name: row.Name || "", status: row.Status || "active", pin_reset: pinReset };
 }
 
 function ia_verifyLogin(phone, pin) {
@@ -163,7 +166,15 @@ function ia_register(body) {
     const ws = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
     const existing = ia_rows(ws).find(function (r) { return ia_normPhone(r.Phone) === p; });
     if (existing) {
-      if (String(existing.PIN) !== pin) return { error: "Account exists. Enter your PIN to continue." };
+      const existingPin = String(existing.PIN || "").trim();
+      if (existingPin === "") {
+        // PIN was reset/cleared by admin → set the new PIN on this existing row.
+        ia_forceTextCols(ws);
+        ws.getRange(existing._row, 3).setNumberFormat("@").setValue(pin);
+        if (name) ws.getRange(existing._row, 2).setValue(name);
+        return { success: true, name: name || existing.Name || "" };
+      }
+      if (existingPin !== pin) return { error: "Account exists. Enter your PIN to continue." };
       return { success: true, name: existing.Name || name };
     }
     ia_forceTextCols(ws);

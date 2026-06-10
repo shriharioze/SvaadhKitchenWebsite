@@ -342,7 +342,7 @@
     // Same UPI details as the live order page (manual payments).
     const UPI_VPA = "9819969682@hdfc", UPI_VPA_BACKUP = "shriharioze07-1@okhdfcbank", UPI_NAME = "Svaadh Kitchen";
     const $ = id => document.getElementById(id);
-    const S = { step:0, phone:"", pinReal:"", name:"", isNew:false, acctChecked:false,
+    const S = { step:0, phone:"", pinReal:"", name:"", isNew:false, pinReset:false, acctChecked:false,
                 dates:[], calY:0, calM:0, cfg:null, menu:{}, cart:{}, open:{} };
 
     function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2800); }
@@ -374,7 +374,7 @@
       try{ S.cfg=await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"],cutoffs:{Lunch:{h:11,m:0},Dinner:{h:17,m:0}}}; }
       const now=new Date(); S.calY=now.getFullYear(); S.calM=now.getMonth();
       $("phone").addEventListener("input",e=>{ e.target.value=e.target.value.replace(/\D/g,"");
-        if(S.acctChecked){ S.acctChecked=false; S.pinReal=""; $("pin").value=""; $("loginExtra").style.display="none"; $("next").textContent="Continue →"; }});
+        if(S.acctChecked){ S.acctChecked=false; S.isNew=false; S.pinReset=false; S.pinReal=""; $("pin").value=""; $("loginExtra").style.display="none"; $("next").textContent="Continue →"; }});
       setupPinMask();
       $("calPrev").onclick=()=>{ S.calM--; if(S.calM<0){S.calM=11;S.calY--;} renderCalendar(); };
       $("calNext").onclick=()=>{ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} renderCalendar(); };
@@ -437,22 +437,27 @@
         setBusy(false);                          // restores "Continue →"
         if(r.error){ toast(r.error); return; }
         S.isNew=!r.exists;
+        S.pinReset=!!r.pin_reset;                 // existing account whose PIN was cleared
+        const setPinMode=S.isNew||S.pinReset;     // either case = user must choose a new PIN
+        if(S.pinReset && r.name) $("name").value=r.name;  // prefill known name on reset
         $("loginExtra").style.display="block";
-        $("nameWrap").style.display=S.isNew?"block":"none";
-        $("pinLabel").textContent=S.isNew?"Set a 4-digit PIN":"Enter your PIN";
-        $("pinHint").textContent=S.isNew?"💡 Make it memorable — try your birthday (DDMM). You'll use this PIN every time you log in."
-                                        :("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN.");
-        $("forgotPin").style.display=S.isNew?"none":"block";   // only returning users can forget
-        $("next").textContent=S.isNew?"Set PIN & Continue →":"Verify PIN & Continue →";  // set AFTER busy clears
+        $("nameWrap").style.display=setPinMode?"block":"none";
+        $("pinLabel").textContent=setPinMode?(S.pinReset?"Set a new 4-digit PIN":"Set a 4-digit PIN"):"Enter your PIN";
+        $("pinHint").textContent=S.pinReset?"Your PIN was reset. Choose a new 4-digit PIN to continue."
+                                          :(S.isNew?"💡 Make it memorable — try your birthday (DDMM). You'll use this PIN every time you log in."
+                                                   :("Welcome back"+(r.name?", "+r.name:"")+"! Enter your PIN."));
+        $("forgotPin").style.display=setPinMode?"none":"block";   // only returning users with a PIN can forget
+        $("next").textContent=setPinMode?"Set PIN & Continue →":"Verify PIN & Continue →";  // set AFTER busy clears
         S.acctChecked=true; setTimeout(()=>$("pin").focus(),100);
         return;
       }
       const pin=S.pinReal, name=$("name").value.trim();
+      const setPinMode=S.isNew||S.pinReset;
       if(pin.length!==4){ toast("PIN must be 4 digits."); return; }
-      if(S.isNew && !name){ toast("Please enter your name."); return; }
-      setBusy(true,S.isNew?"Creating…":"Verifying…");
+      if(setPinMode && !name){ toast("Please enter your name."); return; }
+      setBusy(true,setPinMode?(S.pinReset?"Saving…":"Creating…"):"Verifying…");
       let res;
-      try{ res=S.isNew?await post({_action:"ia_register",phone,pin,name}):await api("ia_verifyLogin",{phone,pin}); }
+      try{ res=setPinMode?await post({_action:"ia_register",phone,pin,name}):await api("ia_verifyLogin",{phone,pin}); }
       catch(e){ setBusy(false); toast("Network error — try again."); return; }
       if(!res.success){ setBusy(false); toast(res.error||"Could not continue."); return; }
       S.phone=phone; S.pin=pin; S.name=res.name||name;

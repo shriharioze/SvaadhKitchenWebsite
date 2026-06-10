@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.2; // 2026-06-08: ADD getBreakfastItemDates endpoint for special-breakfast reorder calendar restriction
+const CODE_VERSION   = 15.3; // 2026-06-08: FIX Intent PIN reset flow — cleared PIN now lets user set a new one (was "Incorrect")
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
