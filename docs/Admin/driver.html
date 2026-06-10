@@ -874,6 +874,15 @@ function _queueDelivery(submissionId, meal, deliveredAt) {
     _showOfflineBadge(q.length);
   }
 }
+// Queue a failed "Start Delivery" (batchMarkEnRoute) for background sync.
+// The UI is already unlocked optimistically; this only retries the server write.
+function _queueEnRoute(submissionIds, enRouteAt) {
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem(_OFFLINE_KEY) || "[]"); } catch(e) {}
+  q.push({ type: "enroute", submissionIds, enRouteAt, pin: D.sessionPin });
+  localStorage.setItem(_OFFLINE_KEY, JSON.stringify(q));
+  _showOfflineBadge(q.length);
+}
 function _showOfflineBadge(count) {
   let badge = document.getElementById("offlineQueueBadge");
   if (!badge) {
@@ -883,7 +892,7 @@ function _showOfflineBadge(count) {
     badge.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#e67e22;color:#fff;font-size:0.78rem;font-weight:700;padding:8px 16px;border-radius:20px;cursor:pointer;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);";
     document.body.appendChild(badge);
   }
-  badge.textContent = `⚠️ ${count} delivery offline — tap to sync`;
+  badge.textContent = `⚠️ ${count} update(s) offline — tap to sync`;
   badge.style.display = count > 0 ? "block" : "none";
 }
 
@@ -895,6 +904,14 @@ async function _flushOfflineQueue() {
   const remaining = [];
   for (const item of q) {
     try {
+      // Queued "Start Delivery" batch (UI already unlocked optimistically)
+      if (item.type === "enroute") {
+        const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
+          body: JSON.stringify({_action:"batchMarkEnRoute", pin: item.pin || D.sessionPin, submissionIds: item.submissionIds, enRouteAt: item.enRouteAt})});
+        const data = await res.json();
+        if (data.success) flushed++; else remaining.push(item);
+        continue;
+      }
       const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
         body: JSON.stringify({_action:"markDelivered", pin: item.pin || D.sessionPin, submissionId: item.submissionId, deliveredAt: item.deliveredAt})});
       const data = await res.json();
@@ -978,6 +995,17 @@ async function markAllEnRoute(meal) {
   const enRouteAt = new Date().toISOString();
   const submissionIds = orders.filter(o => !o.enRouteAt && !o.deliveredAt).map(o => o.submissionId);
 
+  // OPTIMISTIC UNLOCK: apply local state FIRST so a flaky network can never
+  // leave the cards stuck on "Start Delivery to Unlock". The server sync
+  // happens after; if it fails it's queued and flushed automatically.
+  orders.forEach(o => {
+    if (submissionIds.includes(o.submissionId)) o.enRouteAt = enRouteAt;
+  });
+  const selectedDate = document.getElementById("datePicker").value;
+  localStorage.setItem(`sk_enroute_${selectedDate}_${meal}`, 'true');
+  document.getElementById("panel_" + meal).innerHTML = renderMealPanel(orders, meal);
+  switchTab(meal);
+
   try {
     const res = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
@@ -990,26 +1018,11 @@ async function markAllEnRoute(meal) {
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed to update");
-
-    // Update local data
-    orders.forEach(o => {
-      if (submissionIds.includes(o.submissionId)) o.enRouteAt = enRouteAt;
-    });
-
-    // Persist Started state
-    const selectedDate = document.getElementById("datePicker").value;
-    localStorage.setItem(`sk_enroute_${selectedDate}_${meal}`, 'true');
-
-    btn.className = "route-btn green done";
-    btn.innerHTML = `🚗 ${meal} Out for Delivery`;
-    
-    // Refresh the UI cards to unlock the "Mark Delivered" buttons
-    document.getElementById("panel_" + meal).innerHTML = renderMealPanel(orders, meal);
-    switchTab(meal);
     await sAlert(`Success! ${submissionIds.length} orders marked as Out for Delivery.`, "Delivery Started", "✅");
   } catch (err) {
-    sBtnLoading(btn, false);
-    await sAlert("Error: " + err.message, "Batch Update Failed", "❌");
+    // Cards are already unlocked locally — queue the server sync for later.
+    _queueEnRoute(submissionIds, enRouteAt);
+    await sAlert("No signal — delivery started locally and all points are unlocked. The server will sync automatically when you're back online (or tap the orange badge).", "Started (Offline)", "📡");
   }
 }
 

@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.4; // 2026-06-08: ADD admin Reset PIN buttons (regular + IA customers) — adminResetPin / ia_resetPin
+const CODE_VERSION   = 15.5; // 2026-06-10: ADD autoMarkDeliveredDaily midnight trigger + resilient Start Delivery (optimistic unlock + offline queue)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -798,6 +798,11 @@ function doPost(e) {
     if (action === "setupQuarterlyArchiveTrigger") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       try { setupQuarterlyArchiveTrigger(); return jsonRes({success:true}); }
+      catch(e) { return jsonRes({success:false, error:e.message}); }
+    }
+    if (action === "setupAutoDeliveredTrigger") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      try { return jsonRes({success:true, message: setupAutoDeliveredTrigger()}); }
       catch(e) { return jsonRes({success:false, error:e.message}); }
     }
 
@@ -7496,6 +7501,75 @@ function markDelivered(body) {
     ws.appendRow(newRowArr);
   }
   return {success:true, submissionId:sid, deliveredAt:deliveredAt};
+}
+
+// ── AUTO-MARK DELIVERED (daily 00:00 IST safety net) ─────────────────────────
+// If the driver forgets to tap "Mark Delivered", any order dated BEFORE today
+// is auto-marked delivered at the start of the next day. Deliveries are keyed
+// by Submission_ID and one submission can span several dates, so a submission
+// is only auto-marked once ALL its (non-cancelled) orders are in the past —
+// otherwise we'd pre-mark tomorrow's delivery as done.
+function autoMarkDeliveredDaily() {
+  var ss    = getSpreadsheet();
+  var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  var ws    = getOrCreateTab(ss, TAB_ORDERS, []);
+  var rows  = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+
+  var bySid = {}; // sid → { past: has orders before today, current: has orders today/future }
+  rows.forEach(function(r) {
+    var sid = String(r.Submission_ID || "").trim();
+    if (!sid) return;
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    var d = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date || "").trim();
+    if (!d) return;
+    if (!bySid[sid]) bySid[sid] = { past: false, current: false };
+    if (d < today) bySid[sid].past = true; else bySid[sid].current = true;
+  });
+
+  var delWs   = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
+  var hIdx    = headerIndex(delWs);
+  var delMap  = {};
+  getAllRows(delWs).forEach(function(r) {
+    var s = String(r.Submission_ID || "").trim();
+    if (s) delMap[s] = r;
+  });
+
+  var stamp  = new Date().toISOString();
+  var marked = 0;
+  Object.keys(bySid).forEach(function(sid) {
+    var s = bySid[sid];
+    if (!s.past || s.current) return; // nothing past-due, or still has today/future orders
+    var existing = delMap[sid];
+    if (existing && String(existing.Delivered_At || "").trim() !== "") return; // already delivered
+    if (existing) {
+      delWs.getRange(existing._row, hIdx["Delivered_At"]).setValue(stamp);
+    } else {
+      var arr = [];
+      arr[hIdx["Submission_ID"] - 1] = sid;
+      arr[hIdx["Delivered_At"] - 1]  = stamp;
+      arr[hIdx["EnRoute_At"] - 1]    = "";
+      delWs.appendRow(arr);
+    }
+    marked++;
+  });
+  Logger.log("autoMarkDeliveredDaily: auto-marked " + marked + " submission(s) delivered.");
+  return { success: true, marked: marked };
+}
+
+// Run once (Apps Script editor or admin action) to register the daily trigger.
+// Script timezone is Asia/Kolkata, so atHour(0) fires between 00:00–01:00 IST.
+function setupAutoDeliveredTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "autoMarkDeliveredDaily") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("autoMarkDeliveredDaily")
+    .timeBased()
+    .everyDays(1)
+    .atHour(0)
+    .create();
+  return "Auto-delivered trigger set — runs daily shortly after midnight IST.";
 }
 
 // ═══════════════════════════════════════════════════════
