@@ -446,6 +446,27 @@ function ia_customers(body) {
   };
 }
 
+// Admin: clear a customer's PIN so they can set a fresh one on next login.
+// The row is kept; only the PIN cell (column C) is emptied. ia_checkPhone then
+// returns pin_reset:true and the app routes them to the "set new PIN" screen.
+function ia_resetPin(body) {
+  if (!ia_isAdmin(body.pin)) return { error: "Unauthorized." };
+  const p = ia_normPhone(body.phone);
+  if (p.length !== 10) return { error: "Enter a valid 10-digit number." };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ws = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
+    const existing = ia_rows(ws).find(function (r) { return ia_normPhone(r.Phone) === p; });
+    if (!existing) return { error: "Customer not found." };
+    ia_forceTextCols(ws);
+    ws.getRange(existing._row, 3).setNumberFormat("@").setValue(""); // PIN = column C
+    return { success: true, name: existing.Name || "" };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function ia_analytics(body) {
   if (!ia_isAdmin(body.pin)) return { error: "Unauthorized." };
   const from = body.from || "", to = body.to || "";

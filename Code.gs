@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.3; // 2026-06-08: FIX Intent PIN reset flow — cleared PIN now lets user set a new one (was "Incorrect")
+const CODE_VERSION   = 15.4; // 2026-06-08: ADD admin Reset PIN buttons (regular + IA customers) — adminResetPin / ia_resetPin
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -755,6 +755,10 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(adminCreditWallet(body));
     }
+    if (action === "adminResetPin") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(adminResetPin(body));
+    }
     if (action === "rejectWalletRecharge") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(rejectWalletRecharge(body));
@@ -862,6 +866,7 @@ function doPost(e) {
     if (action === "ia_submitOrder") return jsonRes(ia_submitOrder(body));
     if (action === "ia_setMenu")     return jsonRes(ia_setMenu(body));
     if (action === "ia_approve")     return jsonRes(ia_approve(body));
+    if (action === "ia_resetPin")    return jsonRes(ia_resetPin(body));
     if (action === "ia_markDelivered")    return jsonRes(ia_markDelivered(body));
     if (action === "ia_batchMarkEnRoute") return jsonRes(ia_batchMarkEnRoute(body));
 
@@ -6170,6 +6175,30 @@ function getAnalytics(p) {
     // Lets the admin UI show "Including X archived orders" so they know
     // the report pulled across archive files (which is slower than live-only).
     archived:{count: archivedCount, included: archivedCount > 0}};
+}
+
+// ── ADMIN RESET CUSTOMER PIN ──────────────────────────────────────────────────
+// Clears the PIN cell for a customer so they can set a new one on next login.
+// The row is kept; getCustomer() then returns hasPin:false → the order flow
+// shows the "set a new PIN" screen automatically.
+function adminResetPin(body) {
+  var phone = _normalizePhone(body.phone);
+  if (!phone || phone.length < 10) return { success: false, error: "Valid phone required" };
+  var ss = getSpreadsheet();
+  var ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  if (ws.getLastRow() < 2) return { success: false, error: "Customer not found." };
+  var headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+  var pinCol   = headers.indexOf("PIN") + 1;
+  var phoneCol = headers.indexOf("Phone");
+  if (!pinCol || phoneCol < 0) return { success: false, error: "Schema error: PIN/Phone column missing." };
+  var data = ws.getRange(2, 1, ws.getLastRow() - 1, ws.getLastColumn()).getValues();
+  for (var i = 0; i < data.length; i++) {
+    if (_normalizePhone(data[i][phoneCol]) === phone) {
+      ws.getRange(i + 2, pinCol).setValue("");
+      return { success: true };
+    }
+  }
+  return { success: false, error: "Customer not found." };
 }
 
 // ── ADMIN WALLET CREDIT ───────────────────────────────────────────────────────

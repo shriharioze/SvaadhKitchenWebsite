@@ -5410,6 +5410,29 @@ async function toggleVIP(phone, status) {
   }
 }
 
+async function adminResetPin(phone, name) {
+  const who = name || phone;
+  if (!(await showUIConfirm(
+    `Reset the wallet PIN for ${who}?<br><br>Their current PIN will be <b>cleared</b>. The next time they log in they'll be asked to set a new 4-digit PIN. Their wallet balance and order history are unaffected.`,
+    "Reset PIN", "🔑"))) return;
+
+  sLoading(true, "Resetting PIN...");
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ _action: "adminResetPin", pin: S.sessionPin, phone })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Could not reset PIN.");
+    toast("🔑 PIN cleared — customer will set a new one on next login.");
+    loadCustomerDetail(phone);
+  } catch(e) {
+    sAlert("Error: " + e.message);
+  } finally {
+    sLoading(false);
+  }
+}
+
 async function whitelistNewVIP() {
   const phone = prompt("Enter the phone number to whitelist for FREE delivery:");
   if (!phone || phone.length < 10) return;
@@ -5734,12 +5757,23 @@ function renderCustomerDetail(data) {
            ${data.On_Account === 'Yes' ? `<span style="color:#0d47a1;">💳 Authorized (${data.Billing_Cycle || 'Daily'})</span>` : '<span style="color:var(--muted);">Unauthorized</span>'}
          </div>
        </div>
-       <button class="btn-set-fav" style="padding:8px 16px; font-weight:700; border-color:${data.On_Account === 'Yes' ? 'var(--red-border)' : '#1e5fa8'}; color:${data.On_Account === 'Yes' ? 'var(--red)' : '#1e5fa8'};" 
+       <button class="btn-set-fav" style="padding:8px 16px; font-weight:700; border-color:${data.On_Account === 'Yes' ? 'var(--red-border)' : '#1e5fa8'}; color:${data.On_Account === 'Yes' ? 'var(--red)' : '#1e5fa8'};"
          onclick="toggleOnAccount('${data.phone}', ${data.On_Account !== 'Yes'})">
          ${data.On_Account === 'Yes' ? 'Remove On Account' : '💳 Authorize On Account'}
        </button>
     </div>
-    
+
+    <div style="background:#fff5f4; padding:12px 16px; border-radius:12px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; border:1px solid #f0c4c0;">
+       <div>
+         <div style="font-size:.65rem; color:#b23b34; font-weight:700; text-transform:uppercase; margin-bottom:4px;">Wallet PIN</div>
+         <div style="font-size:.9rem; font-weight:700; color:var(--muted);">Clear PIN so the customer can set a new one on next login</div>
+       </div>
+       <button class="btn-set-fav" id="resetPinBtn" style="padding:8px 16px; font-weight:700; border-color:var(--red-border); color:var(--red);"
+         onclick="adminResetPin('${data.phone}', '${(data.name||'').replace(/'/g, "\\'")}')">
+         🔑 Reset PIN
+       </button>
+    </div>
+
     ${stdOrderHtml}
     ${bulkTool}
 
