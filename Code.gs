@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.6; // 2026-06-10: FIX loyalty streak undercount — today's placed orders now count as streak days (frontend/backend parity)
+const CODE_VERSION   = 15.7; // 2026-06-10: FIX fixLoyaltyDiscountMarkers — replay now also skips admin kitchen-closed days (was Sundays only)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -9240,6 +9240,10 @@ function fixLoyaltyDiscountMarkers() {
   const writes = []; // { rowIndex, value }
   let changed = 0, unchanged = 0;
 
+  // Admin-marked kitchen-closed days (past dates included) — skipped like
+  // Sundays so an owner day-off never counts as the customer breaking a streak.
+  const closedSet = _kitchenClosedSet();
+
   Object.entries(byPhone).forEach(([phone, rows]) => {
     // Sort chronologically, then by rowIndex (multiple meals same day)
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.rowIndex - b.rowIndex);
@@ -9268,11 +9272,15 @@ function fixLoyaltyDiscountMarkers() {
       if (!prevDate) {
         isContinuous = true; // first ever day always starts streak
       } else {
-        // Advance prevDate forward by 1+ days, skipping Sundays, to see if we land on dateStr
+        // Advance prevDate forward by 1+ days, skipping Sundays AND admin-closed
+        // days, to see if we land on dateStr
         const prev = new Date(prevDate + "T00:00:00+05:30");
         let nxt = new Date(prev); nxt.setDate(nxt.getDate() + 1);
-        while (nxt.getDay() === 0) nxt.setDate(nxt.getDate() + 1); // skip Sundays
-        const nxtISO = Utilities.formatDate(nxt, "Asia/Kolkata", "yyyy-MM-dd");
+        let nxtISO = Utilities.formatDate(nxt, "Asia/Kolkata", "yyyy-MM-dd");
+        while (nxt.getDay() === 0 || closedSet[nxtISO]) { // skip Sundays + kitchen-closed days
+          nxt.setDate(nxt.getDate() + 1);
+          nxtISO = Utilities.formatDate(nxt, "Asia/Kolkata", "yyyy-MM-dd");
+        }
         isContinuous = (nxtISO === dateStr);
       }
 
