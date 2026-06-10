@@ -702,7 +702,12 @@ function renderMealPanel(orders, meal) {
   
   // Detect if delivery trip already started for this meal (now includes localStorage check)
   const isEnRoute = orders.some(o => o.enRouteAt);
-  
+
+  // Glitch recovery: delivery was started but some points are still locked
+  // (no enRouteAt, not delivered). Offer a Restart to re-open just those.
+  const lockedCount = orders.filter(o => !o.enRouteAt && !o.deliveredAt).length;
+  const showRestart = isToday && timeReached && isEnRoute && lockedCount > 0;
+
   const fmtSlotTime = (t) => {
     const h = Math.floor(t), m = (t % 1) * 60;
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`;
@@ -744,6 +749,7 @@ function renderMealPanel(orders, meal) {
             ${btnAttr}>
       ${btnText}
     </button>
+    ${showRestart ? `<button class="route-btn" onclick="restartDelivery('${meal}')" title="Re-unlock delivery points still showing 'Start Delivery to Unlock' (delivered orders stay delivered)" style="background:#e67e22;">↻ Restart Delivery</button>` : ""}
     ${(!isEnRoute && statusMsg) ? `<span style="font-size:0.7rem;color:#1E1240;font-weight:700;margin-left:4px;">${statusMsg}</span>` : ""}
     ${canOptimize
       ? `<button class="route-btn" onclick="optimizeRoute('${meal}')">🗺 Optimize Route</button>`
@@ -1004,6 +1010,39 @@ async function markAllEnRoute(meal) {
   } catch (err) {
     sBtnLoading(btn, false);
     await sAlert("Error: " + err.message, "Batch Update Failed", "❌");
+  }
+}
+
+// Glitch recovery: re-open only the delivery points still showing
+// "Start Delivery to Unlock" (locked, not yet delivered). Delivered orders
+// are left untouched. Use when "Start Delivery" half-failed and some cards
+// stayed locked with no way to retry.
+async function restartDelivery(meal) {
+  const orders = _ordersData[meal] || [];
+  const locked = orders.filter(o => !o.enRouteAt && !o.deliveredAt);
+  if (!locked.length) { await sAlert("All delivery points for " + meal + " are already unlocked.", "Nothing to restart", "ℹ️"); return; }
+
+  if (!await sConfirm(`Re-unlock ${locked.length} ${meal} delivery point(s) still showing "Start Delivery to Unlock"?\n\nAlready-delivered orders stay delivered — this only re-opens the stuck ones.`, "Restart Delivery", "↻")) return;
+
+  const enRouteAt = new Date().toISOString();
+  const submissionIds = locked.map(o => o.submissionId);
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ _action: "batchMarkEnRoute", pin: D.sessionPin, submissionIds: submissionIds, enRouteAt: enRouteAt })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed to update");
+
+    orders.forEach(o => { if (submissionIds.includes(o.submissionId)) o.enRouteAt = enRouteAt; });
+    const selectedDate = document.getElementById("datePicker").value;
+    localStorage.setItem(`sk_enroute_${selectedDate}_${meal}`, 'true');
+
+    document.getElementById("panel_" + meal).innerHTML = renderMealPanel(orders, meal);
+    switchTab(meal);
+    await sAlert(`Re-opened ${submissionIds.length} delivery point(s). You can now mark them delivered.`, "Delivery Restarted", "✅");
+  } catch (err) {
+    await sAlert("Error: " + err.message, "Restart Failed", "❌");
   }
 }
 
