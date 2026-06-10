@@ -1725,6 +1725,17 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
         <div id="custGridWrap">
           <div style="text-align:center;padding:40px;color:var(--muted);">Click <strong>Refresh</strong> to load all customers</div>
         </div>
+
+        <!-- ════ IA · Intent employees (separate namespace) ════ -->
+        <div style="margin-top:30px;border-top:2px dashed var(--border);padding-top:18px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:.85rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#6a3fb5;">🎯 IA · Intent Employees</div>
+            <button class="btn-primary" style="background:#6a3fb5;border-color:#6a3fb5;" onclick="loadIACustomers()">↺ Refresh IA</button>
+          </div>
+          <div id="iaCustGridWrap">
+            <div style="text-align:center;padding:24px;color:var(--muted);">Click <strong>Refresh</strong> above to load IA employees</div>
+          </div>
+        </div>
       </div><!-- /pageCustomers -->
 
       <!-- ════ PAGE: APPROVALS ════ -->
@@ -5302,6 +5313,7 @@ async function loadCustomers(force = false, silent = false) {
     _custDataLoaded = true;
     _backgroundLoadSuccess.customers = true;
     applyCustomerFilters();
+    loadIACustomers();   // load IA / Intent employees alongside regular customers
   } catch(e) {
     if (!silent && el) {
       el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
@@ -5430,6 +5442,50 @@ async function adminResetPin(phone, name) {
     sAlert("Error: " + e.message);
   } finally {
     sLoading(false);
+  }
+}
+
+// ── IA / Intent employees (separate namespace, same admin PIN) ────────────────
+async function loadIACustomers() {
+  const el = document.getElementById("iaCustGridWrap");
+  if (!el) return;
+  el.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  try {
+    const res  = await fetch(`${APPS_SCRIPT_URL}?action=ia_customers&pin=${S.sessionPin}&_t=${Date.now()}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const list = data.customers || [];
+    if (!list.length) { el.innerHTML = `<div class="no-orders-msg">No IA employees yet.</div>`; return; }
+    el.innerHTML = `<table class="hist-table">
+      <thead><tr><th>Name</th><th>Phone</th><th>Joined</th><th>Last order</th><th style="text-align:right;">PIN</th></tr></thead>
+      <tbody>${list.map(c=>`<tr>
+        <td><span class="vip-chip" style="background:#ede4fb;color:#6a3fb5;">IA</span> <strong>${(c.name||"").replace(/</g,"&lt;")}</strong></td>
+        <td><span style="font-size:.72rem;color:var(--muted);">${c.phone}</span></td>
+        <td><span style="font-size:.72rem;color:var(--muted);">${c.created_at||"—"}</span></td>
+        <td><span style="font-size:.72rem;color:var(--muted);">${c.last_order||"—"}</span></td>
+        <td style="text-align:right;"><button class="btn-set-fav" style="padding:5px 12px;font-weight:700;border-color:var(--red-border);color:var(--red);"
+          onclick="iaResetPin('${c.phone}','${(c.name||'').replace(/'/g,"\\'")}', this)">🔑 Reset PIN</button></td>
+      </tr>`).join("")}</tbody></table>`;
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--red);padding:12px;">Error: ${e.message}</p>`;
+  }
+}
+
+async function iaResetPin(phone, name, btn) {
+  const who = name || phone;
+  if (!(await showUIConfirm(
+    `Reset the Intent (IA) PIN for ${who}?<br><br>Their current PIN will be <b>cleared</b>. The next time they log in they'll be asked to set a new 4-digit PIN.`,
+    "Reset IA PIN", "🔑"))) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Resetting…"; }
+  try {
+    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"ia_resetPin", pin:S.sessionPin, phone }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Could not reset PIN.");
+    toast("🔑 IA PIN cleared — employee will set a new one on next login.");
+    if (btn) btn.textContent = "✓ Reset";
+  } catch(e) {
+    sAlert("Error: " + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = "🔑 Reset PIN"; }
   }
 }
 
