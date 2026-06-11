@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.9; // 2026-06-12: AUDIT batch 1 — negative-net clamp generalized, per-meal surcharge accrual, ₹11 delivery clawback, dynamic clawback threshold, cancelled rows excluded, VIP retro-credit parity
+const CODE_VERSION   = 16.0; // 2026-06-12: AUDIT batch 2 — single markReviewed (+3, claimed flag), promo/surplus backout on duplicate skips, layer-4 dup guard moved to pre-flight, promo use restored on cancellation
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -2116,6 +2116,63 @@ function _submitOrderInternal(body) {
     return String(d).trim().substring(0, 10);
   };
 
+  // ════ LAYER 4 PRE-FLIGHT — LONG-WINDOW DUPLICATE GUARD ═══════════════════
+  // Scan EVERY meal of this submission for a historical duplicate BEFORE any
+  // row is written. (Doing this mid-loop used to reject the submission AFTER
+  // earlier meals' rows were already appended — a half-placed order the
+  // customer believed had failed.) Recent rows (≤5 min) are excluded here:
+  // those are legitimate retries, silently deduped by layers 1–3 in the loop.
+  if (body.confirm_duplicate !== true) {
+    for (const _o of orders) {
+      let _mealsPF = _o.meals || [];
+      for (const _m of _mealsPF) {
+        let _itemsPF = _m.items || [];
+        if (typeof _itemsPF === "string") { try { _itemsPF = JSON.parse(_itemsPF); } catch(e) { _itemsPF = []; } }
+        if (!Array.isArray(_itemsPF)) _itemsPF = [];
+        const _objPF = {};
+        // Build EXACTLY like the main loop's itemsObj (no qty filtering) so the
+        // signature matches what rows store and what layers 1–3 compare.
+        _itemsPF.forEach(it => {
+          if (!it) return;
+          _objPF[it.colKey === "B_CURD" ? "Breakfast Curd" : resolveName(it.colKey)] = it.qty;
+        });
+        const _sigPF = _itemsSig(_objPF);
+        const _hist = allOrderRows.find(r => {
+          if (_normalizePhone(r.Phone) !== _normPhone) return false;
+          if (_normDate(r.Order_Date) !== _normDate(_o.date)) return false;
+          if (r.Meal_Type !== _m.type) return false;
+          if (_isOrderCancelled(r.Payment_Status)) return false;
+          const rMs = r.Submitted_At ? new Date(r.Submitted_At).getTime() : 0;
+          if (rMs && (_dupNowMs - rMs) <= _FIVE_MIN_MS) return false; // recent retry → layers 1–3 dedupe it
+          try {
+            const stored = typeof r.Items_JSON === "string" ? JSON.parse(r.Items_JSON) : (r.Items_JSON || {});
+            return _itemsSig(stored) === _sigPF;
+          } catch(e) { return false; }
+        });
+        if (_hist) {
+          console.warn("Duplicate order REJECTED (pre-flight, no confirm flag) — phone=" + _normPhone
+            + " date=" + _o.date + " meal=" + _m.type + " existingSid=" + _hist.Submission_ID);
+          return {
+            success: false,
+            duplicate_detected: true,
+            error: "A " + _m.type + " order with the same items for " + _o.date
+                 + " already exists (Order ID: " + _hist.Submission_ID
+                 + "). If you intentionally want to place another one, please confirm.",
+            existing_submission_id: _hist.Submission_ID,
+            existing_order_date:    _normDate(_hist.Order_Date),
+            existing_meal_type:     _hist.Meal_Type,
+            existing_payment_status: _hist.Payment_Status || "Pending",
+            existing_submitted_at:  _hist.Submitted_At ? String(_hist.Submitted_At) : "",
+            attempted_order_date:   _o.date,
+            attempted_meal_type:    _m.type
+          };
+        }
+      }
+    }
+  } else {
+    console.log("Duplicate order ALLOWED (confirm_duplicate=true) — phone=" + _normPhone);
+  }
+
   // ── Streak gap guard (mirrors the frontend fix) ──────────────────────────
   // The projected streak must NOT carry across a real ordering gap. Build the
   // set of ALL the customer's ordered days (past rows + this submission) so an
@@ -2293,8 +2350,11 @@ function _submitOrderInternal(body) {
       // exceeding the day's bill AND retroactive discount/fee credits exceeding
       // a small top-up order (e.g. ₹10 add-on that pushes the day over a
       // discount tier, earning back more than the add-on costs).
+      // mealSurplus is tracked per meal so a duplicate-skip can back it out.
+      let mealSurplus = 0;
       if (netTotal < 0) {
-        loyaltyExcessCredit += Math.abs(netTotal);
+        mealSurplus = Math.abs(netTotal);
+        loyaltyExcessCredit += mealSurplus;
         netTotal = 0;
       }
       meal._reviewDiscount = reviewDiscount; // carry for set() below
@@ -2392,6 +2452,10 @@ function _submitOrderInternal(body) {
       const _cachedSid = _cache.get(_dupKey);
       if (_cachedSid) {
         submissionIds[submissionIds.length - 1] = _cachedSid;
+        // Skipped duplicate — back out this meal's in-memory mutations so the
+        // retry doesn't burn a promo use or double-credit the wallet surplus.
+        if (reviewDiscount > 0) promoCount++;
+        if (mealSurplus > 0) loyaltyExcessCredit -= mealSurplus;
         console.log("Duplicate caught by cache: " + _dupKey + " → " + _cachedSid);
         continue;
       }
@@ -2420,61 +2484,17 @@ function _submitOrderInternal(body) {
         submissionIds[submissionIds.length - 1] = _dupRow.Submission_ID || sid;
         // Backfill cache so subsequent calls hit layer 1 (faster + more reliable)
         try { _cache.put(_dupKey, _dupRow.Submission_ID || sid, 300); } catch(e) {}
+        // Skipped duplicate — back out this meal's in-memory mutations so the
+        // retry doesn't burn a promo use or double-credit the wallet surplus.
+        if (reviewDiscount > 0) promoCount++;
+        if (mealSurplus > 0) loyaltyExcessCredit -= mealSurplus;
         console.log("Duplicate order skipped (sheet check): " + _normPhone + " / " + orderDate + " / " + mealType);
         continue;
       }
 
-      // ════ LAYER 4 — LONG-WINDOW DUPLICATE GUARD ════════════════════════
-      // The three layers above silently dedupe legitimate retries inside a
-      // 5-min window (network retries / double-clicks). They cannot catch
-      // the case where an order somehow gets re-submitted FAR LATER —
-      // e.g. a stale standard-order/auto-place path firing 40 min after
-      // the customer's original checkout.
-      //
-      // Policy: any non-cancelled order for the SAME customer + date +
-      // meal + items signature, with NO time window, is treated as a
-      // duplicate. The submission is REJECTED unless the request body
-      // carries confirm_duplicate=true (set by the frontend after the
-      // customer explicitly accepts the duplicate-warning prompt).
-      //
-      // Case 1 (auto-replay): no confirm flag -> rejected.
-      // Case 2 (manual re-place): customer sees prompt, clicks confirm,
-      //                            frontend retries with the flag -> accepted.
-      if (body.confirm_duplicate !== true) {
-        const _historicalDup = _freshRows.find(r => {
-          if (_normalizePhone(r.Phone) !== _normPhone) return false;
-          if (_normDate(r.Order_Date) !== _normDate(orderDate)) return false;
-          if (r.Meal_Type !== mealType) return false;
-          if (_isOrderCancelled(r.Payment_Status)) return false;
-          try {
-            const stored = typeof r.Items_JSON === "string" ? JSON.parse(r.Items_JSON) : (r.Items_JSON || {});
-            return _itemsSig(stored) === _incomingSig;
-          } catch(e) { return false; }
-        });
-        if (_historicalDup) {
-          console.warn("Duplicate order REJECTED (no confirm flag) — phone=" + _normPhone
-            + " date=" + orderDate + " meal=" + mealType
-            + " existingSid=" + _historicalDup.Submission_ID
-            + " submittedAt=" + _historicalDup.Submitted_At);
-          return {
-            success: false,
-            duplicate_detected: true,
-            error: "A " + mealType + " order with the same items for " + orderDate
-                 + " already exists (Order ID: " + _historicalDup.Submission_ID
-                 + "). If you intentionally want to place another one, please confirm.",
-            existing_submission_id: _historicalDup.Submission_ID,
-            existing_order_date:    _normDate(_historicalDup.Order_Date),
-            existing_meal_type:     _historicalDup.Meal_Type,
-            existing_payment_status: _historicalDup.Payment_Status || "Pending",
-            existing_submitted_at:  _historicalDup.Submitted_At ? String(_historicalDup.Submitted_At) : "",
-            attempted_order_date:   orderDate,
-            attempted_meal_type:    mealType
-          };
-        }
-      } else {
-        console.log("Duplicate order ALLOWED (confirm_duplicate=true) — phone=" + _normPhone
-          + " date=" + orderDate + " meal=" + mealType);
-      }
+      // LAYER 4 (long-window duplicate guard) moved to a PRE-FLIGHT scan before
+      // this loop — rejecting mid-loop left earlier meals' rows already written
+      // while the customer saw an error (half-placed submission).
 
       // Reserve the cache key BEFORE the wallet deduction + row write so any
       // concurrent retry that arrives during this meal's processing hits layer 1.
@@ -3266,6 +3286,26 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       success: true,
       message: "Cancellation completed. Your refund was already in the queue and will be processed within 1-2 days."
     };
+  }
+
+  // ── RESTORE REVIEW-PROMO USE ───────────────────────────────────────────
+  // If this order consumed a 10% review-promo meal, give the use back —
+  // cancelling shouldn't permanently burn the reward. ("Exhausted"/blank
+  // counts read as 0, so restoring from an empty state yields 1.)
+  if (!opts.dryRun && (Number(r.Review_Discount) || 0) > 0) {
+    try {
+      const custWsP = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+      const cIdxP   = headerIndex(custWsP);
+      if (cIdxP["Review_Promo_Count"]) {
+        const ownPhone = _normalizePhone(r.Phone);
+        const cP = getAllRows(custWsP).find(x => _normalizePhone(x.Phone) === ownPhone);
+        if (cP) {
+          const curRaw = cP.Review_Promo_Count;
+          const cur = (curRaw === "" || curRaw === null || curRaw === undefined || isNaN(curRaw)) ? 0 : Number(curRaw);
+          custWsP.getRange(cP._row, cIdxP["Review_Promo_Count"]).setValue(cur + 1);
+        }
+      }
+    } catch(e) { /* non-fatal */ }
   }
 
   // GRACEFUL REFUND HANDLING with eligibility recalculation (Cases 1/2/3)
@@ -7745,24 +7785,10 @@ function adminCancelOrder(body) {
 /**
  * ADMIN: Grant Review Promo (Manual)
  */
-function markReviewed(body) {
-  const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
-  const rows = getAllRows(ws);
-  const phone = _normalizePhone(body.phone);
-  
-  const hIdx = headerIndex(ws);
-  if (!hIdx["Review_Promo_Count"]) return {success: false, error: "Review column not initialized. Please refresh sheet."};
-  
-  const rowIdx = rows.findIndex(x => _normalizePhone(x.Phone) === phone);
-  if (rowIdx === -1) return {success: false, message: "Customer not found."};
-  
-  // Set Review_Promo_Count to 3
-  const realRow = rowIdx + 2;
-  ws.getRange(realRow, hIdx["Review_Promo_Count"]).setValue(3);
-  
-  return {success: true, message: "10% Discount (3x) gifted successfully!"};
-}
+// NOTE: markReviewed lives earlier in this file (the +3-stacking version that
+// also sets Review_Reward_Claimed). A second definition here used to OVERWRITE
+// the count to 3 — wiping any unused balance — and, being the later definition,
+// silently shadowed the correct one. Removed.
 
 /**
  * Run this function once from the Apps Script editor to populate
