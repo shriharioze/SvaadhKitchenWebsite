@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.08.5";
+    const APP_VERSION = "v26.06.11.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9358,14 +9358,22 @@
             const delBtnHtml = cutoffCrossed
               ? `<button class="omr-del-btn" style="opacity:0.55;border-style:dashed;cursor:not-allowed;" onclick="cancelBlockedMsg()" title="Cutoff crossed — no cancellation allowed">🔒 Cancellation closed</button>`
               : `<button class="omr-del-btn" onclick="deleteOrder('${o.rowId}','${o.date}','${o.meal}')">🗑 Delete</button>`;
+
+            const checkboxHtml = cutoffCrossed
+              ? `<input type="checkbox" disabled style="opacity:0.5; cursor:not-allowed; accent-color:#e65100;" title="Cutoff crossed">`
+              : `<input type="checkbox" class="bulk-cancel-cb" value="${o.rowId}" data-date="${o.date}" data-meal="${o.meal}" onchange="updateBulkCancelBtn()" style="cursor:pointer; width:18px; height:18px; accent-color:#e65100;">`;
+
             return `<div class="order-manage-row">
           <div class="omr-top">
-            <div class="omr-info">
-              <div class="omr-title">${formatDate(o.date)} — ${o.meal}</div>
-              <div class="omr-sub">${o.summaryParts.join(", ")} · ₹${o.totalSum}</div>
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                ${trackHtml ? trackHtml : ""}
-                ${payChip}
+            <div style="display:flex; align-items:center; gap:12px; flex:1;">
+              ${checkboxHtml}
+              <div class="omr-info" style="flex:1;">
+                <div class="omr-title">${formatDate(o.date)} — ${o.meal}</div>
+                <div class="omr-sub">${o.summaryParts.join(", ")} · ₹${o.totalSum}</div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  ${trackHtml ? trackHtml : ""}
+                  ${payChip}
+                </div>
               </div>
             </div>
             <div class="omr-actions">
@@ -9375,7 +9383,22 @@
         </div>`;
           }).join("");
         }
-        upcomingWrap.innerHTML = upcomingHeaderHtml + `<div id="upcomingContent" class="collapsible-content ${window.orderViewState.upcoming ? "open" : ""}">${upcomingRowsHtml}</div>`;
+        let bulkDeleteBtnHtml = "";
+        if (upcoming.some(o => {
+            const cutoffH = (todayCutoffs[o.meal] ?? CUTOFFS[o.meal] ?? 23);
+            return !((o.date === today) && (hNow >= cutoffH));
+        })) {
+           bulkDeleteBtnHtml = `
+             <div style="padding:10px 14px; display:flex; justify-content:space-between; align-items:center; background:#fffaf0; border-bottom:1px solid #ffe0b2;">
+               <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer; color:#e65100; font-weight:600;">
+                 <input type="checkbox" id="bulkCancelSelectAll" onchange="toggleAllBulkCancel(this.checked)" style="width:16px; height:16px; accent-color:#e65100;"> Select All
+               </label>
+               <button id="bulkCancelBtn" onclick="deleteSelectedOrders()" style="display:none; padding:6px 14px; background:#e65100; color:#fff; border:none; border-radius:6px; font-size:0.85rem; font-weight:600; cursor:pointer; box-shadow:0 2px 4px rgba(230,81,0,0.2);">🗑 Cancel Selected</button>
+             </div>
+           `;
+        }
+
+        upcomingWrap.innerHTML = upcomingHeaderHtml + `<div id="upcomingContent" class="collapsible-content ${window.orderViewState.upcoming ? "open" : ""}">${bulkDeleteBtnHtml}${upcomingRowsHtml}</div>`;
         _checkJustPlacedSync(phone, upcomingWrap);
 
         // ── RENDER CANCELLED ──
@@ -9619,7 +9642,147 @@
       }
     }
 
+    window.updateBulkCancelBtn = function() {
+      const cbs = document.querySelectorAll('.bulk-cancel-cb:checked');
+      const btn = document.getElementById('bulkCancelBtn');
+      if(btn) btn.style.display = cbs.length > 0 ? 'block' : 'none';
 
+      const selectAllCb = document.getElementById('bulkCancelSelectAll');
+      const totalCbs = document.querySelectorAll('.bulk-cancel-cb:not([disabled])');
+      if(selectAllCb && totalCbs.length > 0) {
+        selectAllCb.checked = (cbs.length === totalCbs.length);
+      }
+    };
+
+    window.toggleAllBulkCancel = function(checked) {
+      document.querySelectorAll('.bulk-cancel-cb:not([disabled])').forEach(cb => cb.checked = checked);
+      window.updateBulkCancelBtn();
+    };
+
+    window.deleteSelectedOrders = async function() {
+      const cbs = document.querySelectorAll('.bulk-cancel-cb:checked');
+      if (cbs.length === 0) return;
+      const count = cbs.length;
+
+      const summaries = Array.from(cbs).map(cb => {
+        const d = cb.getAttribute('data-date');
+        const m = cb.getAttribute('data-meal');
+        return `<b>${m}</b> on <b>${formatDate(d)}</b>`;
+      });
+      const uniqueSummaries = [...new Set(summaries)];
+      const summaryListHtml = `<ul style="text-align:left; font-size:0.85rem; margin:10px 0; padding-left:20px;">${uniqueSummaries.map(s => `<li>${s}</li>`).join('')}</ul>`;
+
+      const confirmed = await sConfirm(`Cancel these <b>${count}</b> selected orders?<br>${summaryListHtml}`, "Cancel Orders", "🗑️", "काय तुम्ही निवडलेल्या ऑर्डर रद्द करू इच्छिता?");
+      if (!confirmed) return;
+
+      // Each checkbox is a DISPLAYED order that may bundle several backend rows
+      // (combined meals). Expand to ALL underlying row ids — exactly like the
+      // single-order cancel — so every row is actually cancelled, not just the
+      // group's representative row.
+      const selectedGroups = Array.from(cbs).map(cb => cb.value);
+
+      // ── Per-order refund routing: each order goes back to ITS OWN original
+      //    method. Wallet/Split orders always refund to Wallet; paid/pending UPI
+      //    orders go to the customer's chosen method (asked once, not per order).
+      let totalPaid = 0, potentialAmt = 0, hasPaidUpi = false, hasPendingUpi = false;
+      selectedGroups.forEach(rid => {
+        const c = orderDataCache[rid] || {};
+        const paid = Number(c.original_total_paid) || 0;
+        const pending = String(c.status || "").toLowerCase().trim() === "pending";
+        totalPaid += paid;
+        potentialAmt += (Number(c.potential_total) || 0);
+        if (!c.is_wallet && !c.is_split && paid > 0) hasPaidUpi = true;
+        if (!c.is_wallet && !c.is_split && pending && !paid) hasPendingUpi = true;
+      });
+
+      let paidChoice = "manual_upi"; // default: back to the original payment method
+      if (hasPaidUpi) {
+        const choice = await sPromptRefund(`Some of these orders are already paid (₹${totalPaid} total). Where should we send those refunds?`, "Refund Method", "💰", "रीफंड कुठे हवा आहे?", { wallet: "Svaadh Wallet (Instant)" });
+        if (choice === "exit") return;
+        paidChoice = (choice === "wallet") ? "wallet" : "manual_upi";
+      } else if (hasPendingUpi) {
+        const choice = await sPromptRefund(`Some selected orders have a payment pending admin verification (₹${potentialAmt} total). Once admin confirms, where should we send those refunds?`, "Refund Method", "⏳", "रीफंड कुठे हवा आहे?", { wallet: "Svaadh Wallet (Upto 3 working days)" });
+        if (choice === "exit") return;
+        paidChoice = (choice === "wallet") ? "wallet" : "manual_upi";
+      }
+
+      // Resolve each group's refund method: wallet/split → wallet; paid/pending → choice.
+      const groupRefundType = {};
+      selectedGroups.forEach(rid => {
+        const c = orderDataCache[rid] || {};
+        const paid = Number(c.original_total_paid) || 0;
+        const pending = String(c.status || "").toLowerCase().trim() === "pending";
+        groupRefundType[rid] = (c.is_wallet || c.is_split) ? "wallet"
+                              : (paid > 0 || pending) ? paidChoice
+                              : "none";
+      });
+
+      // ── Preview: fetch each order's refund breakdown and show before final confirm.
+      sLoading(true, "Calculating refunds…");
+      const previewBlocks = [];
+      for (const grp of selectedGroups) {
+        const c = orderDataCache[grp] || {};
+        const firstRowId = (c.all_row_ids && c.all_row_ids[0]) || grp;
+        try {
+          const prev = await fetch(APPS_SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify({ _action: "previewCancellation", phone: S.phone, rowId: firstRowId, refundType: groupRefundType[grp] })
+          }).then(r => r.json());
+          if (prev && prev.success && prev.dryRun && prev.breakdownText) previewBlocks.push(prev.breakdownText);
+        } catch (e) { /* non-fatal — skip this order's preview */ }
+      }
+      sLoading(false);
+
+      if (previewBlocks.length) {
+        const previewHtml = previewBlocks
+          .map(t => t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>"))
+          .join("<hr style='border:none;border-top:1px solid #eee;margin:10px 0;'>");
+        const goAhead = await sConfirm(`<div style='font-size:.82rem;line-height:1.6;text-align:left;max-height:50vh;overflow-y:auto;'>${previewHtml}</div>`, "Confirm Cancellation", "💸", "वरील तपशील बघून रद्द करायचे आहे का?");
+        if (!goAhead) return;
+      }
+
+      sLoading(true, "Cancelling orders…");
+      try {
+        // Cancel each order with ITS OWN refund method; expand groups to all rows.
+        const results = [];
+        for (const grp of selectedGroups) {
+          const c = orderDataCache[grp] || {};
+          const ids = (c.all_row_ids && c.all_row_ids.length) ? c.all_row_ids : [grp];
+          for (const rid of ids) {
+            const res = await fetch(APPS_SCRIPT_URL, {
+              method: "POST",
+              body: JSON.stringify({ _action: "deleteOrder", phone: S.phone, rowId: rid, refundType: groupRefundType[grp] })
+            }).then(r => r.json());
+            results.push(res);
+          }
+        }
+
+        sLoading(false);
+        const isAlreadyCancelled = (res) => !res.success && /already/i.test(res.error || "") && /cancel/i.test(res.error || "");
+        const success = results.every(res => res.success || isAlreadyCancelled(res));
+        if (success) {
+          syncWalletValue(true);
+          window.orderViewState.cancelled = true;
+          await loadExistingOrders(S.phone);
+
+          // Summarise where refunds went (each to its own original method).
+          const toOriginal = selectedGroups.some(g => groupRefundType[g] === "manual_upi");
+          const toWallet   = selectedGroups.some(g => groupRefundType[g] === "wallet");
+          let successMsg = `Successfully cancelled ${count} order${count > 1 ? 's' : ''}.`;
+          const refundLines = [];
+          if (toWallet)   refundLines.push("💳 Wallet payments credited back to your Svaadh Wallet");
+          if (toOriginal) refundLines.push("💸 Paid amounts are being refunded to your chosen method (up to 3 working days)");
+          if (refundLines.length) successMsg += `<br><br>${refundLines.join("<br>")}`;
+          await sAlert(successMsg, "Done", "✅");
+        } else {
+          const firstErr = results.find(r => !r.success && !isAlreadyCancelled(r))?.error || "Unknown error";
+          throw new Error(firstErr || "Cancellation failed for some orders.");
+        }
+      } catch(e) {
+        sLoading(false);
+        await sAlert("Error: " + e.message, "Failure", "❌");
+      }
+    };
 
     // ═══════════════════════════════════════════════════════════
     // THEME TOGGLE
