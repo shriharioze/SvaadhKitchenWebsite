@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 16.0; // 2026-06-12: AUDIT batch 2 — single markReviewed (+3, claimed flag), promo/surplus backout on duplicate skips, layer-4 dup guard moved to pre-flight, promo use restored on cancellation
+const CODE_VERSION   = 16.1; // 2026-06-12: AUDIT batch 3 — server-side ordering-window guard (past dates/Sundays/cutoffs/closed meals, admin-PIN bypass) + gateway exception on stock block
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -2046,6 +2046,60 @@ function _submitOrderInternal(body) {
     }
   }
 
+  // ════ ORDERING-WINDOW PRE-FLIGHT ════
+  // Server-side guard for what the calendar/meal screen enforce client-side:
+  // no past dates, no Sundays, no past-cutoff meals for today, no admin-closed
+  // meals. Without this, a stale tab (left open across a cutoff) or a crafted
+  // POST could place orders the kitchen can't fulfil — the cancel path has
+  // always had a cutoff guard; the place path now matches it.
+  // Gateway exception (mirrors the kitchen-closure guard above): the customer
+  // already paid on the HDFC page — accept the order and warn so admin can
+  // manually cancel + refund instead of orphaning the money.
+  {
+    const _wToday = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+    const _wNow   = getISTDate();
+    const _wHour  = _wNow.getHours() + _wNow.getMinutes() / 60;
+    const _wViolations = [];
+    for (const _o of orders) {
+      const _d = String(_o.date || "").trim();
+      if (!_d) continue;
+      if (_d < _wToday) { _wViolations.push("Orders for past dates (" + _d + ") cannot be placed."); continue; }
+      if (new Date(_d + "T12:00:00").getDay() === 0) {
+        _wViolations.push("The kitchen is closed on Sundays (" + _d + ").");
+        continue;
+      }
+      const _menuRowW = menuRowsAll.find(function(mr) {
+        const md = mr.Date instanceof Date
+          ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(mr.Date).trim();
+        return md === _d;
+      });
+      let _ordersClosedW = {};
+      try { if (_menuRowW && _menuRowW.Orders_Closed) _ordersClosedW = JSON.parse(_menuRowW.Orders_Closed); } catch(e) {}
+      const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
+      for (const _m of (_o.meals || [])) {
+        const _mt = String(_m.type || "");
+        if (_ordersClosedW[_mt]) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
+        if (_effCutW && _effCutW[_mt] !== undefined && _wHour >= _effCutW[_mt]) {
+          _wViolations.push("The " + _mt + " cutoff for today (" + _d + ") has already passed.");
+        }
+      }
+    }
+    if (_wViolations.length) {
+      // Admin bypass: submissions carrying the verified ADMIN_PIN (e.g. the
+      // vault's Place Bulk Orders tool) may legitimately order late/closed.
+      const _isAdminSubmit = String(body.pin || "") !== "" && _pinMatch(String(body.pin || ""), ADMIN_PIN);
+      if (_isAdminSubmit) {
+        console.log("Ordering-window violation(s) bypassed by ADMIN submission: " + _wViolations.join(" | "));
+      } else if (payMethod !== "Gateway (HDFC)") {
+        return { error: _wViolations[0], window_violations: _wViolations };
+      } else {
+        console.warn("⚠️ Gateway-paid order accepted despite ordering-window violation(s): "
+          + _wViolations.join(" | ") + " (phone " + profile.phone + "). Admin must review.");
+      }
+    }
+  }
+
   // ════ STOCK LIMIT PRE-FLIGHT ════
   // Hard-block submission if any requested item exceeds remaining stock.
   // Runs under LockService so concurrent submissions see each other's counts.
@@ -2093,10 +2147,18 @@ function _submitOrderInternal(body) {
     if (stockConflicts.length) {
       const first = stockConflicts[0];
       const nm = first.colKey === "B_CURD" ? "Curd (Breakfast)" : first.colKey;
-      return {
-        error: `Only ${first.available} of "${nm}" left for ${first.meal} on ${first.date}. Please reduce your quantity.`,
-        stock_conflicts: stockConflicts
-      };
+      // Gateway exception: the customer has ALREADY PAID on the HDFC page by
+      // the time this runs — rejecting would take the money without an order.
+      // Accept and warn so admin can adjust stock or cancel + refund manually.
+      if (payMethod !== "Gateway (HDFC)") {
+        return {
+          error: `Only ${first.available} of "${nm}" left for ${first.meal} on ${first.date}. Please reduce your quantity.`,
+          stock_conflicts: stockConflicts
+        };
+      }
+      console.warn("⚠️ Gateway-paid order accepted despite STOCK conflict(s): "
+        + stockConflicts.map(c => c.meal + "/" + c.colKey + " on " + c.date + " (only " + c.available + " left)").join(" | ")
+        + " (phone " + profile.phone + "). Admin must review.");
     }
   }
 
@@ -7955,7 +8017,8 @@ function placeBulkOrders(body) {
         items: tpl.items,
         payment_method: "Wallet",
         payment_freq: "Prepaid Wallet",
-        source: "Admin Bulk"
+        source: "Admin Bulk",
+        pin: pin   // verified admin pin — lets the ordering-window guard allow late/closed-day placement
       };
       const res = submitOrder(orderBody);
       if (res.success) count++;
