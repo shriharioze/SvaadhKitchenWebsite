@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 15.7; // 2026-06-10: FIX fixLoyaltyDiscountMarkers — replay now also skips admin kitchen-closed days (was Sundays only)
+const CODE_VERSION   = 15.8; // 2026-06-12: FIX cancellation — dry-run preview no longer mutates rows; loyalty clawback marks reward recovered on payoff row (no double-claw)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -3311,7 +3311,8 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
           overDiscount = totalActualDiscount;
 
           // Update remaining rows: zero out their Discount_Amount and restore Net_Total
-          if (overDiscount > 0 && discColIdx && netColIdx) {
+          // (sheet writes only on a REAL cancellation — the dry-run preview must not mutate)
+          if (overDiscount > 0 && discColIdx && netColIdx && !opts.dryRun) {
             sameDayRows.forEach(x => {
               const xSub      = Number(x.Food_Subtotal)       || 0;
               const xSurcharge= Number(x.Inflation_Surcharge) || 0;
@@ -3354,7 +3355,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         if (xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
           deliveryOwed += 11;
           netDelta += 10;
-          if (delivColIdx) ws.getRange(x._row, delivColIdx).setValue(10);
+          if (delivColIdx && !opts.dryRun) ws.getRange(x._row, delivColIdx).setValue(10);
         }
 
         // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹50 was waived due to threshold
@@ -3363,11 +3364,12 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
             && (Number(x.Small_Order_Fee) || 0) === 0) {
           smallFeeOwed += 10;
           netDelta += 10;
-          if (smallFeeColIdx) ws.getRange(x._row, smallFeeColIdx).setValue(10);
+          if (smallFeeColIdx && !opts.dryRun) ws.getRange(x._row, smallFeeColIdx).setValue(10);
         }
 
         // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback)
-        if (netDelta > 0 && netColIdx2) {
+        // (sheet writes only on a REAL cancellation — the dry-run preview must not mutate)
+        if (netDelta > 0 && netColIdx2 && !opts.dryRun) {
           ws.getRange(x._row, netColIdx2).setValue((Number(x.Net_Total) || 0) + netDelta);
         }
       });
@@ -3399,6 +3401,22 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         loyaltyClawbackNote = `Loyalty reward of ₹${loyaltyClawback} was applied on ${
           (() => { const d = laterPayoffs[0].Order_Date; return d instanceof Date ? Utilities.formatDate(d,"Asia/Kolkata","dd MMM") : String(d); })()
         } — cancelling this order breaks your streak, so that reward is reversed.`;
+
+        // On a REAL cancellation, mark the reward as RECOVERED on the payoff row:
+        // zero its Discount_Amount and add the amount back to its Net_Total. This
+        // prevents (a) cancelling a second streak day clawing the same reward
+        // again, and (b) a later cancellation of the payoff row itself refunding
+        // its discounted Net even though the reward was already recovered here.
+        // Loyalty_Discount stays "Yes" — the streak cycle was still consumed.
+        if (!opts.dryRun && loyaltyClawback > 0) {
+          const payoffRow = laterPayoffs[0];
+          const discColL = hIdx["Discount_Amount"];
+          const netColL  = hIdx["Net_Total"];
+          if (discColL && netColL) {
+            ws.getRange(payoffRow._row, discColL).setValue(0);
+            ws.getRange(payoffRow._row, netColL).setValue((Number(payoffRow.Net_Total) || 0) + loyaltyClawback);
+          }
+        }
       }
     }
 
