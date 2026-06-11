@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.11.2";
+    const APP_VERSION = "v26.06.12.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7020,7 +7020,9 @@
           if (_cdt >= DISC_T2.min) _dr = DISC_T2.rate;
           else if (_cdt >= DISC_T1.min) _dr = DISC_T1.rate;
           const _exDisc = Object.values(_ex).reduce((s,m) => s+(m.discount_applied||0), 0);
-          const _retro = Math.max(0, Math.round(_exft*_dr) - _exDisc);
+          // Per-meal surcharge sum — matches what is actually CHARGED (each meal
+          // is billed ceil(sub × 6%)), so the waiver accrual is exact.
+          const _msu = ["Breakfast","Lunch","Dinner"].reduce((s,m) => s + Math.ceil((_do[m]?.subtotal||0)*0.06), 0);
           // Mirror the main bill loop's loyalty guard: don't fire 6th-day
           // bonus if this date already has existing orders (those existing
           // orders ARE what made virtualStreakCount reach 5; this date
@@ -7029,10 +7031,11 @@
           const _is6 = !_hasExisting && (_psc === 5);
           let _da = 0;
           if (_is6) {
-            const _cds = Math.ceil(_dft*0.06);
-            _da = _pps + _cds;
+            _da = _pps + _msu;
           } else {
-            _da = Math.min(_dft, Math.round(_dft*_dr) + _retro);
+            // Same formula as the backend: day entitlement on the COMBINED total
+            // minus what existing orders already received (single rounding).
+            _da = Math.min(_dft, Math.max(0, Math.round(_cdt*_dr) - _exDisc));
           }
           const _totalM = ["Breakfast","Lunch","Dinner"].filter(m=>(_do[m]?.subtotal>0)||(_ex[m]?.subtotal>0)).length;
           const _dynTh = _totalM<=1 ? 100 : 150;
@@ -7060,7 +7063,7 @@
           // for dates that already had existing orders (already counted).
           if (_hasExisting) { /* no streak state change */ }
           else if (_is6)    { _psc = 0; _pps = 0; }
-          else              { _psc++; _pps += Math.ceil(_dft*0.06); }
+          else              { _psc++; _pps += _msu; }
           _prevDate = _d;
         }
         // Find streak day surplus and carry backwards
@@ -7082,12 +7085,16 @@
       }
       // ── End pre-compute pass ──
 
+      let daySurplusToWallet = 0; // per-day clamp surplus — credited to wallet on place (mirrors backend)
       let prevStreakDate = S.loyaltyInfo?.end || null; // last ordered day (past or earlier cart date) — for gap detection
       for (const date of S.selectedDates) {
         const dayOrders = S.orders[date] || {};
         let dayFoodTotal = 0;
         ["Breakfast", "Lunch", "Dinner"].forEach(m => { dayFoodTotal += dayOrders[m]?.subtotal || 0; });
         if (dayFoodTotal === 0) continue;
+        // Per-meal surcharge sum — matches what is actually CHARGED (each meal
+        // is billed ceil(sub × 6%)), so waiver accrual is exact on multi-meal days.
+        const dayMealSurcharge = ["Breakfast","Lunch","Dinner"].reduce((s,m) => s + Math.ceil((dayOrders[m]?.subtotal||0)*0.06), 0);
 
         // Streak gap guard: if this date is NOT consecutive with the previous
         // ordered day, the streak is broken — restart the projected count so the
@@ -7133,16 +7140,17 @@
 
         if (is6thDay) {
           // Loyalty Discount triggers on Day 6: waive all surcharges across 6 days
-          const currentDaySurcharge = Math.ceil(dayFoodTotal * 0.06);
-          loyaltyWaiverTotal = virtualPastSurcharge + currentDaySurcharge;
+          // (per-meal surcharge sum = exactly what was charged on this day)
+          loyaltyWaiverTotal = virtualPastSurcharge + dayMealSurcharge;
           // Cap discAmt so this day's total doesn't go below ₹0 (surplus already
           // distributed to prior days via carryBack in the pre-compute pass above)
-          const grossDayBill = dayFoodTotal; // fees added later; we clamp post-fee
           discAmt = loyaltyWaiverTotal; // may cause negative dayTotal — handled below
           discLabel = "🎉 6-Day Streak Reward";
         } else {
-          // Audit Fix #4: Cap discount at current food total to prevent negative bills
-          discAmt = Math.min(dayFoodTotal, Math.round(dayFoodTotal * discRate) + retroDiscountCredit);
+          // Same formula as the backend: day entitlement on the COMBINED total
+          // minus what existing orders already received (single rounding), capped
+          // at this cart's food total to prevent negative bills.
+          discAmt = Math.min(dayFoodTotal, Math.max(0, Math.round(combinedDayTotal * discRate) - existingDiscountTotal));
         }
 
         // Prepare discount note for display
@@ -7312,7 +7320,17 @@
 
         // For prior days: apply carry-back credit received from the streak day
         const cbAmt = carryBack[date] || 0;
-        const dayTotal = rawDayTotal - cbAmt;
+        let dayTotal = rawDayTotal - cbAmt;
+
+        // A day's bill can never be negative (retro discounts/fee credits can
+        // exceed a small top-up order). Mirror the backend: clamp to ₹0 — the
+        // surplus is credited to the Wallet when the order is placed.
+        let dayClampSurplus = 0;
+        if (dayTotal < 0) {
+          dayClampSurplus = Math.abs(dayTotal);
+          daySurplusToWallet += dayClampSurplus;
+          dayTotal = 0;
+        }
 
         grandTotal += dayTotal;
 
@@ -7320,7 +7338,6 @@
         // Don't increment if this cart date already had existing orders —
         // those orders' contribution is already inside virtualStreakCount
         // via S.loyaltyInfo, so re-incrementing would over-count.
-        const daySurcharge = Math.ceil(dayFoodTotal * 0.06);
         if (dateAlreadyHasExistingOrder) {
           // no state change — adding meals to an already-counted day
           // doesn't extend the streak
@@ -7329,7 +7346,7 @@
           virtualPastSurcharge = 0;
         } else {
           virtualStreakCount++;
-          virtualPastSurcharge += daySurcharge;
+          virtualPastSurcharge += dayMealSurcharge; // per-meal sum = what was actually charged
         }
         prevStreakDate = date; // this date is now an ordered day — track it for the next gap check
 
@@ -7354,11 +7371,16 @@
         <span>🎁 Streak Carry-back Credit</span><span>−₹${cbAmt}</span></div>`;
         }
 
+        if (dayClampSurplus > 0) {
+          html += `<div class="bill-line discount" style="cursor:pointer; margin-bottom:4px;" onclick="toast('Your credits for this day exceed its bill. The extra ₹${dayClampSurplus} will be added to your Svaadh Wallet when you place the order.', 7000)">
+        <span>💳 Surplus to Wallet</span><span>+₹${dayClampSurplus}</span></div>`;
+        }
         html += `  <div class="bill-line date-total" style="font-size:1.1rem; padding:4px 0;"><span>Day Total</span><span>₹${dayTotal}</span></div>
     </div><hr class="bill-divider" style="margin-top:16px;"></div>`;
       }
-      // Handle negative grand total: excess loyalty credit → wallet bonus
-      const walletBonus = grandTotal < 0 ? Math.abs(grandTotal) : 0;
+      // Wallet bonus = per-day clamp surpluses + any residual negative grand
+      // total (excess loyalty credit) — all of it comes back as wallet credit.
+      const walletBonus = (grandTotal < 0 ? Math.abs(grandTotal) : 0) + daySurplusToWallet;
       S.walletBonus = walletBonus;
       if (grandTotal < 0) grandTotal = 0;
       S.grandTotal = grandTotal;
@@ -7373,7 +7395,7 @@
             <span style="font-size:1.4rem;flex-shrink:0;">🎁</span>
             <div>
               <div style="font-weight:800;color:#065f46;font-size:0.88rem;margin-bottom:3px;">₹${walletBonus} Wallet Credit Incoming!</div>
-              <div style="font-size:0.76rem;color:#047857;line-height:1.5;">Your loyalty reward exceeds today's bill. The extra ₹${walletBonus} will be added to your Svaadh Wallet automatically when you place this order.</div>
+              <div style="font-size:0.76rem;color:#047857;line-height:1.5;">Your rewards & credits exceed the bill. The extra ₹${walletBonus} will be added to your Svaadh Wallet automatically when you place this order.</div>
             </div>
            </div>`
         : "";
