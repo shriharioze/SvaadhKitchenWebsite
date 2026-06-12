@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 16.6; // 2026-06-12: AUDIT F (IntentAmplify) — ia_isOpen weekend guard (server-side parity), defensive cancelled filter in ia_rowsAsSK; prices server-sourced, clean
+const CODE_VERSION   = 16.8; // 2026-06-13: PERF re-applied (proven safe end-to-end) + HARD GUARDS: no empty-success from submitOrder, no unknown-action fall-through, rows_written/replayed in response
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -875,8 +875,14 @@ function doPost(e) {
     if (action === "ia_markDelivered")    return jsonRes(ia_markDelivered(body));
     if (action === "ia_batchMarkEnRoute") return jsonRes(ia_batchMarkEnRoute(body));
 
-    // Regular order submission
-    return jsonRes(submitOrder(body));
+    // Regular order submission — the ONLY POST with no _action. Anything else
+    // (unknown/typo'd actions, malformed debug payloads) must NOT fall through
+    // to submitOrder: that used to return {success:true, submissionId:""} for a
+    // body with no orders — a phantom "success" with nothing written.
+    if (action === "" && Array.isArray(body.orders) && body.orders.length) {
+      return jsonRes(submitOrder(body));
+    }
+    return jsonRes({ error: "Unknown action" + (action ? ": '" + action + "'" : " (no orders payload)") });
   } catch(err) {
     return jsonRes({error: err.message});
   }
@@ -1964,13 +1970,11 @@ function _submitOrderInternal(body) {
     }
   }
 
-  // Pre-fetch masters once for ID -> Name resolution in sheet columns
-  const masterMap = {};
-  try {
-    const masters = getAdminData();
-    (masters.breakfastMaster || []).forEach(m => masterMap[String(m.id)] = m.name);
-    (masters.sabjiMaster || []).forEach(m => masterMap[String(m.id)] = m.name);
-  } catch(e) { console.error("Master fetch failed in submitOrder", e); }
+  // Masters for ID -> Name resolution in sheet columns. Lightweight masters-only
+  // lookup (NOT getAdminData — that scans every order per menu date, ~40s cold,
+  // and was the entire place-order lag). Cached 5 min.
+  let masterMap = {};
+  try { masterMap = _getMastersMap(); } catch(e) { console.error("Master fetch failed in submitOrder", e); }
 
   // Strip weight/measure suffixes like [175g], [200g], [100ml], (2 pieces) etc.
   // so backend always stores the clean item name regardless of what frontend shows.
@@ -2167,6 +2171,7 @@ function _submitOrderInternal(body) {
   const _normPhone = _normalizePhone(profile.phone);
   let loyaltyExcessCredit = 0; // accumulates surplus when 6th-day discount exceeds the bill
   let grandNetTotal = 0;       // sum of all per-meal Net_Totals — returned so the UPI QR matches what's recorded
+  let newRowsWritten = 0;      // rows actually appended this call — 0 means everything was a dedupe replay
   // SPLIT: one cart-level wallet budget (the frontend sends the whole intended
   // wallet portion in body.wallet_credit). Spent down per meal so the wallet is
   // distributed correctly across a multi-meal cart instead of re-applied to each
@@ -2646,6 +2651,7 @@ function _submitOrderInternal(body) {
       }
 
       ordersWs.appendRow(row);
+      newRowsWritten++;
       _missedOrderSafetyNet(ss, sid, row, profile.phone);  // safety net — verify write succeeded
     }
   }
@@ -2697,7 +2703,24 @@ function _submitOrderInternal(body) {
     _invalidateCache(...submissionDates.map(d => "menu_v2_" + d));
   }
 
-  return {success: true, submissionId: submissionIds[0] || "", wallet_bonus: loyaltyExcessCredit, grand_total: grandNetTotal};
+  // HARD GUARD: never return an "empty success". If no meal was even processed
+  // (empty/missing orders payload), that is an ERROR — the old behaviour
+  // returned {success:true, submissionId:"", grand_total:0}, showing the
+  // customer a success screen while NOTHING was written to the sheet.
+  if (!submissionIds.length) {
+    console.error("submitOrder received no valid order items — phone=" + phoneStr
+      + " ordersLen=" + (orders ? orders.length : "n/a"));
+    return { error: "No order items were received. Please refresh the page and try placing your order again." };
+  }
+
+  return {
+    success: true,
+    submissionId: submissionIds[0] || "",
+    wallet_bonus: loyaltyExcessCredit,
+    grand_total: grandNetTotal,
+    rows_written: newRowsWritten,          // diagnosability: 0 = pure dedupe replay
+    replayed: newRowsWritten === 0         // true → this exact order already existed (retry/double-tap)
+  };
 }
 
 
@@ -3766,6 +3789,25 @@ function getAdminData() {
   return _cachedData("adminData_v1", 30, _getAdminDataUncached);
 }
 
+// Lightweight id→name map for the breakfast + sabji masters ONLY.
+// submitOrder uses this to resolve item-id columns; it must NOT call the full
+// getAdminData(), whose menuEntries pass scans every order row per menu date
+// (O(orders × dates)) and took ~40s cold — the entire order-placement lag.
+// Two small sheet reads, cached 5 min (masters change rarely).
+function _getMastersMap() {
+  return _cachedData("mastersMap_v1", 300, function() {
+    const ss = getSpreadsheet();
+    const map = {};
+    getAllRows(getOrCreateTab(ss, TAB_BF_MASTER, [])).forEach(function(r) {
+      if (r.ID !== "" && r.ID !== undefined) map[String(r.ID)] = String(r.Name || "");
+    });
+    getAllRows(getOrCreateTab(ss, TAB_SABJI, [])).forEach(function(r) {
+      if (r.ID !== "" && r.ID !== undefined) map[String(r.ID)] = String(r.Name || "");
+    });
+    return map;
+  });
+}
+
 function _getAdminDataUncached() {
   const ss = getSpreadsheet();
 
@@ -3779,6 +3821,28 @@ function _getAdminDataUncached() {
 
   const ordersWsAdm = getOrCreateTab(ss, TAB_ORDERS, []);
   const allOrdersAdm = getAllRows(ordersWsAdm);
+
+  // Build per-date ordered-unit counts in ONE pass over all orders. Previously
+  // countOrderedUnits(allOrders, date) was called per menu row → O(orders ×
+  // dates) with a JSON.parse for every order each time (the ~40s hot spot).
+  const countsByDate = {};
+  allOrdersAdm.forEach(function(row) {
+    if (_isOrderCancelled(row.Payment_Status)) return;
+    const dd = row.Order_Date instanceof Date
+      ? Utilities.formatDate(row.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(row.Order_Date || "").trim();
+    if (!dd) return;
+    const meal = String(row.Meal_Type || "");
+    if (!countsByDate[dd]) countsByDate[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
+    if (!countsByDate[dd][meal]) return;
+    let items = {};
+    try { items = JSON.parse(row.Items_JSON || "{}"); } catch (e) {}
+    Object.entries(items).forEach(function(pair) {
+      let k = pair[0];
+      if (meal === "Breakfast" && k === "Curd") k = "Breakfast Curd";
+      countsByDate[dd][meal][k] = (countsByDate[dd][meal][k] || 0) + Number(pair[1] || 0);
+    });
+  });
 
   const breakfastMaster = bfRows.map(r => ({
     id: String(r.ID), name: String(r.Name), price: Number(r.Price),
@@ -3806,7 +3870,7 @@ function _getAdminDataUncached() {
     try { if (r.Orders_Closed) ordersClosed = JSON.parse(r.Orders_Closed); } catch(e) {}
     let stockLimits = {};
     try { if (r.Stock_JSON) stockLimits = JSON.parse(r.Stock_JSON); } catch(e) {}
-    const orderedCounts = countOrderedUnits(allOrdersAdm, d);
+    const orderedCounts = countsByDate[d] || { Breakfast: {}, Lunch: {}, Dinner: {} };
     const unitsRemaining = {};
     ["Breakfast","Lunch","Dinner"].forEach(meal => {
       Object.entries(stockLimits[meal] || {}).forEach(([colKey, limit]) => {
@@ -9674,4 +9738,3 @@ function markOrdersPaidBulk(body) {
   
   return {success:true, updated};
 }
-
