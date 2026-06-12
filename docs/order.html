@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.12.3";
+    const APP_VERSION = "v26.06.13.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4661,6 +4661,13 @@
           clearTimeout(tid);
           const isTimeout = err.name === "AbortError" || err.message?.includes("timeout");
           lastErr = err;
+          // Offline: retrying is pointless — show the offline banner and fail
+          // fast. The 'online' listener clears it the moment data returns.
+          if (typeof navigator !== "undefined" && navigator.onLine === false) {
+            _showOfflineBanner(true);
+            _showSlowBanner(false);
+            throw err;
+          }
           // Log to server (fire-and-forget, don't await — never blocks UI)
           _logServerError({
             type:    isTimeout ? "timeout" : "network_error",
@@ -4706,9 +4713,47 @@
       _slowBannerEl.style.display = show ? "block" : "none";
     }
 
+    // ── OFFLINE BANNER ───────────────────────────────────────────
+    // Instant "Failed to fetch" bursts in the error log were customers on
+    // dead/flaky mobile data. Tell them plainly instead of generic errors.
+    let _offlineBannerEl = null;
+    function _showOfflineBanner(show) {
+      if (!_offlineBannerEl) {
+        _offlineBannerEl = document.createElement("div");
+        _offlineBannerEl.id = "offlineBanner";
+        Object.assign(_offlineBannerEl.style, {
+          position:"fixed", top:"0", left:"0", right:"0",
+          background:"#c0392b", color:"#fff", padding:"9px 14px",
+          fontSize:".8rem", fontWeight:"700", zIndex:"10005",
+          textAlign:"center", display:"none",
+          boxShadow:"0 2px 8px rgba(0,0,0,.25)"
+        });
+        _offlineBannerEl.textContent = "📡 You appear to be offline — please check your internet connection. We'll reconnect automatically.";
+        document.body.appendChild(_offlineBannerEl);
+      }
+      _offlineBannerEl.style.display = show ? "block" : "none";
+    }
+    window.addEventListener("offline", () => _showOfflineBanner(true));
+    window.addEventListener("online",  () => { _showOfflineBanner(false); toast("✅ Back online!", 2500); });
+    // Reflect the state on load too (page opened while offline)
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      window.addEventListener("DOMContentLoaded", () => _showOfflineBanner(true));
+    }
+
     // ── ERROR LOGGER (fire-and-forget) ───────────────────────────
     function _logServerError(details) {
       try {
+        // Clamp absurd durations: a suspended mobile tab fires its abort timer
+        // hours later on resume — a 9-hour "duration" is noise, not signal.
+        if (typeof details.ms === "number" && details.ms > 300000) {
+          details.ms = 300000;
+          details.suspended_tab = true;
+        }
+        // Tag client-offline failures so triage can separate "their network"
+        // from "our server" at a glance.
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          details.offline = true;
+        }
         fetch(APPS_SCRIPT_URL, {
           method: "POST",
           body: JSON.stringify({
@@ -4729,7 +4774,10 @@
       } catch(e) {}
       try {
         const b = JSON.parse(opts?.body || "{}");
-        return b._action || b.action || "unknown";
+        if (b._action || b.action) return b._action || b.action;
+        // The order-submission POST is the only call with NO action field —
+        // label it properly instead of "unknown" (it dominated the error log).
+        if (Array.isArray(b.orders) && b.orders.length) return "submitOrder";
       } catch(e) {}
       return "unknown";
     }
