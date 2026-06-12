@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 16.4; // 2026-06-12: AUDIT B4-B6 — markRefunded idempotency+lock (no double credit), verify-time clawback dynamic threshold + ₹11 delivery, markCustomersPaid date normalize
+const CODE_VERSION   = 16.5; // 2026-06-12: AUDIT D — single-day packaging expenses now exclude cancelled orders (matches range variant); rest of kitchen/delivery audited clean
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -5338,7 +5338,8 @@ function getPackagingExpenses(date) {
     var d = r.Order_Date instanceof Date
       ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(r.Order_Date).trim();
-    return d === date;
+    // Exclude cancelled — they consume no packaging (matches the range variant).
+    return d === date && !_isOrderCancelled(r.Payment_Status);
   });
 
   if (dayRows.length === 0) return {date: date, orderCount: 0, meals: {}, items: [], total: 0};
