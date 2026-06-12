@@ -121,6 +121,10 @@ function ia_canPrep(pin) {
 function ia_isOpen(dateStr, meal) {
   const today = ia_todayStr();
   if (dateStr < today) return false;
+  // IA is a weekday corporate service — the calendar blocks Sat/Sun client-side;
+  // enforce it server-side too so a stale tab / crafted POST can't book a weekend.
+  const dow = new Date(dateStr + "T12:00:00").getDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return false;
   if (dateStr > today) return true;
   const c = IA_CUTOFFS[meal];
   if (!c) return false;
@@ -658,7 +662,13 @@ function ia_orderCols(itemsJson) {
 function ia_rowsAsSK() {
   try {
     const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
-    return ia_rows(ws).map(function (r) {
+    return ia_rows(ws)
+      // Defensive: keep cancelled/rejected IA orders out of the shared kitchen/
+      // driver/packaging views. (No IA cancel path exists today, so this is a
+      // no-op now, but it future-proofs if one is added — same rule the
+      // consumer prep functions apply.)
+      .filter(function (r) { return typeof _isOrderCancelled !== "function" || !_isOrderCancelled(r.Payment_Status); })
+      .map(function (r) {
       const col = ia_orderCols(r.Items_JSON);
       // Items_JSON in SK style: { itemName: qty } (descriptive names are fine for labels)
       const itemsObj = {};
