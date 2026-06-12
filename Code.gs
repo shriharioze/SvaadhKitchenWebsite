@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 16.1; // 2026-06-12: AUDIT batch 3 — server-side ordering-window guard (past dates/Sundays/cutoffs/closed meals, admin-PIN bypass) + gateway exception on stock block
+const CODE_VERSION   = 16.2; // 2026-06-12: AUDIT batch 4 (SECURITY) — _upsertCustomer never changes a non-blank PIN (blocks setPin/upsertProfile account takeover)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -2738,7 +2738,20 @@ function _upsertCustomer(ss, profile) {
     if (profile.landmark !== undefined) update("Landmark",      profile.landmark || "");
     if (profile.delivery_point !== undefined) update("Delivery_Point", _getDeliveryPointLabel(profile.delivery_point));
     if (profile.payment_preference !== undefined) update("Payment_Freq",  profile.payment_preference);
-    if (profile.pin) update("PIN", profile.pin);
+    // SECURITY: never CHANGE an existing non-blank PIN via upsert. Only write
+    // the PIN when the stored one is blank (new account / admin-cleared reset)
+    // or identical (mid-flow re-save). Without this, setPin/upsertProfile let
+    // anyone who knows a phone number overwrite the PIN and seize the account
+    // (and its wallet). A real "change PIN knowing the old one" flow doesn't
+    // exist in this app, so nothing legitimate is blocked.
+    if (profile.pin) {
+      const _storedPin = String(existing.PIN || "").trim();
+      if (_storedPin === "" || _storedPin === String(profile.pin).trim()) {
+        update("PIN", profile.pin);
+      } else {
+        console.warn("⚠️ PIN overwrite BLOCKED for " + pStr + " — existing PIN not replaced (takeover guard).");
+      }
+    }
     if (profile.meal_addresses) update("Meal_Addresses", profile.meal_addresses);
     if (profile.standardOrder !== undefined) update("Standard_Order", profile.standardOrder);
     if (profile.onAccount !== undefined) update("On_Account", profile.onAccount);
