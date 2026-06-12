@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 16.2; // 2026-06-12: AUDIT batch 4 (SECURITY) — _upsertCustomer never changes a non-blank PIN (blocks setPin/upsertProfile account takeover)
+const CODE_VERSION   = 16.3; // 2026-06-12: AUDIT B1-B3 (wallet) — cancellation charge now debits (was crediting), split wallet budgeted across meals, recharge sanity cap
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -2167,6 +2167,12 @@ function _submitOrderInternal(body) {
   const _normPhone = _normalizePhone(profile.phone);
   let loyaltyExcessCredit = 0; // accumulates surplus when 6th-day discount exceeds the bill
   let grandNetTotal = 0;       // sum of all per-meal Net_Totals — returned so the UPI QR matches what's recorded
+  // SPLIT: one cart-level wallet budget (the frontend sends the whole intended
+  // wallet portion in body.wallet_credit). Spent down per meal so the wallet is
+  // distributed correctly across a multi-meal cart instead of re-applied to each
+  // meal — and payMethod is NOT mutated mid-loop (that used to force every later
+  // meal to full UPI after the first partial meal).
+  let splitWalletBudget = (String(payMethod) === "Split") ? Math.max(0, Number(body.wallet_credit) || 0) : 0;
   // Normalize an items object to a stable JSON signature (sorted keys)
   const _itemsSig = (obj) => JSON.stringify(
     Object.keys(obj).sort().reduce((a, k) => { a[k] = obj[k]; return a; }, {})
@@ -2579,21 +2585,22 @@ function _submitOrderInternal(body) {
           pStat = "Pending"; // Wallet failed, fallback to pending
         }
       } else if (payMethod === "Split") {
-        // Split: deduct wallet portion now, UPI portion remains pending
-        const requestedCredit = Math.min(Number(body.wallet_credit) || 0, netTotal);
+        // Split: spend this meal's slice from the SUBMISSION wallet budget, capped
+        // by the live balance. UPI portion (netTotal − walletCreditUsed) stays
+        // pending. Never mutate payMethod — a later meal with no budget left is
+        // simply recorded with Wallet_Credit 0 (full UPI for that row).
+        const requestedCredit = Math.min(splitWalletBudget, netTotal);
         if (requestedCredit > 0) {
           const currentBalance = _calculateWalletBalance(profile.phone, allWalletRows);
-          if (currentBalance >= requestedCredit) {
-            _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Order Deduction (Wallet Part)", requestedCredit, true, sid);
-            allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Order Deduction", Amount: requestedCredit, Verified: "TRUE" });
-            walletCreditUsed = requestedCredit;
-            pStat = "Pending"; // UPI portion still outstanding
-          } else {
-            // Not enough wallet — fall back to full UPI
-            payMethod = "UPI";
-            pStat = "Pending";
+          const deduct = Math.min(requestedCredit, currentBalance);
+          if (deduct > 0) {
+            _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Order Deduction (Wallet Part)", deduct, true, sid);
+            allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Order Deduction", Amount: deduct, Verified: "TRUE" });
+            walletCreditUsed = deduct;
+            splitWalletBudget -= deduct;
           }
         }
+        pStat = "Pending"; // UPI portion still outstanding
       } else if (payMethod === "On Account") {
         pStat = "On Account";
       }
@@ -3647,9 +3654,14 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // debit the deficit from the wallet — it'll show as a negative balance
     // that gets collected on the customer's next order.
     if (cancellationCharge > 0) {
+      // Store a POSITIVE magnitude — the sign comes from classification, like
+      // every other wallet txn. Type is anchored as "Order ... Charge" so the
+      // balance calc treats it as a DEBIT (was stored negative AND classified
+      // debit → balance -= (−x) = balance += x, i.e. the charge CREDITED the
+      // customer instead of recovering the deficit).
       _appendWalletTransaction(phone, custName,
-        `Cancellation Charge (streak reward reversal — ₹${loyaltyClawback} reward was applied to an order because of this order. Cancelling it breaks your streak, so ₹${cancellationCharge} is recovered here.)`,
-        -cancellationCharge, true, String(rowId));
+        `Order Cancellation Charge (streak reward reversal — the ₹${loyaltyClawback} reward earned via this order is reversed since cancelling it breaks your streak, so ₹${cancellationCharge} is recovered here.)`,
+        cancellationCharge, true, String(rowId));
     }
 
     if (finalType === "wallet") {
@@ -7320,6 +7332,9 @@ function submitWalletRecharge(body) {
   var name   = String(body.name || "").trim();
   var amount = Number(body.amount);
   if (!phone || isNaN(amount) || amount <= 0) return {success:false, error:"Invalid amount or phone"};
+  // Sanity cap — keeps the pending-recharge list clean (admin still verifies
+  // every entry before it touches the balance; this just blocks absurd values).
+  if (amount > 50000) return {success:false, error:"Recharge amount too large. Please contact us for amounts above ₹50,000."};
 
   // Unverified entry requiring admin to flip to TRUE
   const rechargeRef = "RCH-" + Utilities.formatDate(getISTDate(), "Asia/Kolkata", "yyyyMMdd-HHmmss") + "-" + phone.slice(-4);
