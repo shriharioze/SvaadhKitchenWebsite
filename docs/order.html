@@ -3279,7 +3279,7 @@
               autocomplete="current-password"
               style="letter-spacing:8px;font-size:1.5rem;text-align:center;width:120px;margin:0 auto;display:block;"
               oninput="this.value=this.value.replace(/\D/g,''); checkPinLength(); if(this.value.length===4) goNext();"
-              onchange="checkPinLength()" onkeyup="checkPinLength()">
+              onchange="_tryAutoSubmitPin()" onkeyup="checkPinLength()">
           </div>
           <div id="forgotPinWrap" style="margin-top:14px;display:none;">
             <a href="https://wa.me/919322246765?text=Hi,%20I%20forgot%20my%20Svaadh%20Kitchen%20PIN.%20Please%20clear%20my%20PIN%20so%20I%20can%20reset%20it."
@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.13.2";
+    const APP_VERSION = "v26.06.13.3";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5530,6 +5530,22 @@
       }
     }
 
+    // Auto-proceed when the PIN field already holds 4 digits — covers browser
+    // PASSWORD-MANAGER autofill (after logout, the saved number+PIN combo fills
+    // both fields but the PIN fill doesn't fire an 'input' event, so typing's
+    // auto-submit never triggers and the customer had to press Verify manually).
+    // Guarded: only the "verify" (returning-login) screen, and never while a
+    // verify is already in flight (btnNext.disabled), so it can't double-submit.
+    function _tryAutoSubmitPin() {
+      checkPinLength();
+      if (S.authMode !== "verify") return;
+      const v = ($("pinInput")?.value || "").replace(/\D/g, "");
+      const btn = $("btnNext");
+      if (v.length === 4 && btn && !btn.disabled && btn.dataset.locked !== "pin") {
+        goNext();
+      }
+    }
+
     function refreshBillBtn() {
       if (S.step !== 3) return;
       const ok = hasAnyOrder();
@@ -5899,8 +5915,9 @@
           $("btnNext").textContent = "Verify PIN & Continue";
           $("btnNext").dataset.locked = "pin"; $("btnNext").style.opacity = "0.5"; $("btnNext").style.filter = "grayscale(100%)";
           setTimeout(() => { $("pinInput").focus(); checkPinLength(); }, 100);
-          setTimeout(checkPinLength, 500);
-          setTimeout(checkPinLength, 1500);
+          // Poll for password-manager autofill (fills async, no input event) and
+          // auto-proceed once 4 digits are present (verify screen only).
+          [400, 800, 1200, 1800].forEach(ms => setTimeout(_tryAutoSubmitPin, ms));
           return;
         } else {
           S.authMode = "create";
@@ -5923,8 +5940,9 @@
             S.tempProfileData = { _newAccount: true };
           }
           setTimeout(() => { $("pinInput").focus(); checkPinLength(); }, 100);
-          setTimeout(checkPinLength, 500);
-          setTimeout(checkPinLength, 1500);
+          // Poll for password-manager autofill (fills async, no input event) and
+          // auto-proceed once 4 digits are present (verify screen only).
+          [400, 800, 1200, 1800].forEach(ms => setTimeout(_tryAutoSubmitPin, ms));
           return;
         }
       } catch (err) {
