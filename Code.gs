@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.0; // 2026-06-13: RECOVER full file (a bad edit had deleted ~3400 lines) + getOrCreateTab keeps header repair, drops destructive column deletion (archive data-loss + existing-customer PIN fix)
+const CODE_VERSION   = 17.1; // 2026-06-13: E3/E8 audit — on-account bulk-pay/unpaid filters matched lowercase "on account" but status is written "On Account" (capital), so on-account orders were silently skipped by getUnpaidCustomers/markCustomersPaid/getUnpaidOrdersData/markOrdersPaidBulk; now case-insensitive. submitManualOrder wrote address to non-existent "Address" column → fixed to "Full_Address".
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -5733,7 +5733,7 @@ function getUnpaidCustomers(p) {
     String(r.Order_Date) >= dateFrom &&
     String(r.Order_Date) <= dateTo   &&
     (r.Payment_Status === "Pending" ||
-     r.Payment_Status === "on account" ||
+     String(r.Payment_Status||"").trim().toLowerCase() === "on account" ||
      !r.Payment_Status)
   );
 
@@ -5786,7 +5786,7 @@ function markCustomersPaid(body) {
         od >= dateFrom &&
         od <= dateTo   &&
         (r.Payment_Status === "Pending" ||
-         r.Payment_Status === "on account" ||
+         String(r.Payment_Status||"").trim().toLowerCase() === "on account" ||
          !r.Payment_Status)) {
       ws.getRange(r._row, hIdx["Payment_Status"]).setValue("Paid");
       updated++;
@@ -8668,7 +8668,7 @@ function submitManualOrder(body) {
   set("Net_Total",      amount);
   set("Payment_Method", orderPayMethod);
   set("Payment_Status", orderPayStatus);
-  set("Address",        custAddress);
+  set("Full_Address",   custAddress);  // was "Address" — no such column, so manual-order address was silently dropped
   set("Area",           custArea);
   set("Society",        custSociety);
   set("Maps_Link",      custMaps);
@@ -9597,7 +9597,7 @@ function getUnpaidOrdersData(p) {
   const relevant = rows.filter(r => {
     const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
     return d >= dateFrom && d <= dateTo &&
-    (r.Payment_Status === "Pending" || r.Payment_Status === "on account" || !r.Payment_Status);
+    (r.Payment_Status === "Pending" || String(r.Payment_Status||"").trim().toLowerCase() === "on account" || !r.Payment_Status);
   });
 
   const orders = relevant.map(r => ({
@@ -9732,7 +9732,7 @@ function markOrdersPaidBulk(body) {
   
   rows.forEach(r => {
     if (sids.includes(String(r.Submission_ID)) && 
-        (r.Payment_Status === "Pending" || r.Payment_Status === "on account" || !r.Payment_Status)) {
+        (r.Payment_Status === "Pending" || String(r.Payment_Status||"").trim().toLowerCase() === "on account" || !r.Payment_Status)) {
       ws.getRange(r._row, hIdx["Payment_Status"]).setValue("Paid");
       updated++;
     }
