@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.1; // 2026-06-13: E3/E8 audit — on-account bulk-pay/unpaid filters matched lowercase "on account" but status is written "On Account" (capital), so on-account orders were silently skipped by getUnpaidCustomers/markCustomersPaid/getUnpaidOrdersData/markOrdersPaidBulk; now case-insensitive. submitManualOrder wrote address to non-existent "Address" column → fixed to "Full_Address".
+const CODE_VERSION   = 17.2; // 2026-06-13: E1/E9 audit — setKitchenClosed summary no longer counts unpaid "pending" orders as UPI refunds (cosmetic overstatement). getBillingData: blank Billing_Cycle now defaults to "Daily" so an On-Account customer with a missing cycle isn't invisible in every billing tab. (E module audit complete.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -4049,7 +4049,8 @@ function setKitchenClosed(body) {
       let bucket = "other";
       if (pStat === "wallet paid") { rType = "wallet"; bucket = "wallet"; }
       else if (pStat === "on account" || pStat === "onaccount") { rType = "none"; bucket = "on_account"; }
-      else if (pStat === "paid" || pStat.indexOf("pending") !== -1) { rType = "manual_upi"; bucket = "upi"; }
+      else if (pStat === "paid") { rType = "manual_upi"; bucket = "upi"; }
+      else if (pStat.indexOf("pending") !== -1) { rType = "none"; bucket = "other"; }  // unpaid — cancel only, no refund (don't inflate the UPI-refund summary total)
 
       try {
         const res = deleteOrder(String(r.Phone || ""), String(r.Submission_ID || ""),
@@ -8230,8 +8231,11 @@ function getBillingData(cycle, filterValue) {
   onAccountOrders.forEach(r => {
     const phone = String(r.Phone || '').trim();
     const cust  = custMap[phone] || {};
-    // Only include customers whose billing_cycle matches requested cycle
-    if ((cust.billing_cycle || '').toLowerCase() !== cycle.toLowerCase()) return;
+    // Only include customers whose billing_cycle matches requested cycle.
+    // Blank Billing_Cycle defaults to "Daily" (system-wide default) so an
+    // On-Account customer with a missing cycle still surfaces in the Daily
+    // collection view instead of being invisible in every billing tab.
+    if ((cust.billing_cycle || 'Daily').toLowerCase() !== cycle.toLowerCase()) return;
 
     if (!grouped[phone]) {
       grouped[phone] = {
