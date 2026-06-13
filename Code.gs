@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.3; // 2026-06-13: G1 SECURITY — ungated updateProfile/upsertProfile honored onAccount/billingCycle from the body, letting anyone self-promote any phone to pay-later On-Account (escalation). Now strip those admin-only fields from both customer routes (admin markOnAccount path unaffected).
+const CODE_VERSION   = 17.4; // 2026-06-14: Module C (HDFC) audit — fix const-reassignment bug in hdfc_markOrderPaid (txnId const→let, threw when webhook lacked txn_id). NOTE: live's HDFC is a stale subset (dormant, gateway disabled) — port the full hardened gateway from merged before enabling HDFC in production.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -9158,7 +9158,7 @@ function hdfc_getOrderStatus(orderId) {
  */
 function hdfc_markOrderPaid(order) {
   const orderId = String(order.order_id || "").trim();
-  const txnId   = String(order.txn_id   || order.id || "").trim();
+  let   txnId   = String(order.txn_id   || order.id || "").trim();  // reassigned below from Status API — must be let, not const
   const method  = String(order.payment_method_type || order.payment_method || "Gateway").trim();
 
   if (!orderId) return { error: "Webhook: missing order_id." };
