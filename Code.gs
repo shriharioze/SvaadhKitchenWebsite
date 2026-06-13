@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.2; // 2026-06-13: E1/E9 audit — setKitchenClosed summary no longer counts unpaid "pending" orders as UPI refunds (cosmetic overstatement). getBillingData: blank Billing_Cycle now defaults to "Daily" so an On-Account customer with a missing cycle isn't invisible in every billing tab. (E module audit complete.)
+const CODE_VERSION   = 17.3; // 2026-06-13: G1 SECURITY — ungated updateProfile/upsertProfile honored onAccount/billingCycle from the body, letting anyone self-promote any phone to pay-later On-Account (escalation). Now strip those admin-only fields from both customer routes (admin markOnAccount path unaffected).
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -562,6 +562,10 @@ function doPost(e) {
     if (action === "updateProfile") {
       const profile = body.profile;
       if (!profile || !profile.phone) return jsonRes({error: "Phone required"});
+      // SECURITY: these are admin-only fields (set via the gated markOnAccount /
+      // toggleFeeExempt). Strip them from the unauthenticated customer upsert so
+      // nobody can self-promote a phone to pay-later On-Account by knowing it.
+      delete profile.onAccount; delete profile.billingCycle;
       _upsertCustomer(getSpreadsheet(), profile);
       return jsonRes({success: true});
     }
@@ -820,6 +824,9 @@ function doPost(e) {
     if (action === "upsertProfile") {
       // Capture PIN if provided during mid-flow profile upserts
       const profile = { ...body, pin: body.pin || "" };
+      // SECURITY: admin-only fields — strip from this unauthenticated route so a
+      // phone alone can't self-promote to pay-later On-Account (set via gated markOnAccount).
+      delete profile.onAccount; delete profile.billingCycle;
       _upsertCustomer(getSpreadsheet(), profile);
       return jsonRes({success:true});
     }
