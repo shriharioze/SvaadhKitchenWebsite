@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.06.1">
+  <meta name="app-version" content="v26.06.14.1">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2139,7 +2139,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.06.1";
+    const ADMIN_VERSION = "v26.06.14.1";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2150,12 +2150,24 @@ function colKeyToDisplayName(k) {
         const m = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
         if (m && m[1] && m[1] !== ADMIN_VERSION) {
           console.log("[Admin] Version mismatch: running=" + ADMIN_VERSION
-                      + ", latest=" + m[1] + " — reloading to pick up new build");
-          const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
-          window.location.replace(window.location.href + sep + "_v=" + Date.now());
+                      + ", latest=" + m[1] + " — prompting hard refresh");
+          // Marathi confirm — shown ONLY on a real version mismatch. Same dialogue
+          // in Admin + Kitchen. On confirm → hard refresh to the newest build.
+          if (window.confirm(_skUpdateMsgMarathi(ADMIN_VERSION, m[1]))) {
+            const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
+            window.location.replace(window.location.href + sep + "_v=" + Date.now());
+          }
         }
       } catch (_) { /* network blip — try again next load */ }
     })();
+    // Shared update prompt (identical wording in Admin + Kitchen), in Marathi.
+    function _skUpdateMsgMarathi(cur, latest) {
+      return "🔄 नवीन व्हर्जन उपलब्ध आहे!\n\n"
+           + "सध्याची आवृत्ती: " + cur + "\n"
+           + "नवीन आवृत्ती: " + latest + "\n\n"
+           + "लेटेस्ट व्हर्जनवर जाण्यासाठी पेज रिफ्रेश करणे आवश्यक आहे.\n"
+           + "आता रिफ्रेश करायचे?";
+    }
 
 let S = {
   pin:            "",
