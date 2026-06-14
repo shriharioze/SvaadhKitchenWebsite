@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.13.3";
+    const APP_VERSION = "v26.06.14.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6579,8 +6579,13 @@
       ${isAvail
             ? `<div class="meal-body ${(sub > 0 && !isAddrMissing) ? "open" : ""}" id="mb_${date}_${meal}">${buildMealBody(date, meal, menu)}</div>`
             : (() => {
-                const isClosed = !!(S.menuCache[date]?.orders_closed || {})[meal];
-                const msg = isClosed
+                const isSoldOut = !!(S.menuCache[date]?.sold_out || {})[meal];
+                const isClosed  = !!(S.menuCache[date]?.orders_closed || {})[meal];
+                const msg = isSoldOut
+                  ? `<div style="font-size:1.3rem;margin-bottom:8px;">🍽️</div>
+                     <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Sold Out for Today</div>
+                     <div style="font-size:0.72rem;color:#666;">${meal} has reached today's order limit. Please try another day.</div>`
+                  : isClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🔒</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Not Accepting Orders</div>
                      <div style="font-size:0.72rem;color:#666;">Orders for ${meal} are not available on this date.</div>`
@@ -6615,7 +6620,7 @@
         const el = $(`cutdown_${date}_${meal}`);
         if (!el) return;
         const isClosed = !!(menu.orders_closed || {})[meal];
-        if (isClosed) { el.textContent = 'Not accepting orders'; el.style.color = ''; return; }
+        if (isClosed) { el.textContent = !!(menu.sold_out || {})[meal] ? 'Sold out for today' : 'Not accepting orders'; el.style.color = ''; return; }
 
         // For future dates, show the cutoff time as a static label — no countdown needed.
         if (!isToday) {

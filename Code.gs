@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.5; // 2026-06-14: FIX admin "place from favorite" — vault_admin.html posts _action:"processOrder" but no such handler existed (router returned "Unknown action"); the favorites/bulk-favorite placement never worked. Route processOrder (and explicit "submitOrder") to submitOrder, guarded by orders[]-present. submitOrder already honors profile/payment_method (wallet deduct)/On-Account override/admin-pin cutoff bypass.
+const CODE_VERSION   = 17.6; // 2026-06-14: NEW per-meal order CAP. Admin sets Order_Cap_JSON (max orders) per date+meal on Daily Menu; when active (non-cancelled) orders hit the cap that meal is SOLD OUT for the day — submitOrder rejects (authoritative, under lock), getMenu marks orders_closed+sold_out, order.html shows "Sold Out for Today". No cap set = unchanged (open till cutoff). New menu column Order_Cap_JSON.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -1140,7 +1140,7 @@ function initSchema() {
   getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON"
   ]);
   getOrCreateTab(ss, TAB_BF_MASTER, ["ID","Name","Price","Active"]);
   getOrCreateTab(ss, TAB_SABJI,     ["ID","Name","Type","Active"]);
@@ -1462,6 +1462,23 @@ function getWalletTransactions(phone) {
 }
 
 // ── GET MENU ─────────────────────────────────────────────────
+// Count ACTIVE (non-cancelled) orders per meal type for one date, from a rows
+// array. One order row = one order. Cancelled rows free their slot. Shared by
+// getMenu (display) and the submitOrder cap guard (authoritative).
+function _countActiveMealOrders(rows, dateStr) {
+  const c = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  for (var i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const d = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date || "").trim();
+    if (d !== dateStr) continue;
+    if (_isOrderCancelled(r.Payment_Status)) continue;
+    const mt = String(r.Meal_Type || "").trim();
+    if (c[mt] !== undefined) c[mt]++;
+  }
+  return c;
+}
 function getMenu(dateStr) {
   // Cache per-date for 60 s. The hard stock-block in submitOrder (under LockService)
   // prevents actual over-orders even when menu data is slightly stale.
@@ -1631,6 +1648,11 @@ function _getMenuUncached(dateStr) {
   let stockLimits = {};
   try { if (r && r.Stock_JSON) stockLimits = JSON.parse(r.Stock_JSON); } catch(e) {}
 
+  // Per-meal max-order caps (e.g. {"Breakfast":50}). When a meal's active
+  // (non-cancelled) order count reaches its cap it is SOLD OUT for the day.
+  let orderCaps = {};
+  try { if (r && r.Order_Cap_JSON) orderCaps = JSON.parse(r.Order_Cap_JSON); } catch(e) {}
+
   const ordersWs2   = getOrCreateTab(ss, TAB_ORDERS, []);
   // OPTIMIZATION: Only read the last 500 rows to compute stock limit (covers today and yesterday).
   // This prevents scanning thousands of old orders just to check today's stock.
@@ -1644,6 +1666,21 @@ function _getMenuUncached(dateStr) {
     });
   });
 
+  // Cap evaluation — reuse the rows already read above (zero extra cost). A
+  // capped-full meal is marked sold_out (distinct customer label) AND
+  // orders_closed (reuses the existing grey-out + submit-block plumbing).
+  // submitOrder re-checks against the FULL sheet, so this display count being
+  // a recent-window approximation can never let an over-cap order through.
+  const orderCounts = _countActiveMealOrders(ordersRows2, dateStr);
+  const soldOut = {};
+  ["Breakfast","Lunch","Dinner"].forEach(meal => {
+    const cap = Number(orderCaps[meal] || 0);
+    if (cap > 0 && (orderCounts[meal] || 0) >= cap) {
+      soldOut[meal] = true;
+      ordersClosed[meal] = true;
+    }
+  });
+
   return {
     breakfast:    finalBreakfast,
     lunch_dry:    r ? (r.Lunch_Dry || "") : "",
@@ -1655,6 +1692,9 @@ function _getMenuUncached(dateStr) {
     orders_closed: ordersClosed,
     stock_limits: stockLimits,
     units_remaining: unitsRemaining,
+    order_caps:    orderCaps,    // admin display: configured per-meal max
+    order_counts:  orderCounts,  // admin display: active orders placed so far
+    sold_out:      soldOut,      // customer display: meal hit its cap today
     kitchen_closed: _kitchenClosed
   };
 }
@@ -2099,10 +2139,20 @@ function _submitOrderInternal(body) {
       });
       let _ordersClosedW = {};
       try { if (_menuRowW && _menuRowW.Orders_Closed) _ordersClosedW = JSON.parse(_menuRowW.Orders_Closed); } catch(e) {}
+      // Per-meal max-order cap. Count active (non-cancelled) orders for this date
+      // from the FULL sheet — authoritative, and exact because submitOrder runs
+      // under LockService (concurrent orders can't both slip past the cap).
+      let _orderCapW = {};
+      try { if (_menuRowW && _menuRowW.Order_Cap_JSON) _orderCapW = JSON.parse(_menuRowW.Order_Cap_JSON); } catch(e) {}
+      const _capCountsW = Object.keys(_orderCapW).length ? _countActiveMealOrders(allOrderRows, _d) : null;
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
         if (_ordersClosedW[_mt]) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
+        const _capW = _capCountsW ? Number(_orderCapW[_mt] || 0) : 0;
+        if (_capW > 0 && (_capCountsW[_mt] || 0) >= _capW) {
+          _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
+        }
         if (_effCutW && _effCutW[_mt] !== undefined && _wHour >= _effCutW[_mt]) {
           _wViolations.push("The " + _mt + " cutoff for today (" + _d + ") has already passed.");
         }
@@ -3845,6 +3895,7 @@ function _getAdminDataUncached() {
   // countOrderedUnits(allOrders, date) was called per menu row → O(orders ×
   // dates) with a JSON.parse for every order each time (the ~40s hot spot).
   const countsByDate = {};
+  const mealOrderCounts = {};   // dd → {Breakfast,Lunch,Dinner} active order-row counts (for the per-meal order cap)
   allOrdersAdm.forEach(function(row) {
     if (_isOrderCancelled(row.Payment_Status)) return;
     const dd = row.Order_Date instanceof Date
@@ -3852,6 +3903,8 @@ function _getAdminDataUncached() {
       : String(row.Order_Date || "").trim();
     if (!dd) return;
     const meal = String(row.Meal_Type || "");
+    if (!mealOrderCounts[dd]) mealOrderCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+    if (mealOrderCounts[dd][meal] !== undefined) mealOrderCounts[dd][meal]++;
     if (!countsByDate[dd]) countsByDate[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
     if (!countsByDate[dd][meal]) return;
     let items = {};
@@ -3889,6 +3942,8 @@ function _getAdminDataUncached() {
     try { if (r.Orders_Closed) ordersClosed = JSON.parse(r.Orders_Closed); } catch(e) {}
     let stockLimits = {};
     try { if (r.Stock_JSON) stockLimits = JSON.parse(r.Stock_JSON); } catch(e) {}
+    let orderCaps = {};
+    try { if (r.Order_Cap_JSON) orderCaps = JSON.parse(r.Order_Cap_JSON); } catch(e) {}
     const orderedCounts = countsByDate[d] || { Breakfast: {}, Lunch: {}, Dinner: {} };
     const unitsRemaining = {};
     ["Breakfast","Lunch","Dinner"].forEach(meal => {
@@ -3911,6 +3966,8 @@ function _getAdminDataUncached() {
       orders_closed:    ordersClosed,
       stock_limits:     stockLimits,
       units_remaining:  unitsRemaining,
+      order_caps:       orderCaps,
+      order_counts:     mealOrderCounts[d] || { Breakfast: 0, Lunch: 0, Dinner: 0 },
       kitchen_closed:   kitchenClosed,
     };
   });
@@ -3925,7 +3982,7 @@ function saveMenu(body) {
   const ws = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON"
   ]);
   const rows = getAllRows(ws);
   let hIdx = headerIndex(ws);
@@ -3933,6 +3990,12 @@ function saveMenu(body) {
   // Self-heal: ensure Kitchen_Closed column exists for legacy sheets.
   if (!hIdx["Kitchen_Closed"]) {
     ws.getRange(1, ws.getLastColumn() + 1).setValue("Kitchen_Closed");
+    SpreadsheetApp.flush();
+    hIdx = headerIndex(ws);
+  }
+  // Self-heal: ensure Order_Cap_JSON column exists (per-meal max-order caps).
+  if (!hIdx["Order_Cap_JSON"]) {
+    ws.getRange(1, ws.getLastColumn() + 1).setValue("Order_Cap_JSON");
     SpreadsheetApp.flush();
     hIdx = headerIndex(ws);
   }
@@ -3971,6 +4034,11 @@ function saveMenu(body) {
     JSON.stringify(body.orders_closed || {}),
     JSON.stringify(body.stock_limits || {}),
     preservedKitchenClosed ? "TRUE" : "",
+    // Per-meal max-order caps, e.g. {"Breakfast":50,"Lunch":80}. Preserve any
+    // existing caps if this save doesn't carry order_caps (don't silently reopen).
+    (body.order_caps !== undefined)
+      ? JSON.stringify(body.order_caps || {})
+      : (existing && existing.Order_Cap_JSON ? String(existing.Order_Cap_JSON) : "{}"),
   ];
 
   if (existing) {
@@ -4011,7 +4079,7 @@ function setKitchenClosed(body) {
   const menuWs = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON"
   ]);
   let mIdx = headerIndex(menuWs);
   if (!mIdx["Kitchen_Closed"]) {

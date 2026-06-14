@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.14.1">
+  <meta name="app-version" content="v26.06.14.2">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2139,7 +2139,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.14.1";
+    const ADMIN_VERSION = "v26.06.14.2";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2187,6 +2187,8 @@ let S = {
   menuDirty:      false, // true when unsaved changes exist on the menu page
   oosItems:       { Breakfast: [], Lunch: [], Dinner: [] },
   ordersClosed:   {},   // { Breakfast:bool, Lunch:bool, Dinner:bool }
+  orderCaps:      {},   // { Breakfast:N, Lunch:N, Dinner:N } per-meal max order count (blank/0 = unlimited)
+  orderCounts:    {},   // { Breakfast:n, Lunch:n, Dinner:n } active orders placed so far (display only)
   stockLimits:    {},   // { Breakfast:{colKey:limit}, Lunch:{}, Dinner:{} }
   unitsOrdered:   {},   // derived from units_remaining: ordered = limit - remaining
 };
@@ -2819,6 +2821,9 @@ function selectDate(iso) {
     // Load OOS and orders closed state
     S.oosItems     = existing.oos_items     || { Breakfast: [], Lunch: [], Dinner: [] };
     S.ordersClosed = existing.orders_closed || {};
+    // Load per-meal order caps + current active counts (display)
+    S.orderCaps    = existing.order_caps    || {};
+    S.orderCounts  = existing.order_counts  || {};
     // Load stock limits + derive ordered-count from remaining
     S.stockLimits  = existing.stock_limits  || {};
     S.unitsOrdered = {};
@@ -2840,6 +2845,8 @@ function selectDate(iso) {
     // Reset OOS and orders closed
     S.oosItems     = { Breakfast: [], Lunch: [], Dinner: [] };
     S.ordersClosed = {};
+    S.orderCaps    = {};
+    S.orderCounts  = {};
     S.stockLimits  = {};
     S.unitsOrdered = {};
   }
@@ -3151,12 +3158,22 @@ function renderOrdersClosedPanel() {
   ];
   panel.innerHTML = meals.map(m => {
     const isClosed = !!S.ordersClosed[m.key];
+    const cap   = (S.orderCaps && S.orderCaps[m.key]) ? S.orderCaps[m.key] : "";
+    const count = (S.orderCounts && S.orderCounts[m.key] != null) ? Number(S.orderCounts[m.key]) : null;
+    const capHit = cap && count != null && count >= Number(cap);
     return `<div style="text-align:center;">
       <div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px;">${m.icon} ${m.key}</div>
       <button class="toggle ${isClosed ? '' : 'on'}"
               onclick="toggleOrdersClosed('${m.key}')"></button>
       <div style="font-size:.72rem;margin-top:6px;font-weight:600;color:${isClosed ? '#2D1A5E' : 'var(--green)'};">
         ${isClosed ? 'Closed' : 'Open'}
+      </div>
+      <div style="margin-top:10px;border-top:1px dashed var(--border,#ddd);padding-top:8px;">
+        <label style="font-size:.6rem;color:var(--muted);display:block;margin-bottom:3px;">Max orders</label>
+        <input type="number" min="0" inputmode="numeric" placeholder="∞"
+               value="${cap}" onchange="setOrderCap('${m.key}', this.value)"
+               style="width:62px;text-align:center;padding:4px;border-radius:6px;border:1px solid var(--border,#ccc);font-size:.82rem;" />
+        ${count != null ? `<div style="font-size:.6rem;margin-top:4px;color:${capHit ? '#c0392b' : 'var(--muted)'};font-weight:700;">${count}${cap ? ' / ' + cap : ''} placed${capHit ? ' · FULL' : ''}</div>` : ''}
       </div>
     </div>`;
   }).join("");
@@ -3166,6 +3183,15 @@ function toggleOrdersClosed(meal) {
   S.ordersClosed[meal] = !S.ordersClosed[meal];
   setMenuDirty(true);
   renderOrdersClosedPanel();
+}
+
+// Set/clear a per-meal max-order cap. Blank / 0 / invalid → no cap (unlimited).
+function setOrderCap(meal, val) {
+  if (!S.orderCaps) S.orderCaps = {};
+  const n = parseInt(val, 10);
+  if (!val || isNaN(n) || n <= 0) { delete S.orderCaps[meal]; }
+  else { S.orderCaps[meal] = n; }
+  setMenuDirty(true);
 }
 
 // ════════════════════════════════════════════════════════
@@ -3195,6 +3221,7 @@ async function saveCurrentMenu() {
     oos_items:          S.oosItems,
     orders_closed:      S.ordersClosed,
     stock_limits:       S.stockLimits,
+    order_caps:         S.orderCaps,
   };
 
   try {
@@ -3233,6 +3260,8 @@ async function saveCurrentMenu() {
       oos_items:        S.oosItems,
       orders_closed:    S.ordersClosed,
       stock_limits:     S.stockLimits,
+      order_caps:       S.orderCaps,
+      order_counts:     S.orderCounts,
       units_remaining:  (() => {
         const out = {};
         ["Breakfast","Lunch","Dinner"].forEach(meal => {
