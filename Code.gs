@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.4; // 2026-06-14: Module C (HDFC) audit — fix const-reassignment bug in hdfc_markOrderPaid (txnId const→let, threw when webhook lacked txn_id). NOTE: live's HDFC is a stale subset (dormant, gateway disabled) — port the full hardened gateway from merged before enabling HDFC in production.
+const CODE_VERSION   = 17.5; // 2026-06-14: FIX admin "place from favorite" — vault_admin.html posts _action:"processOrder" but no such handler existed (router returned "Unknown action"); the favorites/bulk-favorite placement never worked. Route processOrder (and explicit "submitOrder") to submitOrder, guarded by orders[]-present. submitOrder already honors profile/payment_method (wallet deduct)/On-Account override/admin-pin cutoff bypass.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -881,6 +881,16 @@ function doPost(e) {
     if (action === "ia_resetPin")    return jsonRes(ia_resetPin(body));
     if (action === "ia_markDelivered")    return jsonRes(ia_markDelivered(body));
     if (action === "ia_batchMarkEnRoute") return jsonRes(ia_batchMarkEnRoute(body));
+
+    // Admin "place from favorite" / bulk-favorite placement (vault_admin.html)
+    // posts _action:"processOrder" with the same {profile, orders:[{date,meals}]}
+    // payload as a regular submission. Route it (and the explicit "submitOrder"
+    // name) to submitOrder. Same orders[]-present guard as the no-action path so
+    // a malformed payload can't produce the old phantom "success".
+    if ((action === "processOrder" || action === "submitOrder")
+        && Array.isArray(body.orders) && body.orders.length) {
+      return jsonRes(submitOrder(body));
+    }
 
     // Regular order submission — the ONLY POST with no _action. Anything else
     // (unknown/typo'd actions, malformed debug payloads) must NOT fall through
