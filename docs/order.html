@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.15.1";
+    const APP_VERSION = "v26.06.15.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7861,6 +7861,18 @@
     // whole order's area (both waive our delivery fee).
     const PORTER_TIMES = { Breakfast: "8:30 AM", Lunch: "11:00 AM", Dinner: "7:00 PM" };
     const PICKUP_ADDRESS = "A 104, Shree Laxmi Vihar Society, Hadapsar";
+    const PICKUP_MAPS = "https://maps.app.goo.gl/uWSGMzGUY8PpTZfz5";
+    // What fulfilment did the just-placed order use? Self Pickup / Porter switch
+    // the order-level area, so profile.area (and per-meal areas) reflect it.
+    function _orderFulfilmentType() {
+      const areas = [];
+      try { if (S.profile && S.profile.area) areas.push(S.profile.area); } catch (_) {}
+      try { ["Breakfast", "Lunch", "Dinner"].forEach(m => { const a = (getMealAddr && getMealAddr(m) || {}).area; if (a) areas.push(a); }); } catch (_) {}
+      const norm = areas.map(a => String(a || "").toLowerCase());
+      if (norm.some(a => a === "porter")) return "porter";
+      if (norm.some(a => a.indexOf("pickup") !== -1)) return "pickup";
+      return "delivery";
+    }
     function _soldOutDeliveryMealsInCart() {
       const out = [];
       (S.selectedDates || []).forEach(date => {
@@ -7953,7 +7965,7 @@
         _capCheckOverlay(true);
         let _reach = {};
         try {
-          const _rr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "checkDeliveryReachable", items: _soldOut.map(x => ({ date: x.date, meal: x.meal, society: x.society })) }) });
+          const _rr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "checkDeliveryReachable", phone: (S.profile && S.profile.phone) || "", items: _soldOut.map(x => ({ date: x.date, meal: x.meal, society: x.society })) }) });
           const _rd = await _rr.json();
           (_rd.results || []).forEach(x => { _reach[x.date + "|" + x.meal] = x.reachable; });
         } catch (_) {}
@@ -8397,9 +8409,28 @@
       $("orderIdDisplay").textContent = id ? id.toUpperCase() : "CONFIRMED";
       $("bottomNav").style.display = "none";
 
-      // Show delivery tip permanently on success page
+      // Show the right heads-up on the success page: delivery customers get the
+      // driver/gate/bag tips; Self Pickup & Porter customers get the pickup
+      // address + maps link instead.
       const tipCard = $("deliveryTipCard");
       if (tipCard) {
+        const _ftype = _orderFulfilmentType();
+        if (_ftype === "pickup" || _ftype === "porter") {
+          tipCard.innerHTML =
+            `<div style="display:flex;align-items:flex-start;gap:10px;">
+              <div style="font-size:1.5rem;line-height:1;flex-shrink:0;">${_ftype === "porter" ? "🛵" : "📦"}</div>
+              <div>
+                <div style="font-size:0.85rem;font-weight:700;color:#92400e;margin-bottom:4px;">${_ftype === "porter" ? "Porter — Pickup Point" : "Self Pickup — Collect From"}</div>
+                <div style="font-size:0.8rem;color:#78350f;line-height:1.55;">
+                  <b>${PICKUP_ADDRESS}</b><br>
+                  <a href="${PICKUP_MAPS}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline;">🗺️ Open in Google Maps</a>
+                  ${_ftype === "porter"
+                    ? `<br><span style="margin-top:6px;display:inline-block;">After your food is ready, book a courier (Porter/Borzo etc.) from here to your address and pay the courier directly.</span>`
+                    : ""}
+                </div>
+              </div>
+            </div>`;
+        }
         tipCard.style.display = "block";
       }
 
