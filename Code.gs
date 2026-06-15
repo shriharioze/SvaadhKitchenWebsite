@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.7; // 2026-06-14: Order CAP is now a DELIVERY limit with opt-out. When delivery is full (sold_out), order page offers Self Pickup / Porter (both bypass the cap + waive our delivery fee); cap counts DELIVERY orders only (excludes Self Pickup/Porter). Porter = new fulfillment (area "Porter", keeps customer address, customer books+pays courier). submitOrder rejects only delivery past cap.
+const CODE_VERSION   = 17.8; // 2026-06-14: per-meal toggle (Cap_Alt_JSON) to enable/disable the Self Pickup/Porter offer when delivery is full. Default ON (offer alternatives). OFF = hard sold-out: getMenu sets orders_closed, submitOrder blocks delivery AND pickup/porter past cap. New menu column Cap_Alt_JSON.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -1140,7 +1140,7 @@ function initSchema() {
   getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON"
   ]);
   getOrCreateTab(ss, TAB_BF_MASTER, ["ID","Name","Price","Active"]);
   getOrCreateTab(ss, TAB_SABJI,     ["ID","Name","Type","Active"]);
@@ -1656,6 +1656,10 @@ function _getMenuUncached(dateStr) {
   // (non-cancelled) order count reaches its cap it is SOLD OUT for the day.
   let orderCaps = {};
   try { if (r && r.Order_Cap_JSON) orderCaps = JSON.parse(r.Order_Cap_JSON); } catch(e) {}
+  // Per-meal flag: offer Self Pickup / Porter when delivery is full? Default ON
+  // (missing/true). false = hard sold-out (no alternatives offered).
+  let capAlt = {};
+  try { if (r && r.Cap_Alt_JSON) capAlt = JSON.parse(r.Cap_Alt_JSON); } catch(e) {}
 
   const ordersWs2   = getOrCreateTab(ss, TAB_ORDERS, []);
   // OPTIMIZATION: Only read the last 500 rows to compute stock limit (covers today and yesterday).
@@ -1680,7 +1684,11 @@ function _getMenuUncached(dateStr) {
   const soldOut = {};
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const cap = Number(orderCaps[meal] || 0);
-    if (cap > 0 && (orderCounts[meal] || 0) >= cap) soldOut[meal] = true;
+    if (cap > 0 && (orderCounts[meal] || 0) >= cap) {
+      soldOut[meal] = true;
+      // Alternatives OFF → hard sold-out: close the meal entirely (no pickup/porter).
+      if (capAlt[meal] === false) ordersClosed[meal] = true;
+    }
   });
 
   return {
@@ -1695,6 +1703,7 @@ function _getMenuUncached(dateStr) {
     stock_limits: stockLimits,
     units_remaining: unitsRemaining,
     order_caps:    orderCaps,    // admin display: configured per-meal max
+    cap_alt:       capAlt,       // admin display: per-meal "offer pickup/porter" flags
     order_counts:  orderCounts,  // admin display: active orders placed so far
     sold_out:      soldOut,      // customer display: meal hit its cap today
     kitchen_closed: _kitchenClosed
@@ -2146,17 +2155,31 @@ function _submitOrderInternal(body) {
       // under LockService (concurrent orders can't both slip past the cap).
       let _orderCapW = {};
       try { if (_menuRowW && _menuRowW.Order_Cap_JSON) _orderCapW = JSON.parse(_menuRowW.Order_Cap_JSON); } catch(e) {}
+      let _capAltW = {};   // per-meal: offer Self Pickup / Porter when full? default ON
+      try { if (_menuRowW && _menuRowW.Cap_Alt_JSON) _capAltW = JSON.parse(_menuRowW.Cap_Alt_JSON); } catch(e) {}
       const _capCountsW = Object.keys(_orderCapW).length ? _countActiveMealOrders(allOrderRows, _d) : null;
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
         if (_ordersClosedW[_mt]) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
         const _capW = _capCountsW ? Number(_orderCapW[_mt] || 0) : 0;
-        // Cap is a DELIVERY limit — Self Pickup / Porter bypass it.
-        const _mAreaW = String(_m.area || profile.area || "").toLowerCase();
-        const _mIsDeliveryW = (_mAreaW.indexOf("pickup") === -1 && _mAreaW !== "porter");
-        if (_mIsDeliveryW && _capW > 0 && (_capCountsW[_mt] || 0) >= _capW) {
-          _wViolations.push(_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter, or order for another day."); continue;
+        const _capExceededW = _capW > 0 && _capCountsW && (_capCountsW[_mt] || 0) >= _capW;
+        if (_capExceededW) {
+          // Cap is a DELIVERY limit. Self Pickup / Porter bypass it ONLY when the
+          // admin left alternatives ON for this meal (default). If turned OFF, the
+          // meal is a hard sold-out — block delivery AND pickup/porter.
+          const _mAreaW = String(_m.area || profile.area || "").toLowerCase();
+          const _mIsDeliveryW = (_mAreaW.indexOf("pickup") === -1 && _mAreaW !== "porter");
+          const _altOnW = (_capAltW[_mt] !== false);
+          if (_mIsDeliveryW) {
+            _wViolations.push(_altOnW
+              ? (_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter, or order for another day.")
+              : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
+            continue;
+          } else if (!_altOnW) {
+            _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
+          }
+          // pickup/porter + alternatives ON → allowed (falls through)
         }
         if (_effCutW && _effCutW[_mt] !== undefined && _wHour >= _effCutW[_mt]) {
           _wViolations.push("The " + _mt + " cutoff for today (" + _d + ") has already passed.");
@@ -3959,6 +3982,8 @@ function _getAdminDataUncached() {
     try { if (r.Stock_JSON) stockLimits = JSON.parse(r.Stock_JSON); } catch(e) {}
     let orderCaps = {};
     try { if (r.Order_Cap_JSON) orderCaps = JSON.parse(r.Order_Cap_JSON); } catch(e) {}
+    let capAlt = {};
+    try { if (r.Cap_Alt_JSON) capAlt = JSON.parse(r.Cap_Alt_JSON); } catch(e) {}
     const orderedCounts = countsByDate[d] || { Breakfast: {}, Lunch: {}, Dinner: {} };
     const unitsRemaining = {};
     ["Breakfast","Lunch","Dinner"].forEach(meal => {
@@ -3982,6 +4007,7 @@ function _getAdminDataUncached() {
       stock_limits:     stockLimits,
       units_remaining:  unitsRemaining,
       order_caps:       orderCaps,
+      cap_alt:          capAlt,
       order_counts:     mealOrderCounts[d] || { Breakfast: 0, Lunch: 0, Dinner: 0 },
       kitchen_closed:   kitchenClosed,
     };
@@ -3997,7 +4023,7 @@ function saveMenu(body) {
   const ws = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON"
   ]);
   const rows = getAllRows(ws);
   let hIdx = headerIndex(ws);
@@ -4011,6 +4037,13 @@ function saveMenu(body) {
   // Self-heal: ensure Order_Cap_JSON column exists (per-meal max-order caps).
   if (!hIdx["Order_Cap_JSON"]) {
     ws.getRange(1, ws.getLastColumn() + 1).setValue("Order_Cap_JSON");
+    SpreadsheetApp.flush();
+    hIdx = headerIndex(ws);
+  }
+  // Self-heal: ensure Cap_Alt_JSON column exists (per-meal: offer Self Pickup /
+  // Porter when delivery is full? default ON; false = hard sold-out).
+  if (!hIdx["Cap_Alt_JSON"]) {
+    ws.getRange(1, ws.getLastColumn() + 1).setValue("Cap_Alt_JSON");
     SpreadsheetApp.flush();
     hIdx = headerIndex(ws);
   }
@@ -4054,6 +4087,12 @@ function saveMenu(body) {
     (body.order_caps !== undefined)
       ? JSON.stringify(body.order_caps || {})
       : (existing && existing.Order_Cap_JSON ? String(existing.Order_Cap_JSON) : "{}"),
+    // Per-meal "offer Self Pickup / Porter when delivery full" flags, e.g.
+    // {"Breakfast":false}. Missing/true = offer alternatives (default). Preserve
+    // if this save doesn't carry cap_alt.
+    (body.cap_alt !== undefined)
+      ? JSON.stringify(body.cap_alt || {})
+      : (existing && existing.Cap_Alt_JSON ? String(existing.Cap_Alt_JSON) : "{}"),
   ];
 
   if (existing) {
@@ -4094,7 +4133,7 @@ function setKitchenClosed(body) {
   const menuWs = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON"
   ]);
   let mIdx = headerIndex(menuWs);
   if (!mIdx["Kitchen_Closed"]) {
