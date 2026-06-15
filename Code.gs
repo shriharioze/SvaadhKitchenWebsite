@@ -45,6 +45,10 @@ const HDFC_API_KEY          = SP.getProperty("HDFC_API_KEY")          || "";
 const HDFC_RESPONSE_KEY     = SP.getProperty("HDFC_RESPONSE_KEY")     || "";
 const HDFC_WEBHOOK_USERNAME = SP.getProperty("HDFC_WEBHOOK_USERNAME") || "";
 const HDFC_WEBHOOK_PASSWORD = SP.getProperty("HDFC_WEBHOOK_PASSWORD") || "";
+// Reseller id — sent as x-resellerid only when HDFC provides one.
+const HDFC_RESELLER_ID      = SP.getProperty("HDFC_RESELLER_ID")      || "";
+// UPI-only checkout (per HDFC agreement). Default ON; set HDFC_UPI_ONLY="false" to allow cards/netbanking.
+const HDFC_UPI_ONLY         = SP.getProperty("HDFC_UPI_ONLY") !== "false";
 const HDFC_ENV              = SP.getProperty("HDFC_ENV")              || "test";
 const HDFC_RETURN_URL       = SP.getProperty("HDFC_RETURN_URL")       || "";
 const HDFC_ORDER_PAGE_URL   = SP.getProperty("HDFC_ORDER_PAGE_URL")   || "https://svaadhkitchen.in/order.html";
