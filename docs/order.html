@@ -4141,8 +4141,11 @@
           </div>
 
           <!-- UPI IDs — pay / re-copy. (Order check is already handled by the
-               forced "Quick check" popup, so no redundant check card here.) -->
-          <div style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1.5px solid #5eead4;
+               forced "Quick check" popup, so no redundant check card here.)
+               Shown ONLY for orders that still owe a manual UPI transfer
+               (manual UPI / Split). Hidden for Wallet, HDFC Gateway, On
+               Account & Free — those are already settled. See showSuccess(). -->
+          <div id="successUpiCard" style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1.5px solid #5eead4;
                       border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 4px 15px rgba(13,148,136,0.08);">
             <div style="font-size:0.9rem;font-weight:800;color:#0f766e;margin-bottom:10px;text-align:center;">📲 Pay via UPI</div>
             <div style="text-align:center;">
@@ -4618,7 +4621,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.1";
+    const APP_VERSION = "v26.06.16.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5051,6 +5054,7 @@
       calYear: 0, calMonth: 0,
       grandTotal: 0, runningTotal: 0, walletBalance: 0, walletCredit: 0,
       tempUpiMode: false,
+      paidViaGateway: false,
       version: "14.1.18"
     };
 
@@ -8409,6 +8413,15 @@
       $("orderIdDisplay").textContent = id ? id.toUpperCase() : "CONFIRMED";
       $("bottomNav").style.display = "none";
 
+      // Pay-via-UPI card: only relevant when the customer still owes a manual
+      // UPI transfer. Hide for fully-settled methods (Wallet, HDFC Gateway)
+      // and non-UPI methods (On Account, Free). A gateway order keeps
+      // paymentChoice "UPI", so check the S.paidViaGateway flag too.
+      const _owesManualUpi =
+        (S.paymentChoice === "UPI" && !S.paidViaGateway) ||
+        S.paymentChoice === "Split";
+      if ($("successUpiCard")) $("successUpiCard").style.display = _owesManualUpi ? "" : "none";
+
       // Show the right heads-up on the success page: delivery customers get the
       // driver/gate/bag tips; Self Pickup & Porter customers get the pickup
       // address + maps link instead.
@@ -8732,6 +8745,7 @@
       S.selectedDates = [];
       S.tempUpiMode = false;
       S.paymentChoice = null;
+      S.paidViaGateway = false;
       S.step = 2; // Step 2 is the 'Dates' screen (0-indexed)
       _clearCart(); // wipe persisted cart after successful order
 
@@ -11021,6 +11035,7 @@
         sLoading(false);
         if (data.success) {
           S.isPlaced = true;
+          S.paidViaGateway = true; // settled via HDFC — hide the manual Pay-via-UPI card
           showSuccess(data.submissionId || gatewayOrderId);
         } else {
           throw new Error(data.error || "Order submission failed after payment.");
