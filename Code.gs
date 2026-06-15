@@ -295,11 +295,9 @@ function doGet(e) {
       .map(function(k) { return encodeURIComponent(k) + "=" + encodeURIComponent(p[k]); })
       .join("&");
     const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
-    return HtmlService.createHtmlOutput(
-      '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=' + redirectUrl + '"></head>' +
-      '<body><script>window.location.replace(' + JSON.stringify(redirectUrl) + ');</script>' +
-      '<p>Redirecting... <a href="' + redirectUrl + '">Click here if not redirected</a></p></body></html>'
-    );
+    // Sandbox-aware full-viewport click target — auto-navigation is blocked
+    // inside the Apps Script HtmlService iframe in many browsers. (10_Hdfc_Gateway)
+    return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
   }
   // ─────────────────────────────────────────────────────────────
 
@@ -521,11 +519,7 @@ function doPost(e) {
         .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(parsedForHdfc[k]))
         .join("&");
       const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
-      return HtmlService.createHtmlOutput(
-        `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head>` +
-        `<body><script>window.location.replace(${JSON.stringify(redirectUrl)});</script>` +
-        `<p>Redirecting... <a href="${redirectUrl}">Click here if not redirected</a></p></body></html>`
-      );
+      return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
     }
     // ── Also handle form-encoded POST (Juspay sends this for the failure path)
     // Includes the popup-close loop so AUTHORIZATION_FAILED closes the popup
@@ -538,17 +532,7 @@ function doPost(e) {
           .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(formParams[k]))
           .join("&");
         const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
-        const safeUrlJs = JSON.stringify(redirectUrl);
-        return HtmlService.createHtmlOutput(
-          `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="3;url=${redirectUrl}"></head>` +
-          `<body><p>Returning to Svaadh Kitchen…</p><script>(function(){` +
-          `var URL=${safeUrlJs};` +
-          `var n=0;function tryClose(){n++;try{window.close();}catch(_){}try{if(window.top&&window.top!==window){window.top.close();}}catch(_){}if(n<6)setTimeout(tryClose,300);}tryClose();` +
-          `function go(){try{window.top.location.replace(URL);}catch(e){try{window.top.location.href=URL;}catch(_){window.location.href=URL;}}}` +
-          `setTimeout(go,50);setTimeout(go,500);` +
-          `})();</script>` +
-          `<p><a href="${redirectUrl}">Click here if not redirected</a></p></body></html>`
-        );
+        return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
       }
     }
     // ── Normal API actions ─────────────────────────────────────
@@ -856,6 +840,16 @@ function doPost(e) {
     if (action === "hdfc_savePendingOrder") return jsonRes(hdfc_savePendingOrder(body));
     if (action === "hdfc_getPendingOrder")  return jsonRes(hdfc_getPendingOrder(body));
 
+    // Wallet top-up via HDFC SmartGateway (separate from order payment).
+    if (action === "hdfc_createWalletRechargeSession") {
+      if (!PAYMENT_GATEWAY_ENABLED) return jsonRes({error:"Payment gateway not enabled."});
+      return jsonRes(hdfc_createWalletRechargeSession(body));
+    }
+    if (action === "hdfc_finalizeWalletRecharge") {
+      if (!PAYMENT_GATEWAY_ENABLED) return jsonRes({error:"Payment gateway not enabled."});
+      return jsonRes(hdfc_finalizeWalletRecharge(body.order_id));
+    }
+
     if (action === "hdfc_webhook") {
       // HDFC posts to this URL with Basic Auth — verify credentials first
       if (!PAYMENT_GATEWAY_ENABLED) return jsonRes({error:"Payment gateway not enabled."});
@@ -875,6 +869,17 @@ function doPost(e) {
       // Called by order.html when customer lands back after payment
       if (!PAYMENT_GATEWAY_ENABLED) return jsonRes({error:"Payment gateway not enabled."});
       return jsonRes(hdfc_verifyReturnPayload(body));
+    }
+    if (action === "hdfc_checkPaymentStatus") {
+      // Polling endpoint — order.html calls this every 2s while the customer
+      // is paying in the popup. Returns {status, confirmed, amount} so the
+      // opener tab can complete the order the moment HDFC confirms CHARGED,
+      // even if the popup is still stuck on script.google.com cross-origin.
+      if (!PAYMENT_GATEWAY_ENABLED) return jsonRes({error:"Payment gateway not enabled."});
+      const oid = String(body.order_id || "").trim();
+      if (!oid) return jsonRes({error:"Missing order_id"});
+      const sc = hdfc_getOrderStatus(oid);
+      return jsonRes({ status: sc.status, confirmed: sc.confirmed, amount: sc.amount || 0 });
     }
     // ─────────────────────────────────────────────────────────
 
