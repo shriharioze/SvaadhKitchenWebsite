@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.14.1";
+    const APP_VERSION = "v26.06.14.2";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7141,7 +7141,7 @@
             const _ms = _do[meal]; const _sub = _ms?.subtotal||0; if (_sub<=0) return;
             if (_ppt>0) { _trev += Math.round(_sub*0.10); _ppt--; }
             const _mAddr = getMealAddr(meal);
-            const _isP = _mAddr.area==="Self Pickup";
+            const _isP = _mAddr.area==="Self Pickup" || _mAddr.area==="Porter";  // Porter = customer-booked courier, no delivery fee from us (same as pickup)
             const _isFA = FREE_AREAS.includes(_mAddr.area);
             const _cms = _sub+(_ex[meal]?.subtotal||0);
             if (!S.profile.feeExempt&&!_isFD&&!_isP&&(meal==="Lunch"||meal==="Dinner")&&_sub>0&&_cms<50) _tsm+=10;
@@ -7331,7 +7331,7 @@
           }
 
           const mAddr = getMealAddr(meal);
-          const isPickup = (mAddr.area === "Self Pickup");
+          const isPickup = (mAddr.area === "Self Pickup" || mAddr.area === "Porter");  // Porter waives our delivery + small-order fees (customer books courier)
           const isFreeArea = FREE_AREAS.includes(mAddr.area);
           const combinedMealSub = sub + (existDay[meal]?.subtotal || 0);
 
@@ -7854,8 +7854,93 @@
     }
     // ─────────────────────────────────────────────────────────────
 
+    // ── DELIVERY-CAP OVERFLOW: Self Pickup / Porter offer ───────────────────
+    // The per-meal cap is a DELIVERY limit. If a meal in the cart is delivery-full
+    // (menu.sold_out) but the customer is ordering it for delivery, we offer the
+    // two non-delivery routes that bypass the cap. Self Pickup / Porter switch the
+    // whole order's area (both waive our delivery fee).
+    const PORTER_TIMES = { Breakfast: "8:30 AM", Lunch: "11:00 AM", Dinner: "7:00 PM" };
+    const PICKUP_ADDRESS = "A 104, Shree Laxmi Vihar Society, Hadapsar";
+    function _soldOutDeliveryMealsInCart() {
+      const out = [];
+      (S.selectedDates || []).forEach(date => {
+        const so = (S.menuCache[date] || {}).sold_out || {};
+        ["Breakfast", "Lunch", "Dinner"].forEach(meal => {
+          const mObj = S.orders[date] && S.orders[date][meal];
+          if (!mObj || mObj.subtotal <= 0) return;
+          if (!so[meal]) return;
+          const a = String((getMealAddr(meal) || {}).area || "").toLowerCase();
+          if (a.indexOf("pickup") !== -1 || a === "porter") return; // already non-delivery
+          out.push({ date, meal });
+        });
+      });
+      return out;
+    }
+    // 3-option modal → resolves 'pickup' | 'porter' | 'cancel'.
+    function _deliveryFullDialog(mealsList) {
+      return new Promise(resolve => {
+        const meals = [...new Set(mealsList.map(x => x.meal))];
+        const times = meals.map(m => `${m} ${PORTER_TIMES[m]}`).join(" · ");
+        const ov = document.createElement("div");
+        ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;";
+        ov.innerHTML =
+          `<div style="background:#fff;max-width:430px;width:100%;border-radius:16px;padding:22px 20px;box-shadow:0 18px 50px rgba(0,0,0,.3);font-family:inherit;">
+            <div style="font-size:1.7rem;text-align:center;margin-bottom:6px;">🚚🚫</div>
+            <div style="font-weight:800;font-size:1.05rem;text-align:center;color:#c0392b;margin-bottom:8px;">Delivery is full today</div>
+            <div style="font-size:.86rem;color:#333;line-height:1.55;margin-bottom:14px;">
+              We've reached our delivery limit for <b>${meals.join(" & ")}</b> today, so we can't deliver this order.
+              You can still get your food one of these ways — please pick one:
+              <ul style="margin:10px 0 0;padding-left:18px;">
+                <li style="margin-bottom:6px;"><b>📦 Self Pickup</b> — collect it yourself from our kitchen. <b>Free</b> (no delivery fee).</li>
+                <li><b>🛵 Porter</b> — we keep it ready; <b>you</b> book a courier (Porter/Borzo) from our kitchen to your address and <b>pay the courier directly</b>. We add no delivery fee.</li>
+              </ul>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <button id="_dfp_pickup" style="padding:12px;border:0;border-radius:10px;background:#1E1240;color:#fff;font-weight:700;font-size:.92rem;cursor:pointer;">📦 Self Pickup (Free)</button>
+              <button id="_dfp_porter" style="padding:12px;border:0;border-radius:10px;background:#0e7a5f;color:#fff;font-weight:700;font-size:.92rem;cursor:pointer;">🛵 Order &amp; book Porter myself</button>
+              <button id="_dfp_cancel" style="padding:11px;border:1px solid #ccc;border-radius:10px;background:#fff;color:#555;font-weight:600;font-size:.88rem;cursor:pointer;">Cancel — don't order</button>
+            </div>
+          </div>`;
+        document.body.appendChild(ov);
+        const done = v => { try { document.body.removeChild(ov); } catch (_) {} resolve(v); };
+        ov.querySelector("#_dfp_pickup").onclick = () => done("pickup");
+        ov.querySelector("#_dfp_porter").onclick = () => done("porter");
+        ov.querySelector("#_dfp_cancel").onclick = () => done("cancel");
+      });
+    }
+    function _applyPorterAreaSingle() {
+      const areaSel = $("areaSelect");
+      if (areaSel) {
+        let found = false;
+        for (let i = 0; i < areaSel.options.length; i++) {
+          if (areaSel.options[i].value === "Porter") { areaSel.selectedIndex = i; found = true; break; }
+        }
+        if (!found) { const o = document.createElement("option"); o.value = "Porter"; o.text = "🛵 Porter (you book courier)"; areaSel.add(o); areaSel.value = "Porter"; }
+      }
+      S.profile.area = "Porter";           // Porter KEEPS the address (courier delivers to them)
+      if (typeof syncSingleAddr === "function") syncSingleAddr();
+    }
+
     async function placeOrder(settleAll = false) {
       if (S.isPlacingOrder) return;
+      // Delivery-cap overflow gate — offer Self Pickup / Porter before anything else.
+      const _soldOut = _soldOutDeliveryMealsInCart();
+      if (_soldOut.length) {
+        const choice = await _deliveryFullDialog(_soldOut);
+        if (choice === "cancel" || !choice) return;
+        if (choice === "pickup") {
+          setDeliveryMode('single', 'pickup');
+          await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
+        } else {
+          _applyPorterAreaSingle();
+          const meals = [...new Set(_soldOut.map(x => x.meal))];
+          const times = meals.map(m => `${m}: <b>${PORTER_TIMES[m]}</b>`).join("<br>");
+          await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
+        }
+        try { if (typeof buildBillScreen === "function") await buildBillScreen(); } catch (_) {}
+        S.isPlacingOrder = false;
+        return;
+      }
       const isWalletOrder    = S.paymentChoice === "Wallet";
       const isOnAccountOrder = S.paymentChoice === "OnAccount";
       const isSplitOrder     = S.paymentChoice === "Split";

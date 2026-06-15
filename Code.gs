@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.6; // 2026-06-14: NEW per-meal order CAP. Admin sets Order_Cap_JSON (max orders) per date+meal on Daily Menu; when active (non-cancelled) orders hit the cap that meal is SOLD OUT for the day — submitOrder rejects (authoritative, under lock), getMenu marks orders_closed+sold_out, order.html shows "Sold Out for Today". No cap set = unchanged (open till cutoff). New menu column Order_Cap_JSON.
+const CODE_VERSION   = 17.7; // 2026-06-14: Order CAP is now a DELIVERY limit with opt-out. When delivery is full (sold_out), order page offers Self Pickup / Porter (both bypass the cap + waive our delivery fee); cap counts DELIVERY orders only (excludes Self Pickup/Porter). Porter = new fulfillment (area "Porter", keeps customer address, customer books+pays courier). submitOrder rejects only delivery past cap.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -1474,6 +1474,10 @@ function _countActiveMealOrders(rows, dateStr) {
       : String(r.Order_Date || "").trim();
     if (d !== dateStr) continue;
     if (_isOrderCancelled(r.Payment_Status)) continue;
+    // The cap is a DELIVERY limit — Self Pickup / Porter orders don't use a
+    // delivery slot, so they neither count toward the cap nor get blocked by it.
+    const ar = String(r.Area || "").toLowerCase();
+    if (ar.indexOf("pickup") !== -1 || ar === "porter") continue;
     const mt = String(r.Meal_Type || "").trim();
     if (c[mt] !== undefined) c[mt]++;
   }
@@ -1666,19 +1670,17 @@ function _getMenuUncached(dateStr) {
     });
   });
 
-  // Cap evaluation — reuse the rows already read above (zero extra cost). A
-  // capped-full meal is marked sold_out (distinct customer label) AND
-  // orders_closed (reuses the existing grey-out + submit-block plumbing).
-  // submitOrder re-checks against the FULL sheet, so this display count being
-  // a recent-window approximation can never let an over-cap order through.
+  // Cap evaluation — reuse the rows already read above (zero extra cost). The
+  // cap is a DELIVERY limit: when reached we flag the meal sold_out so the order
+  // page offers Self Pickup / Porter (which bypass the cap). We do NOT set
+  // orders_closed — that path stays open. submitOrder is the authoritative guard:
+  // it rejects DELIVERY orders past the cap (full-sheet count, under lock) while
+  // letting Self Pickup / Porter through.
   const orderCounts = _countActiveMealOrders(ordersRows2, dateStr);
   const soldOut = {};
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const cap = Number(orderCaps[meal] || 0);
-    if (cap > 0 && (orderCounts[meal] || 0) >= cap) {
-      soldOut[meal] = true;
-      ordersClosed[meal] = true;
-    }
+    if (cap > 0 && (orderCounts[meal] || 0) >= cap) soldOut[meal] = true;
   });
 
   return {
@@ -2150,8 +2152,11 @@ function _submitOrderInternal(body) {
         const _mt = String(_m.type || "");
         if (_ordersClosedW[_mt]) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
         const _capW = _capCountsW ? Number(_orderCapW[_mt] || 0) : 0;
-        if (_capW > 0 && (_capCountsW[_mt] || 0) >= _capW) {
-          _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
+        // Cap is a DELIVERY limit — Self Pickup / Porter bypass it.
+        const _mAreaW = String(_m.area || profile.area || "").toLowerCase();
+        const _mIsDeliveryW = (_mAreaW.indexOf("pickup") === -1 && _mAreaW !== "porter");
+        if (_mIsDeliveryW && _capW > 0 && (_capCountsW[_mt] || 0) >= _capW) {
+          _wViolations.push(_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter, or order for another day."); continue;
         }
         if (_effCutW && _effCutW[_mt] !== undefined && _wHour >= _effCutW[_mt]) {
           _wViolations.push("The " + _mt + " cutoff for today (" + _d + ") has already passed.");
@@ -2441,6 +2446,10 @@ function _submitOrderInternal(body) {
       
       // Delivery & Fee logic (matches frontend)
       const isPickup  = (mealArea.toLowerCase().includes("pickup"));
+      // Porter = cap-overflow option: we hand the food to a courier the CUSTOMER
+      // books & pays. We don't deliver, so (like Self Pickup) our delivery + small
+      // -order fees are waived.
+      const isPorter  = (mealArea.toLowerCase() === "porter");
       const isFreeArea = freeAreaNames.includes(mealArea);
 
       // VIP Fee Exemption
@@ -2451,12 +2460,12 @@ function _submitOrderInternal(body) {
       const isDayFree = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
 
       let delCharge = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isFreeArea && sub > 0) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !isFreeArea && sub > 0) {
         delCharge = DELIVERY;
       }
 
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < 50) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < 50) {
         smallOrderFee = 10;
       }
 
@@ -2513,16 +2522,22 @@ function _submitOrderInternal(body) {
         itemsObj[canonical] = qty;
       });
 
-      // Address fields handling (Sanitized for Pickup)
+      // Address fields handling. Self Pickup clears the address (customer comes to
+      // us). Porter KEEPS the customer address (the courier they book delivers to
+      // them) but is tagged area="Porter" so backend/kitchen know it isn't our
+      // delivery and the cap doesn't count it.
       const wing    = isPickup ? "" : (meal.wing    || profile.wing    || "");
       const flat    = isPickup ? "" : (meal.flat    || profile.flat    || "");
       const floor   = isPickup ? "" : (meal.floor   || profile.floor   || "");
       const society = isPickup ? "" : (meal.society || profile.society || "");
-      const area    = isPickup ? "Self Pickup" : mealArea;
+      const area    = isPickup ? "Self Pickup" : (isPorter ? "Porter" : mealArea);
 
+      const _custAddrLine = [wing && `Wing ${wing}`, flat && `Flat ${flat}`, floor && `${floor} Floor`, society].filter(Boolean).join(", ");
       const fullAddr = isPickup
-                        ? "Self Pickup (A 104, Shree laxmi vihar society)"
-                        : [wing && `Wing ${wing}`, flat && `Flat ${flat}`, floor && `${floor} Floor`, society, area].filter(Boolean).join(", ");
+                        ? "Self Pickup (A 104, Shree laxmi vihar society, Hadapsar)"
+                        : isPorter
+                        ? ("Porter (customer-booked courier) → " + (_custAddrLine || "address not provided"))
+                        : [_custAddrLine, area].filter(Boolean).join(", ");
       const mapsLink = isPickup ? "" : (meal.maps || profile.maps || "");
       const landmark = isPickup ? "" : (meal.landmark || profile.landmark || "");
 
