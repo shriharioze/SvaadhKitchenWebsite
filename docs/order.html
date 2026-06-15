@@ -4618,7 +4618,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.14.2";
+    const APP_VERSION = "v26.06.15.1";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7869,9 +7869,11 @@
           const mObj = S.orders[date] && S.orders[date][meal];
           if (!mObj || mObj.subtotal <= 0) return;
           if (!so[meal]) return;
-          const a = String((getMealAddr(meal) || {}).area || "").toLowerCase();
+          const addr = getMealAddr(meal) || {};
+          const a = String(addr.area || "").toLowerCase();
           if (a.indexOf("pickup") !== -1 || a === "porter") return; // already non-delivery
-          out.push({ date, meal });
+          if (FREE_AREAS.includes(addr.area)) return; // free areas (Bhosale Nagar…) are always delivered — never capped
+          out.push({ date, meal, society: addr.society || S.profile.society || "" });
         });
       });
       return out;
@@ -7921,25 +7923,59 @@
       if (typeof syncSingleAddr === "function") syncSingleAddr();
     }
 
+    // "Checking your building…" overlay shown while we look up the delivery route.
+    function _capCheckOverlay(show) {
+      let el = document.getElementById("_capCheckOv");
+      if (show) {
+        if (el) return;
+        el = document.createElement("div");
+        el.id = "_capCheckOv";
+        el.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99998;display:flex;align-items:center;justify-content:center;padding:18px;";
+        el.innerHTML = `<div style="background:#fff;border-radius:14px;padding:22px 26px;text-align:center;max-width:340px;box-shadow:0 14px 40px rgba(0,0,0,.28);font-family:inherit;">
+          <div style="font-size:1.6rem;margin-bottom:8px;">🔎</div>
+          <div style="font-weight:700;font-size:.92rem;margin-bottom:4px;">One moment…</div>
+          <div style="font-size:.8rem;color:#555;">Checking if we're already delivering to your building today.</div>
+        </div>`;
+        document.body.appendChild(el);
+      } else if (el) {
+        try { document.body.removeChild(el); } catch (_) {}
+      }
+    }
+
     async function placeOrder(settleAll = false) {
       if (S.isPlacingOrder) return;
-      // Delivery-cap overflow gate — offer Self Pickup / Porter before anything else.
+      // Delivery-cap overflow gate. If a meal's delivery is full, FIRST check
+      // whether we're already delivering to this customer's building (same stop →
+      // let it through). Only if not, offer Self Pickup / Porter. Free areas
+      // (Bhosale Nagar…) were already excluded above — they always deliver.
       const _soldOut = _soldOutDeliveryMealsInCart();
       if (_soldOut.length) {
-        const choice = await _deliveryFullDialog(_soldOut);
-        if (choice === "cancel" || !choice) return;
-        if (choice === "pickup") {
-          setDeliveryMode('single', 'pickup');
-          await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
-        } else {
-          _applyPorterAreaSingle();
-          const meals = [...new Set(_soldOut.map(x => x.meal))];
-          const times = meals.map(m => `${m}: <b>${PORTER_TIMES[m]}</b>`).join("<br>");
-          await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
+        _capCheckOverlay(true);
+        let _reach = {};
+        try {
+          const _rr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "checkDeliveryReachable", items: _soldOut.map(x => ({ date: x.date, meal: x.meal, society: x.society })) }) });
+          const _rd = await _rr.json();
+          (_rd.results || []).forEach(x => { _reach[x.date + "|" + x.meal] = x.reachable; });
+        } catch (_) {}
+        _capCheckOverlay(false);
+        const _blocked = _soldOut.filter(x => !_reach[x.date + "|" + x.meal]);
+        if (_blocked.length) {
+          const choice = await _deliveryFullDialog(_blocked);
+          if (choice === "cancel" || !choice) return;
+          if (choice === "pickup") {
+            setDeliveryMode('single', 'pickup');
+            await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
+          } else {
+            _applyPorterAreaSingle();
+            const meals = [...new Set(_blocked.map(x => x.meal))];
+            const times = meals.map(m => `${m}: <b>${PORTER_TIMES[m]}</b>`).join("<br>");
+            await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
+          }
+          try { if (typeof buildBillScreen === "function") await buildBillScreen(); } catch (_) {}
+          S.isPlacingOrder = false;
+          return;
         }
-        try { if (typeof buildBillScreen === "function") await buildBillScreen(); } catch (_) {}
-        S.isPlacingOrder = false;
-        return;
+        // else: every capped meal is already on our delivery route → proceed normally
       }
       const isWalletOrder    = S.paymentChoice === "Wallet";
       const isOnAccountOrder = S.paymentChoice === "OnAccount";

@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 17.8; // 2026-06-14: per-meal toggle (Cap_Alt_JSON) to enable/disable the Self Pickup/Porter offer when delivery is full. Default ON (offer alternatives). OFF = hard sold-out: getMenu sets orders_closed, submitOrder blocks delivery AND pickup/porter past cap. New menu column Cap_Alt_JSON.
+const CODE_VERSION   = 17.9; // 2026-06-15: delivery-cap exemptions. (1) Free-delivery areas (Bhosale Nagar/Triveni Nagar) count toward the cap but are NEVER blocked by it (home turf, allowed till cutoff). (2) "Piggyback": if we already have an active delivery to the customer's society for that date+meal, allow one more past the cap (same stop). New checkDeliveryReachable endpoint so the order page checks the route before offering Self Pickup/Porter.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -558,6 +558,7 @@ function doPost(e) {
     if (action === "deleteOrder") return jsonRes(deleteOrder(body.phone, body.rowId, body.refundType, { isAdmin: isAdmin }));
     if (action === "previewCancellation") return jsonRes(_deleteOrderInternal(body.phone, body.rowId, body.refundType || "wallet", { dryRun: true }));
     if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone));
+    if (action === "checkDeliveryReachable") return jsonRes(checkDeliveryReachable(body));
     if (action === "verifyOrderPlaced") return jsonRes(verifyOrderPlaced(body));
     if (action === "updateProfile") {
       const profile = body.profile;
@@ -1462,6 +1463,54 @@ function getWalletTransactions(phone) {
 }
 
 // ── GET MENU ─────────────────────────────────────────────────
+// Normalize a society/building name for LENIENT matching (lowercase + drop all
+// non-alphanumerics) so "Pentagon 1" / "pentagon-1" / "Pentagon1" all match.
+function _normSocietyKey(s) {
+  return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+// For one date, the set (per meal) of normalized societies we ALREADY have an
+// active DELIVERY order to. Lets a customer "piggyback" onto an existing
+// delivery stop even after the delivery cap is reached (same building = no extra
+// stop), before we fall back to offering Self Pickup / Porter.
+function _activeDeliverySocieties(rows, dateStr) {
+  const out = { Breakfast: {}, Lunch: {}, Dinner: {} };
+  for (var i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const d = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date || "").trim();
+    if (d !== dateStr) continue;
+    if (_isOrderCancelled(r.Payment_Status)) continue;
+    const ar = String(r.Area || "").toLowerCase();
+    if (ar.indexOf("pickup") !== -1 || ar === "porter") continue; // delivery only
+    const mt = String(r.Meal_Type || "").trim();
+    if (!out[mt]) continue;
+    const soc = _normSocietyKey(r.Society);
+    if (soc) out[mt][soc] = true;
+  }
+  return out;
+}
+// Customer-facing lookup: for each {date, meal, society}, is there already an
+// active delivery to that society? The order page calls this when a delivery cap
+// is reached — if reachable, the order proceeds as a normal delivery; otherwise
+// it offers Self Pickup / Porter. submitOrder re-checks authoritatively.
+function checkDeliveryReachable(body) {
+  const items = (body && body.items) || [];
+  if (!Array.isArray(items) || !items.length) return { results: [] };
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, []);
+  const rows = getRecentRows(ws, 2000);
+  const byDate = {};
+  const results = items.map(function(it) {
+    const date = String(it.date || "").trim();
+    const meal = String(it.meal || "").trim();
+    const soc  = _normSocietyKey(it.society || "");
+    if (!byDate[date]) byDate[date] = _activeDeliverySocieties(rows, date);
+    const reachable = !!(soc && byDate[date][meal] && byDate[date][meal][soc]);
+    return { date: date, meal: meal, reachable: reachable };
+  });
+  return { results: results };
+}
 // Count ACTIVE (non-cancelled) orders per meal type for one date, from a rows
 // array. One order row = one order. Cancelled rows free their slot. Shared by
 // getMenu (display) and the submitOrder cap guard (authoritative).
@@ -2157,7 +2206,8 @@ function _submitOrderInternal(body) {
       try { if (_menuRowW && _menuRowW.Order_Cap_JSON) _orderCapW = JSON.parse(_menuRowW.Order_Cap_JSON); } catch(e) {}
       let _capAltW = {};   // per-meal: offer Self Pickup / Porter when full? default ON
       try { if (_menuRowW && _menuRowW.Cap_Alt_JSON) _capAltW = JSON.parse(_menuRowW.Cap_Alt_JSON); } catch(e) {}
-      const _capCountsW = Object.keys(_orderCapW).length ? _countActiveMealOrders(allOrderRows, _d) : null;
+      const _capCountsW   = Object.keys(_orderCapW).length ? _countActiveMealOrders(allOrderRows, _d) : null;
+      const _deliverySocW = Object.keys(_orderCapW).length ? _activeDeliverySocieties(allOrderRows, _d) : null;
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
@@ -2172,10 +2222,23 @@ function _submitOrderInternal(body) {
           const _mIsDeliveryW = (_mAreaW.indexOf("pickup") === -1 && _mAreaW !== "porter");
           const _altOnW = (_capAltW[_mt] !== false);
           if (_mIsDeliveryW) {
-            _wViolations.push(_altOnW
-              ? (_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter, or order for another day.")
-              : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
-            continue;
+            // Free-delivery areas (Bhosale Nagar / Triveni Nagar) are home turf:
+            // they COUNT toward the cap but are never BLOCKED by it (allowed till
+            // cutoff). Otherwise allow a "piggyback" when we already have an active
+            // delivery to this customer's society for this date+meal (SAME stop, no
+            // new delivery burden).
+            const _isFreeAreaW = freeAreaNames.indexOf(_m.area || profile.area || "") !== -1;
+            if (!_isFreeAreaW) {
+              const _socW = _normSocietyKey(_m.society || profile.society || "");
+              const _alreadyW = !!(_socW && _deliverySocW && _deliverySocW[_mt] && _deliverySocW[_mt][_socW]);
+              if (!_alreadyW) {
+                _wViolations.push(_altOnW
+                  ? (_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter, or order for another day.")
+                  : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
+                continue;
+              }
+            }
+            // free area OR same-building piggyback → allowed (falls through)
           } else if (!_altOnW) {
             _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
           }
