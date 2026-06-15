@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 18.0; // 2026-06-15: (note: jumped from 17.9 — 17.10 as a number == 17.1, a false downgrade) delivery-cap exemption #3 — a customer who ALREADY has an active delivery for that date+meal can add more past the cap (same stop, keyed on phone; works even without a society). checkDeliveryReachable now also takes phone. (Prior exemptions: free areas Bhosale/Triveni always through; society piggyback.)
+const CODE_VERSION   = 19.0; // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
