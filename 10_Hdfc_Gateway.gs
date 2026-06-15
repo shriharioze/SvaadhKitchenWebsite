@@ -303,7 +303,7 @@ function _checkWebhookLogForCharge(orderId) {
  *   - Small-order fee ₹10 on Lunch/Dinner < ₹50
  *   - Retroactive credit for previously-paid same-day delivery/small-fee
  *     when today crosses the day-free threshold
- *   - Inflation surcharge ceil(sub/20)
+ *   - Inflation surcharge ceil(sub × 6%)
  *   - 6th-day loyalty waiver (waives current + refunds past 5 days' surcharges)
  *   - Review promo (10% off per meal, decrements promo count in-memory)
  *
@@ -315,12 +315,17 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
   if (!savedOrders || typeof savedOrders !== "object") return 0;
 
   // ── Authoritative price lookup (mirror of frontend FIXED_MEAL_ITEMS) ──
+  // Prices MUST mirror LIVE's frontend FIXED_MEAL_ITEMS (order.html ~4960).
+  // Live still charges a separate inflation surcharge on top of these OLD
+  // prices — it has NOT adopted merged's "bake ~6% into prices + drop
+  // surcharge" repricing. (When that repricing ships to live, bump these
+  // and remove the surcharge below together.)
   const LD_PRICE = {
-    "Chapati": 10, "Without Oil Chapati": 9, "Phulka": 8, "Ghee Phulka": 11,
-    "Jowar Bhakri": 22, "Bajra Bhakri": 22,
-    "Dry Sabji Mini (100ml)": 24, "Dry Sabji Full (250ml)": 48,
-    "Curry Sabji Mini (100ml)": 24, "Curry Sabji Full (250ml)": 48,
-    "Dal (200ml)": 24, "Rice (100g)": 13, "Salad (40g)": 8, "Curd (50g)": 13
+    "Chapati": 9, "Without Oil Chapati": 8, "Phulka": 7, "Ghee Phulka": 10,
+    "Jowar Bhakri": 20, "Bajra Bhakri": 20,
+    "Dry Sabji Mini (100ml)": 22, "Dry Sabji Full (250ml)": 45,
+    "Curry Sabji Mini (100ml)": 22, "Curry Sabji Full (250ml)": 45,
+    "Dal (200ml)": 22, "Rice (100g)": 12, "Salad (40g)": 7, "Curd (50g)": 12
   };
   function priceOf(colKey, meal, menu) {
     if (meal === "Breakfast") {
@@ -460,7 +465,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     const mealsThisSubmission = Object.keys(mealSubs);
     const existingMeals       = Object.keys(existingDateInfo).filter(function(t){ return (Number(existingDateInfo[t].subtotal)||0) > 0; });
     const totalMealsCount     = Array.from(new Set(mealsThisSubmission.concat(existingMeals))).length;
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? 106 : 159;
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? 100 : 150;
     // VIP counts as a "free day" too — matches frontend + submitOrder, so a VIP
     // whose earlier same-day orders were charged fees gets them credited back.
     const isDayFree           = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
@@ -475,12 +480,14 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
 
     // Accrual = SUM of per-meal rounds — exactly what each meal row stores in
     // Inflation_Surcharge (round(sub × 5%)); mirrors the submitOrder fix.
+    // Accrual = SUM of per-meal ceils — exactly what each meal row stores in
+    // Inflation_Surcharge (ceil(sub × 6%)); mirrors live submitOrder.
     const submissionDaySurcharge = Object.keys(mealSubs).reduce(
-      function(s, mt) { return s + Math.round((Number(mealSubs[mt].sub) || 0) * 0.05); }, 0);
+      function(s, mt) { return s + Math.ceil((Number(mealSubs[mt].sub) || 0) * 0.06); }, 0);
 
     function getDisc(sub) {
       if (is6thDay) {
-        // Loyalty reward: flat 5% back across all 6 days' food (no surcharge anymore)
+        // 6th-day loyalty waiver: refund all 6 days' accrued surcharge (mirrors submitOrder)
         const totalWaiver = virtualPastSurcharge + submissionDaySurcharge;
         return submissionDayFoodTotal > 0 ? Math.round(totalWaiver * (sub / submissionDayFoodTotal)) : 0;
       }
@@ -508,6 +515,9 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
       const sub      = mealSubs[mealType].sub;
       const mealArea = mealSubs[mealType].area || "";
       const isPickup = mealArea.toLowerCase().indexOf("pickup") !== -1;
+      // Porter = cap-overflow option: customer books & pays the courier, so (like
+      // Self Pickup) our delivery + small-order fees are waived. Mirrors submitOrder.
+      const isPorter = mealArea.toLowerCase() === "porter";
 
       // Strict area-trust gate: only honor "free area" exemption if the
       // customer has demonstrably used this area before (order history OR
@@ -524,12 +534,12 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
       const combinedMealSub = sub + prevMealSub;
 
       let delCharge = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isFreeArea && sub > 0) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !isFreeArea && sub > 0) {
         delCharge = DELIVERY;
       }
 
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < 50) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < 50) {
         smallOrderFee = 10;
       }
 
@@ -555,7 +565,11 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
         : 0;
 
       const discAmt = getDisc(sub);
-      // Market surcharge REMOVED — ~6% baked into item prices, so not charged here.
+      // Inflation surcharge — live charges ceil(sub × 6%) per meal, stored in
+      // Inflation_Surcharge and added to Net_Total. On the 6th day the loyalty
+      // waiver (getDisc) refunds the accrued surcharge, so it nets out then.
+      // Mirrors submitOrder; keep until live adopts the baked-price repricing.
+      const inflationSurcharge = Math.ceil(sub * 0.06);
 
       // Review promo (10% off per meal; decrement in-memory only)
       let reviewDiscount = 0;
@@ -564,7 +578,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
         promoCount--;
       }
 
-      const netTotal = Math.round(sub + delCharge + smallOrderFee - discAmt - mealCredit - reviewDiscount);
+      const netTotal = Math.round(sub + delCharge + smallOrderFee + inflationSurcharge - discAmt - mealCredit - reviewDiscount);
       dayNet += netTotal;
     });
 
