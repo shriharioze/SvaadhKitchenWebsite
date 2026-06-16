@@ -7119,7 +7119,7 @@
       // V2 = market surcharge removed + L/D prices already bumped ~6%. When off, every
       // formula below is byte-for-byte the current behaviour.
       const _v2 = !!S.pricingV2;
-      const _accF = (sub) => _v2 ? Math.round((sub||0) * 0.05) : Math.ceil((sub||0) * 0.06); // loyalty ACCRUAL (not billed in V2)
+      const _accF = (sub) => _v2 ? Math.floor((sub||0) * 0.05) : Math.ceil((sub||0) * 0.06); // loyalty ACCRUAL (not billed in V2)
       const _chgF = (sub) => _v2 ? 0 : Math.ceil((sub||0) * 0.06);                            // surcharge CHARGED in the bill
       const _smallFeeTh = _v2 ? 53 : 50;
       const _freeTh = (meals) => meals <= 1 ? (_v2 ? 106 : 100) : (_v2 ? 159 : 150);

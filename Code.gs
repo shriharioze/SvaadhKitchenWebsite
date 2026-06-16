@@ -2589,7 +2589,7 @@ function _submitOrderInternal(body) {
     // actually paid (and vs _calculateLoyaltyStreak, which sums per-row values).
     // V2: accrual is 5% (round), tracked for the streak but NOT billed. V1: 6% (ceil), billed.
     const submissionDaySurcharge = order.meals.reduce(
-      (s, m) => s + (PRICING_V2 ? Math.round((Number(m.subtotal) || 0) * 0.05) : Math.ceil((Number(m.subtotal) || 0) * 0.06)), 0);
+      (s, m) => s + (PRICING_V2 ? Math.floor((Number(m.subtotal) || 0) * 0.05) : Math.ceil((Number(m.subtotal) || 0) * 0.06)), 0);
 
     // Pro-rate the submission-level discount across meals in this submission
     const getDisc = (sub) => {
@@ -2680,7 +2680,7 @@ function _submitOrderInternal(body) {
       // V1: surcharge ceil(sub×6%) IS charged; the 6th-day loyalty waiver covers it
       // (net: get back days 1–5). V2: NO surcharge in the bill — inflationSurcharge is a
       // round(sub×5%) ACCRUAL stored only for the streak, and given back on the 6th day.
-      const inflationSurcharge = PRICING_V2 ? Math.round(sub * 0.05) : Math.ceil(sub * 0.06);
+      const inflationSurcharge = PRICING_V2 ? Math.floor(sub * 0.05) : Math.ceil(sub * 0.06);
 
       // Google Review Promo Logic (10% OFF per meal)
       let reviewDiscount = 0;
