@@ -8235,18 +8235,103 @@ function autoMarkDeliveredDaily() {
   return { success: true, marked: marked };
 }
 
-// Run once (Apps Script editor or admin action) to register the daily trigger.
-// Script timezone is Asia/Kolkata, so atHour(0) fires between 00:00–01:00 IST.
-function setupAutoDeliveredTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === "autoMarkDeliveredDaily") ScriptApp.deleteTrigger(t);
+// ─────────────────────────────────────────────────────────────────────────────
+// MEAL-SPECIFIC AUTO-DELIVERY HELPERS
+// Runs after each meal's expected service window and marks all unmarked
+// Submission_IDs whose last order of that meal type is on or before today.
+// ─────────────────────────────────────────────────────────────────────────────
+function autoMarkDeliveredByMeal_(mealType) {
+  var ss    = getSpreadsheet();
+  var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  var ws    = getOrCreateTab(ss, TAB_ORDERS, []);
+  var rows  = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+
+  // Group by SID — only look at rows whose Meal_Type matches the target
+  var bySid = {};
+  rows.forEach(function(r) {
+    if (String(r.Meal_Type || "").trim() !== mealType) return;
+    var sid = String(r.Submission_ID || "").trim();
+    if (!sid) return;
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    var d = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date || "").trim();
+    if (!d) return;
+    if (!bySid[sid]) bySid[sid] = { past: false, current: false };
+    // Order_Date <= today  →  meal is done (past or today after service time)
+    // Order_Date >  today  →  still upcoming
+    if (d <= today) bySid[sid].past = true; else bySid[sid].current = true;
   });
+
+  var delWs  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
+  var hIdx   = headerIndex(delWs);
+  var delMap = {};
+  getAllRows(delWs).forEach(function(r) {
+    var s = String(r.Submission_ID || "").trim();
+    if (s) delMap[s] = r;
+  });
+
+  var stamp  = new Date().toISOString();
+  var marked = 0;
+  Object.keys(bySid).forEach(function(sid) {
+    var s = bySid[sid];
+    if (!s.past || s.current) return; // nothing to mark (no past, or still has future orders)
+    var existing = delMap[sid];
+    if (existing && String(existing.Delivered_At || "").trim() !== "") return; // already marked
+    if (existing) {
+      delWs.getRange(existing._row, hIdx["Delivered_At"]).setValue(stamp);
+    } else {
+      var arr = [];
+      arr[hIdx["Submission_ID"] - 1] = sid;
+      arr[hIdx["Delivered_At"] - 1]  = stamp;
+      arr[hIdx["EnRoute_At"] - 1]    = "";
+      delWs.appendRow(arr);
+    }
+    marked++;
+  });
+  Logger.log("autoMarkDelivered[" + mealType + "]: auto-marked " + marked + " submission(s) delivered.");
+  return { success: true, marked: marked, meal: mealType };
+}
+
+/** Triggered at 10:30 AM IST — marks all due Breakfast orders delivered. */
+function autoMarkBreakfastDelivered() { return autoMarkDeliveredByMeal_("Breakfast"); }
+
+/** Triggered at 2:00 PM IST — marks all due Lunch orders delivered. */
+function autoMarkLunchDelivered()     { return autoMarkDeliveredByMeal_("Lunch"); }
+
+/** Triggered at 10:00 PM IST — marks all due Dinner orders delivered. */
+function autoMarkDinnerDelivered()    { return autoMarkDeliveredByMeal_("Dinner"); }
+
+// Run once (Apps Script editor or admin action) to register all triggers.
+function setupAutoDeliveredTrigger() {
+  // Remove any previously registered auto-delivery triggers (all variants)
+  var managed = [
+    "autoMarkDeliveredDaily",
+    "autoMarkBreakfastDelivered",
+    "autoMarkLunchDelivered",
+    "autoMarkDinnerDelivered"
+  ];
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (managed.indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
+  });
+
+  // 🍳 Breakfast — 10:30 AM IST
+  ScriptApp.newTrigger("autoMarkBreakfastDelivered")
+    .timeBased().everyDays(1).atHour(10).nearMinute(30).create();
+
+  // 🍱 Lunch — 2:00 PM IST
+  ScriptApp.newTrigger("autoMarkLunchDelivered")
+    .timeBased().everyDays(1).atHour(14).create();
+
+  // 🌙 Dinner — 10:00 PM IST
+  ScriptApp.newTrigger("autoMarkDinnerDelivered")
+    .timeBased().everyDays(1).atHour(22).create();
+
+  // 🌚 Catch-all safety net — 1:00 AM IST (marks anything still missed)
   ScriptApp.newTrigger("autoMarkDeliveredDaily")
-    .timeBased()
-    .everyDays(1)
-    .atHour(0)
-    .create();
-  return "Auto-delivered trigger set — runs daily shortly after midnight IST.";
+    .timeBased().everyDays(1).atHour(1).create();
+
+  return "Auto-delivered triggers set — Breakfast 10:30 AM, Lunch 2:00 PM, Dinner 10:00 PM, Catch-all 1:00 AM (all IST).";
 }
 
 // ═══════════════════════════════════════════════════════
