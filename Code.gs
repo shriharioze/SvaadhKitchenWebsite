@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 19.2; // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
+const CODE_VERSION   = 19.3; // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -1540,6 +1540,15 @@ function checkDeliveryReachable(body) {
 // getMenu (display) and the submitOrder cap guard (authoritative).
 function _countActiveMealOrders(rows, dateStr) {
   const c = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  // Bulk/internal channels collapse to ONE delivery slot each, no matter how many
+  // orders they place: customers named "Enkin", and IntentAmplify ("[IA] …")
+  // orders. They also BYPASS the cap when full (Enkin in submitOrder's guard; IA
+  // via its own ia_submitOrder flow, which never checks the cap). Only relevant
+  // once the cap is hit — until then everyone is counted 1:1 anyway.
+  const sawEnkin = { Breakfast: false, Lunch: false, Dinner: false };
+  const sawIA    = { Breakfast: false, Lunch: false, Dinner: false };
+  const _isEnkin = function (nm) { return String(nm || "").trim().toLowerCase() === "enkin"; };
+  const _isIA    = function (nm) { return String(nm || "").trim().toLowerCase().indexOf("[ia]") === 0; };
   for (var i = 0; i < rows.length; i++) {
     const r = rows[i];
     const d = r.Order_Date instanceof Date
@@ -1552,8 +1561,30 @@ function _countActiveMealOrders(rows, dateStr) {
     const ar = String(r.Area || "").toLowerCase();
     if (ar.indexOf("pickup") !== -1 || ar === "porter") continue;
     const mt = String(r.Meal_Type || "").trim();
-    if (c[mt] !== undefined) c[mt]++;
+    if (c[mt] === undefined) continue;
+    if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; } // counted once below
+    if (_isIA(r.Customer_Name))    { sawIA[mt]    = true; continue; } // counted once below
+    c[mt]++;
   }
+  // IntentAmplify orders live in a separate IA_ tab (not in `rows`) — fold their
+  // presence in as ONE slot per meal too (one corporate delivery, not n).
+  try {
+    if (typeof ia_rowsAsSK === "function") {
+      ia_rowsAsSK().forEach(function (r) {
+        const d = r.Order_Date instanceof Date
+          ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(r.Order_Date || "").trim();
+        if (d !== dateStr) return;
+        if (_isOrderCancelled(r.Payment_Status)) return;
+        const mt = String(r.Meal_Type || "").trim();
+        if (sawIA[mt] !== undefined) sawIA[mt] = true;
+      });
+    }
+  } catch (e) {}
+  ["Breakfast", "Lunch", "Dinner"].forEach(function (m) {
+    if (sawEnkin[m]) c[m]++;
+    if (sawIA[m])    c[m]++;
+  });
   return c;
 }
 function getMenu(dateStr) {
@@ -2239,6 +2270,10 @@ function _submitOrderInternal(body) {
         const _capW = _capCountsW ? Number(_orderCapW[_mt] || 0) : 0;
         const _capExceededW = _capW > 0 && _capCountsW && (_capCountsW[_mt] || 0) >= _capW;
         if (_capExceededW) {
+          // Enkin (bulk/internal customer) bypasses the delivery cap entirely —
+          // always allowed even when the meal is full.
+          const _isEnkinOrderW = String(profile.name || "").trim().toLowerCase() === "enkin";
+          if (!_isEnkinOrderW) {
           // Cap is a DELIVERY limit. Self Pickup / Porter bypass it ONLY when the
           // admin left alternatives ON for this meal (default). If turned OFF, the
           // meal is a hard sold-out — block delivery AND pickup/porter.
@@ -2272,6 +2307,7 @@ function _submitOrderInternal(body) {
             _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
           }
           // pickup/porter + alternatives ON → allowed (falls through)
+          } // end if (!_isEnkinOrderW) — Enkin always falls through (cap bypassed)
         }
         if (_effCutW && _effCutW[_mt] !== undefined && _wHour >= _effCutW[_mt]) {
           _wViolations.push("The " + _mt + " cutoff for today (" + _d + ") has already passed.");
