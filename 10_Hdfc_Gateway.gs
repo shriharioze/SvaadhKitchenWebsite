@@ -1448,6 +1448,10 @@ function hdfc_processWebhookLog() {
           const rechResult = hdfc_finalizeWalletRecharge(oid);
           result = JSON.stringify(rechResult);
           if (rechResult.error) newStatus = "FAILED";
+        } else if (oid && /^SK\d{6}A/.test(oid)) {
+          const oaResult = hdfc_finalizeOnAccountPayment(oid);
+          result = JSON.stringify(oaResult);
+          if (oaResult.error) newStatus = "FAILED";
         } else {
           const markResult = hdfc_markOrderPaid(order);
           result = JSON.stringify(markResult);
@@ -1476,6 +1480,8 @@ function hdfc_processWebhookLog() {
         const oid = String(order.order_id || "").trim();
         if (oid && /^SK\d{6}W/.test(oid)) {
           result = "Wallet-recharge failure (" + (order.status || eventName) + ") — no order row.";
+        } else if (oid && /^SK\d{6}A/.test(oid)) {
+          result = "On-account settlement failure (" + (order.status || eventName) + ") — no settlement applied.";
         } else {
           const failResult = hdfc_markOrderFailed(order);
           result = JSON.stringify(failResult);
@@ -1974,4 +1980,225 @@ function hdfc_finalizeWalletRecharge(orderId) {
   } finally {
     try { lock.releaseLock(); } catch(_) {}
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ON-ACCOUNT SETTLEMENT VIA HDFC GATEWAY
+// Lets a monthly On-Account customer clear their dues through the gateway.
+// DIRECT settlement: the gateway-confirmed amount marks the customer's oldest
+// "on account" order rows "Paid" — no wallet round-trip (unlike the manual
+// recharge → _autoSettlePendingOrders path). All gated by PAYMENT_GATEWAY_ENABLED.
+// Order-id marker: SK + YYMMDD + 'A' + 9 chars  ('A' = on-Account).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Authoritative on-account due (rupees) for a customer — computed from the
+ * sheet, never from a client-supplied amount.
+ *   scope "monthly" → only orders dated before the 1st of the current IST month
+ *                     (matches getOnAccountBill — the finalized monthly bill).
+ *   scope "all"     → every still-"on account" order up to now (pending-till-present).
+ * @returns {{amount:Number, count:Number}}
+ */
+function _computeOnAccountDue(phone, scope) {
+  const phoneStr = _normalizePhone(phone);
+  if (!phoneStr) return { amount: 0, count: 0 };
+  const ws   = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
+  const rows = getAllRows(ws);
+
+  let cutoff = null;
+  if (String(scope).toLowerCase() === "monthly") {
+    const now = getISTDate();
+    cutoff = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), "Asia/Kolkata", "yyyy-MM-dd");
+  }
+
+  let amount = 0, count = 0;
+  rows.forEach(function (r) {
+    if (_normalizePhone(r.Phone) !== phoneStr) return;
+    if (String(r.Payment_Status || "").trim().toLowerCase() !== "on account") return;
+    const ds = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date || "").trim();
+    if (cutoff && (!ds || ds >= cutoff)) return; // monthly: only pre-cutoff orders
+    const net = Number(r.Net_Total || 0);
+    if (net > 0) { amount += net; count++; }
+  });
+  return { amount: Math.round(amount), count: count };
+}
+
+/**
+ * Create an HDFC gateway session to settle a customer's On-Account dues.
+ * Amount is ALWAYS recomputed server-side (anti-tamper); body.amount is ignored.
+ */
+function hdfc_createOnAccountSession(body) {
+  if (!PAYMENT_GATEWAY_ENABLED) return { error: "Gateway not enabled." };
+
+  const phone = _normalizePhone(body.phone || "");
+  if (!phone || phone.length !== 10) return { error: "Invalid phone" };
+  const scope = (String(body.scope || "all").toLowerCase() === "monthly") ? "monthly" : "all";
+
+  const due = _computeOnAccountDue(phone, scope);
+  const amount = due.amount;
+  if (amount <= 0)      return { error: "No pending on-account dues to settle." };
+  if (amount > 100000)  return { error: "Amount too large — please contact support." };
+
+  let name = String(body.name || "Customer").trim();
+  try {
+    const cRow = _findCustomerRow(getSpreadsheet(), phone);
+    if (cRow && cRow.Customer_Name) name = String(cRow.Customer_Name).trim();
+  } catch(_) {}
+
+  const now      = new Date();
+  const datePart = String(now.getFullYear()).slice(-2)
+                 + String(now.getMonth()+1).padStart(2,"0")
+                 + String(now.getDate()).padStart(2,"0");
+  const rand     = Utilities.getUuid().replace(/-/g,"").toUpperCase().slice(0,9);
+  const orderId  = "SK" + datePart + "A" + rand;
+
+  // Persist a pending entry so the return/webhook flow can settle later.
+  try {
+    const props   = PropertiesService.getScriptProperties();
+    const pending = JSON.parse(props.getProperty("HDFC_PENDING_ONACCOUNT") || "{}");
+    const nowMs   = Date.now();
+    Object.keys(pending).forEach(function (k) {
+      if (nowMs - (pending[k].ts || 0) > 30*60*1000) delete pending[k];
+    });
+    pending[orderId] = { ts: nowMs, phone: phone, name: name, amount: amount, scope: scope };
+    props.setProperty("HDFC_PENDING_ONACCOUNT", JSON.stringify(pending));
+  } catch(e) { /* non-fatal */ }
+
+  const payload = {
+    order_id:               orderId,
+    amount:                 amount,
+    currency:               "INR",
+    customer_id:            phone,
+    customer_phone:         phone,
+    customer_email:         phone + "@svaadh.noemail",
+    payment_page_client_id: HDFC_MERCHANT_ID,
+    action:                 "paymentPage",
+    return_url:             HDFC_RETURN_URL + (HDFC_RETURN_URL.indexOf("?") === -1 ? "?_popup=1" : "&_popup=1"),
+    description:            "Svaadh Kitchen — On-Account Settlement ₹" + amount,
+    first_name:             name.split(" ")[0] || name,
+    last_name:              name.split(" ").slice(1).join(" ") || "",
+    udf1:                   phone,
+    udf3:                   "svaadh_kitchen_onaccount",
+    notification_url:       HDFC_RETURN_URL
+  };
+  if (HDFC_UPI_ONLY) {
+    payload.payment_filter = { allowDefaultOptions: false, options: [ { enable: true, paymentMethodType: "UPI" } ] };
+  }
+
+  try {
+    const authToken = Utilities.base64Encode(HDFC_API_KEY + ":");
+    const resp = UrlFetchApp.fetch(HDFC_BASE_URL + "/session", {
+      method: "post",
+      contentType: "application/json",
+      headers: { "Authorization": "Basic " + authToken, "x-merchantid": HDFC_MERCHANT_ID },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const respBody = JSON.parse(resp.getContentText());
+    if (!respBody.payment_links || !respBody.payment_links.web) {
+      console.error("hdfc_createOnAccountSession: no payment URL", respBody);
+      return { error: "HDFC returned no payment URL." };
+    }
+    return { success: true, payment_url: respBody.payment_links.web, order_id: orderId, amount: amount };
+  } catch(err) {
+    console.error("hdfc_createOnAccountSession error:", err.message);
+    return { error: err.message };
+  }
+}
+
+/**
+ * Finalise an on-account settlement after gateway payment. Confirms via Status
+ * API (single source of truth for the charged amount), then DIRECTLY marks the
+ * customer's oldest "on account" order rows "Paid" up to that amount.
+ * Idempotent (Script-Property log) + locked against webhook/return races.
+ */
+function hdfc_finalizeOnAccountPayment(orderId) {
+  const oid = String(orderId || "").trim();
+  if (!oid) return { error: "order_id required" };
+  if (!/^SK\d{6}A/.test(oid)) return { error: "Not an on-account settlement order" };
+
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); }
+  catch (e) { return { success: true, already_settled: true, message: "Concurrent finalize in progress" }; }
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+
+    // Idempotency — log of already-settled on-account gateway orders.
+    let settledLog = {};
+    try { settledLog = JSON.parse(props.getProperty("HDFC_ONACCOUNT_SETTLED") || "{}"); } catch(_) {}
+    if (settledLog[oid]) {
+      return { success: true, already_settled: true, amount_settled: settledLog[oid].amount || 0 };
+    }
+
+    // Mandatory Status API check — never trust the return params for the amount.
+    const statusCheck = hdfc_getOrderStatus(oid);
+    if (!statusCheck.confirmed) {
+      return { error: "Payment not confirmed by gateway. Status: " + statusCheck.status };
+    }
+    const chargedAmount = Math.round(Number(statusCheck.amount || 0));
+    if (chargedAmount <= 0) return { error: "Gateway reports zero charged amount." };
+
+    // Identify the customer from the pending entry.
+    let phone = "", name = "Customer";
+    try {
+      const pending = JSON.parse(props.getProperty("HDFC_PENDING_ONACCOUNT") || "{}");
+      const entry = pending[oid];
+      if (entry) { phone = entry.phone || ""; name = entry.name || "Customer"; }
+    } catch(_) {}
+    if (!phone) return { error: "Could not identify customer for settlement " + oid };
+
+    const result = _settleOnAccountDirect(phone, chargedAmount, oid);
+    SpreadsheetApp.flush(); // commit row writes before releasing the lock
+
+    settledLog[oid] = { phone: phone, amount: result.settled, count: result.count, rows: result.rows, ts: Date.now() };
+    props.setProperty("HDFC_ONACCOUNT_SETTLED", JSON.stringify(settledLog));
+
+    console.log("hdfc_finalizeOnAccountPayment: settled ₹" + result.settled + " across " + result.count
+      + " order(s) for " + phone + " (" + oid + "); charged ₹" + chargedAmount);
+    return { success: true, amount_settled: result.settled, orders_settled: result.count, charged: chargedAmount };
+  } finally {
+    try { lock.releaseLock(); } catch(_) {}
+  }
+}
+
+/**
+ * Mark a customer's oldest "on account" order rows "Paid", up to `amount`.
+ * WHOLE-order settlement only (never partial) — mirrors _autoSettlePendingOrders'
+ * selection, but funded by the gateway-confirmed amount and with NO wallet
+ * transaction. Returns { settled, count, rows }.
+ */
+function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
+  const phoneStr  = _normalizePhone(phone);
+  const ws        = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
+  const rows      = getAllRows(ws);
+  const hIdx      = headerIndex(ws);
+  const statusCol = hIdx["Payment_Status"];
+
+  const pending = rows.filter(function (r) {
+    if (_normalizePhone(_get(r, "Phone")) !== phoneStr) return false;
+    if (String(_get(r, "Payment_Status") || "").trim().toLowerCase() !== "on account") return false;
+    return _cleanNum(_get(r, "Net_Total")) > 0;
+  });
+  pending.sort(function (a, b) {
+    return String(_get(a, "Order_Date")).localeCompare(String(_get(b, "Order_Date")));
+  });
+
+  let remaining = Math.round(Number(amount) || 0);
+  let settled = 0, count = 0;
+  const settledRows = [];
+  for (let i = 0; i < pending.length; i++) {
+    const net = Math.round(_cleanNum(_get(pending[i], "Net_Total")));
+    if (remaining >= net) {
+      ws.getRange(pending[i]._row, statusCol).setValue("Paid");
+      remaining -= net; settled += net; count++;
+      settledRows.push(String(_get(pending[i], "Submission_ID") || _get(pending[i], "Order_Date")));
+    } else {
+      break; // whole-order only — leftover stays on account
+    }
+  }
+  return { settled: settled, count: count, rows: settledRows };
 }
