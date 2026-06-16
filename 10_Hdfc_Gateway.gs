@@ -1579,6 +1579,15 @@ function hdfc_markOrderPaid(order) {
           console.log("hdfc_markOrderPaid: order " + orderId + " row " + (i+1) + " already Paid — skipping (duplicate webhook).");
           continue;
         }
+        // ── NEVER resurrect a CANCELLED order ──────────────────────────────
+        // A late/duplicate ORDER_SUCCEEDED webhook arriving AFTER the customer
+        // cancelled must not flip the row back to "Paid" — the cancellation already
+        // refunded them. Without this, cancelled orders reappeared as Paid →
+        // kitchen would prep them and the customer is effectively double-charged.
+        if (currentStatus.indexOf("cancel") !== -1 || (typeof _isOrderCancelled === "function" && _isOrderCancelled(data[i][COL_PSTATUS]))) {
+          console.log("hdfc_markOrderPaid: order " + orderId + " row " + (i+1) + " is CANCELLED — skipping (won't re-mark Paid).");
+          continue;
+        }
 
         ws.getRange(i + 1, COL_PSTATUS + 1).setValue("Paid");
         if (COL_PMETHOD >= 0) {
