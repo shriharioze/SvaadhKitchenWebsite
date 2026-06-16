@@ -232,7 +232,7 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
       isFirstTime:        !!entry.isFirstTime
     },
     orders:           orders,
-    payment_method:   isSplit ? "Split" : "Gateway (HDFC)",
+    payment_method:   isSplit ? "Split (HDFC)" : "Gateway (HDFC)",
     payment_status:   "Paid",
     wallet_credit:    walletApplied,
     gateway_order_id: orderId,

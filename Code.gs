@@ -2205,7 +2205,7 @@ function _submitOrderInternal(body) {
   // here the customer has already paid on the HDFC-hosted page. Rejecting
   // would leave the money taken without an order in our sheet. Accept
   // the order and log a warning so admin can cancel + refund manually.
-  if (payMethod !== "Gateway (HDFC)") {
+  if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
     const closedHits = [];
     for (const _o of orders) {
       const _menuForDate = menuRowsAll.find(function(mr) {
@@ -2343,7 +2343,7 @@ function _submitOrderInternal(body) {
       const _isAdminSubmit = String(body.pin || "") !== "" && _pinMatch(String(body.pin || ""), ADMIN_PIN);
       if (_isAdminSubmit) {
         console.log("Ordering-window violation(s) bypassed by ADMIN submission: " + _wViolations.join(" | "));
-      } else if (payMethod !== "Gateway (HDFC)") {
+      } else if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
         return { error: _wViolations[0], window_violations: _wViolations };
       } else {
         console.warn("⚠️ Gateway-paid order accepted despite ordering-window violation(s): "
@@ -2402,7 +2402,7 @@ function _submitOrderInternal(body) {
       // Gateway exception: the customer has ALREADY PAID on the HDFC page by
       // the time this runs — rejecting would take the money without an order.
       // Accept and warn so admin can adjust stock or cancel + refund manually.
-      if (payMethod !== "Gateway (HDFC)") {
+      if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
         return {
           error: `Only ${first.available} of "${nm}" left for ${first.meal} on ${first.date}. Please reduce your quantity.`,
           stock_conflicts: stockConflicts
@@ -2420,12 +2420,32 @@ function _submitOrderInternal(body) {
   let loyaltyExcessCredit = 0; // accumulates surplus when 6th-day discount exceeds the bill
   let grandNetTotal = 0;       // sum of all per-meal Net_Totals — returned so the UPI QR matches what's recorded
   let newRowsWritten = 0;      // rows actually appended this call — 0 means everything was a dedupe replay
-  // SPLIT: one cart-level wallet budget (the frontend sends the whole intended
-  // wallet portion in body.wallet_credit). Spent down per meal so the wallet is
-  // distributed correctly across a multi-meal cart instead of re-applied to each
-  // meal — and payMethod is NOT mutated mid-loop (that used to force every later
-  // meal to full UPI after the first partial meal).
-  let splitWalletBudget = (String(payMethod) === "Split") ? Math.max(0, Number(body.wallet_credit) || 0) : 0;
+  // SPLIT: one cart-level wallet budget.
+  // "Split" (manual UPI): frontend sends body.wallet_credit as the intended wallet portion.
+  // "Split (HDFC)": read server-authoritative wallet_applied from the HDFC pending entry
+  //   (stored by hdfc_createSession from the real SK_Wallet balance — client value NEVER trusted).
+  //   Falls back to body.wallet_credit only for reconciler submissions (server-computed,
+  //   used when the pending entry has expired after >30 min TTL).
+  let splitWalletBudget = 0;
+  if (String(payMethod) === "Split") {
+    splitWalletBudget = Math.max(0, Number(body.wallet_credit) || 0);
+  } else if (String(payMethod) === "Split (HDFC)") {
+    try {
+      const _spe = JSON.parse(
+        PropertiesService.getScriptProperties().getProperty("HDFC_PENDING_ORDERS") || "{}"
+      )[String(body.gateway_order_id || "")] || null;
+      if (_spe && Number(_spe.wallet_applied) > 0) {
+        splitWalletBudget = Number(_spe.wallet_applied); // server-validated at hdfc_createSession time
+        console.log("Split (HDFC): wallet_applied=" + splitWalletBudget + " for " + body.gateway_order_id);
+      } else if (body.placed_via === "reconciler" && Number(body.wallet_credit) > 0) {
+        // Pending entry expired (>30 min) — reconciler's server-computed value is safe to trust
+        splitWalletBudget = Math.max(0, Number(body.wallet_credit));
+        console.log("Split (HDFC) reconciler fallback: wallet_credit=" + splitWalletBudget);
+      }
+    } catch (_spe_err) {
+      if (body.placed_via === "reconciler") splitWalletBudget = Math.max(0, Number(body.wallet_credit) || 0);
+    }
+  }
   // Normalize an items object to a stable JSON signature (sorted keys)
   const _itemsSig = (obj) => JSON.stringify(
     Object.keys(obj).sort().reduce((a, k) => { a[k] = obj[k]; return a; }, {})
@@ -2858,23 +2878,28 @@ function _submitOrderInternal(body) {
         } else {
           pStat = "Pending"; // Wallet failed, fallback to pending
         }
-      } else if (payMethod === "Split") {
-        // Split: spend this meal's slice from the SUBMISSION wallet budget, capped
-        // by the live balance. UPI portion (netTotal − walletCreditUsed) stays
-        // pending. Never mutate payMethod — a later meal with no budget left is
-        // simply recorded with Wallet_Credit 0 (full UPI for that row).
+      } else if (payMethod === "Split" || payMethod === "Split (HDFC)") {
+        // Split: spend this meal's slice from the SUBMISSION wallet budget, capped by the
+        // live balance. Never mutate payMethod — a later meal with no budget left is
+        // simply recorded with Wallet_Credit 0.
+        // "Split"        → manual UPI still outstanding → pStat = "Pending"
+        // "Split (HDFC)" → HDFC portion already captured → pStat stays "Paid" (from body.payment_status)
         const requestedCredit = Math.min(splitWalletBudget, netTotal);
         if (requestedCredit > 0) {
           const currentBalance = _calculateWalletBalance(profile.phone, allWalletRows);
           const deduct = Math.min(requestedCredit, currentBalance);
           if (deduct > 0) {
-            _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Order Deduction (Wallet Part)", deduct, true, sid);
+            const _txnLabel = payMethod === "Split (HDFC)"
+              ? "Order Deduction (Wallet Part — Gateway Split)"
+              : "Order Deduction (Wallet Part)";
+            _appendWalletTransaction(profile.phone || "", profile.name || "Customer", _txnLabel, deduct, true, sid);
             allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Order Deduction", Amount: deduct, Verified: "TRUE" });
             walletCreditUsed = deduct;
             splitWalletBudget -= deduct;
           }
         }
-        pStat = "Pending"; // UPI portion still outstanding
+        if (payMethod === "Split") pStat = "Pending"; // manual UPI portion still outstanding
+        // Split (HDFC): pStat stays as initialized from body.payment_status = "Paid"
       } else if (payMethod === "On Account") {
         pStat = "On Account";
       }
@@ -3981,7 +4006,13 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       // Match ANY gateway method — the webhook rewrites "Gateway (HDFC)" to the actual
       // instrument used, e.g. "Gateway (UPI)" / "Gateway (Card)". An exact "Gateway
       // (HDFC)" check would miss those and wrongly fall back to a manual refund.
-      const _isGatewayPaid = (String(r.Payment_Method || "").trim().indexOf("Gateway") === 0) && _gwOrderId;
+      // Match any gateway-processed payment: methods starting with "Gateway" (e.g. "Gateway (HDFC)",
+      // "Gateway (UPI)", "Gateway (Card)" — rewritten by hdfc_markOrderPaid) OR "Split (HDFC)"
+      // (wallet + HDFC gateway split). Both carry a Gateway_Order_ID and qualify for auto-refund.
+      const _isGatewayPaid = !!_gwOrderId && (
+        String(r.Payment_Method || "").trim().indexOf("Gateway") === 0 ||
+        String(r.Payment_Method || "").trim() === "Split (HDFC)"
+      );
       let _autoRefundOk = false;
       if (_isGatewayPaid && refundAmt > 0 && typeof hdfc_initiateRefund === "function") {
         try {

@@ -5497,7 +5497,8 @@
       if (S.paymentChoice === "Wallet") {
         isChecked = $("walletConfirmCheck")?.checked;
       } else if (S.paymentChoice === "Split") {
-        isChecked = $("splitConfirmCheck")?.checked;
+        // When gateway handles the UPI remainder, no manual checkbox is needed — the gateway button is the action
+        isChecked = S.gatewayEnabled ? true : $('splitConfirmCheck')?.checked;
       } else if (S.paymentChoice === "OnAccount") {
         isChecked = true;
       } else if (S.paymentChoice === "Free") {
@@ -7581,7 +7582,7 @@
 
 
       // If gateway is enabled and payment is UPI, swap to gateway card
-      if (S.paymentChoice === "UPI") hdfc_showGatewayIfEnabled();
+      if (S.paymentChoice === "UPI" || S.paymentChoice === "Split") hdfc_showGatewayIfEnabled();
 
       if (S.paymentChoice === "UPI") {
         // Show switch back links if applicable
@@ -10680,7 +10681,20 @@
       if (!S.gatewayEnabled) return;
       if (S.paymentChoice === "Wallet" || S.paymentChoice === "OnAccount") return;
 
-      // Hide the manual UPI card, show the gateway card
+      if (S.paymentChoice === "Split") {
+        // Split mode: hide manual UPI section + confirm checkbox, show the gateway button
+        // for the UPI remainder. Step 1 (wallet auto-deduction) stays visible.
+        const upiDue = Math.max(0, (S.grandTotal || 0) - (S.walletCredit || 0));
+        if ($("splitManualUpiSection"))  $("splitManualUpiSection").style.display  = "none";
+        if ($("splitGatewaySection")) {
+          $("splitGatewaySection").style.display = "block";
+          if ($("splitGatewayAmtDisplay")) $("splitGatewayAmtDisplay").textContent = upiDue;
+          if ($("splitHdfcPayBtnAmt"))     $("splitHdfcPayBtnAmt").textContent     = upiDue;
+        }
+        return;
+      }
+
+      // UPI mode: hide the manual UPI card, show the full gateway card
       if ($("paymentCard")) $("paymentCard").style.display = "none";
       if ($("hdfcGatewayCard")) {
         $("hdfcGatewayCard").style.display = "block";
@@ -11312,6 +11326,9 @@
             S.mealAddrs     = pendingData.mealAddrs     || {};
             S.isFirstTime   = pendingData.isFirstTime   || false;
             S.grandTotal    = pendingData.amount        || 0;
+            // Restore payment split state so hdfc_submitVerifiedOrder knows it was a gateway-split
+            S.paymentChoice = pendingData.payment_choice || "Gateway";
+            S.walletCredit  = pendingData.wallet_applied || 0; // server-validated wallet portion
 
             S.hdfcPaymentVerified = true;
             S.hdfcGatewayOrderId  = orderId;
@@ -11382,6 +11399,7 @@
         if (meals.length) orders.push({ date, meals });
       }
 
+      const isSplitGateway = (S.paymentChoice === "Split");
       const payload = {
         profile: {
           name: S.profile.name, phone: S.phone,
@@ -11394,8 +11412,12 @@
           isFirstTime: S.isFirstTime
         },
         orders,
-        payment_method: "Gateway (HDFC)",
+        // Split (HDFC): wallet portion was deducted server-side; HDFC captured the remainder
+        payment_method: isSplitGateway ? "Split (HDFC)" : "Gateway (HDFC)",
         payment_status: "Paid",
+        // wallet_credit sent for audit / backend fallback; backend reads wallet_applied from
+        // Script Properties (set by hdfc_createSession) and NEVER trusts this field directly
+        wallet_credit:    isSplitGateway ? (S.walletCredit || 0) : undefined,
         gateway_order_id: gatewayOrderId,
         gateway_status:   hdfcStatus,
         settle_all: false
