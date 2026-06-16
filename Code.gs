@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 20.0; // 2026-06-16: Refund robustness per HDFC docs — webhook now handles ALL refund event names (ORDER_REFUNDED / ORDER_REFUND_FAILED / REFUND_MANUAL_REVIEW_NEEDED / AUTO_REFUND_*) not just REFUND_SUCCEEDED; excludes *REFUND* from the CHARGED/paid branch (partial refunds keep order CHARGED); auto-refund row now status "Processing" + reqId "RF"+Submission_ID so reconcilePendingRefunds (Status-API backstop) settles it. // 2026-06-16: submitOrder now STORES Gateway_Order_ID on each meal row (self-healed column) — one gateway payment covers B+L+D, all rows carry the same id, enabling PARTIAL auto-refund per meal + the reconciler's order linking (was missing in live's submitOrder → auto-refund silently fell back to manual). // 2026-06-16: Auto-refund WIRED — gateway-paid order cancellation (UPI-refund choice) now calls hdfc_initiateRefund against the row's Gateway_Order_ID; logs a Refund_Mode=gateway row that the REFUND_SUCCEEDED webhook flips to Refunded. Falls back to the manual UPI queue on ANY API error. // 2026-06-16: Dedicated WEEKLY webhook archiver — archiveOldWebhooks() moves SETTLED rows >7 days old into per-month files (Jun→Jun, Jul→Jul) and deletes from live, keeping PENDING + recent; setupWebhookArchiveTrigger() (Mon ~4AM). archiveMonth reverted to proven orders-only. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
+const CODE_VERSION   = 20.1; // 2026-06-16: Breakfast prices now come SOLELY from SK_Master_Breakfast (single source) — daily Breakfast_JSON only picks which items appear; prices pulled from the master by name (active + inactive). Update a price once in the master and it applies everywhere (menu, cart, gateway recompute). // 2026-06-16: Refund robustness per HDFC docs — webhook now handles ALL refund event names (ORDER_REFUNDED / ORDER_REFUND_FAILED / REFUND_MANUAL_REVIEW_NEEDED / AUTO_REFUND_*) not just REFUND_SUCCEEDED; excludes *REFUND* from the CHARGED/paid branch (partial refunds keep order CHARGED); auto-refund row now status "Processing" + reqId "RF"+Submission_ID so reconcilePendingRefunds (Status-API backstop) settles it. // 2026-06-16: submitOrder now STORES Gateway_Order_ID on each meal row (self-healed column) — one gateway payment covers B+L+D, all rows carry the same id, enabling PARTIAL auto-refund per meal + the reconciler's order linking (was missing in live's submitOrder → auto-refund silently fell back to manual). // 2026-06-16: Auto-refund WIRED — gateway-paid order cancellation (UPI-refund choice) now calls hdfc_initiateRefund against the row's Gateway_Order_ID; logs a Refund_Mode=gateway row that the REFUND_SUCCEEDED webhook flips to Refunded. Falls back to the manual UPI queue on ANY API error. // 2026-06-16: Dedicated WEEKLY webhook archiver — archiveOldWebhooks() moves SETTLED rows >7 days old into per-month files (Jun→Jun, Jul→Jul) and deletes from live, keeping PENDING + recent; setupWebhookArchiveTrigger() (Mon ~4AM). archiveMonth reverted to proven orders-only. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -1734,21 +1734,35 @@ function _getMenuUncached(dateStr) {
   if (r && r.Cutoff_Lunch)     co.Lunch     = Number(r.Cutoff_Lunch);
   if (r && r.Cutoff_Dinner)    co.Dinner    = Number(r.Cutoff_Dinner);
 
+  // SINGLE SOURCE OF TRUTH for breakfast prices: the SK_Master_Breakfast sheet.
+  // The daily menu (Breakfast_JSON) only decides WHICH items are available that day;
+  // every price is pulled from the master by name — so updating a price in the master
+  // updates it everywhere (menu, cart, and the gateway's authoritative recompute),
+  // even for items featured in a day's JSON. Map built from ALL master rows (active
+  // AND inactive — inactive = rotated specials like Aloo Paratha).
+  const _masterPriceByName = {};
+  getAllRows(bfWs).forEach(function (x) {
+    const _nm = NAME_MAP[String(x.Name).trim()] || String(x.Name).trim();
+    _masterPriceByName[_nm] = Number(x.Price) || 0;
+  });
+
   // MERGE LOGIC: Start with master active items, then merge daily overrides
   const masterActive = breakfast;
   let dailyBf = [];
   if (r && r.Breakfast_JSON) {
-    try { 
-      const parsed = JSON.parse(r.Breakfast_JSON); 
-      dailyBf = parsed.map(d => ({
-        ...d,
-        name: d.name ? (NAME_MAP[d.name.trim()] || d.name) : ""
-      }));
+    try {
+      const parsed = JSON.parse(r.Breakfast_JSON);
+      dailyBf = parsed.map(d => {
+        const _nm = d.name ? (NAME_MAP[d.name.trim()] || d.name) : "";
+        // Price ALWAYS from the master; fall back to the JSON's own price only if the
+        // item isn't in the master at all (a genuine one-off not yet added there).
+        const _mp = _masterPriceByName[_nm];
+        return Object.assign({}, d, { name: _nm, price: (_mp !== undefined ? _mp : (Number(d.price) || 0)) });
+      });
     } catch(e) {}
   }
 
-  // Prioritize Daily selections (where specific prices or choices were made)
-  // but ensure Master Active items are always present.
+  // Ensure Master Active items are always present (prices already from the master).
   const finalBreakfast = [...dailyBf];
   masterActive.forEach(m => {
     if (!finalBreakfast.some(d => d.name === m.name)) {
