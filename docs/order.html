@@ -4640,7 +4640,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.10";
+    const APP_VERSION = "v26.06.17.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11481,7 +11481,7 @@
       })();
 
       if ($("verLabel")) $("verLabel").textContent = APP_VERSION;
-      console.log(`Svaadh Kitchen ${APP_VERSION} Loaded - Grace period cutoff timer + carry-back loyalty`);
+      console.log(`Svaadh Kitchen ${APP_VERSION} Loaded - Split HDFC Flow`);
       applyThemeIcon();
       hdfc_init();   // Check gateway config + handle any HDFC return URL params
 
