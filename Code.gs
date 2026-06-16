@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 19.4; // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
+const CODE_VERSION   = 19.5; // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -2530,7 +2530,7 @@ function _submitOrderInternal(body) {
     const existingMeals = Object.keys(existingDateInfo).filter(mType => (Number(existingDateInfo[mType].subtotal) || 0) > 0);
     const allMealsOnDate = Array.from(new Set([...mealsThisSubmission, ...existingMeals]));
     const totalMealsCount = allMealsOnDate.length;
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? 100 : 150;
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : (PRICING_V2 ? 159 : 150);
 
     // Calculate total food subtotal for this specific submission's date
     const submissionDayFoodTotal = order.meals.reduce((s, m) => s + (Number(m.subtotal) || 0), 0);
@@ -2553,8 +2553,9 @@ function _submitOrderInternal(body) {
     // CHARGED (each meal row stores ceil(sub × 6%)). Using a single per-day
     // ceil here undercounted the waiver by ₹1–2 on multi-meal days vs what was
     // actually paid (and vs _calculateLoyaltyStreak, which sums per-row values).
+    // V2: accrual is 5% (round), tracked for the streak but NOT billed. V1: 6% (ceil), billed.
     const submissionDaySurcharge = order.meals.reduce(
-      (s, m) => s + Math.ceil((Number(m.subtotal) || 0) * 0.06), 0);
+      (s, m) => s + (PRICING_V2 ? Math.round((Number(m.subtotal) || 0) * 0.05) : Math.ceil((Number(m.subtotal) || 0) * 0.06)), 0);
 
     // Pro-rate the submission-level discount across meals in this submission
     const getDisc = (sub) => {
@@ -2625,7 +2626,7 @@ function _submitOrderInternal(body) {
       }
 
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < 50) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
         smallOrderFee = 10;
       }
 
@@ -2642,10 +2643,10 @@ function _submitOrderInternal(body) {
       const mealCredit = submissionDayFoodTotal > 0 ? Math.round(totalDateCredit * (sub / submissionDayFoodTotal)) : 0;
 
       const discAmt = getDisc(sub);
-      // On the 6th day, the surcharge IS charged (consistency), and the loyalty discount
-      // (totalWaiver) includes all 6 days of surcharge so it covers it. Net effect:
-      // the 6th-day surcharge charge and refund cancel each other; customer gets back days 1–5.
-      const inflationSurcharge = Math.ceil(sub * 0.06);
+      // V1: surcharge ceil(sub×6%) IS charged; the 6th-day loyalty waiver covers it
+      // (net: get back days 1–5). V2: NO surcharge in the bill — inflationSurcharge is a
+      // round(sub×5%) ACCRUAL stored only for the streak, and given back on the 6th day.
+      const inflationSurcharge = PRICING_V2 ? Math.round(sub * 0.05) : Math.ceil(sub * 0.06);
 
       // Google Review Promo Logic (10% OFF per meal)
       let reviewDiscount = 0;
@@ -2655,7 +2656,7 @@ function _submitOrderInternal(body) {
         promoCount--;
       }
 
-      let netTotal = Math.round(sub + delCharge + smallOrderFee + inflationSurcharge - discAmt - mealCredit - reviewDiscount);
+      let netTotal = Math.round(sub + delCharge + smallOrderFee + (PRICING_V2 ? 0 : inflationSurcharge) - discAmt - mealCredit - reviewDiscount);
       // A bill can never be negative. Clamp to ₹0 and credit the surplus to the
       // wallet after all rows are written. Covers BOTH the 6th-day waiver
       // exceeding the day's bill AND retroactive discount/fee credits exceeding

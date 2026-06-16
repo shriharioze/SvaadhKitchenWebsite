@@ -315,11 +315,9 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
   if (!savedOrders || typeof savedOrders !== "object") return 0;
 
   // ── Authoritative price lookup (mirror of frontend FIXED_MEAL_ITEMS) ──
-  // Prices MUST mirror LIVE's frontend FIXED_MEAL_ITEMS (order.html ~4960).
-  // Live still charges a separate inflation surcharge on top of these OLD
-  // prices — it has NOT adopted merged's "bake ~6% into prices + drop
-  // surcharge" repricing. (When that repricing ships to live, bump these
-  // and remove the surcharge below together.)
+  // OLD (v1) L/D prices — must mirror LIVE's frontend FIXED_MEAL_ITEMS (order.html
+  // ~4960). When PRICING_V2 is on, priceOf() returns ceil(base × 1.06) — exactly the
+  // new table the frontend's getPrice() derives — and the surcharge below is dropped.
   const LD_PRICE = {
     "Chapati": 9, "Without Oil Chapati": 8, "Phulka": 7, "Ghee Phulka": 10,
     "Jowar Bhakri": 20, "Bajra Bhakri": 20,
@@ -329,11 +327,14 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
   };
   function priceOf(colKey, meal, menu) {
     if (meal === "Breakfast") {
-      if (colKey === "B_CURD") return 12;
+      // Breakfast prices come from the menu sheet (updated to V2 there); only the
+      // hardcoded B_CURD needs the bump (12 → 13) under V2.
+      if (colKey === "B_CURD") return PRICING_V2 ? 13 : 12;
       const f = (menu && menu.breakfast || []).find(function(b){ return b.name === colKey; });
       return f ? Number(f.price) || 0 : 0;
     }
-    return Number(LD_PRICE[colKey] || 0);
+    const _base = Number(LD_PRICE[colKey] || 0);
+    return PRICING_V2 ? Math.ceil(_base * 1.06) : _base;
   }
 
   const DELIVERY = 11; // MUST match the order page's DELIVERY_CHARGE so the gateway charge == cart total
@@ -465,7 +466,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     const mealsThisSubmission = Object.keys(mealSubs);
     const existingMeals       = Object.keys(existingDateInfo).filter(function(t){ return (Number(existingDateInfo[t].subtotal)||0) > 0; });
     const totalMealsCount     = Array.from(new Set(mealsThisSubmission.concat(existingMeals))).length;
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? 100 : 150;
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : (PRICING_V2 ? 159 : 150);
     // VIP counts as a "free day" too — matches frontend + submitOrder, so a VIP
     // whose earlier same-day orders were charged fees gets them credited back.
     const isDayFree           = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
@@ -483,7 +484,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     // Accrual = SUM of per-meal ceils — exactly what each meal row stores in
     // Inflation_Surcharge (ceil(sub × 6%)); mirrors live submitOrder.
     const submissionDaySurcharge = Object.keys(mealSubs).reduce(
-      function(s, mt) { return s + Math.ceil((Number(mealSubs[mt].sub) || 0) * 0.06); }, 0);
+      function(s, mt) { return s + (PRICING_V2 ? Math.round((Number(mealSubs[mt].sub) || 0) * 0.05) : Math.ceil((Number(mealSubs[mt].sub) || 0) * 0.06)); }, 0);
 
     function getDisc(sub) {
       if (is6thDay) {
@@ -539,7 +540,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
       }
 
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < 50) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
         smallOrderFee = 10;
       }
 
@@ -565,11 +566,10 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
         : 0;
 
       const discAmt = getDisc(sub);
-      // Inflation surcharge — live charges ceil(sub × 6%) per meal, stored in
-      // Inflation_Surcharge and added to Net_Total. On the 6th day the loyalty
-      // waiver (getDisc) refunds the accrued surcharge, so it nets out then.
-      // Mirrors submitOrder; keep until live adopts the baked-price repricing.
-      const inflationSurcharge = Math.ceil(sub * 0.06);
+      // V1: charge ceil(sub×6%) surcharge (6th-day loyalty waiver refunds it).
+      // V2: NO surcharge billed — round(sub×5%) accrual tracked for the streak only,
+      // given back on the 6th day. Mirrors submitOrder.
+      const inflationSurcharge = PRICING_V2 ? Math.round(sub * 0.05) : Math.ceil(sub * 0.06);
 
       // Review promo (10% off per meal; decrement in-memory only)
       let reviewDiscount = 0;
@@ -578,7 +578,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
         promoCount--;
       }
 
-      const netTotal = Math.round(sub + delCharge + smallOrderFee + inflationSurcharge - discAmt - mealCredit - reviewDiscount);
+      const netTotal = Math.round(sub + delCharge + smallOrderFee + (PRICING_V2 ? 0 : inflationSurcharge) - discAmt - mealCredit - reviewDiscount);
       dayNet += netTotal;
     });
 

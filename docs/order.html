@@ -4621,7 +4621,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.7";
+    const APP_VERSION = "v26.06.16.8";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6939,12 +6939,16 @@
     }
     function getPrice(colKey, meal, date) {
       if (meal === "Breakfast") {
-        if (colKey === "B_CURD") return 12;
+        // Breakfast prices come from the menu sheet (updated to V2 there); only the
+        // hardcoded B_CURD needs the bump (12 → 13) under V2.
+        if (colKey === "B_CURD") return S.pricingV2 ? 13 : 12;
         const bfItems = S.menuCache[date]?.breakfast || [];
         for (const [n, ck] of Object.entries(BREAKFAST_COL_MAP)) { if (ck === colKey) { const f = bfItems.find(x => x.name === n); return f ? f.price : 0; } }
         const f = bfItems.find(x => x.name === colKey); return f ? f.price : 0;
       }
-      for (const g of FIXED_MEAL_ITEMS[meal] || []) { const f = g.items.find(i => i.colKey === colKey); if (f) return f.price; }
+      // L/D: V2 prices are exactly ceil(oldPrice × 1.06) — derived, so they always
+      // match the gateway recompute (priceOf) without a second table to drift.
+      for (const g of FIXED_MEAL_ITEMS[meal] || []) { const f = g.items.find(i => i.colKey === colKey); if (f) return S.pricingV2 ? Math.ceil(f.price * 1.06) : f.price; }
       return 0;
     }
     function getItemName(colKey, meal, date) {
@@ -7091,6 +7095,15 @@
         virtualPastSurcharge = 0;
       }
 
+      // ── PRICING_V2 gating (defined once, used by both the pre-pass and main loop) ──
+      // V2 = market surcharge removed + L/D prices already bumped ~6%. When off, every
+      // formula below is byte-for-byte the current behaviour.
+      const _v2 = !!S.pricingV2;
+      const _accF = (sub) => _v2 ? Math.round((sub||0) * 0.05) : Math.ceil((sub||0) * 0.06); // loyalty ACCRUAL (not billed in V2)
+      const _chgF = (sub) => _v2 ? 0 : Math.ceil((sub||0) * 0.06);                            // surcharge CHARGED in the bill
+      const _smallFeeTh = _v2 ? 53 : 50;
+      const _freeTh = (meals) => meals <= 1 ? (_v2 ? 106 : 100) : (_v2 ? 159 : 150);
+
       // ── Pre-compute pass: figure out carry-back credits from streak surplus ──
       // We need to know how much surplus the streak day generates so we can
       // retroactively reduce prior days' displayed totals (5th → 4th → 3rd …)
@@ -7118,7 +7131,7 @@
           const _exDisc = Object.values(_ex).reduce((s,m) => s+(m.discount_applied||0), 0);
           // Per-meal surcharge sum — matches what is actually CHARGED (each meal
           // is billed ceil(sub × 6%)), so the waiver accrual is exact.
-          const _msu = ["Breakfast","Lunch","Dinner"].reduce((s,m) => s + Math.ceil((_do[m]?.subtotal||0)*0.06), 0);
+          const _msu = ["Breakfast","Lunch","Dinner"].reduce((s,m) => s + _accF(_do[m]?.subtotal||0), 0);
           // Mirror the main bill loop's loyalty guard: don't fire 6th-day
           // bonus if this date already has existing orders (those existing
           // orders ARE what made virtualStreakCount reach 5; this date
@@ -7134,7 +7147,7 @@
             _da = Math.min(_dft, Math.max(0, Math.round(_cdt*_dr) - _exDisc));
           }
           const _totalM = ["Breakfast","Lunch","Dinner"].filter(m=>(_do[m]?.subtotal>0)||(_ex[m]?.subtotal>0)).length;
-          const _dynTh = _totalM<=1 ? 100 : 150;
+          const _dynTh = _freeTh(_totalM);
           const _isFD = (_cdt >= _dynTh) || S.profile.feeExempt;
           let _tdel=0, _tsm=0, _tsu=0, _trev=0, _tcred=0;
           if (_isFD && _exft > 0) {
@@ -7149,9 +7162,9 @@
             const _isP = _mAddr.area==="Self Pickup" || _mAddr.area==="Porter";  // Porter = customer-booked courier, no delivery fee from us (same as pickup)
             const _isFA = FREE_AREAS.includes(_mAddr.area);
             const _cms = _sub+(_ex[meal]?.subtotal||0);
-            if (!S.profile.feeExempt&&!_isFD&&!_isP&&(meal==="Lunch"||meal==="Dinner")&&_sub>0&&_cms<50) _tsm+=10;
+            if (!S.profile.feeExempt&&!_isFD&&!_isP&&(meal==="Lunch"||meal==="Dinner")&&_sub>0&&_cms<_smallFeeTh) _tsm+=10;
             if (!S.profile.feeExempt&&!_isFD&&!_isP&&!_isFA&&_sub>0) _tdel+=DELIVERY_CHARGE;
-            _tsu += Math.ceil(_sub*0.06); // surcharge always charged; loyalty discount covers it on day 6
+            _tsu += _chgF(_sub); // V1: surcharge charged (loyalty covers it day 6). V2: 0.
           });
           const _net = _dft - _da + _tdel + _tsm + _tsu - _tcred - _trev;
           _dayNets[_d] = { net: _net, is6: _is6 };
@@ -7190,7 +7203,7 @@
         if (dayFoodTotal === 0) continue;
         // Per-meal surcharge sum — matches what is actually CHARGED (each meal
         // is billed ceil(sub × 6%)), so waiver accrual is exact on multi-meal days.
-        const dayMealSurcharge = ["Breakfast","Lunch","Dinner"].reduce((s,m) => s + Math.ceil((dayOrders[m]?.subtotal||0)*0.06), 0);
+        const dayMealSurcharge = ["Breakfast","Lunch","Dinner"].reduce((s,m) => s + _accF(dayOrders[m]?.subtotal||0), 0);
 
         // Streak gap guard: if this date is NOT consecutive with the previous
         // ordered day, the streak is broken — restart the projected count so the
@@ -7265,7 +7278,7 @@
         // Discount & Fee Waiver logic based on combined day total
         const mealsToday = ["Breakfast", "Lunch", "Dinner"].filter(m => (dayOrders[m]?.subtotal > 0) || (existDay[m]?.subtotal > 0));
         const totalMealsOnDate = mealsToday.length;
-        const dynamicThreshold = totalMealsOnDate <= 1 ? 100 : 150;
+        const dynamicThreshold = _freeTh(totalMealsOnDate);
         const isDayFree = (combinedDayTotal >= dynamicThreshold) || S.profile.feeExempt;
 
         // Suppress "Add more for Free Delivery" banner if all ordered meals are Self Pickup
@@ -7282,7 +7295,7 @@
         } else if (is6thDay) {
           html += `<div style="font-size:0.75rem;background:linear-gradient(135deg,#f1c40f,#f39c12);color:#fff;padding:12px 14px;border-radius:10px;margin-bottom:12px;font-weight:700;box-shadow:0 4px 10px rgba(243,156,18,0.3);display:flex;align-items:center;gap:10px;">
             <span style="font-size:1.4rem;">🎉</span>
-            <span><strong>6-Day Streak!</strong> We're giving back all your market surcharges — ~6% of your food bill, back in your pocket. You've earned it! Total reward: <strong>₹${loyaltyWaiverTotal}</strong></span>
+            <span><strong>6-Day Streak!</strong> ${_v2 ? "Here's your loyalty reward — 5% of your 6 days' food bill, back in your pocket" : "We're giving back all your market surcharges — ~6% of your food bill, back in your pocket"}. You've earned it! Total reward: <strong>₹${loyaltyWaiverTotal}</strong></span>
           </div>`;
         } else if (!isDayFree && !allPickup) {
           const diff = dynamicThreshold - combinedDayTotal;
@@ -7347,7 +7360,7 @@
 
           // 3. Small Order Fee (current)
           // Waived if isDayFree or Pickup or VIP. Else applies if Lunch/Dinner and meal total < 50
-          if (!S.profile.feeExempt && !isDayFree && !isPickup && (meal === "Lunch" || meal === "Dinner") && sub > 0 && combinedMealSub < 50) {
+          if (!S.profile.feeExempt && !isDayFree && !isPickup && (meal === "Lunch" || meal === "Dinner") && sub > 0 && combinedMealSub < _smallFeeTh) {
             const fee = 10;
             mealExtras.push({ icon: "📦", name: "Small Order Fee", val: fee, desc: "A small flat fee applied to orders below ₹50 to help cover baseline packaging & logistics overheads." });
             totalSmallOrderFee += fee;
@@ -7361,8 +7374,9 @@
             totalDelivery += fee;
           }
 
-          // 5. Market Surcharge (always charged; on 6th day the loyalty discount covers it)
-          const surcharge = Math.ceil(sub * 0.06);
+          // 5. Market Surcharge — V1 only (always charged; 6th-day loyalty covers it).
+          //    V2: _chgF returns 0, so the line is skipped and nothing is billed.
+          const surcharge = _chgF(sub);
           if (surcharge > 0) {
             mealExtras.push({ icon: "📈", name: "Market Surcharge", val: surcharge, desc: "A minimal % charge to help us offset the rapidly rising costs of fresh vegetables & ingredients in the market." });
             totalInflationSurcharge += surcharge;
