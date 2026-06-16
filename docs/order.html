@@ -4621,7 +4621,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.4";
+    const APP_VERSION = "v26.06.16.5";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7985,41 +7985,55 @@
       }
     }
 
+    // Delivery-cap gate — shared by the manual/wallet submit (placeOrder) AND the
+    // HDFC gateway path (hdfc_initiatePayment). If a capped meal can't be delivered,
+    // offers Self Pickup / Porter, switches the order, rebuilds the bill, and returns
+    // FALSE (caller aborts; the customer re-confirms with the updated, delivery-fee-free
+    // total — at which point the gateway's recompute reads the pickup/porter area and
+    // waives the fee, so charge == cart). Returns TRUE when it's safe to proceed
+    // (no capped meals, or all capped meals are already on our delivery route).
+    async function _ensureDeliveryCapResolved() {
+      const _soldOut = _soldOutDeliveryMealsInCart();
+      if (!_soldOut.length) return true;
+      _capCheckOverlay(true);
+      let _reach = {};
+      try {
+        const _rr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "checkDeliveryReachable", phone: (S.profile && S.profile.phone) || "", items: _soldOut.map(x => ({ date: x.date, meal: x.meal, society: x.society })) }) });
+        const _rd = await _rr.json();
+        (_rd.results || []).forEach(x => { _reach[x.date + "|" + x.meal] = x.reachable; });
+      } catch (_) {}
+      _capCheckOverlay(false);
+      const _blocked = _soldOut.filter(x => !_reach[x.date + "|" + x.meal]);
+      if (!_blocked.length) return true; // every capped meal is already on our delivery route
+      const choice = await _deliveryFullDialog(_blocked);
+      if (choice === "cancel" || !choice) return false;
+      if (choice === "pickup") {
+        setDeliveryMode('single', 'pickup');
+        await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
+      } else {
+        _applyPorterAreaSingle();
+        const meals = [...new Set(_blocked.map(x => x.meal))];
+        const times = meals.map(m => `${m}: <b>${PORTER_TIMES[m]}</b>`).join("<br>");
+        await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
+      }
+      try { if (typeof buildBillScreen === "function") await buildBillScreen(); } catch (_) {}
+      return false; // switched — caller aborts; customer re-confirms with the updated bill
+    }
+
     async function placeOrder(settleAll = false) {
       if (S.isPlacingOrder) return;
       // Delivery-cap overflow gate. If a meal's delivery is full, FIRST check
       // whether we're already delivering to this customer's building (same stop →
       // let it through). Only if not, offer Self Pickup / Porter. Free areas
       // (Bhosale Nagar…) were already excluded above — they always deliver.
-      const _soldOut = _soldOutDeliveryMealsInCart();
-      if (_soldOut.length) {
-        _capCheckOverlay(true);
-        let _reach = {};
-        try {
-          const _rr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "checkDeliveryReachable", phone: (S.profile && S.profile.phone) || "", items: _soldOut.map(x => ({ date: x.date, meal: x.meal, society: x.society })) }) });
-          const _rd = await _rr.json();
-          (_rd.results || []).forEach(x => { _reach[x.date + "|" + x.meal] = x.reachable; });
-        } catch (_) {}
-        _capCheckOverlay(false);
-        const _blocked = _soldOut.filter(x => !_reach[x.date + "|" + x.meal]);
-        if (_blocked.length) {
-          const choice = await _deliveryFullDialog(_blocked);
-          if (choice === "cancel" || !choice) return;
-          if (choice === "pickup") {
-            setDeliveryMode('single', 'pickup');
-            await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
-          } else {
-            _applyPorterAreaSingle();
-            const meals = [...new Set(_blocked.map(x => x.meal))];
-            const times = meals.map(m => `${m}: <b>${PORTER_TIMES[m]}</b>`).join("<br>");
-            await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
-          }
-          try { if (typeof buildBillScreen === "function") await buildBillScreen(); } catch (_) {}
-          S.isPlacingOrder = false;
-          return;
-        }
-        // else: every capped meal is already on our delivery route → proceed normally
+      // Delivery-cap gate (Self Pickup / Porter offer) — extracted to a shared
+      // helper so the gateway path enforces it too. Returns false if the order was
+      // switched (bill rebuilt) or cancelled — abort and let the customer re-confirm.
+      {
+        const _capOk = await _ensureDeliveryCapResolved();
+        if (!_capOk) { S.isPlacingOrder = false; return; }
       }
+
       const isWalletOrder    = S.paymentChoice === "Wallet";
       const isOnAccountOrder = S.paymentChoice === "OnAccount";
       const isSplitOrder     = S.paymentChoice === "Split";
@@ -10943,6 +10957,18 @@
       if (!S.gatewayEnabled) {
         await sAlert("Payment gateway is not available right now. Please try again in a moment.", "Gateway Unavailable", "⚠️");
         return;
+      }
+
+      // Delivery-cap gate — same Self Pickup / Porter offer the manual flow uses.
+      // Runs BEFORE the popup opens. If the order is switched (or cancelled) we
+      // abort; the customer re-confirms with the updated, delivery-fee-free bill,
+      // and the gateway's server recompute then reads the pickup/porter area and
+      // waives the fee (charge == cart). Only awaits when a meal is actually capped,
+      // so the common no-cap path still opens the popup inside the user-activation
+      // window. (No sheet/backend changes needed — the gateway is already correct.)
+      if (_soldOutDeliveryMealsInCart().length) {
+        const _capOk = await _ensureDeliveryCapResolved();
+        if (!_capOk) return;
       }
 
       // ── POPUP MUST OPEN INSIDE USER-ACTIVATION WINDOW ─────────────────
