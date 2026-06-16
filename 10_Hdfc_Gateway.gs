@@ -1440,7 +1440,9 @@ function hdfc_processWebhookLog() {
       var   result  = "";
       var   newStatus = "PROCESSED";
 
-      if (eventName === "ORDER_SUCCEEDED" || order.status === "CHARGED") {
+      if ((eventName === "ORDER_SUCCEEDED" || order.status === "CHARGED") && eventName.indexOf("REFUND") === -1) {
+        // NB: a PARTIAL refund leaves order.status === "CHARGED", so we must exclude
+        // any *REFUND* event here or it would re-mark-paid and skip refund handling.
         // Wallet-recharge orders use SK + YYMMDD + 'W' + 9 chars (vs 'G' for orders).
         // Route them to the recharge finalizer instead of hdfc_markOrderPaid.
         const oid = String(order.order_id || "").trim();
@@ -1458,16 +1460,22 @@ function hdfc_processWebhookLog() {
           if (markResult.error) newStatus = "FAILED";
         }
 
-      } else if (eventName === "REFUND_INITIATED" || eventName === "REFUND_SUCCEEDED" || eventName === "REFUND_FAILED") {
-        // Auto-refunds are raised at cancellation time via hdfc_initiateRefund().
-        // When HDFC confirms settlement, flip the matching Refunds row to "Refunded"
-        // so the sheet reflects reality without any manual update.
+      } else if (eventName.indexOf("REFUND") !== -1) {
+        // Refund events — handle EVERY naming variant HDFC/Juspay may send:
+        //   merchant refunds: REFUND_INITIATED / REFUND_SUCCEEDED / REFUND_FAILED
+        //   (per HDFC docs)   ORDER_REFUNDED / ORDER_REFUND_FAILED / REFUND_MANUAL_REVIEW_NEEDED
+        //   auto-refunds:     AUTO_REFUND_INITIATED / AUTO_REFUND_SUCCEEDED / AUTO_REFUND_FAILED
+        // On success → flip the matching SK_Refunds row to "Refunded" via
+        // _hdfcMarkRefundSettled (matches Refund_Mode=gateway + the order id in the note).
         var rOid   = String(order.order_id || "").trim();
         var rList  = Array.isArray(order.refunds) ? order.refunds : [];
         var rRefId = rList.length ? String(rList[rList.length - 1].id || rList[rList.length - 1].unique_request_id || "") : "";
-        if (eventName === "REFUND_SUCCEEDED" && rOid) {
+        var ev     = eventName.toUpperCase();
+        if (rOid && (ev.indexOf("SUCCEEDED") !== -1 || ev === "ORDER_REFUNDED")) {
           _hdfcMarkRefundSettled(rOid, rRefId);
-          result = "Refund settled for " + rOid + (rRefId ? " (" + rRefId + ")" : "");
+          result = "Refund settled (" + eventName + ") for " + rOid + (rRefId ? " (" + rRefId + ")" : "");
+        } else if (ev.indexOf("FAILED") !== -1) {
+          result = "Refund FAILED (" + eventName + ") for " + rOid + " — admin should initiate a fresh refund.";
         } else {
           result = "Refund event acknowledged (" + eventName + ") for " + rOid;
         }
