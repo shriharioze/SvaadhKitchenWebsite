@@ -3886,11 +3886,9 @@
         <p style="font-size:0.7rem;color:#888;text-align:center;margin-top:8px;">
           Secured by HDFC SmartGateway · 256-bit SSL
         </p>
-
-        <div style="text-align:center;margin-top:10px;">
-          <a href="javascript:togglePaymentMode('UPI')"
-            style="font-size:0.75rem;color:#666;text-decoration:underline;">Pay via UPI manually instead</a>
-        </div>
+        <!-- Manual "Pay via UPI instead" escape removed on purpose: when the gateway
+             is live, all UPI payments must go through it (no manual-UPI fallback).
+             Customers with wallet balance still toggle Wallet/Split via those cards. -->
       </div>
 
       <!-- WALLET CONFIRMATION CARD -->
@@ -4621,7 +4619,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.2";
+    const APP_VERSION = "v26.06.16.3";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9626,6 +9624,9 @@
               payChip = `<div style="display:inline-block;background:#f5f0ff;color:#5b21b6;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #c4b5fd;margin-top:5px;vertical-align:middle;">🔀 ₹${walletCredit} Wallet + ₹${upiDue} UPI · ${splitStat}</div>`;
             } else if (isWalletPay) {
               payChip = `<div style="display:inline-block;background:#eafaf1;color:#1a6640;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #b7e4c7;margin-top:5px;vertical-align:middle;">💳 Wallet</div>`;
+            } else if (payMeth.includes("gateway")) {
+              // Paid through the HDFC gateway — distinct from manual UPI for clarity.
+              payChip = `<div style="display:inline-block;background:#e3f2fd;color:#1565c0;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #90caf9;margin-top:5px;vertical-align:middle;">📱 UPI · Gateway</div>`;
             } else {
               payChip = `<div style="display:inline-block;background:#f3e5f5;color:#6a1b9a;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #d1c4e9;margin-top:5px;vertical-align:middle;">📱 UPI</div>`;
             }
@@ -9740,9 +9741,13 @@
               <div class="omr-title" style="color:#666;">${formatDate(o.date)} — ${o.meal}</div>
               <div class="omr-sub">${o.summaryParts.join(", ")} · ₹${o.totalSum}</div>
               <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">
-                ${o.payment_method?.toLowerCase().includes("wallet") ?
-                `<div style="display:inline-block;background:#f9fafb;color:#666;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #ddd;">💳 Wallet</div>` :
-                `<div style="display:inline-block;background:#f9fafb;color:#666;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #ddd;">📱 UPI</div>`}
+                ${(function(){
+                  const m = (o.payment_method || "").toLowerCase();
+                  const label = m.includes("wallet") ? "💳 Wallet"
+                              : m.includes("gateway") ? "📱 UPI · Gateway"
+                              : "📱 UPI";
+                  return `<div style="display:inline-block;background:#f9fafb;color:#666;font-size:0.62rem;padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid #ddd;">${label}</div>`;
+                })()}
                 ${(o.items_raw && o.meal !== "Breakfast") ? `<button onclick='_startReorder("${o.meal}", this.dataset.items)' ${itemsRawAttr}
                   style="font-size:0.65rem;font-weight:700;padding:2px 9px;border-radius:99px;border:1.5px solid #1E1240;color:#1E1240;background:#fff5f4;cursor:pointer;">📋 Reorder</button>` : ''}
               </div>
