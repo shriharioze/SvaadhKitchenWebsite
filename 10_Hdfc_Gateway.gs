@@ -1665,6 +1665,9 @@ function hdfc_markOrderFailed(order) {
         const cur = String(data[i][COL_PSTATUS] || "").toLowerCase();
         // NEVER touch a confirmed-paid order (could be a later/duplicate attempt).
         if (cur === "paid" || cur === "collected" || cur === "wallet paid") { skippedPaid++; continue; }
+        // NEVER un-cancel an order — a stray FAILED webhook must not overwrite a
+        // "Cancelled …" status (same class of bug as the mark-paid resurrection).
+        if (cur.indexOf("cancel") !== -1) continue;
         if (cur === "failed") continue; // already failed
         ws.getRange(i + 1, COL_PSTATUS + 1).setValue("Failed");
         if (COL_NOTES >= 0) {
