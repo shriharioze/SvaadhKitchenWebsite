@@ -4621,7 +4621,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.8";
+    const APP_VERSION = "v26.06.16.9";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10636,7 +10636,9 @@
           '<button id="_sndX" aria-label="Close" disabled style="position:absolute;top:8px;right:14px;border:none;background:none;font-size:1.6rem;line-height:1;color:#cbd5e1;cursor:not-allowed;pointer-events:none;opacity:0.5;">&times;</button>' +
           '<div style="font-size:2rem;margin-bottom:8px;">💰</div>' +
           '<div style="font-size:1.05rem;font-weight:800;color:#1E1240;margin-bottom:10px;">A quick update</div>' +
-          '<div style="font-size:0.9rem;color:#475569;line-height:1.6;">We are <b>removing the market surcharge</b> and have <b>updated our prices accordingly</b> — so your bill stays around the <b>same or almost the same</b>, just simpler.<br><br>Also, <b>free delivery</b> now applies when your day\'s food total reaches <b>₹106</b> (single meal) or <b>₹159</b> (2 or more meals).<br><br>Same great food, simpler bill. 💛<br><br><span style="font-size:0.76rem;color:#94a3b8;font-style:italic;">Ps. This message is shown only once.</span></div>' +
+          '<div style="font-size:0.9rem;color:#475569;line-height:1.6;">We are <b>removing the market surcharge</b> and have <b>updated our prices accordingly</b> — so your bill stays around the <b>same or almost the same</b>, just simpler.<br><br>Also, <b>free delivery</b> now applies when your day\'s food total reaches <b>₹106</b> (single meal) or <b>₹159</b> (2 or more meals).<br><br>' +
+          (S.gatewayEnabled ? 'All payments now move to our <b>secure HDFC Payment Gateway</b> — pay by UPI in a tap and your order is confirmed instantly, no screenshots needed.<br><br>' : '') +
+          'Same great food, simpler bill. 💛<br><br><span style="font-size:0.76rem;color:#94a3b8;font-style:italic;">Ps. This message is shown only once.</span></div>' +
           '<button id="_sndOk" disabled style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#cbd5e1;color:#fff;font-size:0.92rem;font-weight:700;cursor:not-allowed;">Got it (5)</button>' +
         '</div>';
       const close = function () {
