@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 19.6; // 2026-06-16: archiveMonth also archives+deletes the month's SETTLED webhook-log rows (keeps PENDING) — SK_Webhook_Log is full-scanned every minute + per checkout, so it must not grow unbounded. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
+const CODE_VERSION   = 19.7; // 2026-06-16: Dedicated WEEKLY webhook archiver — archiveOldWebhooks() moves SETTLED rows >7 days old into per-month files (Jun→Jun, Jul→Jul) and deletes from live, keeping PENDING + recent; setupWebhookArchiveTrigger() (Mon ~4AM). archiveMonth reverted to proven orders-only. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -7257,30 +7257,6 @@ function archiveMonth(year, month) {
       }
     }
 
-    // ── Webhook log: archive this month's settled rows, keep PENDING ────────
-    // SK_Webhook_Log is full-scanned every minute (hdfc_processWebhookLog) AND on
-    // each order's return-verification, and each order can receive several
-    // webhooks — so it grows faster than SK_Orders and would slow those hot paths
-    // if left unbounded. Archive PROCESSED/FAILED rows for the month; ALWAYS keep
-    // still-PENDING rows (never lose an unprocessed webhook) and other months.
-    var WEBHOOK_HEADERS  = ["Received_At","Event_Name","Order_ID","Raw_Payload","Status","Processed_At","Result"];
-    var webhookWs        = getOrCreateTab(ss, TAB_WEBHOOK_LOG, WEBHOOK_HEADERS);
-    var allWebhookData   = webhookWs.getDataRange().getValues();
-    var wHeaders         = allWebhookData.length ? allWebhookData[0] : WEBHOOK_HEADERS;
-    var wRecvIdx         = wHeaders.indexOf("Received_At");
-    var wStatIdx         = wHeaders.indexOf("Status");
-    var toArchiveWebhook = [];
-    var keepWebhook      = [];
-    for (var wi = 1; wi < allWebhookData.length; wi++) {
-      var wd      = fmtDate(allWebhookData[wi][wRecvIdx]);
-      var wStatus = String(allWebhookData[wi][wStatIdx] || "").trim().toUpperCase();
-      if (wStatus !== "PENDING" && wd >= qr.from && wd <= qr.to) {
-        toArchiveWebhook.push(allWebhookData[wi]);
-      } else {
-        keepWebhook.push(allWebhookData[wi]); // other months OR still-PENDING
-      }
-    }
-
     // ── STEP 3: Write SK_Orders to archive (verify) ─────────────────────────
     if (toArchiveOrders.length > 0) {
       var archiveOrderSheet = archiveSS.getActiveSheet();
@@ -7297,22 +7273,6 @@ function archiveMonth(year, month) {
       log.push(toArchiveOrders.length + " orders archived ✓");
     } else {
       log.push("No orders found for this month.");
-    }
-
-    // ── STEP 3b: Write the month's settled webhook rows to archive (verify) ──
-    if (toArchiveWebhook.length > 0) {
-      var archiveWebhookSheet = archiveSS.insertSheet("SK_Webhook_Log");
-      archiveWebhookSheet.getRange(1, 1, 1, wHeaders.length).setValues([wHeaders]);
-      archiveWebhookSheet.getRange(2, 1, toArchiveWebhook.length, wHeaders.length).setValues(toArchiveWebhook);
-      SpreadsheetApp.flush();
-      var wWritten = archiveWebhookSheet.getLastRow() - 1;
-      if (wWritten !== toArchiveWebhook.length) {
-        return {success:false, error:"Webhook-log archive verification failed. Expected "
-          + toArchiveWebhook.length + ", got " + wWritten + ". Nothing deleted from the live webhook log."};
-      }
-      log.push(toArchiveWebhook.length + " webhook rows archived ✓");
-    } else {
-      log.push("No settled webhook rows to archive for this month.");
     }
 
     // ── STEPS 4–6: WALLET IS INTENTIONALLY *NOT* ARCHIVED ───────────────────
@@ -7376,34 +7336,146 @@ function archiveMonth(year, month) {
       log.push(toArchiveOrders.length + " order rows removed from live sheet ✓");
     }
 
-    // Remove the archived webhook rows from the live log (keep PENDING + other months).
-    if (toArchiveWebhook.length > 0) {
-      var wRebuild = rebuildSheet(webhookWs, wHeaders, keepWebhook);
-      if (!wRebuild.success) {
-        return {success:false,
-          error:"Webhook-log rebuild verification failed. Expected " + wRebuild.expected
-                + ", got " + wRebuild.actual + ". Archive file IS created — please verify manually before retrying.",
-          archiveUrl: archiveSS.getUrl()};
-      }
-      log.push(toArchiveWebhook.length + " webhook rows removed from live log ✓");
-    }
-
     // (Wallet rebuild removed — wallet is never archived; see STEPS 4–6 above.)
 
     return {
-      success:          true,
-      archiveName:      archiveName,
-      archiveUrl:       archiveSS.getUrl(),
-      archiveFolder:    yearFolder ? yearFolder.getName() : "(My Drive)",
-      ordersArchived:   toArchiveOrders.length,
-      walletArchived:   toArchiveWallet.length,
-      webhooksArchived: toArchiveWebhook.length,
-      snapshots:        snapshotCount,
-      log:              log
+      success:        true,
+      archiveName:    archiveName,
+      archiveUrl:     archiveSS.getUrl(),
+      archiveFolder:  yearFolder ? yearFolder.getName() : "(My Drive)",
+      ordersArchived: toArchiveOrders.length,
+      walletArchived: toArchiveWallet.length,
+      snapshots:      snapshotCount,
+      log:            log
     };
   } finally {
     try { lock.releaseLock(); } catch(_) {}
   }
+}
+
+/**
+ * Get-or-create the monthly WEBHOOK archive spreadsheet for year/month, inside
+ * My Drive > WebBased Ordering > Archive > <year>, named
+ * "Svaadh Kitchen Webhook Archive — Mon YYYY". Kept separate from the orders
+ * archive so the heavy webhook volume never bloats it. Idempotent (re-runs reuse
+ * the same file, so a week that spans a month boundary lands each row in the
+ * right month's file).
+ */
+function _getOrCreateMonthlyWebhookArchiveSS(year, month) {
+  var MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var name = "Svaadh Kitchen Webhook Archive — " + MONTH_NAMES[month - 1] + " " + year;
+  var folder = _getArchiveYearFolder(year);
+  var found = null;
+  try {
+    if (folder) { var it = folder.getFilesByName(name); if (it.hasNext()) found = it.next(); }
+    if (!found)  { var it2 = DriveApp.getFilesByName(name); if (it2.hasNext()) found = it2.next(); }
+  } catch (e) {}
+  if (found) return SpreadsheetApp.openById(found.getId());
+  var ss = SpreadsheetApp.create(name);
+  if (folder) {
+    try {
+      var f = DriveApp.getFileById(ss.getId());
+      var parents = f.getParents();
+      while (parents.hasNext()) { var p = parents.next(); if (p.getId() !== folder.getId()) p.removeFile(f); }
+      folder.addFile(f);
+    } catch (e) {}
+  }
+  return ss;
+}
+
+/**
+ * WEEKLY job: archive SETTLED webhook rows older than 7 days into each month's
+ * webhook-archive file (June rows → June file, July → July, …), then delete them
+ * from the live SK_Webhook_Log. ALWAYS keeps still-PENDING rows and anything
+ * within the last 7 days (the reconciler / return-verification window). Verify-
+ * before-delete + script lock. No-op if the log is empty. Runs regardless of the
+ * gateway flag (old webhooks still need clearing even if the gateway is later off).
+ */
+function archiveOldWebhooks() {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10 * 60 * 1000); }
+  catch (e) { return { success: false, error: "System busy — could not acquire lock." }; }
+  try {
+    var ss = getSpreadsheet();
+    var WEBHOOK_HEADERS = ["Received_At","Event_Name","Order_ID","Raw_Payload","Status","Processed_At","Result"];
+    var ws  = getOrCreateTab(ss, TAB_WEBHOOK_LOG, WEBHOOK_HEADERS);
+    var all = ws.getDataRange().getValues();
+    if (all.length < 2) return { success: true, archived: 0, kept: 0, note: "Webhook log empty." };
+
+    var headers = all[0];
+    var recvIdx = headers.indexOf("Received_At");
+    var statIdx = headers.indexOf("Status");
+    var cutoffStr = Utilities.formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), "Asia/Kolkata", "yyyy-MM-dd");
+
+    var keep = [];
+    var byMonth = {}; // "YYYY-MM" -> { year, month, rows: [] }
+    for (var i = 1; i < all.length; i++) {
+      var recv = all[i][recvIdx];
+      var dStr = recv instanceof Date
+        ? Utilities.formatDate(recv, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(recv || "").trim().slice(0, 10);
+      var status = String(all[i][statIdx] || "").trim().toUpperCase();
+      if (status !== "PENDING" && dStr && dStr < cutoffStr) {
+        var pp  = dStr.split("-");
+        var key = pp[0] + "-" + pp[1];
+        if (!byMonth[key]) byMonth[key] = { year: Number(pp[0]), month: Number(pp[1]), rows: [] };
+        byMonth[key].rows.push(all[i]);
+      } else {
+        keep.push(all[i]); // PENDING, within 7 days, or undated → keep live
+      }
+    }
+
+    var monthKeys = Object.keys(byMonth);
+    if (!monthKeys.length) return { success: true, archived: 0, kept: keep.length, note: "Nothing settled older than 7 days." };
+
+    // Append to each month's file, VERIFYING each write BEFORE deleting anything.
+    var totalArchived = 0, done = [];
+    for (var k = 0; k < monthKeys.length; k++) {
+      var grp  = byMonth[monthKeys[k]];
+      var arSS = _getOrCreateMonthlyWebhookArchiveSS(grp.year, grp.month);
+      var sh   = arSS.getSheetByName("SK_Webhook_Log") || arSS.insertSheet("SK_Webhook_Log");
+      if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+      var before = sh.getLastRow();
+      sh.getRange(before + 1, 1, grp.rows.length, headers.length).setValues(grp.rows);
+      var def = arSS.getSheetByName("Sheet1"); // drop a freshly-created file's default tab
+      if (def && arSS.getSheets().length > 1) arSS.deleteSheet(def);
+      SpreadsheetApp.flush();
+      if ((sh.getLastRow() - before) !== grp.rows.length) {
+        return { success: false, error: "Webhook archive verification failed for " + monthKeys[k]
+          + ". Nothing deleted from the live log." };
+      }
+      totalArchived += grp.rows.length;
+      done.push(monthKeys[k] + ": " + grp.rows.length);
+    }
+
+    // All month-files written + verified → rebuild the live log with kept rows only.
+    var lastRow = ws.getLastRow(), lastCol = ws.getLastColumn();
+    if (lastRow > 1) ws.getRange(2, 1, lastRow - 1, Math.max(lastCol, headers.length)).clearContent();
+    if (keep.length > 0) ws.getRange(2, 1, keep.length, headers.length).setValues(keep);
+    SpreadsheetApp.flush();
+    if ((ws.getLastRow() - 1) !== keep.length) {
+      return { success: false, error: "Live-log rebuild mismatch. Archive files ARE written — verify before re-running." };
+    }
+
+    Logger.log("archiveOldWebhooks: archived " + totalArchived + " [" + done.join(", ") + "], kept " + keep.length);
+    return { success: true, archived: totalArchived, kept: keep.length, months: done };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+/**
+ * Install the WEEKLY trigger for archiveOldWebhooks (idempotent). Run ONCE from
+ * the editor. Mondays ~4 AM IST (low traffic).
+ */
+function setupWebhookArchiveTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "archiveOldWebhooks") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("archiveOldWebhooks")
+    .timeBased().everyWeeks(1).onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(4).create();
+  Logger.log("✅ archiveOldWebhooks weekly trigger created — Mondays ~4 AM.");
+  return { success: true };
 }
 
 /**
