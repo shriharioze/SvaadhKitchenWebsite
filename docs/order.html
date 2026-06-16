@@ -4621,7 +4621,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.16.9";
+    const APP_VERSION = "v26.06.16.10";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6674,7 +6674,7 @@
         html += `<div class="section-label">${t('today_breakfast_label')}</div>`;
         html += items.map(item => itemRow(date, "Breakfast", item.name, item.price, item.name)).join("");
         html += `<div class="section-label" style="margin-top:10px;">${t('extras_label')}</div>`;
-        html += itemRow(date, "Breakfast", "Curd (50g)", 12, "B_CURD");
+        html += itemRow(date, "Breakfast", "Curd (50g)", getPrice("B_CURD", "Breakfast", date), "B_CURD");
       } else {
         const groups = FIXED_MEAL_ITEMS[meal];
         const dryName = meal === "Lunch" ? menu.lunch_dry : menu.dinner_dry;
@@ -6690,7 +6690,7 @@
           } else {
             html += `<div class="section-label">${label}</div>`;
           }
-          html += g.items.map(item => itemRow(date, meal, item.name, item.price, item.colKey)).join("");
+          html += g.items.map(item => itemRow(date, meal, item.name, getPrice(item.colKey, meal, date), item.colKey)).join("");
         });
       }
       html += `<div class="form-group" style="margin-top:10px;">
