@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 19.7; // 2026-06-16: Dedicated WEEKLY webhook archiver — archiveOldWebhooks() moves SETTLED rows >7 days old into per-month files (Jun→Jun, Jul→Jul) and deletes from live, keeping PENDING + recent; setupWebhookArchiveTrigger() (Mon ~4AM). archiveMonth reverted to proven orders-only. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
+const CODE_VERSION   = 19.8; // 2026-06-16: Auto-refund WIRED — gateway-paid order cancellation (UPI-refund choice) now calls hdfc_initiateRefund against the row's Gateway_Order_ID; logs a Refund_Mode=gateway row that the REFUND_SUCCEEDED webhook flips to Refunded. Falls back to the manual UPI queue on ANY API error. // 2026-06-16: Dedicated WEEKLY webhook archiver — archiveOldWebhooks() moves SETTLED rows >7 days old into per-month files (Jun→Jun, Jul→Jul) and deletes from live, keeping PENDING + recent; setupWebhookArchiveTrigger() (Mon ~4AM). archiveMonth reverted to proven orders-only. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -3947,10 +3947,39 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       const note = adjustment > 0
         ? `Adjusted -₹${adjustment} (overDiscount:${overDiscount}, deliveryOwed:${deliveryOwed}, smallFeeOwed:${smallFeeOwed}, loyaltyClawback:${loyaltyClawback})`
         : "";
-      refWs.appendRow([rowId, phone, custName, refundAmt, r.Meal_Type, orderDateStr, "Pending", now, note, "upi"]);
+
+      // Gateway-paid order → fire the HDFC auto-refund (money back to the original
+      // payment method). On ANY error, fall back to the manual UPI queue so a refund
+      // is never lost. The REFUND_SUCCEEDED webhook later flips the row to "Refunded"
+      // via _hdfcMarkRefundSettled (matches Refund_Mode="gateway" + the gateway order
+      // id in the note). hdfc_initiateRefund's unique_request_id makes it idempotent.
+      const _gwOrderId = String(r.Gateway_Order_ID || "").trim();
+      const _isGatewayPaid = (String(r.Payment_Method || "").trim() === "Gateway (HDFC)") && _gwOrderId;
+      let _autoRefundOk = false;
+      if (_isGatewayPaid && refundAmt > 0 && typeof hdfc_initiateRefund === "function") {
+        try {
+          const _reqId = ("RF" + Date.now() + Math.floor(Math.random() * 100)).slice(0, 20);
+          const _rf = hdfc_initiateRefund(_gwOrderId, refundAmt, _reqId);
+          if (_rf && _rf.success) {
+            _autoRefundOk = true;
+            refWs.appendRow([rowId, phone, custName, refundAmt, r.Meal_Type, orderDateStr, "Pending", now,
+              (note ? note + " | " : "") + "Auto-refund HDFC " + _gwOrderId + " req=" + _reqId, "gateway"]);
+          } else {
+            console.warn("Auto-refund failed (" + _gwOrderId + "): " + (_rf && _rf.error) + " — queuing manual UPI.");
+          }
+        } catch (e) {
+          console.warn("Auto-refund exception (" + _gwOrderId + "): " + e.message + " — queuing manual UPI.");
+        }
+      }
+      if (!_autoRefundOk) {
+        refWs.appendRow([rowId, phone, custName, refundAmt, r.Meal_Type, orderDateStr, "Pending", now, note, "upi"]);
+      }
+
       const upiLine = cancellationCharge > 0
         ? `₹0 refunded via UPI — ₹${cancellationCharge} charged to your Wallet (will be collected on your next order).`
-        : `₹${refundAmt} refund request raised — we'll process it within 1-2 days.`;
+        : (_autoRefundOk
+            ? `₹${refundAmt} refund has been initiated to your original payment method — it usually arrives within 3-5 working days.`
+            : `₹${refundAmt} refund request raised — we'll process it within 1-2 days.`);
       msg = buildRefundBreakdown() + `\n\n` + upiLine;
     }
   } 
