@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 19.5; // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
+const CODE_VERSION   = 19.6; // 2026-06-16: archiveMonth also archives+deletes the month's SETTLED webhook-log rows (keeps PENDING) — SK_Webhook_Log is full-scanned every minute + per checkout, so it must not grow unbounded. // 2026-06-16: PRICING_V2 full money-calc gating — submitOrder + gateway _computeAuthoritativeTotal (prices ceil×1.06, surcharge 0, accrual round×5%, threshold 106/159, small-fee 53) + getPrice; all OFF by default. // 2026-06-16: PRICING_V2 flag scaffolding (default OFF) + getConfig exposes pricing_v2 + one-time surcharge-removal notice (frontend, gated). Actual price/surcharge/threshold/loyalty flip still pending behind this flag. // 2026-06-16: Delivery-cap exemptions — "Enkin" customer + IntentAmplify ("[IA]") orders each collapse to ONE slot in _countActiveMealOrders (not n) and bypass the cap when full (Enkin in submitOrder guard; IA via its own flow). // 2026-06-16: On-Account settlement via HDFC gateway — hdfc_createOnAccountSession + hdfc_finalizeOnAccountPayment (DIRECT order settlement, Status-API-confirmed, idempotent, locked) + webhook 'A'-marker dispatch + routes. Gated by PAYMENT_GATEWAY_ENABLED. // 2026-06-16: Gateway amount fix — _computeAuthoritativeTotal now mirrors LIVE submitOrder (was merged's repriced model): restored old L/D prices, charge ceil(sub×6%) inflation surcharge, 100/150 free-delivery threshold, ceil×6% accrual, Porter fee waiver. Fixes ₹3 surcharge under-charge + L/D overcharge. // 2026-06-16: HDFC PAYMENT GATEWAY go-live port. Replaced live's partial HDFC with merged's full hardened gateway (10_Hdfc_Gateway.gs + 11_Hdfc_Reconciler.gs): server-authoritative amount recompute, amount-mismatch guard, Status-API-confirmed mark-paid, refunds, wallet-recharge, reconciler. Router reconciled (8 HDFC routes + tested return handlers). order.html got merged's popup+poll frontend. DORMANT until PAYMENT_GATEWAY_ENABLED=true. (Prior: delivery-cap exemptions.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -7257,6 +7257,30 @@ function archiveMonth(year, month) {
       }
     }
 
+    // ── Webhook log: archive this month's settled rows, keep PENDING ────────
+    // SK_Webhook_Log is full-scanned every minute (hdfc_processWebhookLog) AND on
+    // each order's return-verification, and each order can receive several
+    // webhooks — so it grows faster than SK_Orders and would slow those hot paths
+    // if left unbounded. Archive PROCESSED/FAILED rows for the month; ALWAYS keep
+    // still-PENDING rows (never lose an unprocessed webhook) and other months.
+    var WEBHOOK_HEADERS  = ["Received_At","Event_Name","Order_ID","Raw_Payload","Status","Processed_At","Result"];
+    var webhookWs        = getOrCreateTab(ss, TAB_WEBHOOK_LOG, WEBHOOK_HEADERS);
+    var allWebhookData   = webhookWs.getDataRange().getValues();
+    var wHeaders         = allWebhookData.length ? allWebhookData[0] : WEBHOOK_HEADERS;
+    var wRecvIdx         = wHeaders.indexOf("Received_At");
+    var wStatIdx         = wHeaders.indexOf("Status");
+    var toArchiveWebhook = [];
+    var keepWebhook      = [];
+    for (var wi = 1; wi < allWebhookData.length; wi++) {
+      var wd      = fmtDate(allWebhookData[wi][wRecvIdx]);
+      var wStatus = String(allWebhookData[wi][wStatIdx] || "").trim().toUpperCase();
+      if (wStatus !== "PENDING" && wd >= qr.from && wd <= qr.to) {
+        toArchiveWebhook.push(allWebhookData[wi]);
+      } else {
+        keepWebhook.push(allWebhookData[wi]); // other months OR still-PENDING
+      }
+    }
+
     // ── STEP 3: Write SK_Orders to archive (verify) ─────────────────────────
     if (toArchiveOrders.length > 0) {
       var archiveOrderSheet = archiveSS.getActiveSheet();
@@ -7273,6 +7297,22 @@ function archiveMonth(year, month) {
       log.push(toArchiveOrders.length + " orders archived ✓");
     } else {
       log.push("No orders found for this month.");
+    }
+
+    // ── STEP 3b: Write the month's settled webhook rows to archive (verify) ──
+    if (toArchiveWebhook.length > 0) {
+      var archiveWebhookSheet = archiveSS.insertSheet("SK_Webhook_Log");
+      archiveWebhookSheet.getRange(1, 1, 1, wHeaders.length).setValues([wHeaders]);
+      archiveWebhookSheet.getRange(2, 1, toArchiveWebhook.length, wHeaders.length).setValues(toArchiveWebhook);
+      SpreadsheetApp.flush();
+      var wWritten = archiveWebhookSheet.getLastRow() - 1;
+      if (wWritten !== toArchiveWebhook.length) {
+        return {success:false, error:"Webhook-log archive verification failed. Expected "
+          + toArchiveWebhook.length + ", got " + wWritten + ". Nothing deleted from the live webhook log."};
+      }
+      log.push(toArchiveWebhook.length + " webhook rows archived ✓");
+    } else {
+      log.push("No settled webhook rows to archive for this month.");
     }
 
     // ── STEPS 4–6: WALLET IS INTENTIONALLY *NOT* ARCHIVED ───────────────────
@@ -7336,17 +7376,30 @@ function archiveMonth(year, month) {
       log.push(toArchiveOrders.length + " order rows removed from live sheet ✓");
     }
 
+    // Remove the archived webhook rows from the live log (keep PENDING + other months).
+    if (toArchiveWebhook.length > 0) {
+      var wRebuild = rebuildSheet(webhookWs, wHeaders, keepWebhook);
+      if (!wRebuild.success) {
+        return {success:false,
+          error:"Webhook-log rebuild verification failed. Expected " + wRebuild.expected
+                + ", got " + wRebuild.actual + ". Archive file IS created — please verify manually before retrying.",
+          archiveUrl: archiveSS.getUrl()};
+      }
+      log.push(toArchiveWebhook.length + " webhook rows removed from live log ✓");
+    }
+
     // (Wallet rebuild removed — wallet is never archived; see STEPS 4–6 above.)
 
     return {
-      success:        true,
-      archiveName:    archiveName,
-      archiveUrl:     archiveSS.getUrl(),
-      archiveFolder:  yearFolder ? yearFolder.getName() : "(My Drive)",
-      ordersArchived: toArchiveOrders.length,
-      walletArchived: toArchiveWallet.length,
-      snapshots:      snapshotCount,
-      log:            log
+      success:          true,
+      archiveName:      archiveName,
+      archiveUrl:       archiveSS.getUrl(),
+      archiveFolder:    yearFolder ? yearFolder.getName() : "(My Drive)",
+      ordersArchived:   toArchiveOrders.length,
+      walletArchived:   toArchiveWallet.length,
+      webhooksArchived: toArchiveWebhook.length,
+      snapshots:        snapshotCount,
+      log:              log
     };
   } finally {
     try { lock.releaseLock(); } catch(_) {}
