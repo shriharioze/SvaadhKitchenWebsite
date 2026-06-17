@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 20.4; // 2026-06-17: markOrderFailed also skips CANCELLED rows (same anti-resurrection guard as markOrderPaid) — no webhook can un-cancel an order now.
+const CODE_VERSION   = 20.5; // 2026-06-17: Loyalty accrual unified to 5% — _calculateLoyaltyStreak derive ceil(food x6%) -> round(food x5%); added normalizeSurchargeTo5pct() one-time migration (dry-run default) to rewrite old 6% stored values. Frontend already sums stored, so all paths agree once migrated.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -3222,7 +3222,7 @@ function diagnoseLoyaltyStreak(phone) {
   mine.slice(0, 15).forEach((r, idx) => {
     const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
     const stored  = Number(r.Inflation_Surcharge);
-    const derived = Math.ceil((Number(r.Food_Subtotal) || 0) * 0.06);
+    const derived = Math.round((Number(r.Food_Subtotal) || 0) * 0.05);
     Logger.log("[" + (idx+1) + "] " + d + " " + r.Meal_Type
       + "  food=" + r.Food_Subtotal
       + "  storedSurch=" + (isNaN(stored) ? "(empty)" : stored)
@@ -3242,6 +3242,54 @@ function diagnoseLoyaltyStreak(phone) {
   Logger.log("Expected next-order behaviour: is6thDay would be " + (result.streak === 5 ? "TRUE" : "FALSE"));
   Logger.log("If is6thDay TRUE: loyalty waiver = pastSurcharge(" + result.pastSurcharge + ") + today's surcharge");
   Logger.log("=== end ===");
+}
+
+/**
+ * ONE-TIME MIGRATION: normalise every order's Inflation_Surcharge to the V2
+ * accrual round(Food_Subtotal × 5%). Old (v1) rows stored ceil(×6%); this rewrites
+ * them so the loyalty accrual is consistent everywhere — the sheet, the frontend
+ * (which sums the stored values), and the backend engine (which now derives 5%).
+ *
+ * SAFE: only touches the Inflation_Surcharge column. It does NOT re-charge anything
+ * or change any Net_Total — only the per-row accrual used for the 6-day reward.
+ * Idempotent (re-running leaves already-5% rows untouched).
+ *
+ * Run from the Apps Script editor:
+ *   normalizeSurchargeTo5pct(true)    // PREVIEW — logs what would change, writes nothing
+ *   normalizeSurchargeTo5pct(false)   // APPLY
+ */
+function normalizeSurchargeTo5pct(dryRun) {
+  if (dryRun === undefined) dryRun = true;
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const data = ws.getDataRange().getValues();
+  if (data.length < 2) { Logger.log("No order rows."); return { changed: 0, same: 0, applied: false }; }
+
+  const H = data[0];
+  const cFood  = H.indexOf("Food_Subtotal");
+  const cSurch = H.indexOf("Inflation_Surcharge");
+  if (cFood === -1 || cSurch === -1) { Logger.log("Food_Subtotal / Inflation_Surcharge column not found."); return; }
+
+  let changed = 0, same = 0;
+  const updates = []; // [rowNumber, newValue]
+  for (let i = 1; i < data.length; i++) {
+    const food = Number(data[i][cFood]) || 0;
+    if (food <= 0) continue;
+    const cur  = Number(data[i][cSurch]) || 0;
+    const want = Math.round(food * 0.05);
+    if (cur !== want) { changed++; updates.push([i + 1, want]); } else same++;
+  }
+
+  Logger.log("normalizeSurchargeTo5pct(dryRun=" + dryRun + "): " + changed + " rows to change, " + same + " already 5%.");
+  if (dryRun) {
+    updates.slice(0, 12).forEach(u => Logger.log("  row " + u[0] + "  →  " + u[1]));
+    Logger.log("PREVIEW only — nothing written. Run normalizeSurchargeTo5pct(false) to apply.");
+    return { changed: changed, same: same, applied: false };
+  }
+  updates.forEach(u => ws.getRange(u[0], cSurch + 1).setValue(u[1]));
+  SpreadsheetApp.flush();
+  Logger.log("APPLIED: " + changed + " rows rewritten to round(food×5%).");
+  return { changed: changed, same: same, applied: true };
 }
 
 // Returns a map { "yyyy-MM-dd": true } of all admin-marked kitchen-closed
@@ -3304,7 +3352,10 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
     // 5-day streak history collapses pastSurcharge to 0 and the
     // customer ends up paying full price on their day-6 reward.
     const storedSurch  = Number(r.Inflation_Surcharge) || 0;
-    const derivedSurch = Math.ceil((Number(r.Food_Subtotal) || 0) * 0.06);
+    // V2: accrual is round(food × 5%). (The MAX with stored still protects against
+    // legacy rows where the column was blank.) Run normalizeSurchargeTo5pct() once
+    // to rewrite old 6% stored values so MAX never picks the higher legacy number.
+    const derivedSurch = Math.round((Number(r.Food_Subtotal) || 0) * 0.05);
     dailyTotals[d] += Math.max(storedSurch, derivedSurch);
 
     // Track days where the 6-day loyalty reward was already given
