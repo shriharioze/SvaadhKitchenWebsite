@@ -794,12 +794,19 @@
         if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
       };
 
-      const runVerify=async()=>{
+      const runVerify=async(statusFromPopup)=>{
         if(verifyStarted) return; verifyStarted=true;
         try{ clearInterval(timer); }catch(_){}
         try{ clearInterval(statusTimer); }catch(_){}
         try{ popup.close(); }catch(_){}
         try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
+        const actualStatus = statusFromPopup || "CHARGED";
+        if (actualStatus !== "CHARGED" && actualStatus !== "SUCCESS" && actualStatus !== "PENDING" && actualStatus !== "STARTED") {
+           ov.remove();
+           toast("Payment was cancelled or failed. Please try again.");
+           if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
+           return;
+        }
         const t=document.getElementById("iaWaitTitle");
         const b=document.getElementById("iaWaitBody");
         const c=document.getElementById("iaCancelWait");
@@ -807,7 +814,7 @@
         if(b) b.innerHTML="Confirming with HDFC…<br>Please wait.";
         if(c) c.style.display="none";
         let res2;
-        try{ res2=await post({_action:"ia_hdfc_verifyAndSubmit",order_id:orderId,status:"CHARGED"}); }
+        try{ res2=await post({_action:"ia_hdfc_verifyAndSubmit",order_id:orderId,status:actualStatus}); }
         catch(e){ res2=null; }
         ov.remove();
         if(!res2||!res2.success){
@@ -829,7 +836,7 @@
         try{ popup.close(); }catch(_){}
         window.removeEventListener("storage",storageH);
         window.removeEventListener("message",msgH);
-        await runVerify();
+        await runVerify(data.status);
       };
       const storageH=(e)=>{
         if(e.key!=="ia_hdfc_popup_result"||!e.newValue) return;
@@ -893,13 +900,17 @@
         try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
         try{ localStorage.setItem("ia_hdfc_popup_result",JSON.stringify({orderId,status,ts:Date.now()})); }catch(_){}
         try{ if(window.opener&&!window.opener.closed) window.opener.postMessage({__iaHdfc:true,orderId,status},"*"); }catch(_){}
+        const isOk = (status === "CHARGED" || status === "SUCCESS" || status === "PENDING" || status === "STARTED");
+        const icon = isOk ? '<div style="font-size:3rem;color:#16a34a;margin-bottom:16px;">✓</div>' : '<div style="font-size:3rem;color:#dc2626;margin-bottom:16px;">✕</div>';
+        const title = isOk ? 'Payment Received' : 'Payment Not Completed';
+        const msg = isOk ? 'Your order is being confirmed in the original tab.<br>You can close this window.' : 'Please close this window and try again.';
         try{ document.body.innerHTML=
           '<div style="font-family:system-ui,-apple-system,Arial,sans-serif;min-height:100vh;'+
           'display:flex;flex-direction:column;align-items:center;justify-content:center;'+
           'padding:40px 20px;text-align:center;background:#fef9f6;">'+
-          '<div style="font-size:3rem;color:#16a34a;margin-bottom:16px;">✓</div>'+
-          '<div style="font-size:1.4rem;font-weight:800;color:#222;margin-bottom:8px;">Payment Received</div>'+
-          '<div style="font-size:1rem;color:#666;margin-bottom:24px;">Your order is being confirmed in the original tab.<br>You can close this window.</div>'+
+          icon+
+          '<div style="font-size:1.4rem;font-weight:800;color:#222;margin-bottom:8px;">'+title+'</div>'+
+          '<div style="font-size:1rem;color:#666;margin-bottom:24px;">'+msg+'</div>'+
           '<button onclick="window.close()" style="padding:12px 28px;background:#1E1240;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">Close Window</button>'+
           '</div>'; }catch(_){}
         var n=0; var doClose=function(){ n++; try{ window.close(); }catch(_){} if(n<8) setTimeout(doClose,250); }; doClose();

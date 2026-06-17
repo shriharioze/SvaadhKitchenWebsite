@@ -10660,10 +10660,16 @@
       document.getElementById("oaWaitCancel").onclick = () => { cancelled = true; try { popup.close(); } catch(_) {} ov.remove(); };
 
       let verifyStarted = false;
-      const runFinalize = async () => {
+      const runFinalize = async (statusFromPopup) => {
         if (verifyStarted) return;
         verifyStarted = true;
         try { clearInterval(timer); } catch(_) {}
+        const actualStatus = statusFromPopup || "CHARGED";
+        if (actualStatus !== "CHARGED" && actualStatus !== "SUCCESS" && actualStatus !== "PENDING" && actualStatus !== "STARTED") {
+          ov.remove();
+          await sAlert("Payment was cancelled or failed. Please try again.", "Payment Cancelled", "⚠️");
+          return;
+        }
         document.getElementById("oaWaitTitle").textContent = "Settling Dues";
         document.getElementById("oaWaitBody").innerHTML = "Confirming with HDFC…<br>Please wait.";
         try {
@@ -10692,19 +10698,19 @@
         }
       };
 
-      _hdfcInstallPopupResultListener(orderId, "hdfc_onaccount", async () => { try { popup.close(); } catch(_) {} await runFinalize(); });
+      _hdfcInstallPopupResultListener(orderId, "hdfc_onaccount", async (data) => { try { popup.close(); } catch(_) {} await runFinalize(data.status); });
 
       let pollTicks = 0;
       const timer = setInterval(async () => {
         if (cancelled || verifyStarted) { clearInterval(timer); return; }
         pollTicks++;
         let closed = true; try { closed = popup.closed; } catch(_) { closed = true; }
-        if (closed) { await runFinalize(); return; }
+        if (closed) { await runFinalize("CHARGED"); return; }
         if (pollTicks % 2 === 0) {
           try {
             const r = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_checkPaymentStatus", order_id: orderId }) });
             const d = await r.json();
-            if (d && d.confirmed) { try { popup.close(); } catch(_) {} await runFinalize(); return; }
+            if (d && d.confirmed) { try { popup.close(); } catch(_) {} await runFinalize(d.status || "CHARGED"); return; }
           } catch(_) {}
         }
       }, 1000);
@@ -10856,15 +10862,19 @@
         }
       } catch(_) {}
       try { window.history.replaceState({}, "", window.location.pathname); } catch(_) {}
+      const isOk = (status === "CHARGED" || status === "SUCCESS" || status === "PENDING" || status === "STARTED");
+      const icon = isOk ? '<div style="font-size:3rem;color:#16a34a;margin-bottom:16px;">✓</div>' : '<div style="font-size:3rem;color:#dc2626;margin-bottom:16px;">✕</div>';
+      const title = isOk ? 'Payment Received' : 'Payment Not Completed';
+      const msg = isOk ? 'You can safely close this window.<br>Your order is being confirmed in the original tab.' : 'Please close this window and try again.';
       try {
         document.body.innerHTML =
           '<div style="font-family:system-ui,-apple-system,Arial,sans-serif;' +
           'min-height:100vh;display:flex;flex-direction:column;align-items:center;' +
           'justify-content:center;padding:40px 20px;text-align:center;background:#fef9f6;">' +
-          '<div style="font-size:3rem;color:#16a34a;margin-bottom:16px;">✓</div>' +
-          '<div style="font-size:1.4rem;font-weight:800;color:#222;margin-bottom:8px;">Payment Received</div>' +
-          '<div style="font-size:1rem;color:#666;margin-bottom:24px;">You can safely close this window.<br>Your order is being confirmed in the original tab.</div>' +
-          '<button onclick="window.close()" style="padding:12px 28px;background:#c0392b;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">Close Window</button></div>';
+          icon +
+          '<div style="font-size:1.4rem;font-weight:800;color:#222;margin-bottom:8px;">' + title + '</div>' +
+          '<div style="font-size:1rem;color:#666;margin-bottom:24px;">' + msg + '</div>' +
+          '<button onclick="window.close()" style="padding:12px 28px;background:#1E1240;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">Close Window</button></div>';
       } catch(_) {}
       var n = 0;
       var doClose = function() {
@@ -10959,6 +10969,12 @@
         if (verifyStarted) return;
         verifyStarted = true;
         try { clearInterval(timer); } catch(_) {}
+        const actualStatus = statusFromPopup || "CHARGED";
+        if (actualStatus !== "CHARGED" && actualStatus !== "SUCCESS" && actualStatus !== "PENDING" && actualStatus !== "STARTED") {
+          ov.remove();
+          await sAlert("Payment was cancelled or failed. Please try again.", "Payment Cancelled", "⚠️");
+          return;
+        }
         try {
           const t = document.getElementById("hdfcWaitTitle");
           const b = document.getElementById("hdfcWaitBody");
@@ -10973,7 +10989,7 @@
             body: JSON.stringify({
               _action: "hdfc_verifyReturn",
               order_id: orderId,
-              status: statusFromPopup || "CHARGED",
+              status: actualStatus,
               signature: ""
             })
           });
@@ -11085,10 +11101,16 @@
       };
 
       let verifyStarted = false;
-      const runFinalize = async () => {
+      const runFinalize = async (statusFromPopup) => {
         if (verifyStarted) return;
         verifyStarted = true;
         try { clearInterval(timer); } catch(_) {}
+        const actualStatus = statusFromPopup || "CHARGED";
+        if (actualStatus !== "CHARGED" && actualStatus !== "SUCCESS" && actualStatus !== "PENDING" && actualStatus !== "STARTED") {
+          ov.remove();
+          await sAlert("Payment was cancelled or failed. Please try again.", "Payment Cancelled", "⚠️");
+          return;
+        }
         document.getElementById("rwTitle").textContent = "Crediting Wallet";
         document.getElementById("rwBody").innerHTML = "Confirming with HDFC…<br>Please wait.";
         try {
@@ -11125,9 +11147,9 @@
         }
       };
 
-      _hdfcInstallPopupResultListener(orderId, "hdfc_recharge", async () => {
+      _hdfcInstallPopupResultListener(orderId, "hdfc_recharge", async (data) => {
         try { popup.close(); } catch(_) {}
-        await runFinalize();
+        await runFinalize(data.status);
       });
 
       let pollTicks = 0;
@@ -11135,7 +11157,7 @@
         if (cancelled || verifyStarted) { clearInterval(timer); return; }
         pollTicks++;
         let closed = true; try { closed = popup.closed; } catch(_) { closed = true; }
-        if (closed) { await runFinalize(); return; }
+        if (closed) { await runFinalize("CHARGED"); return; }
         if (pollTicks % 2 === 0) {
           try {
             const r = await fetch(APPS_SCRIPT_URL, {
@@ -11143,7 +11165,7 @@
               body: JSON.stringify({ _action: "hdfc_checkPaymentStatus", order_id: orderId })
             });
             const d = await r.json();
-            if (d && d.confirmed) { try { popup.close(); } catch(_) {} await runFinalize(); return; }
+            if (d && d.confirmed) { try { popup.close(); } catch(_) {} await runFinalize(d.status || "CHARGED"); return; }
           } catch(_) {}
         }
       }, 1000);
