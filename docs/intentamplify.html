@@ -666,15 +666,17 @@
         <style>@keyframes iaspin{to{transform:rotate(360deg);}}</style>`;
       document.body.appendChild(ov);
 
-      let cancelled=false, verifyStarted=false;
+      let cancelled=false, verifyStarted=false, statusTimer=null;
       document.getElementById("iaCancelWait").onclick=()=>{
-        cancelled=true; try{ popup.close(); }catch(_){} ov.remove();
+        cancelled=true; try{ clearInterval(statusTimer); }catch(_){} try{ popup.close(); }catch(_){} ov.remove();
         if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
       };
 
       const runVerify=async()=>{
         if(verifyStarted) return; verifyStarted=true;
         try{ clearInterval(timer); }catch(_){}
+        try{ clearInterval(statusTimer); }catch(_){}
+        try{ popup.close(); }catch(_){}
         try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
         const t=document.getElementById("iaWaitTitle");
         const b=document.getElementById("iaWaitBody");
@@ -723,6 +725,22 @@
         let closed=true; try{ closed=popup.closed; }catch(_){}
         if(closed){ clearInterval(timer); await runVerify(); }
       },1000);
+
+      // Backend safety net — poll HDFC order status every 2s. This is the ONLY
+      // signal that survives when the popup is STUCK on the cross-origin Apps
+      // Script domain: the sandbox loads our return page in a nested iframe where
+      // window.opener is null, third-party localStorage is partitioned (Brave),
+      // and window.close() is a no-op — so storage/message relays AND the
+      // popup.closed poll all fail. The moment HDFC reports CHARGED we finalise,
+      // regardless of whether the popup ever relays or closes. Mirrors order.html.
+      let statusPolls=0;
+      statusTimer=setInterval(async()=>{
+        if(cancelled||verifyStarted){ clearInterval(statusTimer); return; }
+        if(++statusPolls>150){ clearInterval(statusTimer); return; } // ~5 min cap
+        let sc; try{ sc=await post({_action:"hdfc_checkPaymentStatus",order_id:orderId}); }catch(_){ sc=null; }
+        if(cancelled||verifyStarted){ clearInterval(statusTimer); return; }
+        if(sc&&sc.confirmed){ clearInterval(statusTimer); await runVerify(); }
+      },2000);
     }
 
     async function placeOrder(){ ia_initiatePayment(); }
@@ -735,14 +753,21 @@
 
       history.replaceState(null,"",location.pathname);
 
-      // Check if we are the popup window (even if window.opener was lost via COOP).
+      // Are we the popup/return frame? THREE independent signals, because each can
+      // fail alone: (1) the _popup=1 URL param HDFC carries back through the redirect
+      // chain — origin-independent, survives COOP AND a browser that partitions
+      // third-party localStorage (e.g. Brave loads our return page in a nested
+      // sandbox iframe where the beacon below is invisible); (2) the same-origin
+      // localStorage beacon; (3) a live window.opener. ANY one means "don't run the
+      // full-page success here — relay to the opener instead." Mirrors order.html.
+      const fromUrlPopup = (params.get("_popup") === "1");
       let isPopup=false;
       try{
         const m=JSON.parse(localStorage.getItem("ia_hdfc_popup_active")||"null");
         if(m&&m.ts&&(Date.now()-m.ts<30*60*1000)) isPopup=true;
       }catch(_){}
 
-      if(isPopup || (window.opener&&!window.opener.closed)){
+      if(fromUrlPopup || isPopup || (window.opener&&!window.opener.closed)){
         try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
         try{ localStorage.setItem("ia_hdfc_popup_result",JSON.stringify({orderId,status,ts:Date.now()})); }catch(_){}
         try{ if(window.opener&&!window.opener.closed) window.opener.postMessage({__iaHdfc:true,orderId,status},"*"); }catch(_){}
