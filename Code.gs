@@ -2587,7 +2587,7 @@ function _submitOrderInternal(body) {
     // CHARGED (each meal row stores ceil(sub × 6%)). Using a single per-day
     // ceil here undercounted the waiver by ₹1–2 on multi-meal days vs what was
     // actually paid (and vs _calculateLoyaltyStreak, which sums per-row values).
-    // V2: accrual is 5% (round), tracked for the streak but NOT billed. V1: 6% (ceil), billed.
+    // V2: accrual is 5% (floor), tracked for the streak but NOT billed. V1: 6% (ceil), billed.
     const submissionDaySurcharge = order.meals.reduce(
       (s, m) => s + (PRICING_V2 ? Math.floor((Number(m.subtotal) || 0) * 0.05) : Math.ceil((Number(m.subtotal) || 0) * 0.06)), 0);
 
