@@ -147,6 +147,31 @@
     .mo-card .it{font-size:.78rem;color:var(--muted);margin-top:3px;}
     .mo-pill{font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap;}
     .mo-pill.paid{background:#d7f5dd;color:#1c7a35;} .mo-pill.pend{background:#fff3cd;color:#946200;}
+
+    /* WEEKLY MENU OVERLAY */
+    .wm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30000;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);animation:fadeIn .2s;}
+    .wm-overlay.active{display:flex;}
+    .wm-sheet{background:#fdf8f2;width:100%;max-width:540px;max-height:92vh;border-radius:20px 20px 0 0;overflow:hidden;display:flex;flex-direction:column;animation:slideUp .3s ease-out;}
+    .wm-handle-bar{text-align:center;padding:10px 0 4px;} .wm-handle-bar span{display:inline-block;width:36px;height:4px;border-radius:99px;background:#ccc;}
+    .wm-header{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 12px;border-bottom:1px solid #eee;}
+    .wm-header h3{font-size:1.05rem;font-weight:700;color:#1E1240;}
+    .wm-close{background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;}
+    .wm-tabs{display:flex;gap:6px;padding:12px 16px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .wm-tabs::-webkit-scrollbar{display:none;}
+    .wm-tab{flex-shrink:0;padding:7px 14px;border-radius:99px;font-size:.76rem;font-weight:600;border:1.5px solid #ddd;background:#fff;color:#555;cursor:pointer;transition:.15s;}
+    .wm-tab.active{border-color:#2D1A5E;background:#2D1A5E;color:#fff;}
+    .wm-tab.today{border-color:#27ae60;} .wm-tab.today.active{background:#27ae60;border-color:#27ae60;}
+    .wm-body{flex:1;overflow-y:auto;padding:12px 18px 24px;}
+    .wm-day-title{font-size:.82rem;font-weight:700;color:#333;margin-bottom:12px;}
+    .wm-meal-card{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:10px;border:1px solid #f0ebe6;}
+    .wm-meal-label{font-size:.7rem;font-weight:700;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+    .wm-meal-label.bf{color:#e67e22;} .wm-meal-label.ln{color:#27ae60;} .wm-meal-label.dn{color:#8e44ad;}
+    .wm-sabji-name{font-size:.88rem;font-weight:600;color:#333;}
+    .wm-sabji-type{font-size:.72rem;color:#888;margin-top:2px;}
+    .wm-bf-list{display:flex;flex-wrap:wrap;gap:6px;}
+    .wm-bf-chip{background:#fff8f0;border:1px solid #fde2c8;border-radius:8px;padding:4px 10px;font-size:.76rem;font-weight:500;color:#b45309;}
+    .wm-not-set{font-size:.82rem;color:#aaa;font-style:italic;padding:8px 0;}
+    .wm-btn{display:flex;flex-direction:column;align-items:center;gap:3px;background:linear-gradient(135deg,#fff7ed,#fff);border:1.5px solid #fbbf24;border-radius:12px;padding:12px 16px;font-size:.84rem;font-weight:600;color:#92400e;cursor:pointer;width:100%;transition:all .2s;margin-top:10px;text-align:center;}
   </style>
 </head>
 <body>
@@ -194,6 +219,21 @@
     <div class="mo-sheet">
       <div class="mo-h"><h2>🛒 My Orders</h2><button class="pd-x" style="background:#eee;color:#555;" onclick="closeManageOrders()">✕</button></div>
       <div id="moList"><div class="sub" style="margin:0">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- WEEKLY MENU OVERLAY -->
+  <div class="wm-overlay" id="wmOverlay" onclick="if(event.target===this)closeWeeklyMenu()">
+    <div class="wm-sheet">
+      <div class="wm-handle-bar"><span></span></div>
+      <div class="wm-header">
+        <h3>📅 Upcoming Days' Tentative Menu</h3>
+        <button class="wm-close" onclick="closeWeeklyMenu()">✕</button>
+      </div>
+      <div class="wm-tabs" id="wmTabs"></div>
+      <div class="wm-body" id="wmBody">
+        <div style="text-align:center;padding:40px;"><p style="font-size:0.8rem;color:#888;">Loading menu...</p></div>
+      </div>
     </div>
   </div>
 
@@ -248,6 +288,7 @@
           <span><i class="lg-dot" style="background:#faf6f2"></i> Weekend off</span>
         </div>
         <div class="sel-summary" id="selSummary">Tap dates to select (multiple OK)</div>
+        <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
     </div>
 
@@ -298,7 +339,10 @@
           <div class="total" style="font-size:1rem;margin-top:10px;padding-top:10px;"><span>Total</span><span>₹<span id="okTotal">0</span></span></div>
           <div class="ok-pay" id="okPay"></div>
         </div>
-        <button class="btn btn-primary" onclick="location.reload()">Place Another Order</button>
+        <button class="btn btn-primary" onclick="ia_resetForAnotherOrder()">Place Another Order</button>
+      </div>
+      <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;">
+        Svaadh Kitchen v26.06.17.10 · <a href="#" onclick="location.reload(true)" style="color:var(--muted);">Hard Refresh</a>
       </div>
     </div>
 
@@ -315,10 +359,9 @@
 
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+    const APPS_SCRIPT_URL = API;
     const STEPS = ["Account","Dates","Meals","Pay"];
     const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    // Same UPI details as the live order page (manual payments).
-    const UPI_VPA = "9819969682@hdfc", UPI_VPA_BACKUP = "shriharioze07-1@okhdfcbank", UPI_NAME = "Svaadh Kitchen";
     const $ = id => document.getElementById(id);
     const S = { step:0, phone:"", pinReal:"", name:"", isNew:false, pinReset:false, acctChecked:false,
                 dates:[], calY:0, calM:0, cfg:null, menu:{}, cart:{}, open:{} };
@@ -347,7 +390,6 @@
       window.scrollTo(0,0);
     }
 
-    // ── init ──
     (async function(){
       try{ S.cfg=await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"],cutoffs:{Lunch:{h:11,m:0},Dinner:{h:17,m:0}}}; }
       const now=new Date(); S.calY=now.getFullYear(); S.calM=now.getMonth();
@@ -357,29 +399,20 @@
       $("calPrev").onclick=()=>{ S.calM--; if(S.calM<0){S.calM=11;S.calY--;} renderCalendar(); };
       $("calNext").onclick=()=>{ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} renderCalendar(); };
       setInterval(tickCutoffs,1000);
-
-      // ── Gateway return detection — check BEFORE persistent login ──
-      // If HDFC redirected back here (order_id+status in URL), handle that flow first.
-      // ia_handleGatewayReturn() is a no-op when those params are absent.
       await ia_handleGatewayReturn();
-      if(S.step===4) return; // gateway return showed success screen — stop here
-
-      // Persistent login — auto sign-in if we have saved creds (cookie-like, until Log out)
+      if(S.step===4) return;
       const sp=localStorage.getItem("ia_phone"), spin=localStorage.getItem("ia_pin");
       if(sp&&spin){
         try{
           const lr=await api("ia_verifyLogin",{phone:sp,pin:spin});
           if(lr.success){ S.phone=sp; S.pin=spin; S.name=lr.name||localStorage.getItem("ia_name")||"";
             markLoggedIn(); renderCalendar(); show(1); return; }
-          localStorage.removeItem("ia_phone"); localStorage.removeItem("ia_pin"); // stale creds
+          localStorage.removeItem("ia_phone"); localStorage.removeItem("ia_pin");
         }catch(_){}
       }
       show(0);
     })();
 
-    // ── PIN mask (beforeinput-controlled so fast typing never corrupts) ──
-    // We preventDefault on every edit and drive the value ourselves from
-    // S.pinReal, so the input element never holds a re-readable digit.
     function setupPinMask(){
       const el=$("pin"); let revealTimer=null;
       function render(){
@@ -398,7 +431,7 @@
     }
 
     async function goNext(){
-      if(S.busy) return;                       // ignore taps while an action is running
+      if(S.busy) return;
       if(S.step===0) return stepAccount();
       if(S.step===1){
         if(!S.dates.length){ toast("Please pick at least one date."); return; }
@@ -410,6 +443,78 @@
       if(S.step===3) return placeOrder();
     }
     function goBack(){ if(!S.busy && S.step>0) show(S.step-1); }
+
+    function ia_resetForAnotherOrder() {
+      if(window.location.hostname==="script.google.com"){
+        window.location.href="https://www.svaadhkitchen.in/intentamplify.html";
+        return;
+      }
+      S.cart={}; S.dates=[]; S.total=0;
+      history.replaceState(null,"",location.pathname);
+      show(1);
+      renderCalendar();
+      updateSel();
+      window.scrollTo(0,0);
+    }
+
+    // ── WEEKLY MENU LOGIC ──
+    let wmLoaded=false, wmDays=[];
+    async function openWeeklyMenu(){
+      $("wmOverlay").classList.add("active");
+      document.body.style.overflow="hidden";
+      if(!wmLoaded){
+        $("wmBody").innerHTML=`<div style="text-align:center;padding:40px;"><p style="font-size:0.8rem;color:var(--muted);">Fetching menus...</p></div>`;
+        try{
+          const res=await fetch(`${APPS_SCRIPT_URL}?action=getWeeklyMenu`);
+          const data=await res.json();
+          if(data.success&&data.days){
+            wmDays=data.days; wmLoaded=true;
+            renderWeeklyTabs(); renderWeeklyDay(0);
+          }else throw new Error(data.error);
+        }catch(e){
+          $("wmBody").innerHTML=`<div style="text-align:center;padding:30px;color:#c0392b;">Failed to load menu. Please try again.</div>`;
+        }
+      }
+    }
+    function closeWeeklyMenu(){
+      $("wmOverlay").classList.remove("active");
+      document.body.style.overflow="";
+    }
+    function renderWeeklyTabs(){
+      const todayISO=new Date().toLocaleDateString("en-CA");
+      $("wmTabs").innerHTML=wmDays.map((d,i)=>{
+        let classes="wm-tab";
+        const isToday=(d.date===todayISO);
+        const isTomorrow=(()=>{const t=new Date();t.setDate(t.getDate()+1);return d.date===t.toLocaleDateString("en-CA");})();
+        if(isToday) classes+=" today";
+        const txt=isToday?"Today":(isTomorrow?"Tomorrow":d.displayDate);
+        return `<button class="${classes}" id="wmTab_${i}" onclick="renderWeeklyDay(${i})">${txt}</button>`;
+      }).join("");
+    }
+    function renderWeeklyDay(idx){
+      document.querySelectorAll(".wm-tab").forEach((el,i)=>el.classList.toggle("active",i===idx));
+      const d=wmDays[idx];
+      if(!d.menuSet){ $("wmBody").innerHTML=`<div class="wm-day-title">${d.displayDate}</div><div class="wm-meal-card"><div class="wm-not-set">Menu hasn't been set for this date yet.</div></div>`; return; }
+      let html=`<div class="wm-day-title">${d.displayDate}</div>`;
+      if(d.breakfast_items&&d.breakfast_items.length){
+        html+=`<div class="wm-meal-card"><div class="wm-meal-label bf">🌅 Breakfast Items</div><div class="wm-bf-list">`;
+        d.breakfast_items.forEach(itm=>{ html+=`<span class="wm-bf-chip">${itm}</span>`; });
+        html+=`</div></div>`;
+      }
+      if(d.lunch_dry||d.lunch_curry){
+        html+=`<div class="wm-meal-card"><div class="wm-meal-label ln">☀️ Lunch</div>`;
+        if(d.lunch_dry) html+=`<div class="wm-sabji-name">${d.lunch_dry} <div class="wm-sabji-type">Dry Sabji</div></div>`;
+        if(d.lunch_curry) html+=`<div class="wm-sabji-name" style="margin-top:8px;">${d.lunch_curry} <div class="wm-sabji-type">Curry Sabji</div></div>`;
+        html+=`</div>`;
+      }
+      if(d.dinner_dry||d.dinner_curry){
+        html+=`<div class="wm-meal-card"><div class="wm-meal-label dn">🌙 Dinner</div>`;
+        if(d.dinner_dry) html+=`<div class="wm-sabji-name">${d.dinner_dry} <div class="wm-sabji-type">Dry Sabji</div></div>`;
+        if(d.dinner_curry) html+=`<div class="wm-sabji-name" style="margin-top:8px;">${d.dinner_curry} <div class="wm-sabji-type">Curry Sabji</div></div>`;
+        html+=`</div>`;
+      }
+      $("wmBody").innerHTML=html;
+    }
 
     async function stepAccount(){
       const phone=$("phone").value.replace(/\D/g,"");
