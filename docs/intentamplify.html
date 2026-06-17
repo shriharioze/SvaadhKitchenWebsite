@@ -911,10 +911,10 @@
           icon+
           '<div style="font-size:1.4rem;font-weight:800;color:#222;margin-bottom:8px;">'+title+'</div>'+
           '<div style="font-size:1rem;color:#666;margin-bottom:24px;">'+msg+'</div>'+
-          '<button onclick="try{window.open(\'\',\'_self\').close();}catch(_){} window.close();" style="padding:12px 28px;background:#1E1240;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">Close Window</button>'+
+          '<button onclick="try{window.top.close();}catch(_){} try{window.parent.close();}catch(_){} try{window.open(\'\',\'_self\').close();}catch(_){} window.close();" style="padding:12px 28px;background:#1E1240;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">Close Window</button>'+
           '<div style="margin-top:16px;font-size:0.85rem;color:#888;">If the button doesn\'t work, simply close this tab manually.</div>'+
           '</div>'; }catch(_){}
-        var n=0; var doClose=function(){ n++; try{ window.close(); }catch(_){} if(n<8) setTimeout(doClose,250); }; doClose();
+        var n=0; var doClose=function(){ n++; try{ window.top.close(); }catch(_){} try{ window.parent.close(); }catch(_){} try{ window.close(); }catch(_){} if(n<8) setTimeout(doClose,250); }; doClose();
         return;
       }
 
