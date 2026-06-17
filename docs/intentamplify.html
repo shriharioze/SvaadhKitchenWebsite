@@ -600,51 +600,173 @@
 
     // ── HDFC Gateway initiation ──
     async function ia_initiatePayment(){
+      // 1. Pre-open popup INSIDE the user-gesture window to beat popup blockers.
+      const _w=(screen&&screen.availWidth)?screen.availWidth:1280;
+      const _h=(screen&&screen.availHeight)?screen.availHeight:800;
+      const popup=window.open("about:blank","ia_hdfc_payment",
+        `width=${_w},height=${_h},top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes`);
+      const popupBlocked=!popup||popup.closed||typeof popup.closed==="undefined";
+
+      try{ localStorage.setItem("ia_hdfc_popup_active",JSON.stringify({ts:Date.now()})); }catch(_){}
+
       const btn=$("iaGatewayBtn");
-      if(btn){ btn.disabled=true; btn.textContent="Opening gateway…"; }
-      setBusy(true,"Opening gateway…");
+      if(btn){ btn.disabled=true; btn.textContent="⏳ Creating secure session…"; }
+      if(popup&&!popupBlocked){
+        try{ popup.document.write(
+          '<!DOCTYPE html><html><head><title>Connecting to HDFC…</title>'+
+          '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+          '<style>html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Arial,sans-serif;'+
+          'display:flex;align-items:center;justify-content:center;background:#fef9f6;}'+
+          '.spin{width:48px;height:48px;border:5px solid #f5cba7;border-top-color:#c0392b;'+
+          'border-radius:50%;animation:s 1s linear infinite;margin:0 auto 18px;}'+
+          '@keyframes s{to{transform:rotate(360deg);}}</style></head>'+
+          '<body><div style="text-align:center"><div class="spin"></div>'+
+          '<div style="font-weight:800;color:#c0392b;font-size:1.1rem;">Connecting to HDFC…</div>'+
+          '<div style="color:#666;font-size:.88rem;margin-top:6px;">Creating secure session…</div>'+
+          '</div></body></html>'); }catch(_){}
+      }
+
       let res;
       try{ res=await post({_action:"ia_hdfc_createSession",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart}); }
-      catch(e){ setBusy(false); if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway";} toast("Network error — try again."); return; }
-      if(!res.success){ setBusy(false); if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway";} toast(res.error||"Could not open gateway."); return; }
-      // Redirect to HDFC payment page
-      window.location.href=res.payment_url;
+      catch(e){ res=null; }
+
+      if(!res||!res.success){
+        try{ if(popup) popup.close(); }catch(_){}
+        try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
+        if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
+        toast(res&&res.error||"Could not open gateway \u2014 try again.");
+        return;
+      }
+
+      const orderId=res.order_id;
+      try{ localStorage.setItem("ia_hdfc_popup_active",JSON.stringify({ts:Date.now(),orderId})); }catch(_){}
+
+      if(popup&&!popupBlocked){
+        try{ popup.location.href=res.payment_url; }catch(_){}
+        _ia_showWaitingOverlay(orderId, popup, btn);
+      } else {
+        window.location.href=res.payment_url;
+      }
+    }
+
+    function _ia_showWaitingOverlay(orderId, popup, btn){
+      const ov=document.createElement("div");
+      ov.id="ia-hdfc-overlay";
+      ov.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Arial,sans-serif;";
+      ov.innerHTML=`
+        <div style="background:#fff;border-radius:18px;padding:36px 32px;text-align:center;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.18);">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="animation:iaspin 1s linear infinite;display:inline-block;margin-bottom:14px;">
+            <circle cx="24" cy="24" r="20" stroke="#eee" stroke-width="5"/>
+            <path d="M44 24a20 20 0 0 0-20-20" stroke="#1E1240" stroke-width="5" stroke-linecap="round"/>
+          </svg>
+          <div id="iaWaitTitle" style="font-size:1.1rem;font-weight:700;color:#222;margin-bottom:8px;">Complete Payment</div>
+          <div id="iaWaitBody" style="font-size:.88rem;color:#666;line-height:1.5;margin-bottom:20px;">Pay securely on the HDFC tab.<br>We'll automatically confirm your order when done.</div>
+          <button id="iaCancelWait" style="padding:10px 24px;background:#f5f5f5;border:1px solid #ddd;border-radius:8px;font-size:.85rem;color:#666;cursor:pointer;">Cancel</button>
+        </div>
+        <style>@keyframes iaspin{to{transform:rotate(360deg);}}</style>`;
+      document.body.appendChild(ov);
+
+      let cancelled=false, verifyStarted=false;
+      document.getElementById("iaCancelWait").onclick=()=>{
+        cancelled=true; try{ popup.close(); }catch(_){} ov.remove();
+        if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
+      };
+
+      const runVerify=async()=>{
+        if(verifyStarted) return; verifyStarted=true;
+        try{ clearInterval(timer); }catch(_){}
+        try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
+        const t=document.getElementById("iaWaitTitle");
+        const b=document.getElementById("iaWaitBody");
+        const c=document.getElementById("iaCancelWait");
+        if(t) t.textContent="Verifying Payment";
+        if(b) b.innerHTML="Confirming with HDFC…<br>Please wait.";
+        if(c) c.style.display="none";
+        let res2;
+        try{ res2=await post({_action:"ia_hdfc_verifyAndSubmit",order_id:orderId,status:"CHARGED"}); }
+        catch(e){ res2=null; }
+        ov.remove();
+        if(!res2||!res2.success){
+          toast((res2&&res2.error)||"Payment could not be confirmed. Contact support if money was deducted.");
+          if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Retry payment"; }
+          return;
+        }
+        $("okName").textContent=S.name||"";
+        $("okId").textContent=res2.submission_id;
+        $("okTotal").textContent=res2.total;
+        if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
+        $("okPay").innerHTML=`\u2705 Payment of <b>\u20b9${res2.total}</b> confirmed via <b>HDFC Gateway</b>.`;
+        show(4);
+      };
+
+      let firedOnce=false;
+      const finish=async(data)=>{
+        if(firedOnce) return; firedOnce=true;
+        try{ popup.close(); }catch(_){}
+        window.removeEventListener("storage",storageH);
+        window.removeEventListener("message",msgH);
+        await runVerify();
+      };
+      const storageH=(e)=>{
+        if(e.key!=="ia_hdfc_popup_result"||!e.newValue) return;
+        let d; try{ d=JSON.parse(e.newValue); }catch(_){ return; }
+        if(d&&d.orderId===orderId){ try{ localStorage.removeItem("ia_hdfc_popup_result"); }catch(_){} finish(d); }
+      };
+      const msgH=(e)=>{
+        if(!e.data||!e.data.__iaHdfc) return;
+        if(e.data.orderId===orderId) finish(e.data);
+      };
+      window.addEventListener("storage",storageH);
+      window.addEventListener("message",msgH);
+      const timer=setInterval(async()=>{
+        if(cancelled||verifyStarted){ clearInterval(timer); return; }
+        let closed=true; try{ closed=popup.closed; }catch(_){}
+        if(closed){ clearInterval(timer); await runVerify(); }
+      },1000);
     }
 
     async function placeOrder(){ ia_initiatePayment(); }
 
-    // ── Gateway return detection (runs on page load) ──
     async function ia_handleGatewayReturn(){
       const params=new URLSearchParams(window.location.search);
       const orderId=params.get("order_id")||"";
       const status=params.get("status")||"";
-      // Only handle IA return params (order_id starts with "IA")
       if(!orderId||!status||!orderId.startsWith("IA")) return;
-      // Strip gateway params from URL (clean appearance) without triggering a reload
+
       history.replaceState(null,"",location.pathname);
-      // Show a processing screen while we verify
+
+      if(window.opener&&!window.opener.closed){
+        try{ localStorage.setItem("ia_hdfc_popup_result",JSON.stringify({orderId,status,ts:Date.now()})); }catch(_){}
+        try{ window.opener.postMessage({__iaHdfc:true,orderId,status},"*"); }catch(_){}
+        try{ document.body.innerHTML=
+          '<div style="font-family:system-ui,-apple-system,Arial,sans-serif;min-height:100vh;'+
+          'display:flex;flex-direction:column;align-items:center;justify-content:center;'+
+          'padding:40px 20px;text-align:center;background:#fef9f6;">'+
+          '<div style="font-size:3rem;color:#16a34a;margin-bottom:16px;">✓</div>'+
+          '<div style="font-size:1.4rem;font-weight:800;color:#222;margin-bottom:8px;">Payment Received</div>'+
+          '<div style="font-size:1rem;color:#666;margin-bottom:24px;">Your order is being confirmed in the original tab.<br>You can close this window.</div>'+
+          '<button onclick="window.close()" style="padding:12px 28px;background:#1E1240;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">Close Window</button>'+
+          '</div>'; }catch(_){}
+        var n=0; var doClose=function(){ n++; try{ window.close(); }catch(_){} if(n<8) setTimeout(doClose,250); }; doClose();
+        return;
+      }
+
       show(3);
       const btn=$("iaGatewayBtn");
       if(btn){ btn.disabled=true; btn.textContent="Verifying payment…"; }
       toast("Verifying your payment with HDFC…");
-      // Build the full param object to send to the backend
       const returnBody={_action:"ia_hdfc_verifyAndSubmit"};
       params.forEach((v,k)=>{ returnBody[k]=v; });
       let res;
-      try{ res=await post(returnBody); }
-      catch(e){ toast("Network error — could not verify payment. Contact support."); if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway";} return; }
-      if(!res.success){
-        const msg=res.error||"Payment could not be confirmed.";
-        toast(msg);
-        if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Retry payment";}
-        setBusy(false);
+      try{ res=await post(returnBody); }catch(e){ res=null; }
+      if(!res||!res.success){
+        toast((res&&res.error)||"Could not confirm payment. Contact support.");
+        if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Retry payment"; }
         return;
       }
-      // Success!
       $("okName").textContent=S.name||"";
       $("okId").textContent=res.submission_id;
       $("okTotal").textContent=res.total;
-      // rebuild review lines from cart if available, else show order id
       if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
       $("okPay").innerHTML=`\u2705 Payment of <b>\u20b9${res.total}</b> confirmed via <b>HDFC Gateway</b>.`;
       show(4);
