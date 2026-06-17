@@ -795,7 +795,7 @@ function ia_config() {
     cutoffs: IA_CUTOFFS,
     upi: IA_UPI_VPA,
     upi_name: IA_UPI_NAME,
-    version: CODE_VERSION
+    version: "26.06.17.11"
   };
 }
 
