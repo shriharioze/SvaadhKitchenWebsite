@@ -648,10 +648,11 @@ function ia_orderCols(itemsJson) {
     // menu carries it); fall back to mapping the name for legacy/generic items.
     let c = it.col || ia_itemToCol(it.name);
     if (!c && it.name) {
-      if (it.name.indexOf("(Dry · 100ml)") > -1) c = "Dry_Sabji_Mini";
-      else if (it.name.indexOf("(Dry · 250ml)") > -1) c = "Dry_Sabji_Full";
-      else if (it.name.indexOf("(Curry · 100ml)") > -1) c = "Curry_Sabji_Mini";
-      else if (it.name.indexOf("(Curry · 250ml)") > -1) c = "Curry_Sabji_Full";
+      const n = it.name.toLowerCase();
+      if (n.indexOf("dry") > -1 && n.indexOf("100ml") > -1) c = "Dry_Sabji_Mini";
+      else if (n.indexOf("dry") > -1 && n.indexOf("250ml") > -1) c = "Dry_Sabji_Full";
+      else if (n.indexOf("curry") > -1 && n.indexOf("100ml") > -1) c = "Curry_Sabji_Mini";
+      else if (n.indexOf("curry") > -1 && n.indexOf("250ml") > -1) c = "Curry_Sabji_Full";
     }
     if (c) col[c] = (col[c] || 0) + (Number(it.qty) || 0);
   }); } catch (e) {}
