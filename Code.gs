@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 20.6; // 2026-06-17: Align loyalty streak derive + migration to Math.floor (was Math.round) to match d07e046 accrual. All v2 accrual = floor(food x5%), consistent across submitOrder, gateway, streak engine, and the normalize migration.
+const CODE_VERSION   = 20.7; // 2026-06-17: Webhook archiver weekly->daily (same monthly file, verify-before-delete unchanged). Loyalty floor-consistency (20.6).
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -7610,16 +7610,20 @@ function archiveOldWebhooks() {
 }
 
 /**
- * Install the WEEKLY trigger for archiveOldWebhooks (idempotent). Run ONCE from
- * the editor. Mondays ~4 AM IST (low traffic).
+ * Install the DAILY trigger for archiveOldWebhooks (idempotent). Run ONCE from
+ * the editor. ~4 AM IST (low traffic). Safe to run daily: each run only moves
+ * rows that just crossed the 7-day boundary, appends them to that month's single
+ * archive file (one file per month, never many small ones), and verifies every
+ * write BEFORE deleting anything from the live log — so a daily cadence carries
+ * no extra data-loss risk, it just keeps the live log smaller day-to-day.
  */
 function setupWebhookArchiveTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === "archiveOldWebhooks") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("archiveOldWebhooks")
-    .timeBased().everyWeeks(1).onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(4).create();
-  Logger.log("✅ archiveOldWebhooks weekly trigger created — Mondays ~4 AM.");
+    .timeBased().everyDays(1).atHour(4).create();
+  Logger.log("✅ archiveOldWebhooks DAILY trigger created — every day ~4 AM.");
   return { success: true };
 }
 

@@ -4640,7 +4640,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.17.01";
+    const APP_VERSION = "v26.06.17.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8371,8 +8371,11 @@
           S.isPlacingOrder = false;
           $("btnNext").style.pointerEvents = "auto";
         }
-        // Could not confirm — force the same blocking verify modal (no escape).
-        showOrderVerifyModal();
+        // Could not confirm in the short window — hand off to the blocking modal,
+        // which keeps live-polling (up to ~3 min) and auto-resolves to the success
+        // screen the moment the order surfaces. Pass the cart + pre-submit snapshot
+        // so it knows exactly what to look for.
+        showOrderVerifyModal(orders, _preSubmitRowIds);
       }
     }
 
@@ -8426,7 +8429,7 @@
       return null;
     }
 
-    function showSuccess(id) {
+    function showSuccess(id, skipVerifyModal) {
       // Record what was just placed so Manage Orders can confirm it shows up —
       // and re-read if Google Sheets hasn't propagated the write yet. This kills
       // the "I don't see my order → place it again → duplicate warning" loop.
@@ -8560,13 +8563,28 @@
       if (typeof renderCalendar === 'function') renderCalendar();
       if (typeof updateDateSummary === 'function') updateDateSummary();
 
-      // Force the order-verification popup — the customer MUST tap Manage Orders
-      // to cross-check the order landed. No overlay-click / X / Esc to dismiss.
-      showOrderVerifyModal();
+      // Order-verification popup — auto-confirms the order landed in the sheet by
+      // live-polling getCustomerOrders, then resolves itself. No overlay-click / X /
+      // Esc to dismiss. Skipped when the recovery path already confirmed (it passes
+      // skipVerifyModal=true to avoid a second, redundant modal).
+      if (!skipVerifyModal) showOrderVerifyModal();
     }
 
-    // Blocking verification modal — only the Manage Orders button closes it.
-    function showOrderVerifyModal() {
+    // Blocking verification modal that LIVE-POLLS for the order and auto-resolves.
+    //
+    // Two modes, decided by whether a cart is passed:
+    //  • RECOVERY mode (orders[] passed): submit timed out, existence unknown. On
+    //    match → showSuccess(rowId, true) so the success screen finally renders.
+    //  • CONFIRM mode (no args): called from showSuccess; the order definitely
+    //    exists, we're just proving it landed in the sheet. On match → flip THIS
+    //    modal to a "confirmed" state in place. NEVER calls showSuccess (would loop).
+    //
+    // Either way it keeps polling getCustomerOrders for ~3 min so a slow backend
+    // (order lands a minute or two late) resolves itself — the customer never has
+    // to re-pay or re-order. A manual "Check my orders" button is always available.
+    function showOrderVerifyModal(orders, preSubmitRowIds) {
+      const recoveryMode = Array.isArray(orders) && orders.length > 0;
+
       const ex = document.getElementById("orderVerifyModal");
       if (ex) ex.remove();
       const overlay = document.createElement("div");
@@ -8574,23 +8592,104 @@
       overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:20px;";
       overlay.innerHTML =
         '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);">' +
-          '<div style="font-size:2.4rem;margin-bottom:8px;">🛡️</div>' +
-          '<div style="font-size:1.1rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Quick check</div>' +
-          '<div style="font-size:0.85rem;color:#075985;line-height:1.6;text-align:left;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:8px;">' +
-            'Please tap the button below to make sure this order shows up in your orders list:<br><br>' +
-            '✅ <b>If it\'s there</b> — you\'re all set, your meal is confirmed!<br>' +
-            '❌ <b>If it\'s missing</b> — please place the order once more. <b>Payment only once</b>.' +
+          '<div id="ovmIcon" style="font-size:2.4rem;margin-bottom:8px;">⏳</div>' +
+          '<div id="ovmTitle" style="font-size:1.1rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Confirming your order…</div>' +
+          '<div id="ovmBody" style="font-size:0.85rem;color:#075985;line-height:1.6;text-align:left;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:8px;">' +
+            'Hang tight — we\'re checking with our servers. During busy hours this can take a minute or two.<br><br>' +
+            '🔒 <b>Please don\'t pay or place the order again.</b> If it went through, it\'ll appear here automatically.' +
           '</div>' +
-          '<div style="font-size:0.75rem;color:#64748b;font-style:italic;margin-bottom:18px;">Apologies for the inconvenience — we\'re actively working to make this smoother. 🙏</div>' +
-          '<button id="orderVerifyBtn" style="width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);display:flex;align-items:center;justify-content:center;gap:8px;">🔍 Manage Orders — Check My Order</button>' +
+          '<div id="ovmSpin" style="font-size:0.8rem;color:#0284c7;letter-spacing:3px;margin-bottom:14px;">● ● ●</div>' +
+          '<button id="orderVerifyBtn" style="width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);display:flex;align-items:center;justify-content:center;gap:8px;">🔍 Check my orders</button>' +
         '</div>';
       // No dismiss on overlay click — swallow it so there's no escape.
       overlay.addEventListener("click", function(e){ if (e.target === overlay) { e.stopPropagation(); e.preventDefault(); } });
       document.body.appendChild(overlay);
+
+      // Stop polling if THIS overlay is no longer the live one (re-entrancy guard)
+      // or the user navigated away via the button.
+      let stopped = false;
+      const isLive = () => !stopped && document.getElementById("orderVerifyModal") === overlay;
+
       document.getElementById("orderVerifyBtn").addEventListener("click", function(){
+        stopped = true;
         overlay.remove();
         showManageOrders();
       });
+
+      // What to look for: explicit cart (recovery) or what we just placed (confirm).
+      const cartEntries = [];
+      if (recoveryMode) {
+        for (const dateOrder of orders) for (const meal of (dateOrder.meals || [])) cartEntries.push({ date: dateOrder.date, meal: meal.type });
+      } else {
+        for (const j of (S.justPlaced || [])) cartEntries.push({ date: j.date, meal: j.meal });
+      }
+      const knownIds = (recoveryMode && preSubmitRowIds) ? preSubmitRowIds : new Set();
+
+      function showConfirmedInPlace() {
+        const icon = document.getElementById("ovmIcon");
+        const title = document.getElementById("ovmTitle");
+        const body = document.getElementById("ovmBody");
+        const spin = document.getElementById("ovmSpin");
+        const btn  = document.getElementById("orderVerifyBtn");
+        if (spin) spin.style.display = "none";
+        if (icon) icon.textContent = "✅";
+        if (title) { title.textContent = "Order confirmed!"; title.style.color = "#15803d"; }
+        if (body)  { body.style.background = "#f0fdf4"; body.style.borderColor = "#bbf7d0"; body.style.color = "#166534"; body.style.textAlign = "center";
+          body.innerHTML = 'We found your order in your list — you\'re all set. 🎉<br><span style="font-size:0.78rem;color:#4d7c0f;">Your meal is confirmed.</span>'; }
+        if (btn) { btn.textContent = "✓ Great"; btn.style.background = "linear-gradient(135deg,#16a34a,#15803d)";
+          btn.onclick = function(){ stopped = true; overlay.remove(); }; }
+      }
+
+      function showManualFallback() {
+        const icon = document.getElementById("ovmIcon");
+        const title = document.getElementById("ovmTitle");
+        const body = document.getElementById("ovmBody");
+        const spin = document.getElementById("ovmSpin");
+        if (spin) spin.style.display = "none";
+        if (icon) icon.textContent = "🛡️";
+        if (title) title.textContent = "Quick check";
+        if (body)  body.innerHTML =
+            'We couldn\'t auto-confirm your order yet. Please tap below to check your orders list:<br><br>' +
+            '✅ <b>If it\'s there</b> — you\'re all set, your meal is confirmed!<br>' +
+            '❌ <b>If it\'s missing</b> — please place the order once more. <b>Payment only once</b>.';
+      }
+
+      // Background poll loop — ~3 min horizon (18 × 10s). Single-shot fetch per poll.
+      (async function liveVerify(){
+        if (!cartEntries.length) { showManualFallback(); return; }
+        const url = `${APPS_SCRIPT_URL}?action=getCustomerOrders&phone=${encodeURIComponent(S.phone)}`;
+        const MAX_POLLS = 18, POLL_DELAY = 10000, PER_TIMEOUT = 12000;
+        for (let i = 0; i < MAX_POLLS && isLive(); i++) {
+          await _sleep(POLL_DELAY);
+          if (!isLive()) return;
+          try {
+            const ctrl = new AbortController();
+            const tid  = setTimeout(() => ctrl.abort(), PER_TIMEOUT);
+            const res  = await fetch(`${url}&_t=${Date.now()}`, { signal: ctrl.signal });
+            clearTimeout(tid);
+            const data = await res.json();
+            const upcoming = data.orders || [];
+            for (const entry of cartEntries) {
+              const match = upcoming.find(o => o.date === entry.date && o.meal === entry.meal && !knownIds.has(o.rowId));
+              if (match && match.rowId) {
+                if (!isLive()) return;
+                S.existingOrders = upcoming;
+                if (recoveryMode) {
+                  stopped = true;
+                  overlay.remove();
+                  S.isPlaced = true;
+                  showSuccess(match.rowId, true); // success screen, no second modal
+                } else {
+                  showConfirmedInPlace();
+                }
+                return;
+              }
+            }
+          } catch (e) { /* timeout / network — keep polling */ }
+        }
+        // Horizon exhausted without a match — fall back to manual guidance.
+        if (isLive()) showManualFallback();
+      })();
     }
 
     // ═══════════════════════════════════════════════════════════
