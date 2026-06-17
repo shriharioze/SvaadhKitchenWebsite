@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 20.5; // 2026-06-17: Loyalty accrual unified to 5% — _calculateLoyaltyStreak derive ceil(food x6%) -> round(food x5%); added normalizeSurchargeTo5pct() one-time migration (dry-run default) to rewrite old 6% stored values. Frontend already sums stored, so all paths agree once migrated.
+const CODE_VERSION   = 20.6; // 2026-06-17: Align loyalty streak derive + migration to Math.floor (was Math.round) to match d07e046 accrual. All v2 accrual = floor(food x5%), consistent across submitOrder, gateway, streak engine, and the normalize migration.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -3222,7 +3222,7 @@ function diagnoseLoyaltyStreak(phone) {
   mine.slice(0, 15).forEach((r, idx) => {
     const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
     const stored  = Number(r.Inflation_Surcharge);
-    const derived = Math.round((Number(r.Food_Subtotal) || 0) * 0.05);
+    const derived = Math.floor((Number(r.Food_Subtotal) || 0) * 0.05);
     Logger.log("[" + (idx+1) + "] " + d + " " + r.Meal_Type
       + "  food=" + r.Food_Subtotal
       + "  storedSurch=" + (isNaN(stored) ? "(empty)" : stored)
@@ -3246,7 +3246,7 @@ function diagnoseLoyaltyStreak(phone) {
 
 /**
  * ONE-TIME MIGRATION: normalise every order's Inflation_Surcharge to the V2
- * accrual round(Food_Subtotal × 5%). Old (v1) rows stored ceil(×6%); this rewrites
+ * accrual floor(Food_Subtotal × 5%). Old (v1) rows stored ceil(×6%); this rewrites
  * them so the loyalty accrual is consistent everywhere — the sheet, the frontend
  * (which sums the stored values), and the backend engine (which now derives 5%).
  *
@@ -3276,7 +3276,7 @@ function normalizeSurchargeTo5pct(dryRun) {
     const food = Number(data[i][cFood]) || 0;
     if (food <= 0) continue;
     const cur  = Number(data[i][cSurch]) || 0;
-    const want = Math.round(food * 0.05);
+    const want = Math.floor(food * 0.05);
     if (cur !== want) { changed++; updates.push([i + 1, want]); } else same++;
   }
 
@@ -3288,7 +3288,7 @@ function normalizeSurchargeTo5pct(dryRun) {
   }
   updates.forEach(u => ws.getRange(u[0], cSurch + 1).setValue(u[1]));
   SpreadsheetApp.flush();
-  Logger.log("APPLIED: " + changed + " rows rewritten to round(food×5%).");
+  Logger.log("APPLIED: " + changed + " rows rewritten to floor(food×5%).");
   return { changed: changed, same: same, applied: true };
 }
 
@@ -3352,10 +3352,11 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
     // 5-day streak history collapses pastSurcharge to 0 and the
     // customer ends up paying full price on their day-6 reward.
     const storedSurch  = Number(r.Inflation_Surcharge) || 0;
-    // V2: accrual is round(food × 5%). (The MAX with stored still protects against
-    // legacy rows where the column was blank.) Run normalizeSurchargeTo5pct() once
-    // to rewrite old 6% stored values so MAX never picks the higher legacy number.
-    const derivedSurch = Math.round((Number(r.Food_Subtotal) || 0) * 0.05);
+    // V2: accrual is floor(food × 5%) — MUST match submitOrder's stored accrual
+    // (Math.floor, per d07e046). MAX with stored still protects legacy blank rows.
+    // Run normalizeSurchargeTo5pct() once to rewrite old 6% stored values so MAX
+    // never picks the higher legacy number.
+    const derivedSurch = Math.floor((Number(r.Food_Subtotal) || 0) * 0.05);
     dailyTotals[d] += Math.max(storedSurch, derivedSurch);
 
     // Track days where the 6-day loyalty reward was already given
