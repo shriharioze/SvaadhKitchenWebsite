@@ -270,7 +270,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.17.10 · <a href="#" onclick="location.reload(true)" style="color:var(--muted);">Hard Refresh</a>
+        Svaadh Kitchen v26.06.17.10 · <a href="#" class="hard-refresh-link" onclick="location.reload(true)" style="color:var(--muted);pointer-events:none;opacity:0.5;text-decoration:none;">Hard Refresh</a>
       </div>
     </div>
 
@@ -295,7 +295,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.17.10 · <a href="#" onclick="location.reload(true)" style="color:var(--muted);">Hard Refresh</a>
+        Svaadh Kitchen v26.06.17.10 · <a href="#" class="hard-refresh-link" onclick="location.reload(true)" style="color:var(--muted);pointer-events:none;opacity:0.5;text-decoration:none;">Hard Refresh</a>
       </div>
     </div>
 
@@ -349,7 +349,7 @@
         <button class="btn btn-primary" onclick="ia_resetForAnotherOrder()">Place Another Order</button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;">
-        Svaadh Kitchen v26.06.17.10 · <a href="#" onclick="location.reload(true)" style="color:var(--muted);">Hard Refresh</a>
+        Svaadh Kitchen v26.06.17.10 · <a href="#" class="hard-refresh-link" onclick="location.reload(true)" style="color:var(--muted);pointer-events:none;opacity:0.5;text-decoration:none;">Hard Refresh</a>
       </div>
     </div>
 
@@ -367,6 +367,7 @@
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     const APPS_SCRIPT_URL = API;
+    const APP_VERSION = "26.06.17.10";
     const STEPS = ["Account","Dates","Meals","Pay"];
     const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const $ = id => document.getElementById(id);
@@ -399,6 +400,15 @@
 
     (async function(){
       try{ S.cfg=await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"],cutoffs:{Lunch:{h:11,m:0},Dinner:{h:17,m:0}}}; }
+      
+      if(S.cfg && S.cfg.version && S.cfg.version !== APP_VERSION){
+        document.querySelectorAll('.hard-refresh-link').forEach(el=>{
+          el.style.pointerEvents='auto'; el.style.opacity='1';
+          el.style.color='#c0392b'; el.style.fontWeight='600';
+          el.innerHTML="Update Available (Tap to Refresh)";
+        });
+      }
+
       const now=new Date(); S.calY=now.getFullYear(); S.calM=now.getMonth();
       $("phone").addEventListener("input",e=>{ e.target.value=e.target.value.replace(/\D/g,"");
         if(S.acctChecked){ S.acctChecked=false; S.isNew=false; S.pinReset=false; S.pinReal=""; $("pin").value=""; $("loginExtra").style.display="none"; $("next").textContent="Continue →"; }});

@@ -794,7 +794,8 @@ function ia_config() {
     meals: IA_MEALS,
     cutoffs: IA_CUTOFFS,
     upi: IA_UPI_VPA,
-    upi_name: IA_UPI_NAME
+    upi_name: IA_UPI_NAME,
+    version: CODE_VERSION
   };
 }
 
