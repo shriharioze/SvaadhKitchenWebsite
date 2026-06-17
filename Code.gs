@@ -60,6 +60,7 @@ const HDFC_UPI_ONLY         = SP.getProperty("HDFC_UPI_ONLY") !== "false";
 const HDFC_ENV              = SP.getProperty("HDFC_ENV")              || "test";
 const HDFC_RETURN_URL       = SP.getProperty("HDFC_RETURN_URL")       || "";
 const HDFC_ORDER_PAGE_URL   = SP.getProperty("HDFC_ORDER_PAGE_URL")   || "https://svaadhkitchen.in/order.html";
+const IA_ORDER_PAGE_URL     = SP.getProperty("IA_ORDER_PAGE_URL")     || "https://svaadhkitchen.in/intentamplify.html";
 const HDFC_BASE_URL         = HDFC_ENV === "live"
   ? (SP.getProperty("HDFC_LIVE_URL") || "https://smartgateway.hdfcbank.com")
   : (SP.getProperty("HDFC_TEST_URL") || "https://smartgateway-uat.hdfcbank.com");
@@ -297,12 +298,15 @@ function doGet(e) {
   // ── HDFC Return URL via GET ────────────────────────────────────
   // HDFC sometimes redirects the customer's browser via GET (not POST).
   // Detect by presence of order_id + status params with no _action.
-  // Redirect browser to the order page URL with all params forwarded.
+  // Redirect browser to the correct order page with all params forwarded.
+  // IA orders (order_id starts with "IA") → intentamplify.html
+  // Svaadh orders → order.html
   if (p.order_id && p.status && !p.action && !p._action) {
     const params = Object.keys(p)
       .map(function(k) { return encodeURIComponent(k) + "=" + encodeURIComponent(p[k]); })
       .join("&");
-    const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
+    const targetPage = String(p.order_id).slice(0, 2) === "IA" ? IA_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
+    const redirectUrl = targetPage + "?" + params;
     // Sandbox-aware full-viewport click target — auto-navigation is blocked
     // inside the Apps Script HtmlService iframe in many browsers. (10_Hdfc_Gateway)
     return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
@@ -505,6 +509,7 @@ function doGet(e) {
     if (action === "ia_getDriverOrders") return jsonRes(ia_getDriverOrders(p));
     if (action === "ia_getKitchenSummary") return jsonRes(ia_getKitchenSummary(p));
     if (action === "ia_getLabelOrders")    return jsonRes(ia_getLabelOrders(p));
+    if (action === "ia_gatewayEnabled")    return jsonRes({ gateway_enabled: PAYMENT_GATEWAY_ENABLED, gateway_env: HDFC_ENV });
 
     return jsonRes({error:"Unknown action or Access Denied"});
   } catch(err) {
@@ -527,7 +532,9 @@ function doPost(e) {
       const params = Object.keys(parsedForHdfc)
         .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(parsedForHdfc[k]))
         .join("&");
-      const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
+      // IA orders (order_id starts with "IA") → intentamplify.html; Svaadh → order.html
+      const targetPage = String(parsedForHdfc.order_id).slice(0, 2) === "IA" ? IA_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
+      const redirectUrl = targetPage + "?" + params;
       return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
     }
     // ── Also handle form-encoded POST (Juspay sends this for the failure path)
@@ -540,7 +547,8 @@ function doPost(e) {
         const params = Object.keys(formParams)
           .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(formParams[k]))
           .join("&");
-        const redirectUrl = HDFC_ORDER_PAGE_URL + "?" + params;
+        const targetPage = String(formParams.order_id).slice(0, 2) === "IA" ? IA_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
+        const redirectUrl = targetPage + "?" + params;
         return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
       }
     }
@@ -908,8 +916,10 @@ function doPost(e) {
     if (action === "ia_setMenu")     return jsonRes(ia_setMenu(body));
     if (action === "ia_approve")     return jsonRes(ia_approve(body));
     if (action === "ia_resetPin")    return jsonRes(ia_resetPin(body));
-    if (action === "ia_markDelivered")    return jsonRes(ia_markDelivered(body));
-    if (action === "ia_batchMarkEnRoute") return jsonRes(ia_batchMarkEnRoute(body));
+    if (action === "ia_markDelivered")        return jsonRes(ia_markDelivered(body));
+    if (action === "ia_batchMarkEnRoute")     return jsonRes(ia_batchMarkEnRoute(body));
+    if (action === "ia_hdfc_createSession")   return jsonRes(ia_hdfc_createSession(body));
+    if (action === "ia_hdfc_verifyAndSubmit") return jsonRes(ia_hdfc_verifyAndSubmit(body));
 
     // Admin "place from favorite" / bulk-favorite placement (vault_admin.html)
     // posts _action:"processOrder" with the same {profile, orders:[{date,meals}]}

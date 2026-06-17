@@ -806,3 +806,283 @@ function ia_setup() {
   ia_getTab(IA_TAB_MENU, IA_MENU_HEADERS);
   Logger.log("IntentAmplify IA_ tabs ready (PIN/phone columns set to text).");
 }
+
+// ============================================================
+// HDFC GATEWAY INTEGRATION FOR INTENTAMPLIFY
+// ============================================================
+
+/**
+ * Creates an HDFC payment session for an IntentAmplify order.
+ * Called by intentamplify.html just before redirecting to the gateway.
+ *
+ * Anti-tamper: amount is computed SERVER-SIDE from authoritative IA menu
+ * prices. The client never sends an amount — the body only contains the
+ * cart (orders), which the server re-prices here.
+ *
+ * @param {Object} body { phone, pin, name, orders }
+ * @returns {{ success, payment_url, order_id } | { error }}
+ */
+function ia_hdfc_createSession(body) {
+  if (!PAYMENT_GATEWAY_ENABLED) return { error: "Gateway not enabled." };
+  if (!HDFC_MERCHANT_ID || !HDFC_API_KEY) return { error: "Gateway credentials not configured." };
+
+  // 1. Auth
+  const auth = ia_verifyLogin(body.phone, body.pin);
+  if (!auth.success) return { error: auth.error || "Login required." };
+
+  const phone = ia_normPhone(body.phone);
+  const name  = String(auth.name || body.name || "Customer").trim();
+  const orders = body.orders || {};
+  const dates  = Object.keys(orders).sort();
+  if (!dates.length) return { error: "No items selected." };
+
+  // 2. Compute authoritative IA total server-side (never trust client amount)
+  let grandTotal = 0;
+  let hasItems   = false;
+  for (const d of dates) {
+    const day = orders[d] || {};
+    for (const meal of IA_MEALS) {
+      const sel = day[meal];
+      if (!sel || !Object.keys(sel).length) continue;
+      if (!ia_isOpen(d, meal)) continue;
+      const menu = ia_getMenu(d, meal).items;
+      const priceOf = {};
+      menu.forEach(function(it) { priceOf[it.name] = Number(it.price) || 0; });
+      Object.keys(sel).forEach(function(itemName) {
+        const qty   = Number(sel[itemName]) || 0;
+        const price = priceOf[itemName];
+        if (qty > 0 && price !== undefined) { grandTotal += price * qty; hasItems = true; }
+      });
+    }
+  }
+  if (!hasItems || grandTotal <= 0) return { error: "Nothing valid to order." };
+
+  // 3. Generate gateway order ID (max 21 chars, alphanumeric, unique)
+  //    Format: IA + YYMMDDHHMMSS + 5-char random = 19 chars
+  const pad  = function(n) { return String(n).padStart(2, "0"); };
+  const now  = new Date();
+  const ts   = String(now.getFullYear()).slice(2) + pad(now.getMonth() + 1) + pad(now.getDate())
+             + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+  const rand = Utilities.getUuid().replace(/-/g, "").slice(0, 5).toUpperCase();
+  const orderId = "IA" + ts + rand; // e.g. IA260617103245ABCDE
+
+  // 4. Store session in IA_PENDING_ORDERS (separate from HDFC_PENDING_ORDERS)
+  //    so the main Svaadh flow is never affected.
+  try {
+    const props     = PropertiesService.getScriptProperties();
+    const iaPending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}");
+    const nowMs     = Date.now();
+    // Expire entries older than 30 min to keep property size under control
+    Object.keys(iaPending).forEach(function(k) {
+      if (nowMs - (iaPending[k].ts || 0) > 30 * 60 * 1000) delete iaPending[k];
+    });
+    iaPending[orderId] = {
+      ts:              nowMs,
+      phone:           phone,
+      pin:             body.pin,
+      name:            name,
+      orders:          orders,
+      expected_amount: grandTotal,
+      source:          "ia"
+    };
+    props.setProperty("IA_PENDING_ORDERS", JSON.stringify(iaPending));
+  } catch (e) {
+    return { error: "Could not save session: " + e.message };
+  }
+
+  // 5. Call HDFC SmartGateway /session endpoint directly
+  //    (replicates hdfc_createSession payload but uses IA-specific total + description)
+  const authToken = Utilities.base64Encode(HDFC_API_KEY + ":");
+  const payload = {
+    order_id:               orderId,
+    amount:                 Math.round(grandTotal), // SmartGateway takes rupees, NOT paise
+    currency:               "INR",
+    customer_id:            phone,
+    customer_phone:         phone,
+    customer_email:         phone + "@svaadh.noemail",
+    payment_page_client_id: HDFC_MERCHANT_ID,
+    action:                 "paymentPage",
+    return_url:             HDFC_RETURN_URL + (HDFC_RETURN_URL.indexOf("?") === -1 ? "?_popup=1" : "&_popup=1"),
+    description:            "IntentAmplify Meal",
+    first_name:             name.split(" ")[0] || name,
+    last_name:              name.split(" ").slice(1).join(" ") || "",
+    udf1:                   phone,
+    udf3:                   "intentamplify",
+    notification_url:       HDFC_RETURN_URL
+  };
+  if (HDFC_UPI_ONLY) {
+    payload.payment_filter = {
+      allowDefaultOptions: false,
+      options: [{ enable: true, paymentMethodType: "UPI" }]
+    };
+  }
+
+  try {
+    const resp     = UrlFetchApp.fetch(HDFC_BASE_URL + "/session", {
+      method:             "post",
+      contentType:        "application/json",
+      headers: {
+        "Authorization": "Basic " + authToken,
+        "x-merchantid":  HDFC_MERCHANT_ID,
+        "version":       "2023-01-01"
+      },
+      payload:            JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const respCode = resp.getResponseCode();
+    const respBody = JSON.parse(resp.getContentText());
+    console.log("ia_hdfc_createSession [" + respCode + "] orderId=" + orderId, JSON.stringify(respBody));
+
+    if (respCode !== 200 && respCode !== 201) {
+      const errMsg = (respBody.error_info && respBody.error_info.user_message)
+        || respBody.user_message || respBody.error_message || ("HTTP " + respCode);
+      return { error: "HDFC session creation failed: " + errMsg };
+    }
+
+    const paymentUrl = (respBody.payment_links && respBody.payment_links.web)
+      ? respBody.payment_links.web : null;
+    if (!paymentUrl) return { error: "HDFC returned no payment URL. Check merchant config." };
+
+    return { success: true, payment_url: paymentUrl, order_id: orderId };
+
+  } catch (err) {
+    console.error("ia_hdfc_createSession network error:", err.message);
+    return { error: "Network error creating payment session: " + err.message };
+  }
+}
+
+/**
+ * Called by intentamplify.html after HDFC redirects back.
+ * Verifies payment with HDFC Status API (never trusts client status),
+ * cross-checks charged amount, then writes order rows as Paid.
+ *
+ * @param {Object} body { order_id, status, signature, ... } — full HDFC return params
+ * @returns {{ success, submission_id, total } | { error }}
+ */
+function ia_hdfc_verifyAndSubmit(body) {
+  const orderId = String(body.order_id || "").trim();
+  if (!orderId) return { error: "Missing order_id." };
+
+  // 1. Read IA pending session
+  const props     = PropertiesService.getScriptProperties();
+  const iaPending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}");
+  const entry     = iaPending[orderId];
+  if (!entry) return { error: "Session expired or not found. Please contact support.", expired: true };
+
+  // 2. Verify with HDFC Status API — NEVER trust the client-supplied status string.
+  //    Same policy as the main Svaadh flow (hdfc_verifyReturnPayload).
+  const statusCheck = hdfc_getOrderStatus(orderId);
+  if (!statusCheck.confirmed) {
+    const apiStatus = String(statusCheck.status || "").toUpperCase();
+    console.warn("ia_hdfc_verifyAndSubmit: not confirmed — orderId=" + orderId + " apiStatus=" + apiStatus);
+    return {
+      error: "Payment could not be verified by HDFC. Status: " + apiStatus,
+      paid:  false,
+      api_status: apiStatus
+    };
+  }
+
+  // 3. Anti-tamper: charged amount must match what we told HDFC to charge.
+  //    ₹1 rounding tolerance accounts for SmartGateway rounding edge cases.
+  const charged  = Number(statusCheck.amount || 0);
+  const expected = Number(entry.expected_amount || 0);
+  if (expected > 0 && charged < expected - 1) {
+    console.error("⚠️ IA AMOUNT TAMPER — orderId=" + orderId
+      + " charged=" + charged + " expected=" + expected);
+    return {
+      error:           "Payment amount mismatch (charged ₹" + charged
+                     + " vs expected ₹" + expected + "). Order NOT placed. Contact support.",
+      tamper_detected: true,
+      charged_amount:  charged,
+      expected_amount: expected
+    };
+  }
+
+  // 4. Write order rows (with concurrency lock)
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+
+    // Idempotency: if rows already exist for this orderId (e.g. webhook beat us), skip re-write.
+    const existingRows = ia_rows(ws).filter(function(r) {
+      return String(r.Submission_ID || "") === orderId;
+    });
+    if (existingRows.length) {
+      console.log("ia_hdfc_verifyAndSubmit: rows already exist for " + orderId + " — skipping re-write (idempotent).");
+      return { success: true, submission_id: orderId, total: entry.expected_amount };
+    }
+
+    const ts          = ia_now();
+    const orders      = entry.orders || {};
+    const dates       = Object.keys(orders).sort();
+    const rowsToWrite = [];
+
+    for (const d of dates) {
+      const day = orders[d] || {};
+      for (const meal of IA_MEALS) {
+        const sel = day[meal];
+        if (!sel || !Object.keys(sel).length) continue;
+        // Allow slightly-past-cutoff orders through here since payment is confirmed.
+        // If the meal was truly closed at session-creation time ia_hdfc_createSession
+        // already excluded it from the total.
+        const menu    = ia_getMenu(d, meal).items;
+        const priceOf = {};
+        menu.forEach(function(it) { priceOf[it.name] = Number(it.price) || 0; });
+
+        let sub = 0;
+        const lineItems = [], summary = [];
+        Object.keys(sel).forEach(function(itemName) {
+          const qty   = Number(sel[itemName]) || 0;
+          const price = priceOf[itemName];
+          if (qty <= 0 || price === undefined) return;
+          sub += price * qty;
+          lineItems.push({ name: itemName, qty: qty, price: price });
+          summary.push(qty + "\u00d7 " + itemName);
+        });
+        if (sub <= 0) continue;
+
+        rowsToWrite.push([
+          orderId,              // Submission_ID  (= gateway order_id for IA)
+          ts,                   // Timestamp
+          d,                    // Date
+          meal,                 // Meal
+          entry.phone,          // Phone
+          entry.name,           // Customer_Name
+          JSON.stringify(lineItems), // Items_JSON
+          summary.join(", "),   // Item_Summary
+          sub,                  // Subtotal
+          "Paid",               // Payment_Status — confirmed by HDFC gateway
+          orderId,              // Payment_Ref — gateway order ID as reference
+          "Gateway (HDFC)",     // Approved_By
+          ts,                   // Approved_At
+          "",                   // Notes
+          "Pending",            // Delivery_Status
+          "",                   // EnRoute_At
+          ""                    // Delivered_At
+        ]);
+      }
+    }
+
+    if (!rowsToWrite.length) return { error: "Nothing valid to write — all meals may be closed." };
+
+    ws.getRange(ws.getLastRow() + 1, 1, rowsToWrite.length, IA_ORDERS_HEADERS.length)
+      .setValues(rowsToWrite);
+
+    // Update Last_Order_At on the customer record
+    try {
+      const cws  = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
+      const crow = ia_rows(cws).find(function(r) {
+        return ia_normPhone(r.Phone) === ia_normPhone(entry.phone);
+      });
+      if (crow) cws.getRange(crow._row, 5).setValue(ts);
+    } catch (e) { /* non-fatal */ }
+
+    console.log("ia_hdfc_verifyAndSubmit: wrote " + rowsToWrite.length + " rows for " + orderId);
+    return { success: true, submission_id: orderId, total: entry.expected_amount };
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+

@@ -6,7 +6,6 @@
   <title>IntentAmplify Meals · Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="images/svaadh-kitchen-hero.PNG">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{ --ink:#1E1240; --ink2:#2D1A5E; --gold:#E8C840; --cream:#fdf8f2; --line:#f0ebe6; --muted:#888; }
@@ -266,44 +265,23 @@
       </div>
 
       <div class="pay-card" id="payCard">
-        <div class="pay-top">
-          <div class="lbl">UPI Payment</div>
+        <div class="pay-top" style="background:linear-gradient(135deg,#1E1240,#2D1A5E);">
+          <div class="lbl">Secure Payment</div>
           <div class="amt">₹<span id="payAmt">0</span></div>
-          <div class="badge">📲 Scan · Tap · Pay</div>
+          <div class="badge">🔒 HDFC SmartGateway · UPI</div>
         </div>
         <div class="pay-body">
-          <div style="background:#fffbea;border:1px solid #fcd34d;border-radius:12px;padding:10px 13px;margin-bottom:14px;font-size:.77rem;color:#92400e;line-height:1.5;display:flex;gap:8px;align-items:flex-start;">
-            <span>⚠️</span><span><b>Confirm only after payment is complete.</b> Each transaction is verified manually.</span>
-          </div>
-
-          <div style="padding:14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:14px;margin-bottom:12px;">
-            <p style="font-size:.75rem;color:#0f766e;text-align:center;margin-bottom:8px;font-weight:600;">Step 1 — Complete Payment</p>
-            <div class="qr-wrap"><div id="qrcode"></div></div>
-            <div style="text-align:center;margin-bottom:12px;">
-              <div class="upi-id" id="upiId" onclick="copyUpi()" title="Tap to copy">9819969682@hdfc 📋</div>
-              <div style="font-size:.7rem;color:#94a3b8;margin-top:5px;">tap to copy</div>
-            </div>
-            <div style="text-align:center;margin-bottom:6px;padding:8px 10px;background:#f9fafb;border:1px dashed #cbd5e1;border-radius:10px;">
-              <div style="font-size:.66rem;color:#64748b;font-weight:600;letter-spacing:.2px;text-transform:uppercase;margin-bottom:4px;">Alternate UPI ID (Backup)</div>
-              <div onclick="copyBackup()" title="Tap to copy backup" style="cursor:pointer;font-weight:600;color:#475569;font-size:.82rem;background:#fff;padding:4px 12px;border-radius:16px;border:1px solid #e2e8f0;display:inline-block;">shriharioze07-1@okhdfcbank 📋</div>
-              <div style="font-size:.66rem;color:#94a3b8;margin-top:4px;">Use only if the primary UPI ID doesn't work</div>
+          <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:14px;padding:14px 16px;margin-bottom:14px;">
+            <div style="font-size:.8rem;font-weight:700;color:#166534;margin-bottom:6px;">✅ Why gateway?</div>
+            <div style="font-size:.75rem;color:#15803d;line-height:1.6;">
+              Your payment is processed <b>instantly and securely</b> via HDFC SmartGateway.
+              No manual transfer needed — the order is confirmed automatically once payment succeeds.
             </div>
           </div>
-
-          <div class="pay-steps">
-            <div style="font-weight:700;color:#78350f;margin-bottom:4px;text-align:center;">📋 How to Pay via UPI — follow in order</div>
-            1. Tap the UPI ID above to <b>copy</b> it<br>
-            2. <b>Note the amount</b> (₹<span id="payAmt3">0</span>)<br>
-            3. Tick <b>"Will pay"</b> below &amp; tap <b>Place Order</b> first<br>
-            4. Then pay via GPay / PhonePe / Paytm using the copied UPI ID — <em>as soon as the success screen loads</em>
-            <div style="margin-top:8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:6px 10px;font-size:.72rem;color:#991b1b;line-height:1.5;">⚠️ <b>Pay using the UPI ID only</b> — don't pay directly to the phone number.</div>
-          </div>
-
-          <div style="font-size:.82rem;font-weight:700;color:#0f766e;margin:14px 0 8px;">Step 2 — Confirm &amp; Place Order</div>
-          <label class="pay-confirm">
-            <input type="checkbox" id="payConfirm" onchange="updatePlaceBtn()" />
-            <span>I'll complete the UPI payment of ₹<span id="payAmt2">0</span> right after placing this order.</span>
-          </label>
+          <button id="iaGatewayBtn" class="btn btn-primary" style="font-size:1rem;padding:16px;border-radius:14px;box-shadow:0 4px 16px rgba(30,18,64,.35);" onclick="ia_initiatePayment()">
+            🔒 Pay ₹<span id="payAmt2">0</span> via HDFC Gateway
+          </button>
+          <div style="text-align:center;margin-top:10px;font-size:.72rem;color:#94a3b8;">256-bit SSL · UPI · No card data stored</div>
         </div>
       </div>
     </div>
@@ -379,6 +357,13 @@
       $("calPrev").onclick=()=>{ S.calM--; if(S.calM<0){S.calM=11;S.calY--;} renderCalendar(); };
       $("calNext").onclick=()=>{ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} renderCalendar(); };
       setInterval(tickCutoffs,1000);
+
+      // ── Gateway return detection — check BEFORE persistent login ──
+      // If HDFC redirected back here (order_id+status in URL), handle that flow first.
+      // ia_handleGatewayReturn() is a no-op when those params are absent.
+      await ia_handleGatewayReturn();
+      if(S.step===4) return; // gateway return showed success screen — stop here
+
       // Persistent login — auto sign-in if we have saved creds (cookie-like, until Log out)
       const sp=localStorage.getItem("ia_phone"), spin=localStorage.getItem("ia_pin");
       if(sp&&spin){
@@ -599,42 +584,70 @@
           const sel=(S.cart[date]&&S.cart[date][meal])||{}; const menu=((S.menu[date]&&S.menu[date][meal])||{items:[]}).items;
           const price={}; menu.forEach(it=>price[it.name]=it.price);
           let sub=0; const parts=[];
-          Object.entries(sel).forEach(([nm,q])=>{ const p=price[nm]||0; sub+=p*q; parts.push(`${q}× ${nm}`); });
-          if(sub>0){ total+=sub; lines.push(`<div class="rev-line"><span>${dd} · ${meal}<br><small>${parts.join(", ")}</small></span><span class="amt">₹${sub}</span></div>`); }
+          Object.entries(sel).forEach(([nm,q])=>{ const p=price[nm]||0; sub+=p*q; parts.push(`${q}\u00d7 ${nm}`); });
+          if(sub>0){ total+=sub; lines.push(`<div class="rev-line"><span>${dd} \u00b7 ${meal}<br><small>${parts.join(", ")}</small></span><span class="amt">\u20b9${sub}</span></div>`); }
         });
       });
       $("revLines").innerHTML=lines.join(""); S.total=total;
-      ["revTotal","payAmt","payAmt2","payAmt3"].forEach(id=>{ const el=$(id); if(el) el.textContent=total; });
-      renderQR(total);
-      $("payConfirm").checked=false; updatePlaceBtn();
+      ["revTotal","payAmt","payAmt2"].forEach(id=>{ const el=$(id); if(el) el.textContent=total; });
+      const btn=$("iaGatewayBtn"); if(btn){ btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+total+" via HDFC Gateway"; }
+      $("next").disabled=(total<=0); $("next").style.opacity=(total>0)?"1":"0.5";
     }
-    function renderQR(amount){
-      const el=$("qrcode"); el.innerHTML="";
-      const str=`upi://pay?pa=${UPI_VPA}&pn=${encodeURIComponent(UPI_NAME)}&am=${Number(amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent("IntentAmplify Meal")}`;
-      try{ new QRCode(el,{text:str,width:172,height:172,correctLevel:QRCode.CorrectLevel.M}); }catch(e){}
-    }
-    function copyUpi(){ navigator.clipboard?.writeText(UPI_VPA).then(()=>toast("📋 UPI ID copied!")).catch(()=>toast(UPI_VPA)); }
-    function copyBackup(){ navigator.clipboard?.writeText(UPI_VPA_BACKUP).then(()=>toast("📋 Backup UPI ID copied!")).catch(()=>toast(UPI_VPA_BACKUP)); }
     function updatePlaceBtn(){
       if(S.step!==3) return; const btn=$("next");
-      const ok=$("payConfirm").checked;
-      btn.disabled=!ok; btn.style.opacity=ok?"1":"0.5";
+      btn.disabled=(S.total<=0); btn.style.opacity=(S.total>0)?"1":"0.5";
     }
 
-    async function placeOrder(){
-      setBusy(true,"Placing…");
+    // ── HDFC Gateway initiation ──
+    async function ia_initiatePayment(){
+      const btn=$("iaGatewayBtn");
+      if(btn){ btn.disabled=true; btn.textContent="Opening gateway…"; }
+      setBusy(true,"Opening gateway…");
       let res;
-      try{ res=await post({_action:"ia_submitOrder",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart}); }
-      catch(e){ setBusy(false); toast("Network error — try again."); return; }
-      {
-        if(!res.success){ setBusy(false); toast(res.error||"Could not place order."); return; }
-        $("okName").textContent=S.name||"";
-        $("okId").textContent=res.submission_id;
-        $("okTotal").textContent=res.total;
-        $("okLines").innerHTML=$("revLines").innerHTML;
-        $("okPay").innerHTML=`💳 Please pay <b>₹${res.total}</b> to <b>${UPI_VPA}</b> now if you haven't already. We'll confirm once verified.`;
-        show(4);
+      try{ res=await post({_action:"ia_hdfc_createSession",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart}); }
+      catch(e){ setBusy(false); if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway";} toast("Network error — try again."); return; }
+      if(!res.success){ setBusy(false); if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway";} toast(res.error||"Could not open gateway."); return; }
+      // Redirect to HDFC payment page
+      window.location.href=res.payment_url;
+    }
+
+    async function placeOrder(){ ia_initiatePayment(); }
+
+    // ── Gateway return detection (runs on page load) ──
+    async function ia_handleGatewayReturn(){
+      const params=new URLSearchParams(window.location.search);
+      const orderId=params.get("order_id")||"";
+      const status=params.get("status")||"";
+      // Only handle IA return params (order_id starts with "IA")
+      if(!orderId||!status||!orderId.startsWith("IA")) return;
+      // Strip gateway params from URL (clean appearance) without triggering a reload
+      history.replaceState(null,"",location.pathname);
+      // Show a processing screen while we verify
+      show(3);
+      const btn=$("iaGatewayBtn");
+      if(btn){ btn.disabled=true; btn.textContent="Verifying payment…"; }
+      toast("Verifying your payment with HDFC…");
+      // Build the full param object to send to the backend
+      const returnBody={_action:"ia_hdfc_verifyAndSubmit"};
+      params.forEach((v,k)=>{ returnBody[k]=v; });
+      let res;
+      try{ res=await post(returnBody); }
+      catch(e){ toast("Network error — could not verify payment. Contact support."); if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway";} return; }
+      if(!res.success){
+        const msg=res.error||"Payment could not be confirmed.";
+        toast(msg);
+        if(btn){btn.disabled=false;btn.innerHTML="\uD83D\uDD12 Retry payment";}
+        setBusy(false);
+        return;
       }
+      // Success!
+      $("okName").textContent=S.name||"";
+      $("okId").textContent=res.submission_id;
+      $("okTotal").textContent=res.total;
+      // rebuild review lines from cart if available, else show order id
+      if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
+      $("okPay").innerHTML=`\u2705 Payment of <b>\u20b9${res.total}</b> confirmed via <b>HDFC Gateway</b>.`;
+      show(4);
     }
 
     // ── Profile drawer + persistent login ──
