@@ -646,7 +646,13 @@ function ia_orderCols(itemsJson) {
   try { JSON.parse(itemsJson || "[]").forEach(function (it) {
     // Prefer the canonical column stored on the line (named sabji from the main
     // menu carries it); fall back to mapping the name for legacy/generic items.
-    const c = it.col || ia_itemToCol(it.name);
+    let c = it.col || ia_itemToCol(it.name);
+    if (!c && it.name) {
+      if (it.name.indexOf("(Dry · 100ml)") > -1) c = "Dry_Sabji_Mini";
+      else if (it.name.indexOf("(Dry · 250ml)") > -1) c = "Dry_Sabji_Full";
+      else if (it.name.indexOf("(Curry · 100ml)") > -1) c = "Curry_Sabji_Mini";
+      else if (it.name.indexOf("(Curry · 250ml)") > -1) c = "Curry_Sabji_Full";
+    }
     if (c) col[c] = (col[c] || 0) + (Number(it.qty) || 0);
   }); } catch (e) {}
   return col;
@@ -1029,7 +1035,11 @@ function ia_hdfc_verifyAndSubmit(body) {
         // already excluded it from the total.
         const menu    = ia_getMenu(d, meal).items;
         const priceOf = {};
-        menu.forEach(function(it) { priceOf[it.name] = Number(it.price) || 0; });
+        const colOf   = {};
+        menu.forEach(function(it) { 
+          priceOf[it.name] = Number(it.price) || 0; 
+          colOf[it.name] = it.col;
+        });
 
         let sub = 0;
         const lineItems = [], summary = [];
@@ -1038,7 +1048,9 @@ function ia_hdfc_verifyAndSubmit(body) {
           const price = priceOf[itemName];
           if (qty <= 0 || price === undefined) return;
           sub += price * qty;
-          lineItems.push({ name: itemName, qty: qty, price: price });
+          const li = { name: itemName, qty: qty, price: price };
+          if (colOf[itemName]) li.col = colOf[itemName];
+          lineItems.push(li);
           summary.push(qty + "\u00d7 " + itemName);
         });
         if (sub <= 0) continue;
