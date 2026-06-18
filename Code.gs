@@ -7539,12 +7539,11 @@ function _getOrCreateMonthlyWebhookArchiveSS(year, month) {
 }
 
 /**
- * WEEKLY job: archive SETTLED webhook rows older than 7 days into each month's
+ * DAILY job: archive SETTLED webhook rows from previous days into each month's
  * webhook-archive file (June rows → June file, July → July, …), then delete them
- * from the live SK_Webhook_Log. ALWAYS keeps still-PENDING rows and anything
- * within the last 7 days (the reconciler / return-verification window). Verify-
- * before-delete + script lock. No-op if the log is empty. Runs regardless of the
- * gateway flag (old webhooks still need clearing even if the gateway is later off).
+ * from the live SK_Webhook_Log. ALWAYS keeps still-PENDING rows and today's rows.
+ * Verify-before-delete + script lock. No-op if the log is empty. Runs regardless
+ * of the gateway flag.
  */
 function archiveOldWebhooks() {
   var lock = LockService.getScriptLock();
@@ -7560,7 +7559,8 @@ function archiveOldWebhooks() {
     var headers = all[0];
     var recvIdx = headers.indexOf("Received_At");
     var statIdx = headers.indexOf("Status");
-    var cutoffStr = Utilities.formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), "Asia/Kolkata", "yyyy-MM-dd");
+    // Cutoff is today. Anything strictly less than today (i.e. yesterday or older) gets archived.
+    var cutoffStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
 
     var keep = [];
     var byMonth = {}; // "YYYY-MM" -> { year, month, rows: [] }
@@ -7576,12 +7576,12 @@ function archiveOldWebhooks() {
         if (!byMonth[key]) byMonth[key] = { year: Number(pp[0]), month: Number(pp[1]), rows: [] };
         byMonth[key].rows.push(all[i]);
       } else {
-        keep.push(all[i]); // PENDING, within 7 days, or undated → keep live
+        keep.push(all[i]); // PENDING, today's rows, or undated → keep live
       }
     }
 
     var monthKeys = Object.keys(byMonth);
-    if (!monthKeys.length) return { success: true, archived: 0, kept: keep.length, note: "Nothing settled older than 7 days." };
+    if (!monthKeys.length) return { success: true, archived: 0, kept: keep.length, note: "Nothing settled from previous days." };
 
     // Append to each month's file, VERIFYING each write BEFORE deleting anything.
     var totalArchived = 0, done = [];
