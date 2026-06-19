@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 20.7; // 2026-06-17: Webhook archiver weekly->daily (same monthly file, verify-before-delete unchanged). Loyalty floor-consistency (20.6).
+const CODE_VERSION   = 20.8; // 2026-06-19: IntentAmplify webhook routing & triple-trigger polling fix.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
