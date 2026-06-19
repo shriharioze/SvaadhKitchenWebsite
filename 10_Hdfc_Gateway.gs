@@ -1454,6 +1454,10 @@ function hdfc_processWebhookLog() {
           const oaResult = hdfc_finalizeOnAccountPayment(oid);
           result = JSON.stringify(oaResult);
           if (oaResult.error) newStatus = "FAILED";
+        } else if (oid && /^IA\d+/.test(oid)) {
+          const iaResult = ia_hdfc_verifyAndSubmit({ order_id: oid });
+          result = JSON.stringify(iaResult);
+          if (iaResult.error) newStatus = "FAILED";
         } else {
           const markResult = hdfc_markOrderPaid(order);
           result = JSON.stringify(markResult);
@@ -1490,6 +1494,8 @@ function hdfc_processWebhookLog() {
           result = "Wallet-recharge failure (" + (order.status || eventName) + ") — no order row.";
         } else if (oid && /^SK\d{6}A/.test(oid)) {
           result = "On-account settlement failure (" + (order.status || eventName) + ") — no settlement applied.";
+        } else if (oid && /^IA\d+/.test(oid)) {
+          result = "IntentAmplify failure (" + (order.status || eventName) + ") — no order row created.";
         } else {
           const failResult = hdfc_markOrderFailed(order);
           result = JSON.stringify(failResult);

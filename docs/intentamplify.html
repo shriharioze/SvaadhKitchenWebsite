@@ -788,16 +788,15 @@
         <style>@keyframes iaspin{to{transform:rotate(360deg);}}</style>`;
       document.body.appendChild(ov);
 
-      let cancelled=false, verifyStarted=false, statusTimer=null;
+      let cancelled=false, verifyStarted=false;
       document.getElementById("iaCancelWait").onclick=()=>{
-        cancelled=true; try{ clearInterval(statusTimer); }catch(_){} try{ popup.close(); }catch(_){} ov.remove();
+        cancelled=true; try{ popup.close(); }catch(_){} ov.remove();
         if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
       };
 
       const runVerify=async(statusFromPopup)=>{
         if(verifyStarted) return; verifyStarted=true;
         try{ clearInterval(timer); }catch(_){}
-        try{ clearInterval(statusTimer); }catch(_){}
         try{ popup.close(); }catch(_){}
         try{ localStorage.removeItem("ia_hdfc_popup_active"); }catch(_){}
         const actualStatus = statusFromPopup || "CHARGED";
@@ -836,7 +835,7 @@
         try{ popup.close(); }catch(_){}
         window.removeEventListener("storage",storageH);
         window.removeEventListener("message",msgH);
-        await runVerify(data.status);
+        await runVerify(data.status || "CHARGED");
       };
       const storageH=(e)=>{
         if(e.key!=="ia_hdfc_popup_result"||!e.newValue) return;
@@ -849,27 +848,24 @@
       };
       window.addEventListener("storage",storageH);
       window.addEventListener("message",msgH);
-      const timer=setInterval(async()=>{
-        if(cancelled||verifyStarted){ clearInterval(timer); return; }
-        let closed=true; try{ closed=popup.closed; }catch(_){}
-        if(closed){ clearInterval(timer); await runVerify(); }
-      },1000);
 
-      // Backend safety net — poll HDFC order status every 2s. This is the ONLY
-      // signal that survives when the popup is STUCK on the cross-origin Apps
-      // Script domain: the sandbox loads our return page in a nested iframe where
-      // window.opener is null, third-party localStorage is partitioned (Brave),
-      // and window.close() is a no-op — so storage/message relays AND the
-      // popup.closed poll all fail. The moment HDFC reports CHARGED we finalise,
-      // regardless of whether the popup ever relays or closes. Mirrors order.html.
-      let statusPolls=0;
-      statusTimer=setInterval(async()=>{
-        if(cancelled||verifyStarted){ clearInterval(statusTimer); return; }
-        if(++statusPolls>150){ clearInterval(statusTimer); return; } // ~5 min cap
-        let sc; try{ sc=await post({_action:"hdfc_checkPaymentStatus",order_id:orderId}); }catch(_){ sc=null; }
-        if(cancelled||verifyStarted){ clearInterval(statusTimer); return; }
-        if(sc&&sc.confirmed){ clearInterval(statusTimer); await runVerify(); }
-      },2000);
+      let pollTicks = 0;
+      const timer = setInterval(async () => {
+        if (cancelled || verifyStarted) { clearInterval(timer); return; }
+        pollTicks++;
+        let closed = true; try { closed = popup.closed; } catch(_) { closed = true; }
+        if (closed) { await runVerify("CHARGED"); return; }
+        if (pollTicks % 2 === 0) {
+          try {
+            const d = await post({ _action: "hdfc_checkPaymentStatus", order_id: orderId });
+            if (d && d.confirmed) {
+              try { popup.close(); } catch(_) {}
+              await runVerify(d.status || "CHARGED");
+              return;
+            }
+          } catch(_) {}
+        }
+      }, 1000);
     }
 
     async function placeOrder(){ ia_initiatePayment(); }
