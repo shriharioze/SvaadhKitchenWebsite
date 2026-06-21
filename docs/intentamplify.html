@@ -973,7 +973,10 @@
         try{
           const r=await api("ia_myOrders",{phone:S.phone});
           const rows=(r&&r.orders)||[];
-          if(rows.some(function(o){ return String(o.submission_id||"")===orderId; })){
+          // The row is written as "Pending Payment" at session creation, so wait for
+          // it to be FLIPPED to "Paid" (by verify / webhook / reconciler) before we
+          // declare success and open Manage Orders.
+          if(rows.some(function(o){ return String(o.submission_id||"")===orderId && String(o.payment_status||"").toLowerCase()==="paid"; })){
             showManageOrders(orderId);
             return true;
           }

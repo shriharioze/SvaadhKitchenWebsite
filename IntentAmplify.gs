@@ -478,6 +478,9 @@ function ia_analytics(body) {
   let rows = ia_rows(ws);
   if (from) rows = rows.filter(function (r) { return ia_dateStr(r.Date) >= from; });
   if (to)   rows = rows.filter(function (r) { return ia_dateStr(r.Date) <= to; });
+  // Exclude not-yet-paid / abandoned gateway carts so they don't inflate revenue,
+  // meal counts, or item tallies (they aren't real orders until flipped to Paid).
+  rows = rows.filter(function (r) { return !ia_isGatewayUnpaid(r); });
 
   let totalRevenue = 0, paidRevenue = 0, pendingRevenue = 0;
   const byMeal = { Lunch: 0, Dinner: 0 };
@@ -524,6 +527,7 @@ function ia_prep(body) {
   const rows = ia_rows(ws).filter(function (r) {
     if (ia_dateStr(r.Date) !== date) return false;
     if (meal && String(r.Meal) !== meal) return false;
+    if (ia_isGatewayUnpaid(r)) return false; // never cook unpaid/abandoned gateway carts
     return true;
   });
   const agg = {}, headcount = {};
@@ -553,6 +557,7 @@ function ia_getDriverOrders(body) {
   const meals = { Lunch: [], Dinner: [] };
   ia_rows(ws).forEach(function (r) {
     if (ia_dateStr(r.Date) !== date) return;
+    if (ia_isGatewayUnpaid(r)) return; // hide unpaid/abandoned gateway carts from the driver list
     if (!meals[r.Meal]) return;
     meals[r.Meal].push({
       submissionId:   r.Submission_ID,
@@ -677,6 +682,9 @@ function ia_rowsAsSK() {
       // no-op now, but it future-proofs if one is added — same rule the
       // consumer prep functions apply.)
       .filter(function (r) { return typeof _isOrderCancelled !== "function" || !_isOrderCancelled(r.Payment_Status); })
+      // Exclude gateway orders not yet paid (Pending Payment) or abandoned
+      // (Payment Failed) — they must never reach the kitchen/driver/label views.
+      .filter(function (r) { return !ia_isGatewayUnpaid(r); })
       .map(function (r) {
       const col = ia_orderCols(r.Items_JSON);
       // Items_JSON in SK style: { itemName: qty } (descriptive names are fine for labels)
@@ -735,6 +743,7 @@ function ia_getKitchenSummary(p) {
 
   ia_rows(ws).forEach(function (r) {
     if (ia_dateStr(r.Date) !== date) return;
+    if (ia_isGatewayUnpaid(r)) return; // don't cook unpaid/abandoned gateway carts
     const meal = String(r.Meal || ""); if (IA_MEALS.indexOf(meal) === -1) return;
     if (!meals[meal]) meals[meal] = { count: 0 };
     const m = meals[meal]; m.count++;
@@ -785,7 +794,7 @@ function ia_getLabelOrders(p) {
   const COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
                 "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Rice","Salad"];
   const orders = ia_rows(ws)
-    .filter(function (r) { return ia_dateStr(r.Date) === date && String(r.Meal) === meal; })
+    .filter(function (r) { return ia_dateStr(r.Date) === date && String(r.Meal) === meal && !ia_isGatewayUnpaid(r); })
     .map(function (r) {
       const col = ia_orderCols(r.Items_JSON);
       const obj = { name: String(r.Customer_Name||""), area: IA_FIXED_ADDRESS, notes: String(r.Notes||""),
@@ -821,6 +830,61 @@ function ia_setup() {
 // HDFC GATEWAY INTEGRATION FOR INTENTAMPLIFY
 // ============================================================
 
+// Gateway orders are written to IA_Orders as "Pending Payment" at session creation
+// (Svaadh-style durability — the row is the single source of truth, never lost in a
+// Script-Property race) and FLIPPED to "Paid" once HDFC confirms the charge. Until
+// paid they must NOT be cooked: prep views (kitchen/driver/labels) exclude this and
+// any abandoned "Payment Failed" row. Manual orders use plain "Pending" (corporate
+// cook-then-bill) and are deliberately UNaffected by this filter.
+function ia_isGatewayUnpaid(r) {
+  const s = String((r && r.Payment_Status) || "").toLowerCase();
+  return s === "pending payment" || s === "payment failed";
+}
+
+/**
+ * Builds the IA_Orders rows for a cart, priced SERVER-SIDE (never trusts a client
+ * amount). One 17-column row per meal. Returns { rows, total }. Shared by
+ * ia_hdfc_createSession (writes "Pending Payment" before the gateway) and the legacy
+ * verify fallback. enforceOpen=true skips meals past their cutoff (used at order
+ * creation); false lets a confirmed payment through even if slightly past cutoff.
+ */
+function _iaBuildOrderRows(orderId, ordersObj, phone, name, ts, paymentStatus, approvedBy, approvedAt, enforceOpen) {
+  const dates = Object.keys(ordersObj || {}).sort();
+  const rows = [];
+  let total = 0;
+  for (const d of dates) {
+    const day = ordersObj[d] || {};
+    for (const meal of IA_MEALS) {
+      const sel = day[meal];
+      if (!sel || !Object.keys(sel).length) continue;
+      if (enforceOpen && !ia_isOpen(d, meal)) continue;
+      const menu = ia_getMenu(d, meal).items;
+      const priceOf = {}, colOf = {};
+      menu.forEach(function (it) { priceOf[it.name] = Number(it.price) || 0; colOf[it.name] = it.col; });
+      let sub = 0; const lineItems = [], summary = [];
+      Object.keys(sel).forEach(function (itemName) {
+        const qty   = Number(sel[itemName]) || 0;
+        const price = priceOf[itemName];
+        if (qty <= 0 || price === undefined) return;
+        sub += price * qty;
+        const li = { name: itemName, qty: qty, price: price };
+        if (colOf[itemName]) li.col = colOf[itemName];
+        lineItems.push(li);
+        summary.push(qty + "× " + itemName);
+      });
+      if (sub <= 0) continue;
+      total += sub;
+      rows.push([
+        orderId, ts, d, meal, phone, name,
+        JSON.stringify(lineItems), summary.join(", "), sub,
+        paymentStatus, orderId, approvedBy, approvedAt, "",
+        "Pending", "", ""
+      ]);
+    }
+  }
+  return { rows: rows, total: total };
+}
+
 /**
  * Creates an HDFC payment session for an IntentAmplify order.
  * Called by intentamplify.html just before redirecting to the gateway.
@@ -846,70 +910,39 @@ function ia_hdfc_createSession(body) {
   const dates  = Object.keys(orders).sort();
   if (!dates.length) return { error: "No items selected." };
 
-  // 2. Compute authoritative IA total server-side (never trust client amount)
-  let grandTotal = 0;
-  let hasItems   = false;
-  for (const d of dates) {
-    const day = orders[d] || {};
-    for (const meal of IA_MEALS) {
-      const sel = day[meal];
-      if (!sel || !Object.keys(sel).length) continue;
-      if (!ia_isOpen(d, meal)) continue;
-      const menu = ia_getMenu(d, meal).items;
-      const priceOf = {};
-      menu.forEach(function(it) { priceOf[it.name] = Number(it.price) || 0; });
-      Object.keys(sel).forEach(function(itemName) {
-        const qty   = Number(sel[itemName]) || 0;
-        const price = priceOf[itemName];
-        if (qty > 0 && price !== undefined) { grandTotal += price * qty; hasItems = true; }
-      });
-    }
-  }
-  if (!hasItems || grandTotal <= 0) return { error: "Nothing valid to order." };
-
-  // 3. Generate gateway order ID (max 21 chars, alphanumeric, unique)
+  // 2. Generate gateway order ID (max 21 chars, alphanumeric, unique)
   //    Format: IA + YYMMDDHHMMSS + 5-char random = 19 chars
   const pad  = function(n) { return String(n).padStart(2, "0"); };
   const now  = new Date();
-  const ts   = String(now.getFullYear()).slice(2) + pad(now.getMonth() + 1) + pad(now.getDate())
+  const tsId = String(now.getFullYear()).slice(2) + pad(now.getMonth() + 1) + pad(now.getDate())
              + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
   const rand = Utilities.getUuid().replace(/-/g, "").slice(0, 5).toUpperCase();
-  const orderId = "IA" + ts + rand; // e.g. IA260617103245ABCDE
+  const orderId = "IA" + tsId + rand; // e.g. IA260617103245ABCDE
 
-  // 4. Store session in IA_PENDING_ORDERS (separate from HDFC_PENDING_ORDERS)
-  //    so the main Svaadh flow is never affected.
-  //
-  //    LOCKED read-modify-write. IA is a corporate channel where many employees
-  //    create sessions within the same minute (lunch rush). Without a lock, two
-  //    concurrent createSession calls both read the same property snapshot and the
-  //    second setProperty CLOBBERS the first customer's entry — that customer then
-  //    pays, the webhook fires, ia_hdfc_verifyAndSubmit finds no entry, and the
-  //    ORDER IS LOST despite a successful charge (the root cause of "paid but never
-  //    written to IA_Orders, even after multiple webhooks"). Hold the lock ONLY
-  //    across the property mutation — never across the slow HDFC /session call below.
+  // 3. Build the authoritative order rows SERVER-SIDE (never trust client amount).
+  //    enforceOpen=true → respect meal cutoffs at order-creation time.
+  const built = _iaBuildOrderRows(orderId, orders, phone, name, ia_now(),
+                                  "Pending Payment", "", "", /*enforceOpen=*/true);
+  const grandTotal = built.total;
+  if (!built.rows.length || grandTotal <= 0) return { error: "Nothing valid to order." };
+
+  // 4. DURABLE WRITE (Svaadh-style): persist the order to IA_Orders NOW, as
+  //    "Pending Payment", BEFORE redirecting to the gateway. The sheet row is the
+  //    single source of truth — it can never be lost in a Script-Property race
+  //    (the old lost-order bug). The webhook / frontend verify / reconciler simply
+  //    FLIP it to "Paid" once HDFC confirms the charge; ia_isGatewayUnpaid() keeps
+  //    unpaid rows out of the kitchen so a never-completed payment is never cooked.
+  //    Locked append (serialises concurrent lunch-rush checkouts cleanly).
   const _iaLock = LockService.getScriptLock();
   try { _iaLock.waitLock(20000); }
   catch (e) { return { error: "System busy — please retry payment in a moment." }; }
   try {
-    const props     = PropertiesService.getScriptProperties();
-    const iaPending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}");
-    const nowMs     = Date.now();
-    // Expire entries older than 30 min to keep property size under control
-    Object.keys(iaPending).forEach(function(k) {
-      if (nowMs - (iaPending[k].ts || 0) > 30 * 60 * 1000) delete iaPending[k];
-    });
-    iaPending[orderId] = {
-      ts:              nowMs,
-      phone:           phone,
-      pin:             body.pin,
-      name:            name,
-      orders:          orders,
-      expected_amount: grandTotal,
-      source:          "ia"
-    };
-    props.setProperty("IA_PENDING_ORDERS", JSON.stringify(iaPending));
+    const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+    ws.getRange(ws.getLastRow() + 1, 1, built.rows.length, IA_ORDERS_HEADERS.length)
+      .setValues(built.rows);
+    SpreadsheetApp.flush();
   } catch (e) {
-    return { error: "Could not save session: " + e.message };
+    return { error: "Could not save order: " + e.message };
   } finally {
     try { _iaLock.releaseLock(); } catch (_) {}
   }
@@ -987,149 +1020,118 @@ function ia_hdfc_verifyAndSubmit(body) {
   const orderId = String(body.order_id || "").trim();
   if (!orderId) return { error: "Missing order_id." };
 
-  // 1. Read IA pending session
-  const props     = PropertiesService.getScriptProperties();
-  const iaPending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}");
-  const entry     = iaPending[orderId];
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { error: "System busy, please retry." }; }
+  try {
+    const ws   = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+    const mine = ia_rows(ws).filter(function (r) { return String(r.Submission_ID || "") === orderId; });
+
+    // ── Sheet-durable path: the row was written at session creation (v21.1+) ──
+    if (mine.length) {
+      const expectedTotal = mine.reduce(function (s, r) { return s + (Number(r.Subtotal) || 0); }, 0);
+      // Idempotent: already flipped to Paid by a webhook / earlier verify.
+      if (mine.every(function (r) { return String(r.Payment_Status || "").toLowerCase() === "paid"; })) {
+        return { success: true, submission_id: orderId, total: expectedTotal };
+      }
+
+      // Verify CHARGED — Status API, with webhook-log fallback when the API is
+      // transiently unavailable. NEVER trust the client-supplied status string.
+      let statusCheck = hdfc_getOrderStatus(orderId);
+      if (!statusCheck.confirmed) {
+        const st = String(statusCheck.status || "").toUpperCase();
+        const transient = (st === "FETCH_ERROR" || st === "API_ERROR" || st === "UNKNOWN" || st === "NEW");
+        if (transient && typeof _checkWebhookLogForCharge === "function") {
+          const proof = _checkWebhookLogForCharge(orderId);
+          if (proof) {
+            console.log("ia_hdfc_verifyAndSubmit: Status API unavailable (" + st + "), trusting webhook for " + orderId);
+            statusCheck = { confirmed: true, status: "CHARGED", amount: proof.amount };
+          }
+        }
+      }
+      if (!statusCheck.confirmed) {
+        const apiStatus = String(statusCheck.status || "").toUpperCase();
+        return { error: "Payment could not be verified by HDFC. Status: " + apiStatus, paid: false, api_status: apiStatus };
+      }
+
+      // Anti-tamper: charged must cover the server-priced total (1 rupee tolerance).
+      const charged = Number(statusCheck.amount || 0);
+      if (expectedTotal > 0 && charged < expectedTotal - 1) {
+        console.error("IA AMOUNT TAMPER — orderId=" + orderId + " charged=" + charged + " expected=" + expectedTotal);
+        return { error: "Payment amount mismatch (charged Rs " + charged + " vs expected Rs " + expectedTotal + "). Contact support.",
+                 tamper_detected: true, charged_amount: charged, expected_amount: expectedTotal };
+      }
+
+      // Flip Pending Payment -> Paid (only the not-yet-paid rows).
+      const ts = ia_now();
+      mine.forEach(function (r) {
+        if (String(r.Payment_Status || "").toLowerCase() === "paid") return;
+        ws.getRange(r._row, 10).setValue("Paid");            // Payment_Status
+        ws.getRange(r._row, 12).setValue("Gateway (HDFC)");  // Approved_By
+        ws.getRange(r._row, 13).setValue(ts);                // Approved_At
+      });
+      SpreadsheetApp.flush();
+      try {
+        const cws  = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
+        const crow = ia_rows(cws).find(function (r) { return ia_normPhone(r.Phone) === ia_normPhone(mine[0].Phone); });
+        if (crow) cws.getRange(crow._row, 5).setValue(ts);
+      } catch (e) { /* non-fatal */ }
+      console.log("ia_hdfc_verifyAndSubmit: flipped " + mine.length + " row(s) -> Paid for " + orderId);
+      return { success: true, submission_id: orderId, total: expectedTotal };
+    }
+
+    // ── Legacy fallback: no sheet row — an in-flight order created before the
+    //    sheet-durable deploy. Reconstruct from IA_PENDING_ORDERS, write as Paid.
+    //    (Caller already holds the lock, so this must NOT acquire one.)
+    return _ia_legacyVerifyWritePaid(orderId, ws);
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+/**
+ * Transitional fallback for orders created before the sheet-durable refactor: the
+ * order data is only in IA_PENDING_ORDERS, not yet a row. Verifies CHARGED and
+ * writes the rows directly as Paid. Runs UNDER the caller's lock (no lock here).
+ */
+function _ia_legacyVerifyWritePaid(orderId, ws) {
+  const props = PropertiesService.getScriptProperties();
+  let iaPending; try { iaPending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}"); } catch (_) { iaPending = {}; }
+  const entry = iaPending[orderId];
   if (!entry) return { error: "Session expired or not found. Please contact support.", expired: true };
 
-  // 2. Verify with HDFC Status API — NEVER trust the client-supplied status string.
-  //    Same policy as the main Svaadh flow (hdfc_verifyReturnPayload).
   let statusCheck = hdfc_getOrderStatus(orderId);
-  // Webhook-independent fallback: if the Status API is transiently unavailable
-  // (urlfetch quota exhausted / network error), trust a logged ORDER_SUCCEEDED
-  // webhook — HDFC's own server-to-server event, equally authoritative. Mirrors
-  // the Svaadh reconciler (_reconcileSingleEntry). Without this, a quota-exhausted
-  // day would block confirmation for both the frontend AND the reconciler even
-  // though HDFC has already proven the payment CHARGED.
   if (!statusCheck.confirmed) {
     const st = String(statusCheck.status || "").toUpperCase();
     const transient = (st === "FETCH_ERROR" || st === "API_ERROR" || st === "UNKNOWN" || st === "NEW");
     if (transient && typeof _checkWebhookLogForCharge === "function") {
       const proof = _checkWebhookLogForCharge(orderId);
-      if (proof) {
-        console.log("ia_hdfc_verifyAndSubmit: Status API unavailable (" + st + "), trusting ORDER_SUCCEEDED webhook for " + orderId);
-        statusCheck = { confirmed: true, status: "CHARGED", amount: proof.amount };
-      }
+      if (proof) statusCheck = { confirmed: true, status: "CHARGED", amount: proof.amount };
     }
   }
   if (!statusCheck.confirmed) {
     const apiStatus = String(statusCheck.status || "").toUpperCase();
-    console.warn("ia_hdfc_verifyAndSubmit: not confirmed — orderId=" + orderId + " apiStatus=" + apiStatus);
-    return {
-      error: "Payment could not be verified by HDFC. Status: " + apiStatus,
-      paid:  false,
-      api_status: apiStatus
-    };
+    return { error: "Payment could not be verified by HDFC. Status: " + apiStatus, paid: false, api_status: apiStatus };
   }
-
-  // 3. Anti-tamper: charged amount must match what we told HDFC to charge.
-  //    ₹1 rounding tolerance accounts for SmartGateway rounding edge cases.
   const charged  = Number(statusCheck.amount || 0);
   const expected = Number(entry.expected_amount || 0);
   if (expected > 0 && charged < expected - 1) {
-    console.error("⚠️ IA AMOUNT TAMPER — orderId=" + orderId
-      + " charged=" + charged + " expected=" + expected);
-    return {
-      error:           "Payment amount mismatch (charged ₹" + charged
-                     + " vs expected ₹" + expected + "). Order NOT placed. Contact support.",
-      tamper_detected: true,
-      charged_amount:  charged,
-      expected_amount: expected
-    };
+    return { error: "Payment amount mismatch (charged Rs " + charged + " vs expected Rs " + expected + "). Order NOT placed. Contact support.",
+             tamper_detected: true, charged_amount: charged, expected_amount: expected };
   }
-
-  // 4. Write order rows (with concurrency lock)
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
-
-    // Idempotency: if rows already exist for this orderId (e.g. webhook beat us), skip re-write.
-    const existingRows = ia_rows(ws).filter(function(r) {
-      return String(r.Submission_ID || "") === orderId;
-    });
-    if (existingRows.length) {
-      console.log("ia_hdfc_verifyAndSubmit: rows already exist for " + orderId + " — skipping re-write (idempotent).");
-      return { success: true, submission_id: orderId, total: entry.expected_amount };
-    }
-
-    const ts          = ia_now();
-    const orders      = entry.orders || {};
-    const dates       = Object.keys(orders).sort();
-    const rowsToWrite = [];
-
-    for (const d of dates) {
-      const day = orders[d] || {};
-      for (const meal of IA_MEALS) {
-        const sel = day[meal];
-        if (!sel || !Object.keys(sel).length) continue;
-        // Allow slightly-past-cutoff orders through here since payment is confirmed.
-        // If the meal was truly closed at session-creation time ia_hdfc_createSession
-        // already excluded it from the total.
-        const menu    = ia_getMenu(d, meal).items;
-        const priceOf = {};
-        const colOf   = {};
-        menu.forEach(function(it) { 
-          priceOf[it.name] = Number(it.price) || 0; 
-          colOf[it.name] = it.col;
-        });
-
-        let sub = 0;
-        const lineItems = [], summary = [];
-        Object.keys(sel).forEach(function(itemName) {
-          const qty   = Number(sel[itemName]) || 0;
-          const price = priceOf[itemName];
-          if (qty <= 0 || price === undefined) return;
-          sub += price * qty;
-          const li = { name: itemName, qty: qty, price: price };
-          if (colOf[itemName]) li.col = colOf[itemName];
-          lineItems.push(li);
-          summary.push(qty + "\u00d7 " + itemName);
-        });
-        if (sub <= 0) continue;
-
-        rowsToWrite.push([
-          orderId,              // Submission_ID  (= gateway order_id for IA)
-          ts,                   // Timestamp
-          d,                    // Date
-          meal,                 // Meal
-          entry.phone,          // Phone
-          entry.name,           // Customer_Name
-          JSON.stringify(lineItems), // Items_JSON
-          summary.join(", "),   // Item_Summary
-          sub,                  // Subtotal
-          "Paid",               // Payment_Status — confirmed by HDFC gateway
-          orderId,              // Payment_Ref — gateway order ID as reference
-          "Gateway (HDFC)",     // Approved_By
-          ts,                   // Approved_At
-          "",                   // Notes
-          "Pending",            // Delivery_Status
-          "",                   // EnRoute_At
-          ""                    // Delivered_At
-        ]);
-      }
-    }
-
-    if (!rowsToWrite.length) return { error: "Nothing valid to write — all meals may be closed." };
-
-    ws.getRange(ws.getLastRow() + 1, 1, rowsToWrite.length, IA_ORDERS_HEADERS.length)
-      .setValues(rowsToWrite);
-
-    // Update Last_Order_At on the customer record
-    try {
-      const cws  = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
-      const crow = ia_rows(cws).find(function(r) {
-        return ia_normPhone(r.Phone) === ia_normPhone(entry.phone);
-      });
-      if (crow) cws.getRange(crow._row, 5).setValue(ts);
-    } catch (e) { /* non-fatal */ }
-
-    console.log("ia_hdfc_verifyAndSubmit: wrote " + rowsToWrite.length + " rows for " + orderId);
+  // Idempotency (webhook raced us): re-check for rows now.
+  if (ia_rows(ws).some(function (r) { return String(r.Submission_ID || "") === orderId; })) {
     return { success: true, submission_id: orderId, total: entry.expected_amount };
-
-  } finally {
-    lock.releaseLock();
   }
+  const built = _iaBuildOrderRows(orderId, entry.orders || {}, entry.phone, entry.name, ia_now(),
+                                  "Paid", "Gateway (HDFC)", ia_now(), /*enforceOpen=*/false);
+  if (!built.rows.length) return { error: "Nothing valid to write — all meals may be closed." };
+  ws.getRange(ws.getLastRow() + 1, 1, built.rows.length, IA_ORDERS_HEADERS.length).setValues(built.rows);
+  SpreadsheetApp.flush();
+  try {
+    const cws  = ia_getTab(IA_TAB_CUSTOMERS, IA_CUSTOMERS_HEADERS);
+    const crow = ia_rows(cws).find(function (r) { return ia_normPhone(r.Phone) === ia_normPhone(entry.phone); });
+    if (crow) cws.getRange(crow._row, 5).setValue(ia_now());
+  } catch (e) { /* non-fatal */ }
+  return { success: true, submission_id: orderId, total: entry.expected_amount };
 }
 

@@ -271,7 +271,73 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
 function reconcilePendingIAOrders() {
   if (!PAYMENT_GATEWAY_ENABLED) return;
   if (typeof ia_hdfc_verifyAndSubmit !== "function") return;
+  // Primary (v21.1+): flip sheet-durable "Pending Payment" rows once HDFC confirms.
+  try { _reconcileIAPendingPaymentRows(); } catch (e) { Logger.log("_reconcileIAPendingPaymentRows error: " + e.message); }
+  // Transitional: drain any pre-refactor IA_PENDING_ORDERS entries (no sheet row yet).
+  _reconcileIALegacyPendingProp();
+}
 
+/**
+ * Sheet-scan reconciler (durable model): find gateway "Pending Payment" rows in
+ * IA_Orders and, for any order older than 2 min, confirm with HDFC and flip it to
+ * Paid (via ia_hdfc_verifyAndSubmit). Rows still unpaid after 45 min with no charge
+ * are marked "Payment Failed" so they drop out of the customer + prep views. Nothing
+ * can be lost here — the order data is already safely written to the sheet.
+ */
+function _reconcileIAPendingPaymentRows() {
+  if (typeof ia_rows !== "function") return;
+  const ss = getSpreadsheet();
+  const ws = ss.getSheetByName(IA_TAB_ORDERS);
+  if (!ws || ws.getLastRow() < 2) return;
+
+  const groups = {}; // orderId -> [rowObjs]
+  ia_rows(ws).forEach(function (r) {
+    if (String(r.Payment_Status || "").toLowerCase() !== "pending payment") return;
+    const oid = String(r.Submission_ID || "").trim();
+    if (oid) (groups[oid] = groups[oid] || []).push(r);
+  });
+  const oids = Object.keys(groups);
+  if (!oids.length) return;
+
+  const now = Date.now();
+  let checked = 0, flipped = 0, failed = 0;
+  oids.forEach(function (oid) {
+    const grp   = groups[oid];
+    const tsVal = grp[0].Timestamp;
+    const ageMs = now - (tsVal ? new Date(tsVal).getTime() : now);
+    if (ageMs < 2 * 60 * 1000) return; // let the customer's own browser finish first
+    checked++;
+
+    let sc; try { sc = hdfc_getOrderStatus(oid); } catch (e) { sc = { confirmed: false, status: "FETCH_ERROR" }; }
+    let confirmed = sc.confirmed;
+    if (!confirmed) {
+      const st = String(sc.status || "").toUpperCase();
+      if ((st === "FETCH_ERROR" || st === "API_ERROR" || st === "UNKNOWN" || st === "NEW")
+          && typeof _checkWebhookLogForCharge === "function" && _checkWebhookLogForCharge(oid)) {
+        confirmed = true;
+      }
+    }
+
+    if (confirmed) {
+      // Centralised flip (re-checks + anti-tamper + Pending Payment -> Paid). Idempotent.
+      try { const res = ia_hdfc_verifyAndSubmit({ order_id: oid }); if (res && res.success) flipped++; }
+      catch (e) { Logger.log("_reconcileIAPendingPaymentRows: flip error on " + oid + " — " + e.message); }
+    } else if (ageMs > 45 * 60 * 1000) {
+      // Abandoned / failed payment — remove from customer + prep views.
+      grp.forEach(function (r) { try { ws.getRange(r._row, 10).setValue("Payment Failed"); } catch (_) {} });
+      failed++;
+    }
+  });
+  if (checked) Logger.log("_reconcileIAPendingPaymentRows: checked " + checked + ", flipped " + flipped + ", failed " + failed);
+}
+
+/**
+ * Transitional sweep of the old IA_PENDING_ORDERS Script Property — covers orders
+ * created BEFORE the sheet-durable refactor (which have a property entry but no row
+ * yet). ia_hdfc_verifyAndSubmit's legacy fallback writes them. Naturally empties out
+ * within ~30 min post-deploy, then becomes a no-op.
+ */
+function _reconcileIALegacyPendingProp() {
   const props = PropertiesService.getScriptProperties();
   let pending;
   try { pending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}"); }

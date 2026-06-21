@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.0; // 2026-06-21: CRITICAL — lock the IA_PENDING_ORDERS read-modify-write in ia_hdfc_createSession (+ reconciler) to stop the lost-update race that dropped paid IA orders during concurrent (lunch-rush) checkouts. Plus 20.9 IA reconciliation sweep + webhook-log fallback.
+const CODE_VERSION   = 21.1; // 2026-06-21: IA orders now Svaadh-style DURABLE — ia_hdfc_createSession writes the IA_Orders row as "Pending Payment" up front; verify/webhook/reconciler FLIP it to "Paid". Order data lives in the sheet, never in a Script Property → no race-loss possible. Prep views exclude unpaid/abandoned gateway rows (ia_isGatewayUnpaid). Frontend scans sheet post-payment → opens Manage Orders when Paid.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
