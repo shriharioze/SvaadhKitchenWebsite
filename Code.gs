@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 20.9; // 2026-06-21: IA payment-reconciliation sweep (reconcilePendingIAOrders on the 5-min trigger) + webhook-log fallback in ia_hdfc_verifyAndSubmit, so a paid IA order self-heals even if every webhook fails and the tab was closed.
+const CODE_VERSION   = 21.0; // 2026-06-21: CRITICAL — lock the IA_PENDING_ORDERS read-modify-write in ia_hdfc_createSession (+ reconciler) to stop the lost-update race that dropped paid IA orders during concurrent (lunch-rush) checkouts. Plus 20.9 IA reconciliation sweep + webhook-log fallback.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

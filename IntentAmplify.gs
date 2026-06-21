@@ -878,6 +878,18 @@ function ia_hdfc_createSession(body) {
 
   // 4. Store session in IA_PENDING_ORDERS (separate from HDFC_PENDING_ORDERS)
   //    so the main Svaadh flow is never affected.
+  //
+  //    LOCKED read-modify-write. IA is a corporate channel where many employees
+  //    create sessions within the same minute (lunch rush). Without a lock, two
+  //    concurrent createSession calls both read the same property snapshot and the
+  //    second setProperty CLOBBERS the first customer's entry — that customer then
+  //    pays, the webhook fires, ia_hdfc_verifyAndSubmit finds no entry, and the
+  //    ORDER IS LOST despite a successful charge (the root cause of "paid but never
+  //    written to IA_Orders, even after multiple webhooks"). Hold the lock ONLY
+  //    across the property mutation — never across the slow HDFC /session call below.
+  const _iaLock = LockService.getScriptLock();
+  try { _iaLock.waitLock(20000); }
+  catch (e) { return { error: "System busy — please retry payment in a moment." }; }
   try {
     const props     = PropertiesService.getScriptProperties();
     const iaPending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}");
@@ -898,6 +910,8 @@ function ia_hdfc_createSession(body) {
     props.setProperty("IA_PENDING_ORDERS", JSON.stringify(iaPending));
   } catch (e) {
     return { error: "Could not save session: " + e.message };
+  } finally {
+    try { _iaLock.releaseLock(); } catch (_) {}
   }
 
   // 5. Call HDFC SmartGateway /session endpoint directly

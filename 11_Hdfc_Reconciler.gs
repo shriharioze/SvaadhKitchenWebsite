@@ -281,7 +281,7 @@ function reconcilePendingIAOrders() {
   if (!orderIds.length) return;
 
   const now = Date.now();
-  let changed = false;
+  const toDelete = []; // orderIds to remove from the store AFTER the verify pass
   const summary = { checked: 0, skippedFresh: 0, reconciled: 0, expired: 0, notCharged: 0, tamper: 0, errors: 0 };
 
   for (let i = 0; i < orderIds.length; i++) {
@@ -291,25 +291,27 @@ function reconcilePendingIAOrders() {
 
     // Abandoned/unpaid (or already handled long ago) — drop without burning a
     // Status-API call. The webhook processor still covers any logged webhook.
-    if (ageMs > 30 * 60 * 1000) { delete pending[orderId]; changed = true; summary.expired++; continue; }
+    if (ageMs > 30 * 60 * 1000) { toDelete.push(orderId); summary.expired++; continue; }
 
     // Let the customer's own browser poll finish first.
     if (ageMs < 2 * 60 * 1000) { summary.skippedFresh++; continue; }
     summary.checked++;
 
+    // NB: ia_hdfc_verifyAndSubmit takes the script lock internally for its sheet
+    // write, so we must NOT hold a lock across this call (would self-deadlock).
     let res;
     try { res = ia_hdfc_verifyAndSubmit({ order_id: orderId, status: "CHARGED" }); }
     catch (e) { summary.errors++; Logger.log("reconcilePendingIAOrders: error on " + orderId + " — " + e.message); continue; }
 
     if (res && res.success) {
       // Rows written, or idempotent skip because a webhook/poll beat us. Done.
-      summary.reconciled++; delete pending[orderId]; changed = true;
+      summary.reconciled++; toDelete.push(orderId);
     } else if (res && res.expired) {
       // Session no longer in the store (already cleaned elsewhere) — stop tracking.
-      summary.expired++; delete pending[orderId]; changed = true;
+      summary.expired++; toDelete.push(orderId);
     } else if (res && res.tamper_detected) {
       // Amount mismatch — never auto-retry a tamper; surface it and stop tracking.
-      summary.tamper++; delete pending[orderId]; changed = true;
+      summary.tamper++; toDelete.push(orderId);
       Logger.log("reconcilePendingIAOrders: ⚠️ TAMPER on " + orderId + " — " + JSON.stringify(res));
     } else {
       // Not charged yet / transient — leave in place and retry next sweep.
@@ -317,7 +319,22 @@ function reconcilePendingIAOrders() {
     }
   }
 
-  if (changed) { try { props.setProperty("IA_PENDING_ORDERS", JSON.stringify(pending)); } catch(_) {} }
+  // Remove processed entries under a SHORT lock, re-reading the property first so
+  // we never clobber a fresh session that ia_hdfc_createSession added while we were
+  // verifying (the same lost-update race we fixed in createSession). Only the
+  // specific processed ids are deleted — concurrent additions are preserved.
+  if (toDelete.length) {
+    const lock = LockService.getScriptLock();
+    try { lock.waitLock(20000); }
+    catch (e) { Logger.log("reconcilePendingIAOrders: lock busy, will retry next sweep."); return summary; }
+    try {
+      let cur;
+      try { cur = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}"); } catch (_) { cur = {}; }
+      toDelete.forEach(function (id) { delete cur[id]; });
+      props.setProperty("IA_PENDING_ORDERS", JSON.stringify(cur));
+    } finally { try { lock.releaseLock(); } catch (_) {} }
+  }
+
   if (summary.checked || summary.expired) Logger.log("reconcilePendingIAOrders summary: " + JSON.stringify(summary));
   return summary;
 }

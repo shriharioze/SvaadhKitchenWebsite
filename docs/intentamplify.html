@@ -817,8 +817,16 @@
         catch(e){ res2=null; }
         ov.remove();
         if(!res2||!res2.success){
-          toast((res2&&res2.error)||"Payment could not be confirmed. Contact support if money was deducted.");
-          if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Retry payment"; }
+          // The popup reported a successful charge but the immediate write didn't
+          // confirm. The money likely WENT THROUGH \u2014 do NOT prompt a re-pay (that
+          // risks a double charge). The webhook + 5-min reconciler will still write
+          // the row; scan the sheet and surface it in Manage Orders when it lands.
+          toast("Payment received \u2014 confirming your order. Please don't pay again.");
+          const _ok = await _iaConfirmInSheetThenManage(orderId);
+          if(!_ok){
+            if(btn){ btn.disabled=false; btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+S.total+" via HDFC Gateway"; }
+            toast("Still confirming with our servers. If money was deducted your order will appear in My Orders shortly \u2014 no need to pay again. Contact support if it doesn't.", 8000);
+          }
           return;
         }
         $("okName").textContent=S.name||"";
@@ -827,6 +835,10 @@
         if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
         $("okPay").innerHTML=`\u2705 Payment of <b>\u20b9${res2.total}</b> confirmed via <b>HDFC Gateway</b>.`;
         show(4);
+        // Post-payment sheet scan: confirm the order is actually recorded in
+        // IA_Orders, then auto-open Manage Orders so the customer SEES it. Mirrors
+        // order.html's post-payment verification.
+        _iaConfirmInSheetThenManage(orderId);
       };
 
       let firedOnce=false;
@@ -949,7 +961,29 @@
       try{ localStorage.removeItem("ia_phone"); localStorage.removeItem("ia_pin"); localStorage.removeItem("ia_name"); }catch(_){}
       location.reload();
     }
-    async function showManageOrders(){
+    // After an IA gateway payment, scan the IA_Orders SHEET (not just the HDFC
+    // status) until the order actually appears as a row, then open Manage Orders so
+    // the customer can SEE it recorded. Mirrors order.html's post-payment sheet scan.
+    // Resilient to WHO writes the row — frontend verify, the webhook processor, or
+    // the 5-min reconciler — whichever lands it first, this surfaces it. ~3 min window.
+    async function _iaConfirmInSheetThenManage(orderId){
+      if(!orderId || !S.phone) return false;
+      const MAX_POLLS=40, DELAY=4500; // ~3 minutes
+      for(let i=0;i<MAX_POLLS;i++){
+        try{
+          const r=await api("ia_myOrders",{phone:S.phone});
+          const rows=(r&&r.orders)||[];
+          if(rows.some(function(o){ return String(o.submission_id||"")===orderId; })){
+            showManageOrders(orderId);
+            return true;
+          }
+        }catch(_){ /* transient — keep polling */ }
+        await new Promise(function(res){ setTimeout(res,DELAY); });
+      }
+      return false; // not found within the window — leave the success screen as-is
+    }
+
+    async function showManageOrders(highlightId){
       $("moOverlay").style.display="flex"; $("moList").innerHTML='<div class="sub" style="margin:0">Loading…</div>';
       let r; try{ r=await api("ia_myOrders",{phone:S.phone}); }catch(e){ $("moList").innerHTML='<div class="sub" style="margin:0">Could not load orders.</div>'; return; }
       const orders=(r.orders||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
@@ -957,7 +991,9 @@
       $("moList").innerHTML=orders.map(function(o){
         const paid=String(o.payment_status).toLowerCase()==="paid";
         const dd=new Date(o.date+"T00:00:00").toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
-        return `<div class="mo-card"><div class="top"><span>${dd} · ${o.meal}</span><span class="mo-pill ${paid?'paid':'pend'}">${o.payment_status}</span></div>`+
+        const hl=(highlightId && String(o.submission_id||"")===String(highlightId))
+          ? ' style="outline:2px solid #16a34a;outline-offset:1px;"' : '';
+        return `<div class="mo-card"${hl}><div class="top"><span>${dd} · ${o.meal}</span><span class="mo-pill ${paid?'paid':'pend'}">${o.payment_status}</span></div>`+
                `<div class="it">${o.summary||""} · ₹${o.subtotal}</div></div>`;
       }).join("");
     }
