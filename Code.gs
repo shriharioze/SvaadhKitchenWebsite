@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.3; // 2026-06-21: IA gateway -> MANUAL UPI switch (IA_GATEWAY_ENABLED flag, independent of Svaadh) + reconcile 1min. IA app v26.06.21.01.
+const CODE_VERSION   = 21.4; // 2026-06-21: Payout/settlement reconciler (reconcilePayout) — matches HDFC T+2 payout report against gateway-Paid orders by embedded order_id + amount, flags unsettled/mismatch. Plus IA manual switch + menu fix.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
