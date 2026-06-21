@@ -273,7 +273,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.21.02
+        Svaadh Kitchen v26.06.21.03
       </div>
     </div>
 
@@ -298,7 +298,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.21.02
+        Svaadh Kitchen v26.06.21.03
       </div>
     </div>
 
@@ -374,7 +374,7 @@
         <button class="btn btn-primary" onclick="ia_resetForAnotherOrder()">Place Another Order</button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;">
-        Svaadh Kitchen v26.06.21.02
+        Svaadh Kitchen v26.06.21.03
       </div>
     </div>
 
@@ -392,7 +392,7 @@
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     const APPS_SCRIPT_URL = API;
-    const APP_VERSION = "26.06.21.02";
+    const APP_VERSION = "26.06.21.03";
     const STEPS = ["Account","Dates","Meals","Pay"];
     const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const $ = id => document.getElementById(id);
@@ -947,6 +947,63 @@
       if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
       $("okPay").innerHTML=`📲 Please pay <b>₹${(res.total!=null?res.total:S.total)}</b> via UPI to <b>${(S.cfg&&S.cfg.upi)||""}</b>. Your order is confirmed once we verify the payment.`;
       show(4);
+      // Auto-confirm the order actually landed in our system (mirrors order.html):
+      // poll, show a "checking…" → "confirmed ✓" message, then a button to view it
+      // in Manage Orders. Fully self-contained + error-proof — never blocks success.
+      ia_pollOrderConfirm(res.submission_id || "");
+    }
+
+    // Robust post-order confirmation modal. Polls ia_myOrders until the just-placed
+    // order id appears, then flips to "confirmed" with a button that opens Manage
+    // Orders (highlighting it). Times out gracefully (the order was already saved,
+    // so the button still appears). EVERYTHING is wrapped so a hiccup here can never
+    // break the success screen underneath.
+    function ia_pollOrderConfirm(orderId){
+      try{
+        if(!orderId || !S.phone) return;
+        const ex=document.getElementById("iaConfirmModal"); if(ex) ex.remove();
+        const ov=document.createElement("div");
+        ov.id="iaConfirmModal";
+        ov.style.cssText="position:fixed;inset:0;z-index:70000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Poppins',system-ui,-apple-system,Arial,sans-serif;";
+        ov.innerHTML=
+          '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:26px 22px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3);">'+
+            '<div id="iaCfIcon" style="font-size:2.4rem;margin-bottom:10px;">⏳</div>'+
+            '<div id="iaCfTitle" style="font-size:1.1rem;font-weight:800;color:#1E1240;margin-bottom:10px;">Confirming your order…</div>'+
+            '<div id="iaCfBody" style="font-size:.86rem;color:#555;line-height:1.6;margin-bottom:16px;">Checking that your order is recorded in our system. This takes just a moment — please don\'t place it again.</div>'+
+            '<div id="iaCfDots" style="font-size:.95rem;color:#0f766e;letter-spacing:4px;margin-bottom:6px;">● ● ●</div>'+
+            '<button id="iaCfBtn" style="display:none;width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;margin-top:6px;">📋 View in Manage Orders</button>'+
+          '</div>';
+        document.body.appendChild(ov);
+
+        let done=false;
+        const finish=(found)=>{
+          if(done) return; done=true;
+          try{
+            const ic=document.getElementById("iaCfIcon"), t=document.getElementById("iaCfTitle"),
+                  b=document.getElementById("iaCfBody"), d=document.getElementById("iaCfDots"), btn=document.getElementById("iaCfBtn");
+            if(d) d.style.display="none";
+            if(ic) ic.textContent="✅";
+            if(t) t.textContent="Order confirmed!";
+            if(b) b.innerHTML = found
+              ? "Your order is safely recorded in our system. 🎉"
+              : "Your order has been placed. Tap below to view it in your orders.";
+            if(btn){ btn.style.display="block"; btn.onclick=function(){ try{ov.remove();}catch(_){ } try{ showManageOrders(orderId); }catch(_){ } }; }
+          }catch(_){ /* ignore UI errors */ }
+        };
+
+        (async function(){
+          const MAX=45, DELAY=4000; // ~3 min ceiling
+          for(let i=0;i<MAX && !done;i++){
+            try{
+              const r=await api("ia_myOrders",{phone:S.phone});
+              const rows=(r&&r.orders)||[];
+              if(rows.some(function(o){ return String(o.submission_id||"")===String(orderId); })){ finish(true); return; }
+            }catch(_){ /* transient — keep polling */ }
+            await new Promise(function(res){ setTimeout(res,DELAY); });
+          }
+          finish(false); // timed out — the order was still saved; let them proceed
+        })();
+      }catch(_){ /* confirmation UI must never break the success flow */ }
     }
 
     async function ia_handleGatewayReturn(){
