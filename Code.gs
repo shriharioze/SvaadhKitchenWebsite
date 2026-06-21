@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.2; // 2026-06-21: reconcile trigger 5min→1min (re-run setupReconcileTrigger). IA orders now Svaadh-style DURABLE — ia_hdfc_createSession writes the IA_Orders row as "Pending Payment" up front; verify/webhook/reconciler FLIP it to "Paid". Order data lives in the sheet, never in a Script Property → no race-loss possible. Prep views exclude unpaid/abandoned gateway rows (ia_isGatewayUnpaid). Frontend scans sheet post-payment → opens Manage Orders when Paid.
+const CODE_VERSION   = 21.3; // 2026-06-21: IA gateway -> MANUAL UPI switch (IA_GATEWAY_ENABLED flag, independent of Svaadh) + reconcile 1min. IA app v26.06.21.01.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

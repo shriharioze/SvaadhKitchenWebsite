@@ -273,7 +273,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.19.16
+        Svaadh Kitchen v26.06.21.01
       </div>
     </div>
 
@@ -298,7 +298,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.19.16
+        Svaadh Kitchen v26.06.21.01
       </div>
     </div>
 
@@ -335,6 +335,28 @@
           <div style="text-align:center;margin-top:10px;font-size:.72rem;color:#94a3b8;">256-bit SSL · UPI · No card data stored</div>
         </div>
       </div>
+
+      <!-- Manual UPI fallback (shown when IA gateway is off) -->
+      <div class="pay-card" id="manualPayCard" style="display:none;">
+        <div class="pay-top" style="background:linear-gradient(135deg,#0f766e,#115e59);">
+          <div class="lbl">Pay via UPI</div>
+          <div class="amt">₹<span id="manualAmt">0</span></div>
+          <div class="badge">UPI · Manual</div>
+        </div>
+        <div class="pay-body">
+          <div style="text-align:center;font-size:.8rem;color:#334155;line-height:1.6;margin-bottom:12px;">
+            Pay <b>₹<span id="manualAmt2">0</span></b> to the UPI ID below, then tap <b>Place Order</b>.
+          </div>
+          <div style="text-align:center;margin-bottom:14px;">
+            <span class="upi-id" id="manualUpiId" onclick="copyManualUpi()">—</span>
+            <div style="font-size:.66rem;color:#94a3b8;margin-top:5px;">tap to copy · <span id="manualUpiName">Svaadh Kitchen</span></div>
+          </div>
+          <button id="iaManualBtn" class="btn btn-primary" style="font-size:1rem;padding:16px;border-radius:14px;box-shadow:0 4px 16px rgba(15,118,110,.3);" onclick="ia_placeManualOrder()">
+            ✅ I've Paid — Place Order
+          </button>
+          <div style="text-align:center;margin-top:10px;font-size:.7rem;color:#94a3b8;">Your order is confirmed once we verify the payment.</div>
+        </div>
+      </div>
     </div>
 
     <!-- STEP 4: DONE -->
@@ -352,7 +374,7 @@
         <button class="btn btn-primary" onclick="ia_resetForAnotherOrder()">Place Another Order</button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;">
-        Svaadh Kitchen v26.06.19.16
+        Svaadh Kitchen v26.06.21.01
       </div>
     </div>
 
@@ -370,7 +392,7 @@
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     const APPS_SCRIPT_URL = API;
-    const APP_VERSION = "26.06.19.16";
+    const APP_VERSION = "26.06.21.01";
     const STEPS = ["Account","Dates","Meals","Pay"];
     const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const $ = id => document.getElementById(id);
@@ -713,8 +735,18 @@
         });
       });
       $("revLines").innerHTML=lines.join(""); S.total=total;
-      ["revTotal","payAmt","payAmt2"].forEach(id=>{ const el=$(id); if(el) el.textContent=total; });
+      ["revTotal","payAmt","payAmt2","manualAmt","manualAmt2"].forEach(id=>{ const el=$(id); if(el) el.textContent=total; });
       const btn=$("iaGatewayBtn"); if(btn){ btn.innerHTML="\uD83D\uDD12 Pay \u20b9"+total+" via HDFC Gateway"; }
+      // Gateway ON \u2192 show the HDFC card; OFF \u2192 show the manual UPI card. Switch is
+      // server-driven (ia_config.gateway) so it flips without a frontend redeploy.
+      const gwOn=!!(S.cfg && S.cfg.gateway);
+      const gwCard=$("payCard"), mCard=$("manualPayCard");
+      if(gwCard) gwCard.style.display=gwOn?"":"none";
+      if(mCard)  mCard.style.display=gwOn?"none":"";
+      if(!gwOn){
+        const uid=$("manualUpiId"); if(uid) uid.textContent=(S.cfg&&S.cfg.upi)||"\u2014";
+        const un=$("manualUpiName"); if(un) un.textContent=(S.cfg&&S.cfg.upi_name)||"Svaadh Kitchen";
+      }
       $("next").disabled=(total<=0); $("next").style.opacity=(total>0)?"1":"0.5";
     }
     function updatePlaceBtn(){
@@ -882,7 +914,40 @@
       }, 1000);
     }
 
-    async function placeOrder(){ ia_initiatePayment(); }
+    async function placeOrder(){
+      // Server-driven switch: gateway ON → HDFC popup flow; OFF → manual UPI.
+      if(S.cfg && S.cfg.gateway){ ia_initiatePayment(); } else { ia_placeManualOrder(); }
+    }
+
+    function copyManualUpi(){
+      const v=(S.cfg&&S.cfg.upi)||""; if(!v) return;
+      try{ navigator.clipboard.writeText(v); toast("UPI ID copied"); }catch(_){ toast(v); }
+    }
+
+    // Manual (non-gateway) order: record the order as Pending via ia_submitOrder.
+    // The customer pays to the UPI ID out-of-band; an admin verifies + approves.
+    async function ia_placeManualOrder(){
+      if(S._iaPlacingManual) return; S._iaPlacingManual=true;
+      const btn=$("iaManualBtn"), nextBtn=$("next");
+      if(btn){ btn.disabled=true; btn.textContent="⏳ Placing order…"; }
+      if(nextBtn) nextBtn.disabled=true;
+      let res;
+      try{ res=await post({_action:"ia_submitOrder",phone:S.phone,pin:S.pin,name:S.name,orders:S.cart}); }
+      catch(e){ res=null; }
+      S._iaPlacingManual=false;
+      if(!res||!res.success){
+        if(btn){ btn.disabled=false; btn.textContent="✅ I've Paid — Place Order"; }
+        if(nextBtn) nextBtn.disabled=false;
+        toast((res&&res.error)||"Could not place order. Please try again.");
+        return;
+      }
+      $("okName").textContent=S.name||"";
+      $("okId").textContent=res.submission_id||"";
+      $("okTotal").textContent=(res.total!=null?res.total:S.total);
+      if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
+      $("okPay").innerHTML=`📲 Please pay <b>₹${(res.total!=null?res.total:S.total)}</b> via UPI to <b>${(S.cfg&&S.cfg.upi)||""}</b>. Your order is confirmed once we verify the payment.`;
+      show(4);
+    }
 
     async function ia_handleGatewayReturn(){
       const params=new URLSearchParams(window.location.search);

@@ -19,10 +19,15 @@
 // Optional Script Properties:
 //   IA_UPI_VPA   → UPI id shown to employees for manual payment
 //   IA_UPI_NAME  → payee display name (defaults to "Svaadh Kitchen")
+//   IA_GATEWAY_ENABLED → "true" to use the HDFC gateway for IntentAmplify.
+//                  ANYTHING ELSE (or unset) = MANUAL UPI. This is INDEPENDENT of
+//                  the global PAYMENT_GATEWAY_ENABLED, so IA can run manual while
+//                  the main Svaadh site keeps the gateway on. Default = manual.
 // ============================================================
 
-const IA_UPI_VPA       = SP.getProperty("IA_UPI_VPA")  || "";
+const IA_UPI_VPA       = SP.getProperty("IA_UPI_VPA")  || "9819969682@hdfc";
 const IA_UPI_NAME      = SP.getProperty("IA_UPI_NAME") || "Svaadh Kitchen";
+const IA_GATEWAY_ENABLED = SP.getProperty("IA_GATEWAY_ENABLED") === "true";
 const IA_COMPANY_NAME  = "IntentAmplify";
 const IA_FIXED_ADDRESS = "S4 Towers, Magarpatta";
 
@@ -813,7 +818,8 @@ function ia_config() {
     cutoffs: IA_CUTOFFS,
     upi: IA_UPI_VPA,
     upi_name: IA_UPI_NAME,
-    version: "26.06.17.11"
+    gateway: IA_GATEWAY_ENABLED,   // false → frontend shows manual UPI flow
+    version: "26.06.21.01"
   };
 }
 
@@ -897,6 +903,7 @@ function _iaBuildOrderRows(orderId, ordersObj, phone, name, ts, paymentStatus, a
  * @returns {{ success, payment_url, order_id } | { error }}
  */
 function ia_hdfc_createSession(body) {
+  if (!IA_GATEWAY_ENABLED) return { error: "IntentAmplify gateway is disabled — please pay via UPI." };
   if (!PAYMENT_GATEWAY_ENABLED) return { error: "Gateway not enabled." };
   if (!HDFC_MERCHANT_ID || !HDFC_API_KEY) return { error: "Gateway credentials not configured." };
 
