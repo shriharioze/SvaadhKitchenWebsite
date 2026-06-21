@@ -16,11 +16,14 @@ function setupReconcileTrigger() {
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === "reconcilePendingOrders") ScriptApp.deleteTrigger(t);
   });
+  // everyMinutes() only accepts 1, 5, 10, 15, or 30 — so the faster-recovery
+  // options are 1 min (chosen) or 5 min; 2/3 are not valid Apps Script intervals.
+  // The reconciler early-exits when nothing is pending, so idle 1-min runs are cheap.
   ScriptApp.newTrigger("reconcilePendingOrders")
     .timeBased()
-    .everyMinutes(5)
+    .everyMinutes(1)
     .create();
-  return "Reconcile trigger set — runs every 5 minutes.";
+  return "Reconcile trigger set — runs every 1 minute.";
 }
 
 function reconcilePendingOrders() {

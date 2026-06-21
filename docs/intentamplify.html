@@ -179,7 +179,7 @@
     <h1>🍱 IntentAmplify Meals</h1>
     <p>Powered by Svaadh Kitchen</p>
   </div>
-  <button class="avatar-btn" id="avatarBtn" onclick="openDrawer()" aria-label="Open menu">SO</button>
+  <button class="avatar-btn" id="avatarBtn" onclick="openDrawer()" aria-label="Open menu" style="position:relative;">SO<span id="avatarUpdateDot" style="display:none;position:absolute;top:0;right:0;width:10px;height:10px;background:#c0392b;border:2px solid #fff;border-radius:50%;"></span></button>
 
   <!-- PROFILE DRAWER -->
   <div class="pd-overlay" id="pdOverlay" onclick="closeDrawer()"></div>
@@ -193,6 +193,9 @@
       <button class="pd-x" onclick="closeDrawer()" aria-label="Close">✕</button>
     </div>
     <nav class="pd-nav">
+      <button type="button" class="pd-item" id="pdUpdateItem" style="display:none;color:#c0392b;font-weight:700;" onclick="location.reload(true);">
+        <span class="pd-icon">🔄</span><span class="pd-label">Update Available <span class="pd-sub">Tap to refresh</span></span>
+      </button>
       <button type="button" class="pd-item" onclick="closeDrawer(); showManageOrders();">
         <span class="pd-icon">🛒</span><span class="pd-label">Manage Orders</span>
       </button>
@@ -270,7 +273,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.19.16 <a href="#" class="hard-refresh-link" onclick="location.reload(true)" style="color:var(--muted);display:none;text-decoration:none;">· Hard Refresh</a>
+        Svaadh Kitchen v26.06.19.16
       </div>
     </div>
 
@@ -295,7 +298,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.19.16 <a href="#" class="hard-refresh-link" onclick="location.reload(true)" style="color:var(--muted);display:none;text-decoration:none;">· Hard Refresh</a>
+        Svaadh Kitchen v26.06.19.16
       </div>
     </div>
 
@@ -349,7 +352,7 @@
         <button class="btn btn-primary" onclick="ia_resetForAnotherOrder()">Place Another Order</button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;">
-        Svaadh Kitchen v26.06.19.16 <a href="#" class="hard-refresh-link" onclick="location.reload(true)" style="color:var(--muted);display:none;text-decoration:none;">· Hard Refresh</a>
+        Svaadh Kitchen v26.06.19.16
       </div>
     </div>
 
@@ -401,12 +404,11 @@
     (async function(){
       try{ S.cfg=await api("ia_config"); }catch(e){ S.cfg={address:"S4 Towers, Magarpatta",meals:["Lunch","Dinner"],cutoffs:{Lunch:{h:11,m:0},Dinner:{h:17,m:0}}}; }
       
+      // Update available → surface it in the menu drawer (item + avatar dot),
+      // NOT appended to the footer version label (which stays "Svaadh Kitchen vX").
       if(S.cfg && S.cfg.version && S.cfg.version !== APP_VERSION){
-        document.querySelectorAll('.hard-refresh-link').forEach(el=>{
-          el.style.display='inline';
-          el.style.color='#c0392b'; el.style.fontWeight='600';
-          el.innerHTML=" · Update Available (Tap to Refresh)";
-        });
+        const u=document.getElementById('pdUpdateItem'); if(u) u.style.display='flex';
+        const dot=document.getElementById('avatarUpdateDot'); if(dot) dot.style.display='block';
       }
 
       const now=new Date(); S.calY=now.getFullYear(); S.calM=now.getMonth();
