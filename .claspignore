@@ -33,3 +33,8 @@ Scripts/**
 *.md
 *.txt
 README*
+
+# Local debug / scratch scripts — never deploy to the live Apps Script project
+DebugIA.gs
+test_ia.js
+old_order.html

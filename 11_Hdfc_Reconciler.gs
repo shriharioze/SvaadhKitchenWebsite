@@ -31,6 +31,12 @@ function reconcilePendingOrders() {
   // reaches "Refunded" even if the HDFC REFUND_SUCCEEDED webhook never arrives.
   try { reconcilePendingRefunds(); } catch (e) { Logger.log("reconcilePendingRefunds error: " + e.message); }
 
+  // IntentAmplify orders write to IA_Orders via ia_hdfc_verifyAndSubmit (not
+  // submitOrder), so the SK sweep below doesn't cover them. Run the IA sweep on
+  // this same 5-min trigger so a paid IA order self-heals even if every webhook
+  // failed AND the customer closed the popup.
+  try { reconcilePendingIAOrders(); } catch (e) { Logger.log("reconcilePendingIAOrders error: " + e.message); }
+
   const props   = PropertiesService.getScriptProperties();
   const raw     = props.getProperty("HDFC_PENDING_ORDERS") || "{}";
   var pending;
@@ -242,6 +248,78 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
     // Tag the source so logs make it clear this row came from the reconciler
     placed_via:       "reconciler"
   };
+}
+
+/**
+ * IntentAmplify equivalent of reconcilePendingOrders.
+ *
+ * IA orders are written to IA_Orders by ia_hdfc_verifyAndSubmit (not submitOrder),
+ * so the main SK sweep doesn't cover them. ia_hdfc_createSession stashes every IA
+ * session into the IA_PENDING_ORDERS Script Property (order_id → {ts, phone, name,
+ * orders, expected_amount, …}). This sweeps that store: for any session older than
+ * 2 min, it replays ia_hdfc_verifyAndSubmit, which independently confirms CHARGED
+ * with HDFC (Status API + webhook-log fallback), enforces the anti-tamper amount
+ * check, and writes the rows — idempotently (skips if a webhook/poll already wrote
+ * them). Net effect: a paid IA order self-heals within ~5 min even if EVERY webhook
+ * failed and the customer closed the popup immediately after paying.
+ *
+ * Entries are dropped once reconciled, on amount-tamper (surfaced in the log, never
+ * retried), or after 30 min (abandoned/unpaid) to keep the property bounded. The
+ * webhook processor remains a parallel safety net for logged-but-expired sessions.
+ * Called every 5 min from reconcilePendingOrders(). Never throws to the caller.
+ */
+function reconcilePendingIAOrders() {
+  if (!PAYMENT_GATEWAY_ENABLED) return;
+  if (typeof ia_hdfc_verifyAndSubmit !== "function") return;
+
+  const props = PropertiesService.getScriptProperties();
+  let pending;
+  try { pending = JSON.parse(props.getProperty("IA_PENDING_ORDERS") || "{}"); }
+  catch (e) { Logger.log("reconcilePendingIAOrders: malformed IA_PENDING_ORDERS, aborting."); return; }
+
+  const orderIds = Object.keys(pending);
+  if (!orderIds.length) return;
+
+  const now = Date.now();
+  let changed = false;
+  const summary = { checked: 0, skippedFresh: 0, reconciled: 0, expired: 0, notCharged: 0, tamper: 0, errors: 0 };
+
+  for (let i = 0; i < orderIds.length; i++) {
+    const orderId = orderIds[i];
+    const entry   = pending[orderId];
+    const ageMs   = now - ((entry && entry.ts) || 0);
+
+    // Abandoned/unpaid (or already handled long ago) — drop without burning a
+    // Status-API call. The webhook processor still covers any logged webhook.
+    if (ageMs > 30 * 60 * 1000) { delete pending[orderId]; changed = true; summary.expired++; continue; }
+
+    // Let the customer's own browser poll finish first.
+    if (ageMs < 2 * 60 * 1000) { summary.skippedFresh++; continue; }
+    summary.checked++;
+
+    let res;
+    try { res = ia_hdfc_verifyAndSubmit({ order_id: orderId, status: "CHARGED" }); }
+    catch (e) { summary.errors++; Logger.log("reconcilePendingIAOrders: error on " + orderId + " — " + e.message); continue; }
+
+    if (res && res.success) {
+      // Rows written, or idempotent skip because a webhook/poll beat us. Done.
+      summary.reconciled++; delete pending[orderId]; changed = true;
+    } else if (res && res.expired) {
+      // Session no longer in the store (already cleaned elsewhere) — stop tracking.
+      summary.expired++; delete pending[orderId]; changed = true;
+    } else if (res && res.tamper_detected) {
+      // Amount mismatch — never auto-retry a tamper; surface it and stop tracking.
+      summary.tamper++; delete pending[orderId]; changed = true;
+      Logger.log("reconcilePendingIAOrders: ⚠️ TAMPER on " + orderId + " — " + JSON.stringify(res));
+    } else {
+      // Not charged yet / transient — leave in place and retry next sweep.
+      summary.notCharged++;
+    }
+  }
+
+  if (changed) { try { props.setProperty("IA_PENDING_ORDERS", JSON.stringify(pending)); } catch(_) {} }
+  if (summary.checked || summary.expired) Logger.log("reconcilePendingIAOrders summary: " + JSON.stringify(summary));
+  return summary;
 }
 
 /**

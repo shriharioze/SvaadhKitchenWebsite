@@ -648,11 +648,13 @@ function ia_orderCols(itemsJson) {
     // menu carries it); fall back to mapping the name for legacy/generic items.
     let c = it.col || ia_itemToCol(it.name);
     if (!c && it.name) {
-      const n = it.name.toLowerCase();
-      if (n.indexOf("dry") > -1 && n.indexOf("100ml") > -1) c = "Dry_Sabji_Mini";
-      else if (n.indexOf("dry") > -1 && n.indexOf("250ml") > -1) c = "Dry_Sabji_Full";
-      else if (n.indexOf("curry") > -1 && n.indexOf("100ml") > -1) c = "Curry_Sabji_Mini";
-      else if (n.indexOf("curry") > -1 && n.indexOf("250ml") > -1) c = "Curry_Sabji_Full";
+      const n = it.name.toLowerCase().replace(/\s+/g, '');
+      const isFull = n.indexOf("250") > -1 || n.indexOf("full") > -1;
+      if (n.indexOf("dry") > -1) {
+        c = isFull ? "Dry_Sabji_Full" : "Dry_Sabji_Mini";
+      } else if (n.indexOf("curry") > -1) {
+        c = isFull ? "Curry_Sabji_Full" : "Curry_Sabji_Mini";
+      }
     }
     if (c) col[c] = (col[c] || 0) + (Number(it.qty) || 0);
   }); } catch (e) {}
@@ -979,7 +981,24 @@ function ia_hdfc_verifyAndSubmit(body) {
 
   // 2. Verify with HDFC Status API — NEVER trust the client-supplied status string.
   //    Same policy as the main Svaadh flow (hdfc_verifyReturnPayload).
-  const statusCheck = hdfc_getOrderStatus(orderId);
+  let statusCheck = hdfc_getOrderStatus(orderId);
+  // Webhook-independent fallback: if the Status API is transiently unavailable
+  // (urlfetch quota exhausted / network error), trust a logged ORDER_SUCCEEDED
+  // webhook — HDFC's own server-to-server event, equally authoritative. Mirrors
+  // the Svaadh reconciler (_reconcileSingleEntry). Without this, a quota-exhausted
+  // day would block confirmation for both the frontend AND the reconciler even
+  // though HDFC has already proven the payment CHARGED.
+  if (!statusCheck.confirmed) {
+    const st = String(statusCheck.status || "").toUpperCase();
+    const transient = (st === "FETCH_ERROR" || st === "API_ERROR" || st === "UNKNOWN" || st === "NEW");
+    if (transient && typeof _checkWebhookLogForCharge === "function") {
+      const proof = _checkWebhookLogForCharge(orderId);
+      if (proof) {
+        console.log("ia_hdfc_verifyAndSubmit: Status API unavailable (" + st + "), trusting ORDER_SUCCEEDED webhook for " + orderId);
+        statusCheck = { confirmed: true, status: "CHARGED", amount: proof.amount };
+      }
+    }
+  }
   if (!statusCheck.confirmed) {
     const apiStatus = String(statusCheck.status || "").toUpperCase();
     console.warn("ia_hdfc_verifyAndSubmit: not confirmed — orderId=" + orderId + " apiStatus=" + apiStatus);
