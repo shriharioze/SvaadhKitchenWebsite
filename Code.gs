@@ -1614,8 +1614,9 @@ function _countActiveMealOrders(rows, dateStr) {
 function getRateCard() {
   const ss = getSpreadsheet();
   const bfWs = getOrCreateTab(ss, TAB_BF_MASTER, ["ID", "Name", "Price", "Active"]);
+  // List ALL master breakfast items (active AND inactive/seasonal) so the public
+  // rate card shows the full range — not just what's featured today.
   const breakfast = getAllRows(bfWs)
-    .filter(function (x) { return String(x.Active).toLowerCase() !== "false"; })
     .map(function (x) { return { name: String(x.Name).trim(), price: Number(x.Price) || 0 }; })
     .filter(function (x) { return x.name && x.price > 0; });
   return { breakfast: breakfast, pricing_v2: PRICING_V2 };
