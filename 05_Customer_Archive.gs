@@ -201,6 +201,52 @@ function fetchArchivedAddress(phone) {
   }
 }
 
+// READ-ONLY: find a customer in the archive by phone. Returns { rowNum, pin,
+// name, profile } or null. Only ever called on a SK_Customers MISS (cold path),
+// so active customers never scan the archive.
+function _findArchivedCustomer(phone) {
+  const pStr = _normalizePhone(phone || "");
+  if (!pStr) return null;
+  const ss = getSpreadsheet();
+  const arWs = ss.getSheetByName(TAB_CUSTOMERS_ARCHIVE);
+  if (!arWs || arWs.getLastRow() < 2) return null;
+  const data = arWs.getDataRange().getValues();
+  const headers = data[0];
+  const hIdx = {}; headers.forEach(function (h, i) { hIdx[h] = i; });
+  for (let i = 1; i < data.length; i++) {
+    if (_normalizePhone(data[i][hIdx["Phone"]]) !== pStr) continue;
+    const row = data[i];
+    const g = function (c) { return hIdx[c] !== undefined ? (row[hIdx[c]] || "") : ""; };
+    const pin = String(g("PIN") || "").replace(/^'/, "").trim();
+    return {
+      rowNum: i + 1,
+      pin: pin,
+      name: g("Customer_Name"),
+      profile: {
+        phone: pStr, name: g("Customer_Name"), area: g("Area"), wing: g("Wing"),
+        flat: g("Flat"), floor: g("Floor"), society: g("Society"), maps: g("Maps_Link"),
+        landmark: g("Landmark"), meal_addresses: g("Meal_Addresses"), delivery_point: g("Delivery_Point"),
+        payment_preference: g("Payment_Freq"), billingCycle: g("Billing_Cycle"), onAccount: g("On_Account"),
+        pin: pin   // restore the OLD PIN → no reset for the returning customer
+      }
+    };
+  }
+  return null;
+}
+
+// Restore a full archived record (incl. PIN + address) into SK_Customers and
+// remove the archive row. Called by verifyLogin AFTER the PIN is verified, so a
+// returning customer is silently un-archived and logs in with NO reset.
+function _restoreArchivedCustomer(arc) {
+  if (!arc) return;
+  const ss = getSpreadsheet();
+  _upsertCustomer(ss, arc.profile);
+  try {
+    const arWs = ss.getSheetByName(TAB_CUSTOMERS_ARCHIVE);
+    if (arWs) arWs.deleteRow(arc.rowNum);
+  } catch (e) { console.warn("_restoreArchivedCustomer: " + e.message); }
+}
+
 // Run ONCE from the editor — weekly Monday ~3 AM idle-customer archiving.
 function setupCustomerArchiveTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {

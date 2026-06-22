@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.7; // 2026-06-23: customer archiving (Last_Order_At + archiveIdleCustomers + fetchArchivedAddress restore). Loyalty floor parity (21.6).
+const CODE_VERSION   = 21.8; // 2026-06-23: archived returning customers recognized at phone entry + restored (PIN+address) on verified login — no PIN reset. Customer archiving (21.7).
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

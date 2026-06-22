@@ -11,8 +11,18 @@ function getCustomer(phone) {
   const rows = getAllRows(ws);
   const pStr = _normalizePhone(phone);
   const r = rows.find(x => _normalizePhone(x.Phone) === pStr);
-  if (!r) return {found: false, hasPin: false, wallet_balance: 0};
-  
+  if (!r) {
+    // Not in the live list — maybe an archived returning customer. Recognize them
+    // (read-only, cold path) so the frontend shows "enter your PIN" instead of
+    // forcing a fresh registration. The actual restore happens in verifyLogin once
+    // the PIN is confirmed. Name is intentionally withheld (matches the hasPin path).
+    if (typeof _findArchivedCustomer === "function") {
+      const arc = _findArchivedCustomer(pStr);
+      if (arc && arc.pin !== "") return { found: true, hasPin: true, archived: true };
+    }
+    return {found: false, hasPin: false, wallet_balance: 0};
+  }
+
   const hasPin = (String(r.PIN || "").trim() !== "");
   
   if (hasPin) {
@@ -52,9 +62,23 @@ function verifyLogin(phone, pin) {
   const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   const rows = getAllRows(ws);
   const pStr = _normalizePhone(phone);
-  const r = rows.find(x => _normalizePhone(x.Phone) === pStr);
-  
-  if (!r) return {success: false, error: "Account not found."};
+  let r = rows.find(x => _normalizePhone(x.Phone) === pStr);
+
+  if (!r) {
+    // Archived returning customer: verify against the archived PIN and, if it
+    // matches, restore the FULL record (PIN + address) into SK_Customers so they
+    // log in normally — no PIN reset, address pre-filled. (Cold path only.)
+    if (typeof _findArchivedCustomer === "function") {
+      const arc = _findArchivedCustomer(pStr);
+      if (arc && arc.pin !== "") {
+        if (arc.pin !== String(pin).trim()) return { success: false, error: "Incorrect PIN." };
+        _restoreArchivedCustomer(arc);
+        r = getAllRows(getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS))
+              .find(x => _normalizePhone(x.Phone) === pStr);
+      }
+    }
+    if (!r) return {success: false, error: "Account not found."};
+  }
   if (String(r.PIN).trim() !== String(pin).trim()) return {success: false, error: "Incorrect PIN."};
   
   let pendingAmount = 0;
