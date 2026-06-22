@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.4; // 2026-06-21: Payout/settlement reconciler (reconcilePayout) — matches HDFC T+2 payout report against gateway-Paid orders by embedded order_id + amount, flags unsettled/mismatch. Plus IA manual switch + menu fix.
+const CODE_VERSION   = 21.5; // 2026-06-21: public getRateCard endpoint (rate card before login) + IA gateway flow mirror + payout reconciler.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
@@ -332,6 +332,7 @@ function doGet(e) {
       pricing_v2: PRICING_V2
     });
     if (action === "getAreas") return jsonRes(getAreas());
+    if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
     if (action === "verifyLogin") return jsonRes(verifyLogin(p.phone, p.pin));
@@ -1606,6 +1607,20 @@ function _countActiveMealOrders(rows, dateStr) {
   });
   return c;
 }
+// Public rate card (no login). Breakfast prices come from the SK_Master_Breakfast
+// sheet (the single source of truth); the frontend renders the meal items from its
+// own FIXED_MEAL_ITEMS table (the exact values the cart charges), so it just needs
+// pricing_v2 here. Lets new users see prices BEFORE registering.
+function getRateCard() {
+  const ss = getSpreadsheet();
+  const bfWs = getOrCreateTab(ss, TAB_BF_MASTER, ["ID", "Name", "Price", "Active"]);
+  const breakfast = getAllRows(bfWs)
+    .filter(function (x) { return String(x.Active).toLowerCase() !== "false"; })
+    .map(function (x) { return { name: String(x.Name).trim(), price: Number(x.Price) || 0 }; })
+    .filter(function (x) { return x.name && x.price > 0; });
+  return { breakfast: breakfast, pricing_v2: PRICING_V2 };
+}
+
 function getMenu(dateStr) {
   // Cache per-date for 60 s. The hard stock-block in submitOrder (under LockService)
   // prevents actual over-orders even when menu data is slightly stale.
