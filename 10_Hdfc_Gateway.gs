@@ -479,12 +479,12 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     const prevDayDiscAmt    = Object.values(existingDateInfo).reduce(function(s, m){ return s + (Number(m.discount_applied)||0); }, 0);
     const submissionDateDiscAmt = Math.max(0, totalDayDiscAmt - prevDayDiscAmt);
 
-    // Accrual = SUM of per-meal rounds — exactly what each meal row stores in
-    // Inflation_Surcharge (round(sub × 5%)); mirrors the submitOrder fix.
-    // Accrual = SUM of per-meal ceils — exactly what each meal row stores in
-    // Inflation_Surcharge (ceil(sub × 6%)); mirrors live submitOrder.
+    // Accrual = SUM of per-meal floors — MUST match the frontend (_accF), submitOrder
+    // (line ~1372), and _calculateLoyaltyStreak, all of which use floor(sub × 5%) in
+    // V2. Using round here over-counted the 6th-day waiver by up to ₹1/meal vs the
+    // cart the customer saw — the gateway must equal the frontend to the rupee.
     const submissionDaySurcharge = Object.keys(mealSubs).reduce(
-      function(s, mt) { return s + (PRICING_V2 ? Math.round((Number(mealSubs[mt].sub) || 0) * 0.05) : Math.ceil((Number(mealSubs[mt].sub) || 0) * 0.06)); }, 0);
+      function(s, mt) { return s + (PRICING_V2 ? Math.floor((Number(mealSubs[mt].sub) || 0) * 0.05) : Math.ceil((Number(mealSubs[mt].sub) || 0) * 0.06)); }, 0);
 
     function getDisc(sub) {
       if (is6thDay) {
@@ -567,9 +567,9 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
 
       const discAmt = getDisc(sub);
       // V1: charge ceil(sub×6%) surcharge (6th-day loyalty waiver refunds it).
-      // V2: NO surcharge billed — round(sub×5%) accrual tracked for the streak only,
-      // given back on the 6th day. Mirrors submitOrder.
-      const inflationSurcharge = PRICING_V2 ? Math.round(sub * 0.05) : Math.ceil(sub * 0.06);
+      // V2: NO surcharge billed — floor(sub×5%) accrual tracked for the streak only,
+      // given back on the 6th day. floor MUST match frontend/_accF + submitOrder.
+      const inflationSurcharge = PRICING_V2 ? Math.floor(sub * 0.05) : Math.ceil(sub * 0.06);
 
       // Review promo (10% off per meal; decrement in-memory only)
       let reviewDiscount = 0;

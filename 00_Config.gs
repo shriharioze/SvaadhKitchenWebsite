@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.5; // 2026-06-21: public getRateCard endpoint (rate card before login) + IA gateway flow mirror + payout reconciler.
+const CODE_VERSION   = 21.6; // 2026-06-22: gateway loyalty accrual round->floor for exact frontend/submitOrder parity on the 6th-day waiver. Modularized.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
