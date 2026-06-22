@@ -819,7 +819,7 @@ function ia_config() {
     upi: IA_UPI_VPA,
     upi_name: IA_UPI_NAME,
     gateway: IA_GATEWAY_ENABLED,   // false → frontend shows manual UPI flow
-    version: "26.06.21.03"
+    version: "26.06.21.04"
   };
 }
 

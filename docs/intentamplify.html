@@ -273,7 +273,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.21.03
+        Svaadh Kitchen v26.06.21.04
       </div>
     </div>
 
@@ -298,7 +298,7 @@
         <button class="wm-btn" onclick="openWeeklyMenu()"><span>📅 View Upcoming Days' Tentative Menu</span></button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;margin-bottom:10px;">
-        Svaadh Kitchen v26.06.21.03
+        Svaadh Kitchen v26.06.21.04
       </div>
     </div>
 
@@ -374,7 +374,7 @@
         <button class="btn btn-primary" onclick="ia_resetForAnotherOrder()">Place Another Order</button>
       </div>
       <div style="text-align:center;font-size:0.72rem;color:var(--muted);padding:10px;">
-        Svaadh Kitchen v26.06.21.03
+        Svaadh Kitchen v26.06.21.04
       </div>
     </div>
 
@@ -392,7 +392,7 @@
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     const APPS_SCRIPT_URL = API;
-    const APP_VERSION = "26.06.21.03";
+    const APP_VERSION = "26.06.21.04";
     const STEPS = ["Account","Dates","Meals","Pay"];
     const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const $ = id => document.getElementById(id);
@@ -869,10 +869,10 @@
         if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
         $("okPay").innerHTML=`\u2705 Payment of <b>\u20b9${res2.total}</b> confirmed via <b>HDFC Gateway</b>.`;
         show(4);
-        // Post-payment sheet scan: confirm the order is actually recorded in
-        // IA_Orders, then auto-open Manage Orders so the customer SEES it. Mirrors
-        // order.html's post-payment verification.
-        _iaConfirmInSheetThenManage(orderId);
+        // Success page + the SAME visible polling-confirmation modal as the manual
+        // flow / order.html: shows "Confirming…" → "Confirmed ✓", then a button to
+        // view the order in Manage Orders. (Payment is already verified Paid here.)
+        ia_pollOrderConfirm(res2.submission_id || orderId);
       };
 
       let firedOnce=false;
@@ -1069,6 +1069,7 @@
       if($("revLines").innerHTML){ $("okLines").innerHTML=$("revLines").innerHTML; }
       $("okPay").innerHTML=`\u2705 Payment of <b>\u20b9${res.total}</b> confirmed via <b>HDFC Gateway</b>.`;
       show(4);
+      ia_pollOrderConfirm(res.submission_id || orderId);
     }
 
     // ── Profile drawer + persistent login ──
