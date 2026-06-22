@@ -3367,6 +3367,12 @@
       <div class="card">
         <h2 data-i18n="step2_addr_title">📍 Delivery Address</h2>
 
+        <!-- Returning customer (profile archived after long inactivity) → pull saved address -->
+        <div id="fetchArchivedRow" style="display:none;margin-bottom:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:12px 14px;text-align:center;">
+          <div style="font-size:0.8rem;color:#075985;margin-bottom:8px;">👋 Ordered with us before? Pull up your saved address.</div>
+          <button type="button" id="fetchArchivedBtn" onclick="fetchArchivedAddr()" style="background:#0284c7;color:#fff;border:none;border-radius:20px;padding:9px 22px;font-size:0.85rem;font-weight:700;cursor:pointer;">📥 Fetch my saved address</button>
+        </div>
+
         <!-- Same for all toggle -->
         <label class="same-addr-row" id="sameAddrToggleRow" style="margin-bottom:16px;">
           <input type="checkbox" id="sameAddrCheck" checked onchange="toggleAddressMode()">
@@ -4647,7 +4653,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.21.01";
+    const APP_VERSION = "v26.06.23.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5597,6 +5603,48 @@
       window.scrollTo(0, 0);
     }
     function goToStep(n) { S.step = n; updateNav(); window.scrollTo(0, 0); }
+
+    // ── Returning-customer saved-address restore ──────────────────────────
+    // Profiles idle > ~1 month get archived (keeps the customer list fast). A
+    // returning customer logs in (sets a fresh PIN), lands on the address page
+    // with blank fields, and can pull their old address back with one tap.
+    function _maybeShowFetchArchived(){
+      const row=document.getElementById("fetchArchivedRow"); if(!row) return;
+      const area=($("areaSelect")?.value||"").trim();
+      const society=($("societyInput")?.value||"").trim();
+      row.style.display = (!area && !society && S.phone) ? "block" : "none";
+    }
+    async function fetchArchivedAddr(){
+      if(!S.phone){ toast("Please enter your phone number first."); return; }
+      const btn=document.getElementById("fetchArchivedBtn");
+      if(btn){ btn.disabled=true; btn.textContent="⏳ Looking up…"; }
+      let r;
+      try{ const _res=await apiPost({ _action:"fetchArchivedAddress", phone:S.phone }); r=await _res.json(); }catch(e){ r=null; }
+      if(btn){ btn.disabled=false; btn.textContent="📥 Fetch my saved address"; }
+      const row=document.getElementById("fetchArchivedRow");
+      if(!r || !r.found){
+        toast("No saved address on file — please fill it in below.", 4500);
+        if(row) row.style.display="none";
+        return;
+      }
+      try{
+        if($("areaSelect") && r.area) $("areaSelect").value = r.area;
+        if($("wingInput"))    $("wingInput").value    = r.wing || "";
+        if($("flatInput"))    $("flatInput").value    = r.flat || "";
+        if($("floorInput"))   $("floorInput").value   = r.floor || "";
+        if($("societyInput")) $("societyInput").value = r.society || "";
+        if($("landmarkInput") && r.landmark) $("landmarkInput").value = r.landmark;
+        if($("mapsInput") && r.maps) $("mapsInput").value = r.maps;
+        if(S.profile){
+          S.profile.area=r.area; S.profile.wing=r.wing; S.profile.flat=r.flat;
+          S.profile.floor=r.floor; S.profile.society=r.society; S.profile.maps=r.maps; S.profile.landmark=r.landmark;
+        }
+        if(typeof syncSingleAddr==="function") syncSingleAddr();
+        if(typeof togglePickupUI==="function" && $("areaSelect")) togglePickupUI("single", $("areaSelect").value);
+      }catch(_){}
+      if(row) row.style.display="none";
+      toast("✅ Welcome back! Your saved address has been restored.", 4500);
+    }
     async function goNext() {
       if ($("btnNext").dataset.locked === "payment") {
         toast("Please tick the confirmation box to proceed.");
@@ -6097,6 +6145,9 @@
       $("mapsInput").value = S.profile.maps || "";
       $("landmarkInput").value = S.profile.landmark || "";
       $("payFreqSelect").value = S.profile.payment_preference;
+      // Returning customer whose profile was archived after long inactivity →
+      // offer the "fetch my saved address" button when the address is blank.
+      try { _maybeShowFetchArchived(); } catch(_) {}
 
       if (!S.isFirstTime) {
         let same = true;

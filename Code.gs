@@ -67,6 +67,7 @@ function doGet(e) {
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
+    if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(p.phone)); // returning customer restore
     if (action === "verifyLogin") return jsonRes(verifyLogin(p.phone, p.pin));
     if (action === "setPin") {
       const profile = { phone: p.phone, pin: p.pin };
@@ -296,6 +297,7 @@ function doPost(e) {
     if (action === "deleteOrder") return jsonRes(deleteOrder(body.phone, body.rowId, body.refundType, { isAdmin: isAdmin }));
     if (action === "previewCancellation") return jsonRes(_deleteOrderInternal(body.phone, body.rowId, body.refundType || "wallet", { dryRun: true }));
     if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone));
+    if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(body.phone));
     if (action === "checkDeliveryReachable") return jsonRes(checkDeliveryReachable(body));
     if (action === "verifyOrderPlaced") return jsonRes(verifyOrderPlaced(body));
     if (action === "updateProfile") {

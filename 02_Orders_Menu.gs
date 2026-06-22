@@ -1739,6 +1739,9 @@ function _submitOrderInternal(body) {
 
   // Upsert customer record
   _upsertCustomer(ss, profile);
+  // Stamp Last_Order_At so the idle-customer archiver (05_Customer_Archive.gs)
+  // never archives someone who just ordered.
+  if (typeof updateCustomerLastOrder === "function") updateCustomerLastOrder(profile.phone);
 
   // If user requested to settle ALL pending dues in this same transaction
   if (body.settle_all && payMethod === "Wallet") {
