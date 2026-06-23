@@ -65,6 +65,7 @@ function doGet(e) {
     });
     if (action === "getAreas") return jsonRes(getAreas());
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
+    if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(p.phone)); // returning customer restore
