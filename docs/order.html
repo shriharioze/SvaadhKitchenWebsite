@@ -4653,7 +4653,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.23.02";
+    const APP_VERSION = "v26.06.24.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9627,7 +9627,9 @@
           if (S.orders[dStr]) {
             ["Breakfast", "Lunch", "Dinner"].forEach(m => {
               const sub = S.orders[dStr][m]?.subtotal || 0;
-              if (sub > 0) s += Math.ceil(sub * 0.06);
+              // Match the bill's accrual (_accF): V2 = floor(5%), legacy = ceil(6%).
+              // Must agree or the banner's reward would differ from the actual charge.
+              if (sub > 0) s += (S.pricingV2 ? Math.floor(sub * 0.05) : Math.ceil(sub * 0.06));
             });
           }
           dailyTotals[dStr] = s;
@@ -9683,10 +9685,14 @@
         // Projected reward? If we hit 6, this day is a reward day for the NEXT day's lookup
         if (streakCount === 6) allRewardDays.add(dStr);
 
-        streakInfo[dStr] = { count: streakCount, surcharge: streakSurcharge, start: streakStart };
-        
-        // Prepare accumulator for NEXT day: current day's surcharge is added to the "past" sum
+        // Accrue THIS day's surcharge into the running total FIRST, then snapshot — so
+        // streakInfo[dStr].surcharge is INCLUSIVE of dStr's own. Both the bill base
+        // (S.loyaltyInfo, winner = most-recent past day) and the banner (winner = a cart
+        // date) then carry the full streak surcharge through the winner. Previously the
+        // snapshot was taken BEFORE this add, dropping the winner day's surcharge, which
+        // under-refunded the 6-day reward by one day vs the gateway/submitOrder (v22.0).
         streakSurcharge += (dailyTotals[dStr] || 0);
+        streakInfo[dStr] = { count: streakCount, surcharge: streakSurcharge, start: streakStart };
         lastDate = dStr;
       });
 
