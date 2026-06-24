@@ -4653,7 +4653,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.24.01";
+    const APP_VERSION = "v26.06.24.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8760,12 +8760,13 @@
         const body = document.getElementById("ovmBody");
         const spin = document.getElementById("ovmSpin");
         if (spin) spin.style.display = "none";
-        if (icon) icon.textContent = "🛡️";
-        if (title) title.textContent = "Quick check";
+        if (icon) icon.textContent = "⏳";
+        if (title) title.textContent = "Almost there — payment received";
         if (body)  body.innerHTML =
-            'We couldn\'t auto-confirm your order yet. Please tap below to check your orders list:<br><br>' +
-            '✅ <b>If it\'s there</b> — you\'re all set, your meal is confirmed!<br>' +
-            '❌ <b>If it\'s missing</b> — please place the order once more. <b>Payment only once</b>.';
+            'Your payment is safe. When a few orders come in together, yours can take a minute or two to appear — this is normal.<br><br>' +
+            '✅ <b>Please wait 1–2 minutes</b>, then tap below to check — your order should show up in the list.<br>' +
+            '🔒 <b>Please don\'t pay or place the order again.</b><br>' +
+            '❌ Still missing after a few minutes? WhatsApp us at +91 93222 46765 and we\'ll confirm it for you.';
       }
 
       // Background poll loop — ~3 min horizon (18 × 10s). Single-shot fetch per poll.
@@ -11699,8 +11700,8 @@
       } catch (err) {
         sLoading(false);
         await sAlert(
-          "⚠️ Your payment was received but we could not place the order automatically.\n\nPlease WhatsApp us at +91 93222 46765 with:\n• Phone: " + S.phone + "\n• Gateway Order ID: " + gatewayOrderId + "\n\nWe will place the order manually.",
-          "Order Placement Failed", "❌"
+          "✅ Your payment was received — it's safe, nothing went wrong.\n\nThis happens sometimes when a few orders come in together: yours is in the queue and can take a minute or two to show up. Please wait 1–2 minutes, then open the ☰ menu → Manage Orders — your order will appear there.\n\n🔒 Please DO NOT pay or place the order again.\n\nIf it's still not showing after a few minutes, WhatsApp us at +91 93222 46765 (Phone: " + S.phone + " · Order ID: " + gatewayOrderId + ") and we'll confirm it for you.",
+          "Payment received ✓", "⏳"
         );
       }
     }
