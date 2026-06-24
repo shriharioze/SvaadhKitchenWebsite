@@ -1397,10 +1397,16 @@ function _submitOrderInternal(body) {
       (s, m) => s + (PRICING_V2 ? Math.floor((Number(m.subtotal) || 0) * 0.05) : Math.ceil((Number(m.subtotal) || 0) * 0.06)), 0);
 
     // Pro-rate the submission-level discount across meals in this submission
+    // Snapshot the accumulated past surcharge BEFORE the streak-state update below
+    // zeroes it on the 6th day. getDisc() is called LATER (in the per-meal loop), so
+    // reading the live virtualPastSurcharge there would see it post-reset (=0) and
+    // waive only the current day — the bug that under-stored the 6th-day discount and
+    // mismatched the cart. The frontend computes its waiver before resetting; match it.
+    const _waiverPastSurcharge = virtualPastSurcharge;
     const getDisc = (sub) => {
       if (is6thDay) {
         // Loyalty Discount: Waive all 6 days of surcharge
-        const totalWaiver = virtualPastSurcharge + submissionDaySurcharge;
+        const totalWaiver = _waiverPastSurcharge + submissionDaySurcharge;
         return submissionDayFoodTotal > 0 ? Math.round(totalWaiver * (sub / submissionDayFoodTotal)) : 0;
       }
       return submissionDayFoodTotal > 0 ? Math.round(submissionDateDiscAmt * (sub / submissionDayFoodTotal)) : 0;

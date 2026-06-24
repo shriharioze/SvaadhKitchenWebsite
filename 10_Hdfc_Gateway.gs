@@ -486,10 +486,16 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     const submissionDaySurcharge = Object.keys(mealSubs).reduce(
       function(s, mt) { return s + (PRICING_V2 ? Math.floor((Number(mealSubs[mt].sub) || 0) * 0.05) : Math.ceil((Number(mealSubs[mt].sub) || 0) * 0.06)); }, 0);
 
+    // Snapshot the accumulated past surcharge BEFORE the per-day streak-state update
+    // below zeroes it on the 6th day. getDisc() runs LATER (in the per-meal loop), so
+    // reading the live virtualPastSurcharge there would see it AFTER the reset (=0) and
+    // waive only the current day — the bug that under-discounted the gateway charge vs
+    // the cart. The frontend computes its waiver before resetting; this matches it.
+    const _waiverPastSurcharge = virtualPastSurcharge;
     function getDisc(sub) {
       if (is6thDay) {
         // 6th-day loyalty waiver: refund all 6 days' accrued surcharge (mirrors submitOrder)
-        const totalWaiver = virtualPastSurcharge + submissionDaySurcharge;
+        const totalWaiver = _waiverPastSurcharge + submissionDaySurcharge;
         return submissionDayFoodTotal > 0 ? Math.round(totalWaiver * (sub / submissionDayFoodTotal)) : 0;
       }
       return submissionDayFoodTotal > 0 ? Math.round(submissionDateDiscAmt * (sub / submissionDayFoodTotal)) : 0;

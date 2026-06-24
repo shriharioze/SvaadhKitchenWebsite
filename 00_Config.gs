@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 21.9; // 2026-06-23: bulk-order foundation (getBulkWindow + per-meal working-day windows). WIP.
+const CODE_VERSION   = 22.0; // 2026-06-24: CRITICAL loyalty fix — gateway + submitOrder snapshot virtualPastSurcharge BEFORE the 6th-day reset, so the streak waiver applies the full accrual (was waiving only the current day). Plus delivery-cap banner.
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
