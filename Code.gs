@@ -66,12 +66,13 @@ function doGet(e) {
     if (action === "getAreas") return jsonRes(getAreas());
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
-    if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON)
+    if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty})
       const _pj = function (s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
+      const _wrap = function (arr) { return (Array.isArray(arr) && arr.length) ? { items: arr } : null; }; // submitBulkOrder expects {items:[…]}
       return jsonRes(submitBulkOrder({ dryRun: true, plan: p.plan, phone: p.phone,
         profile: { area: p.area || "" },
-        lunch:  _pj(p.lunch),
-        dinner: _pj(p.dinner) }));
+        lunch:  _wrap(_pj(p.lunch)),
+        dinner: _wrap(_pj(p.dinner)) }));
     }
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
