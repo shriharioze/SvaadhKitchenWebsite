@@ -2087,9 +2087,22 @@ const GLOBAL_STAPLE_PRICES = {
   "Curry Sabji Full (250ml)": 45, "Curry Sabji (Full)": 45, "Curry_Sabji_Full": 45, "L_CURRY_FULL": 45, "D_CURRY_FULL": 45,
   "Dal (200ml)": 22, "Dal": 22,
   "Rice (100g)": 12, "Rice": 12,
-  "Salad (40g)": 6, "Salad": 6,
+  "Salad (40g)": 7, "Salad": 7,
   "Curd (50g)": 12, "Curd": 12
 };
+
+// PRICING_V2 (live since the surcharge-removal go-live): the staple BASE prices above
+// are the old values; the bill the customer/admin sees uses ceil(base × 1.06), exactly
+// mirroring the backend priceOf(). Returns the live price for a staple colKey, or null
+// if the key isn't a staple (caller falls back to the breakfast/sabji master price).
+function staplePriceV2(key) {
+  let base = GLOBAL_STAPLE_PRICES[key];
+  if (base === undefined && typeof colKeyToDisplayName === "function") base = GLOBAL_STAPLE_PRICES[colKeyToDisplayName(key)];
+  if (base === undefined) base = GLOBAL_STAPLE_PRICES[String(key).replace(/\s+/g, "_")];
+  return base === undefined ? null : Math.ceil(base * 1.06);
+}
+// Live price for the "full/mini" fallback sabji (when not found in a master list).
+function _fallbackSabjiV2(key) { return Math.ceil((String(key).toLowerCase().includes("full") ? 45 : 22) * 1.06); }
 
 // Maps every possible column key / colKey to a human-readable display name
 function colKeyToDisplayName(k) {
@@ -7061,20 +7074,17 @@ function _calcSubtotal(itemsObj) {
   Object.entries(itemsObj).forEach(([key,qty]) => {
     const n = Number(qty)||0;
     if (n <= 0) return;
-    
-    // Canonicalize key for lookup
-    let canon = colKeyToDisplayName(key);
-    
-    if (GLOBAL_STAPLE_PRICES[canon]) { 
-      sub += GLOBAL_STAPLE_PRICES[canon] * n; 
-      return; 
-    }
 
+    // Staple? Use the live V2 price (ceil(base × 1.06)).
+    const sp = staplePriceV2(key);
+    if (sp !== null) { sub += sp * n; return; }
+
+    // Breakfast/sabji master prices are already V2 (sheet values); else V2 fallback.
     const found = [...(S.bfMaster||[]),...(S.sabjiMaster||[])].find(x=>x.id===key||x.name===key);
     if (found) {
-      sub += (Number(found.price)|| (canon.toLowerCase().includes('full') ? 45 : 22)) * n;
+      sub += (Number(found.price) || _fallbackSabjiV2(key)) * n;
     } else {
-      sub += (canon.toLowerCase().includes('full') ? 45 : 22) * n;
+      sub += _fallbackSabjiV2(key) * n;
     }
   });
   return sub;
@@ -7113,18 +7123,11 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
         .map(([key,qty]) => {
           const label = colKeyToDisplayName ? colKeyToDisplayName(key) : key.replace(/_/g,' ');
           
-          // Helper to get real price for display
-          let price = 0;
-          if (GLOBAL_STAPLE_PRICES[key]) {
-            price = GLOBAL_STAPLE_PRICES[key];
-          } else {
-            const normKey = key.replace(/\s+/g, '_');
-            if (GLOBAL_STAPLE_PRICES[normKey]) {
-              price = GLOBAL_STAPLE_PRICES[normKey];
-            } else {
-              const found = [...(S.bfMaster||[]), ...(S.sabjiMaster||[])].find(x => x.id === key || x.name === key);
-              price = found ? (Number(found.price) || (key.toLowerCase().includes('full') ? 45 : 22)) : (key.toLowerCase().includes('full') ? 45 : 22);
-            }
+          // Live V2 price for display (ceil(base × 1.06) for staples; master price as-is).
+          let price = staplePriceV2(key);
+          if (price === null) {
+            const found = [...(S.bfMaster||[]), ...(S.sabjiMaster||[])].find(x => x.id === key || x.name === key);
+            price = found ? (Number(found.price) || _fallbackSabjiV2(key)) : _fallbackSabjiV2(key);
           }
 
           return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;">
@@ -7141,9 +7144,10 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
           </div>`;
         }).join('');
 
-      const addOptions = addableItems.map(a =>
-        `<option value="${a.key}">${a.label} (₹${a.price})</option>`
-      ).join('');
+      const addOptions = addableItems.map(a => {
+        const p = staplePriceV2(a.key);            // V2 for staples; master items keep their (V2) price
+        return `<option value="${a.key}">${a.label} (₹${p === null ? a.price : p})</option>`;
+      }).join('');
 
       const sub = _calcSubtotal(editItems);
 
