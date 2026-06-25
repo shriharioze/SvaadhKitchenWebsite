@@ -2603,6 +2603,27 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // Calc old day subtotal (including deleted row)
     const oldDaySubtotal = remainingDaySubtotal + (Number(r.Food_Subtotal) || 0);
 
+    // ── BULK cancellation (commitment-discount clawback) ────────────────────
+    // A bulk row's 5% bulk discount is a commitment: the FIRST cancellation in the
+    // batch forfeits the ENTIRE batch bulk discount; later cancellations refund at
+    // full price. Per row: fullPrice = Net_Total + Bulk_Clawback (bulk removed, day-
+    // tier + fees KEPT). The clawback is applied greedily against the batch's total
+    // bulk discount, so an odd first day carries the remainder to the next cancel.
+    // Bulk skips ALL the same-day / loyalty adjustment blocks below (gated on !isBulk).
+    const isBulk = !!(String(r.Source || "").trim() === "Bulk" || String(r.Batch_ID || "").trim());
+    let bulkFullPrice = 0, bulkClawbackApplied = 0;
+    if (isBulk) {
+      const _rBatch = String(r.Batch_ID || "").trim();
+      const _fp = (x) => (Number(x.Net_Total) || 0) + (Number(x.Bulk_Clawback) || 0);
+      const _batchRows = rows.filter(x => String(x.Batch_ID || "").trim() === _rBatch && _rBatch);
+      const _totalBulk = _batchRows.reduce((s, x) => s + (Number(x.Bulk_Clawback) || 0), 0);
+      const _sumBefore = _batchRows
+        .filter(x => String(x.Submission_ID) !== String(rowId) && _isOrderCancelled(x.Payment_Status))
+        .reduce((s, x) => s + _fp(x), 0);
+      bulkFullPrice = _fp(r);
+      bulkClawbackApplied = Math.min(_totalBulk, _sumBefore + bulkFullPrice) - Math.min(_totalBulk, _sumBefore);
+    }
+
     // Over-discount claw-back: only claw back discounts that were ACTUALLY applied
     // to remaining orders (read from their Discount_Amount column), not a theoretical
     // volume tier. submitOrder only applies loyalty (6th-day) discounts, not volume tiers.
@@ -2614,7 +2635,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       // Sum of discounts actually applied to remaining rows
       const totalActualDiscount = sameDayRows.reduce((s, x) => s + (Number(x.Discount_Amount) || 0), 0);
 
-      if (totalActualDiscount > 0) {
+      if (!isBulk && totalActualDiscount > 0) {
         // Re-compute what discount the remaining orders SHOULD get after deletion.
         // We use their total food subtotal and compare to what was actually given.
         // For now: if the deleted order was the "trigger" for the day's loyalty discount,
@@ -2664,7 +2685,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     let deliveryOwed = 0;
     let smallFeeOwed = 0;
 
-    if (oldDaySubtotal >= oldThreshold && remainingDaySubtotal < remThreshold) {
+    if (!isBulk && oldDaySubtotal >= oldThreshold && remainingDaySubtotal < remThreshold) {
       // Day total drops below free-delivery threshold → remaining orders now owe fees.
       // We claw the amounts from THIS refund, AND update those rows in the sheet so that
       // if they are later cancelled themselves, the clawback doesn't fire a second time.
@@ -2710,7 +2731,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     let loyaltyClawbackNote = "";
     const phoneStr = _normalizePhone(phone);
 
-    if (!isAdminCall) {
+    if (!isAdminCall && !isBulk) {
       // Scan for a later streak-reward order that this cancellation would invalidate.
       const laterPayoffs = rows.filter(x => {
         if (String(x.Submission_ID) === String(rowId)) return false;
@@ -2750,8 +2771,10 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
 
     // Refund = Net_Total − adjustment
     // Net_Total already correctly encodes: food + delivery + fees + surcharge − discount − mealCredit − reviewDiscount
-    const adjustment = overDiscount + deliveryOwed + smallFeeOwed + loyaltyClawback;
-    const rawRefund = Number(r.Net_Total) || 0;
+    // Bulk uses the commitment-discount clawback (fullPrice − bulk clawback); regular
+    // orders use Net_Total − same-day/loyalty adjustments.
+    const adjustment = isBulk ? bulkClawbackApplied : (overDiscount + deliveryOwed + smallFeeOwed + loyaltyClawback);
+    const rawRefund  = isBulk ? bulkFullPrice : (Number(r.Net_Total) || 0);
     const netRefund = rawRefund - adjustment;           // may be negative
     const refundAmt = Math.max(0, netRefund);           // amount actually returned
     const cancellationCharge = Math.max(0, -netRefund); // deficit charged to wallet if order < clawback
@@ -2759,6 +2782,15 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // ── HUMAN-READABLE REFUND BREAKDOWN ────────────────────────────────────
     function buildRefundBreakdown() {
       const lines = [];
+      if (isBulk) {
+        if (bulkClawbackApplied > 0) {
+          lines.push(`This was a bulk order — the 5% bulk discount is deducted from your refund.`);
+          lines.push(`Full price ₹${bulkFullPrice} − ₹${bulkClawbackApplied} bulk discount = ₹${refundAmt} refund.`);
+        } else {
+          lines.push(`Full refund of ₹${refundAmt} (the bulk discount was already recovered on an earlier cancellation in this order).`);
+        }
+        return lines.join("\n");
+      }
       if (adjustment === 0) {
         lines.push(`Full refund of ₹${refundAmt}.`);
         return lines.join("\n");
@@ -2860,7 +2892,9 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       const REF_HEADERS = ["Submission_ID","Phone","Name","Amount","Meal","Date","Status","Timestamp","Adjustment_Note","Refund_Mode"];
       const refWs = getOrCreateTab(ss, TAB_REFUNDS, REF_HEADERS);
       const note = adjustment > 0
-        ? `Adjusted -₹${adjustment} (overDiscount:${overDiscount}, deliveryOwed:${deliveryOwed}, smallFeeOwed:${smallFeeOwed}, loyaltyClawback:${loyaltyClawback})`
+        ? (isBulk
+            ? `Bulk discount clawback -₹${adjustment} (batch ${String(r.Batch_ID || "").trim()})`
+            : `Adjusted -₹${adjustment} (overDiscount:${overDiscount}, deliveryOwed:${deliveryOwed}, smallFeeOwed:${smallFeeOwed}, loyaltyClawback:${loyaltyClawback})`)
         : "";
 
       // Gateway-paid order → fire the HDFC auto-refund (money back to the original
@@ -2876,7 +2910,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       // "Gateway (UPI)", "Gateway (Card)" — rewritten by hdfc_markOrderPaid) OR "Split (HDFC)"
       // (wallet + HDFC gateway split). Both carry a Gateway_Order_ID and qualify for auto-refund.
       const _isGatewayPaid = !!_gwOrderId && (
-        String(r.Payment_Method || "").trim().indexOf("Gateway") === 0 ||
+        String(r.Payment_Method || "").trim().indexOf("Gateway") !== -1 ||  // "Gateway (HDFC/UPI/Card)" AND "Bulk (Gateway)"
         String(r.Payment_Method || "").trim() === "Split (HDFC)"
       );
       let _autoRefundOk = false;

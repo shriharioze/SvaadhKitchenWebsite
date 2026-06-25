@@ -415,6 +415,43 @@ function cleanupTestBulk(batchId) {
       : (nCol && String(data[i][nCol - 1] || "").trim() === "ZZ_TEST_BULK");
     if (match) { ws.deleteRow(i + 1); deleted++; }
   }
+  // Also purge any SK_Refunds rows raised by testBulkCancelSequence for the test phone.
+  try {
+    const rWs = getSpreadsheet().getSheetByName(TAB_REFUNDS);
+    if (rWs && rWs.getLastRow() > 1) {
+      const rData = rWs.getDataRange().getValues();
+      const pIdx = rData[0].indexOf("Phone");
+      if (pIdx !== -1) {
+        for (let i = rData.length - 1; i >= 1; i--) {
+          if (_normalizePhone(rData[i][pIdx]) === "9999900001") { rWs.deleteRow(i + 1); }
+        }
+      }
+    }
+  } catch (_) {}
   Logger.log("Deleted " + deleted + " row(s) " + (byBatch ? ("for batch " + batchId) : "for ZZ_TEST_BULK test orders"));
   return deleted;
+}
+// 4) Cancellation sequence — places a batch, cancels every meal-day in order, and
+//    checks the refunds sum to EXACTLY what was paid (the ₹570 conservation rule).
+//    The first cancel shows the full bulk-discount clawback; the rest refund full
+//    price. Uses isAdmin to bypass cutoff/ownership. Self-cleans at the end.
+function testBulkCancelSequence() {
+  const placed = submitBulkOrder(_bulkTestBody({ payment_method: "Bulk (Gateway)", payment_status: "Paid" }));
+  if (!placed.success) { Logger.log("place failed: " + JSON.stringify(placed)); return placed; }
+  const ws = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
+  const rows = getAllRows(ws).filter(function (r) { return String(r.Batch_ID || "").trim() === placed.batch_id; });
+  const paid = rows.reduce(function (s, r) { return s + (Number(r.Net_Total) || 0); }, 0);
+  let totalRefund = 0; const log = [];
+  rows.forEach(function (r) {
+    const dry = deleteOrder("9999900001", r.Submission_ID, "manual_upi", { isAdmin: true, dryRun: true });
+    const amt = (dry && dry.refundAmt) || 0;
+    totalRefund += amt;
+    log.push(String(r.Order_Date).slice(0, 10) + " " + r.Meal_Type + ": refund Rs." + amt + "  [" + (dry.breakdownText || "").split("\n")[0] + "]");
+    deleteOrder("9999900001", r.Submission_ID, "manual_upi", { isAdmin: true }); // real cancel
+  });
+  Logger.log("paid Rs." + paid + " | total refunded Rs." + totalRefund + " | match: " + (paid === totalRefund));
+  Logger.log(log.join("\n"));
+  cleanupTestBulk(placed.batch_id);
+  Logger.log("(test batch + refund rows cleaned up)");
+  return { paid: paid, totalRefund: totalRefund, match: paid === totalRefund };
 }
