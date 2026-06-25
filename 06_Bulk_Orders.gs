@@ -333,17 +333,22 @@ function testBulkPlace() {
   Logger.log("verify on the kitchen page for those dates, then run: cleanupTestBulk('" + out.batch_id + "')");
   return out;
 }
-// 3) Cleanup — delete every row of a test batch by Batch_ID.
+// 3) Cleanup — delete test rows. With a batch_id: delete that batch. With NO arg
+//    (clicking Run in the editor passes nothing): delete every row written by
+//    testBulkPlace (Customer_Name "ZZ_TEST_BULK"). Never touches real orders.
 function cleanupTestBulk(batchId) {
-  if (!batchId) { Logger.log("Pass a batch_id, e.g. cleanupTestBulk('BULK-...')"); return 0; }
-  const ws = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
-  const bCol = headerIndex(ws)["Batch_ID"];
-  if (!bCol) { Logger.log("No Batch_ID column."); return 0; }
+  const ws   = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
+  const hIdx = headerIndex(ws);
+  const bCol = hIdx["Batch_ID"], nCol = hIdx["Customer_Name"];
   const data = ws.getDataRange().getValues();
+  const byBatch = !!batchId;
   let deleted = 0;
   for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][bCol - 1] || "").trim() === String(batchId).trim()) { ws.deleteRow(i + 1); deleted++; }
+    const match = byBatch
+      ? (bCol && String(data[i][bCol - 1] || "").trim() === String(batchId).trim())
+      : (nCol && String(data[i][nCol - 1] || "").trim() === "ZZ_TEST_BULK");
+    if (match) { ws.deleteRow(i + 1); deleted++; }
   }
-  Logger.log("Deleted " + deleted + " row(s) for batch " + batchId);
+  Logger.log("Deleted " + deleted + " row(s) " + (byBatch ? ("for batch " + batchId) : "for ZZ_TEST_BULK test orders"));
   return deleted;
 }
