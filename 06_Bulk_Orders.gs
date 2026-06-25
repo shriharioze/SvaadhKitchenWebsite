@@ -178,3 +178,172 @@ function _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx) {
   priced.dinner = dinnerFood > 0 ? { food: dinnerFood, dates: dinnerDates } : null;
   return priced;
 }
+
+// ── Item name → canonical (for Items_JSON), mirroring submitOrder's resolveName ──
+// (L/D only — bulk has no breakfast, so no master-map branch is needed.)
+function _bulkResolveName(colKey) {
+  const col = ITEM_COL_MAP[colKey];
+  const name = col ? col.replace(/_/g, " ") : String(colKey);
+  return name.replace(/\s*\[.*?\]\s*/g, "").replace(/\s*\(.*?\)\s*/g, "").trim();
+}
+
+// ============================================================
+// BULK STORAGE — submitBulkOrder (bulk-orders branch — NOT on LIVE)
+// ============================================================
+// Prices the batch (server-authoritative) and writes one SK_Orders row per meal-day:
+//   - shared Batch_ID, own Submission_ID
+//   - Items_JSON + per-item columns (kitchen/driver/labels render like a normal order)
+//   - Inflation_Surcharge=0, Loyalty_Discount="No" (bulk is outside the streak)
+//   - Bulk_Clawback = the row's bulk-discount amount (the clawback-able portion that
+//     cancellation will recover — wired up in the cancellation step later)
+//   - Source="Bulk"
+// body: { plan, phone, profile:{name,area,wing,flat,floor,society,maps,landmark},
+//         lunch:{items:[{colKey,qty}]}|null, dinner:{items:...}|null,
+//         payment_method, payment_status, gateway_order_id, batch_id?, notesKitchen?,
+//         dryRun? }  — dryRun:true computes + returns the rows WITHOUT writing.
+function submitBulkOrder(body) {
+  body = body || {};
+  const plan = String(body.plan || "").trim();
+  if (!BULK_PLANS[plan]) return { success: false, error: "Unknown bulk plan." };
+
+  const phone = _normalizePhone(body.phone || (body.profile && body.profile.phone) || "");
+  if (!phone) return { success: false, error: "Missing phone." };
+
+  const lunchItems  = (body.lunch  && Array.isArray(body.lunch.items)  && body.lunch.items.length)  ? body.lunch.items  : null;
+  const dinnerItems = (body.dinner && Array.isArray(body.dinner.items) && body.dinner.items.length) ? body.dinner.items : null;
+  if (_bulkMealFood(lunchItems) <= 0 && _bulkMealFood(dinnerItems) <= 0) {
+    return { success: false, error: "Select at least one meal's items." };
+  }
+
+  // Customer + fee context (mirrors _computeAuthoritativeTotal)
+  const ss     = getSpreadsheet();
+  const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  const cRow   = getAllRows(custWs).find(function (r) { return _normalizePhone(r.Phone) === phone; }) || null;
+  const profile = body.profile || {};
+  const name = String(profile.name || (cRow && cRow.Customer_Name) || "Customer").trim();
+  const area = String(profile.area || (cRow && cRow.Area) || "").trim();
+  const freeAreaNames = (getAreas() || []).filter(function (a) { return a.free; }).map(function (a) { return a.name; });
+  const isPickup = area.toLowerCase().indexOf("pickup") !== -1;
+  const ctx = {
+    isFreeArea:  freeAreaNames.indexOf(area) !== -1,
+    isFeeExempt: !!(cRow && (cRow.Fee_Exempt === "Yes" || cRow.Fee_Exempt === true)),
+    isPickup:    isPickup
+  };
+
+  // Price
+  const priced = _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx);
+  if (priced.error)        return { success: false, error: priced.error };
+  if (!priced.rows.length) return { success: false, error: "No valid bulk days to place (cutoffs may have passed)." };
+
+  // Dry run: return the breakdown WITHOUT writing anything.
+  if (body.dryRun) {
+    return { success: true, dryRun: true, plan: priced.plan, total: priced.total,
+             count: priced.rows.length, totalBulkDisc: priced.totalBulkDisc,
+             totalTierDisc: priced.totalTierDisc, lunch: priced.lunch, dinner: priced.dinner,
+             rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };
+  }
+
+  // Write rows
+  const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const hIdx = headerIndex(ordersWs);
+  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback"].forEach(function (col) {
+    if (!hIdx[col]) { ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue(col); hIdx[col] = ordersWs.getLastColumn(); }
+  });
+
+  const batchId = String(body.batch_id || ("BULK-" + Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyyMMdd-HHmmss") + "-" + (Math.floor(Math.random() * 9000) + 1000)));
+  const paymentMethod = String(body.payment_method || "Bulk (Gateway)");
+  const paymentStatus = String(body.payment_status || "Paid");
+  const gatewayOrderId = String(body.gateway_order_id || "");
+  const submittedAt = getISTTimestamp();
+  const bulkNote = String(body.notesKitchen || "Bulk order - sabji of the day (chef's choice)");
+
+  const wing    = isPickup ? "" : String(profile.wing    || (cRow && cRow.Wing)    || "");
+  const flat    = isPickup ? "" : String(profile.flat    || (cRow && cRow.Flat)    || "");
+  const floor   = isPickup ? "" : String(profile.floor   || (cRow && cRow.Floor)   || "");
+  const society = isPickup ? "" : String(profile.society || (cRow && cRow.Society) || "");
+  const mapsLink = isPickup ? "" : String(profile.maps || (cRow && cRow.Maps_Link) || "");
+  const landmark = isPickup ? "" : String(profile.landmark || (cRow && cRow.Landmark) || "");
+  const _custAddrLine = [wing && ("Wing " + wing), flat && ("Flat " + flat), floor && (floor + " Floor"), society].filter(Boolean).join(", ");
+  const fullAddr = isPickup ? "Self Pickup (A 104, Shree laxmi vihar society, Hadapsar)" : [_custAddrLine, area].filter(Boolean).join(", ");
+
+  const written = [];
+  priced.rows.forEach(function (r) {
+    const sid = generateSubmissionID();
+    const itemsObj = {};
+    r.items.forEach(function (it) { itemsObj[_bulkResolveName(it.colKey)] = it.qty; });
+
+    const row = new Array(ordersWs.getLastColumn()).fill("");
+    const set = function (c, v) { const i = hIdx[c]; if (i) row[i - 1] = v; };
+
+    set("Submission_ID", sid);
+    set("Submitted_At", submittedAt);
+    set("Order_Date", r.date);
+    set("Meal_Type", r.meal);
+    set("Customer_Name", name);
+    set("Phone", phone);
+    set("Area", isPickup ? "Self Pickup" : area);
+    set("Wing", wing); set("Flat", flat); set("Floor", floor); set("Society", society);
+    set("Full_Address", fullAddr); set("Maps_Link", mapsLink); set("Landmark", landmark);
+    set("Items_JSON", JSON.stringify(itemsObj));
+    r.items.forEach(function (it) { const col = ITEM_COL_MAP[it.colKey]; if (col && hIdx[col]) set(col, it.qty); });
+    set("Special_Notes_Kitchen", bulkNote);
+    set("Food_Subtotal", r.food);
+    set("Small_Order_Fee", r.smallFee);
+    set("Delivery_Charge", r.delivery);
+    set("Discount_Amount", r.discount);
+    set("Net_Total", r.net);
+    set("Inflation_Surcharge", 0);
+    set("Loyalty_Discount", "No");
+    set("Payment_Method", paymentMethod);
+    set("Payment_Status", paymentStatus);
+    set("Source", "Bulk");
+    set("Gateway_Order_ID", gatewayOrderId);
+    set("Batch_ID", batchId);
+    set("Bulk_Clawback", r.bulkDisc); // per-row bulk discount = the clawback-able amount
+    ordersWs.appendRow(row);
+    written.push({ sid: sid, date: r.date, meal: r.meal, net: r.net });
+  });
+
+  if (typeof updateCustomerLastOrder === "function") { try { updateCustomerLastOrder(phone); } catch (_) {} }
+
+  return { success: true, batch_id: batchId, total: priced.total, count: written.length,
+           rows: written, lunch: priced.lunch, dinner: priced.dinner };
+}
+
+// ── TEST HELPERS (run from the Apps Script editor; remove before any LIVE wiring) ──
+function _bulkTestBody(extra) {
+  return Object.assign({
+    plan: "week",
+    phone: "9999900001",
+    profile: { name: "ZZ_TEST_BULK", area: "Bhosale Nagar" }, // free-delivery area
+    dinner: { items: [{ colKey: "Phulka", qty: 4 }, { colKey: "Dry Sabji Full (250ml)", qty: 1 }, { colKey: "Dal (200ml)", qty: 1 }, { colKey: "Salad (40g)", qty: 1 }] },
+    lunch:  { items: [{ colKey: "Phulka", qty: 3 }, { colKey: "Curd (50g)", qty: 1 }] }
+  }, extra || {});
+}
+// 1) Dry-run pricing — NO writes. Run this first; read the Execution Log.
+function testBulkQuote() {
+  const out = submitBulkOrder(_bulkTestBody({ dryRun: true }));
+  Logger.log(JSON.stringify(out, null, 2));
+  return out;
+}
+// 2) Real placement — WRITES rows to SK_Orders (future dates). Note the batch_id it logs.
+function testBulkPlace() {
+  const out = submitBulkOrder(_bulkTestBody({ payment_method: "TEST Bulk", payment_status: "Paid" }));
+  Logger.log("PLACED: " + JSON.stringify(out, null, 2));
+  Logger.log("verify on the kitchen page for those dates, then run: cleanupTestBulk('" + out.batch_id + "')");
+  return out;
+}
+// 3) Cleanup — delete every row of a test batch by Batch_ID.
+function cleanupTestBulk(batchId) {
+  if (!batchId) { Logger.log("Pass a batch_id, e.g. cleanupTestBulk('BULK-...')"); return 0; }
+  const ws = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
+  const bCol = headerIndex(ws)["Batch_ID"];
+  if (!bCol) { Logger.log("No Batch_ID column."); return 0; }
+  const data = ws.getDataRange().getValues();
+  let deleted = 0;
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][bCol - 1] || "").trim() === String(batchId).trim()) { ws.deleteRow(i + 1); deleted++; }
+  }
+  Logger.log("Deleted " + deleted + " row(s) for batch " + batchId);
+  return deleted;
+}

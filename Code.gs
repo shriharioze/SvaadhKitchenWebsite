@@ -66,6 +66,13 @@ function doGet(e) {
     if (action === "getAreas") return jsonRes(getAreas());
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
+    if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON)
+      const _pj = function (s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
+      return jsonRes(submitBulkOrder({ dryRun: true, plan: p.plan, phone: p.phone,
+        profile: { area: p.area || "" },
+        lunch:  _pj(p.lunch),
+        dinner: _pj(p.dinner) }));
+    }
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
     if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(p.phone)); // returning customer restore
@@ -666,6 +673,9 @@ function doPost(e) {
         && Array.isArray(body.orders) && body.orders.length) {
       return jsonRes(submitOrder(body));
     }
+
+    // Bulk weekly / 15-day / month order (bulk-orders branch — not yet on LIVE).
+    if (action === "submitBulkOrder") return jsonRes(submitBulkOrder(body));
 
     // Regular order submission — the ONLY POST with no _action. Anything else
     // (unknown/typo'd actions, malformed debug payloads) must NOT fall through
