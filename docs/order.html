@@ -4653,7 +4653,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.24.02";
+    const APP_VERSION = "v26.06.24.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11402,7 +11402,13 @@
           (ordersForServer[date] = ordersForServer[date] || {})[meal] = {
             items:    mObj.items || {},
             subtotal: mObj.subtotal || 0,
-            area:     isPickup ? "Self Pickup" : (mAddr.area || "")
+            area:     isPickup ? "Self Pickup" : (mAddr.area || ""),
+            // Carry the kitchen/driver notes into the durable pending stash. The
+            // gateway order is written from THIS stash by the webhook/reconciler
+            // (_buildSubmitBodyFromPending reads m.notesKitchen/notesDelivery), so
+            // omitting them here silently dropped every gateway order's notes.
+            notesKitchen:  mObj.notesKitchen  || "",
+            notesDelivery: mObj.notesDelivery || ""
           };
         });
       });
