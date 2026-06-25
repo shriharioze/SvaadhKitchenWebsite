@@ -637,11 +637,15 @@ function hdfc_createSession(body) {
     pendingEntry = JSON.parse(pendingRaw)[orderId] || null;
   } catch (e) { /* fall through */ }
 
-  if (!pendingEntry || !pendingEntry.orders) {
+  if (!pendingEntry || (!pendingEntry.orders && !pendingEntry.bulk)) {
     return { error: "Pending order not found. Please retry checkout." };
   }
 
-  const authoritativeAmount = _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || phone);
+  // Bulk batch → bulk authoritative total (mirror of submitBulkOrder); otherwise the
+  // regular per-day recompute. Either way the client `amount` is ignored.
+  const authoritativeAmount = pendingEntry.bulk
+    ? _bulkAuthoritativeTotal(pendingEntry.bulk, pendingEntry.phone || phone, pendingEntry.profile)
+    : _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || phone);
   const clientAmount        = Number(body.amount || 0);
   if (authoritativeAmount <= 0) {
     return { error: "Could not compute order total. Cart may be empty." };
@@ -1262,6 +1266,9 @@ function hdfc_savePendingOrder(body) {
       phone:          body.phone         || "",
       amount:         body.amount        || 0,
       orders:         body.orders        || {},
+      // Bulk batches stash { plan, lunch:{items}, dinner:{items} } here instead of
+      // `orders`; createSession + the reconciler branch on this to use bulk pricing.
+      bulk:           body.bulk          || null,
       selectedDates:  body.selectedDates || [],
       profile:        body.profile       || {},
       mealAddrs:      body.mealAddrs     || {},

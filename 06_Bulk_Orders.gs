@@ -187,6 +187,40 @@ function _bulkResolveName(colKey) {
   return name.replace(/\s*\[.*?\]\s*/g, "").replace(/\s*\(.*?\)\s*/g, "").trim();
 }
 
+// Shared fee context for a bulk order — the customer's area allowlist drives free
+// delivery / fee exemption / pickup. Used by BOTH submitBulkOrder (storage) and
+// _bulkAuthoritativeTotal (gateway charge) so the two can never diverge.
+function _bulkFeeCtx(phone, profile) {
+  profile = profile || {};
+  const cRow = getAllRows(getOrCreateTab(getSpreadsheet(), TAB_CUSTOMERS, CUSTOMERS_HEADERS))
+                 .find(function (r) { return _normalizePhone(r.Phone) === _normalizePhone(phone); }) || null;
+  const area = String(profile.area || (cRow && cRow.Area) || "").trim();
+  const freeAreaNames = (getAreas() || []).filter(function (a) { return a.free; }).map(function (a) { return a.name; });
+  return {
+    cRow: cRow,
+    name: String(profile.name || (cRow && cRow.Customer_Name) || "Customer").trim(),
+    area: area,
+    ctx: {
+      isFreeArea:  freeAreaNames.indexOf(area) !== -1,
+      isFeeExempt: !!(cRow && (cRow.Fee_Exempt === "Yes" || cRow.Fee_Exempt === true)),
+      isPickup:    area.toLowerCase().indexOf("pickup") !== -1
+    }
+  };
+}
+
+// Gateway authoritative total for a bulk batch — the bulk analogue of
+// _computeAuthoritativeTotal. hdfc_createSession charges THIS, so it must use the
+// exact same pricing + fee context submitBulkOrder writes. bulkEntry: { plan,
+// lunch:{items}, dinner:{items} }. Returns the rupee total (0 on any error).
+function _bulkAuthoritativeTotal(bulkEntry, phone, profile) {
+  if (!bulkEntry) return 0;
+  const fc = _bulkFeeCtx(phone, profile);
+  const priced = _bulkComputeBatch(bulkEntry.plan,
+    bulkEntry.lunch  && bulkEntry.lunch.items,
+    bulkEntry.dinner && bulkEntry.dinner.items, fc.ctx);
+  return priced.error ? 0 : priced.total;
+}
+
 // ============================================================
 // BULK STORAGE — submitBulkOrder (bulk-orders branch — NOT on LIVE)
 // ============================================================
@@ -215,25 +249,34 @@ function submitBulkOrder(body) {
     return { success: false, error: "Select at least one meal's items." };
   }
 
-  // Customer + fee context (mirrors _computeAuthoritativeTotal)
-  const ss     = getSpreadsheet();
-  const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
-  const cRow   = getAllRows(custWs).find(function (r) { return _normalizePhone(r.Phone) === phone; }) || null;
+  // Customer + fee context — SHARED with the gateway (_bulkAuthoritativeTotal) so the
+  // HDFC charge always equals what gets written here.
   const profile = body.profile || {};
-  const name = String(profile.name || (cRow && cRow.Customer_Name) || "Customer").trim();
-  const area = String(profile.area || (cRow && cRow.Area) || "").trim();
-  const freeAreaNames = (getAreas() || []).filter(function (a) { return a.free; }).map(function (a) { return a.name; });
-  const isPickup = area.toLowerCase().indexOf("pickup") !== -1;
-  const ctx = {
-    isFreeArea:  freeAreaNames.indexOf(area) !== -1,
-    isFeeExempt: !!(cRow && (cRow.Fee_Exempt === "Yes" || cRow.Fee_Exempt === true)),
-    isPickup:    isPickup
-  };
+  const fc   = _bulkFeeCtx(phone, profile);
+  const cRow = fc.cRow, name = fc.name, area = fc.area, ctx = fc.ctx;
+  const isPickup = ctx.isPickup;
+  const ss = getSpreadsheet();
 
   // Price
   const priced = _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx);
   if (priced.error)        return { success: false, error: priced.error };
   if (!priced.rows.length) return { success: false, error: "No valid bulk days to place (cutoffs may have passed)." };
+
+  // Idempotency: if a gateway order id is supplied and rows already exist for it
+  // (frontend POST + reconciler can both fire), do NOT double-write the batch.
+  if (!body.dryRun && body.gateway_order_id) {
+    const gid = String(body.gateway_order_id).trim();
+    const _ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    const _gCol = headerIndex(_ws)["Gateway_Order_ID"];
+    if (_gCol) {
+      const _data = _ws.getDataRange().getValues();
+      for (let _i = 1; _i < _data.length; _i++) {
+        if (String(_data[_i][_gCol - 1] || "").trim() === gid) {
+          return { success: true, already: true, batch_id: gid, total: priced.total, count: priced.rows.length };
+        }
+      }
+    }
+  }
 
   // Dry run: return the breakdown WITHOUT writing anything.
   if (body.dryRun) {
@@ -325,6 +368,15 @@ function testBulkQuote() {
   const out = submitBulkOrder(_bulkTestBody({ dryRun: true }));
   Logger.log(JSON.stringify(out, null, 2));
   return out;
+}
+// 1b) Gateway parity — confirms the HDFC charge (_bulkAuthoritativeTotal, what
+//     hdfc_createSession sends) equals submitBulkOrder's stored total. NO writes.
+function testBulkGatewayMatch() {
+  const b = _bulkTestBody({});
+  const charge = _bulkAuthoritativeTotal({ plan: b.plan, lunch: b.lunch, dinner: b.dinner }, b.phone, b.profile);
+  const stored = submitBulkOrder(_bulkTestBody({ dryRun: true })).total;
+  Logger.log("gateway charge = " + charge + " | stored total = " + stored + " | match: " + (charge === stored));
+  return { charge: charge, stored: stored, match: charge === stored };
 }
 // 2) Real placement — WRITES rows to SK_Orders (future dates). Note the batch_id it logs.
 function testBulkPlace() {

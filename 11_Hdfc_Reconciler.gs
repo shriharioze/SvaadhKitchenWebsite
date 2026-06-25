@@ -138,6 +138,28 @@ function _reconcileSingleEntry(orderId, entry) {
       return { outcome: "skippedNotCharged", status: statusCheck.status };
     }
 
+    // ── Bulk batch: write via submitBulkOrder from the bulk stash ───────────
+    // (The Gateway_Order_ID dedup above already short-circuits if rows exist;
+    // submitBulkOrder is also idempotent on gateway_order_id as a backstop.)
+    if (entry.bulk) {
+      const bulkResult = submitBulkOrder({
+        plan:             entry.bulk.plan,
+        phone:            entry.phone,
+        profile:          entry.profile,
+        lunch:            entry.bulk.lunch,
+        dinner:           entry.bulk.dinner,
+        payment_method:   "Bulk (Gateway)",
+        payment_status:   "Paid",
+        gateway_order_id: orderId,   // shared id on every batch row (dedup + refunds)
+        batch_id:         orderId    // one gateway charge == one batch
+      });
+      if (bulkResult && bulkResult.success) {
+        Logger.log("reconcile: BULK order " + orderId + " written. result=" + JSON.stringify(bulkResult));
+        return { outcome: "reconciled", subResult: bulkResult };
+      }
+      return { outcome: "errors", reason: "submitBulkOrder did not succeed: " + JSON.stringify(bulkResult) };
+    }
+
     // ── Synthesize the submitOrder body from the pending entry ──────────────
     const body = _buildSubmitBodyFromPending(orderId, entry, statusCheck);
     if (!body || !body.orders || !body.orders.length) {
