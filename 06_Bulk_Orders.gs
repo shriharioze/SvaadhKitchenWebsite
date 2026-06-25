@@ -295,7 +295,7 @@ function submitBulkOrder(body) {
   // Dry run: return the breakdown WITHOUT writing anything.
   if (body.dryRun) {
     return { success: true, dryRun: true, plan: priced.plan, total: priced.total,
-             count: priced.rows.length, totalBulkDisc: priced.totalBulkDisc,
+             count: priced.rows.length, totalFood: priced.totalFood, totalBulkDisc: priced.totalBulkDisc,
              totalTierDisc: priced.totalTierDisc, lunch: priced.lunch, dinner: priced.dinner,
              rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };
   }
