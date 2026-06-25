@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.0; // 2026-06-24: CRITICAL loyalty fix — gateway + submitOrder snapshot virtualPastSurcharge BEFORE the 6th-day reset, so the streak waiver applies the full accrual (was waiving only the current day). Plus delivery-cap banner.
+const CODE_VERSION   = 22.1; // 2026-06-25: bulk-order backend (pricing/storage/gateway/cancellation) — ADDITIVE & DORMANT on LIVE (no live frontend calls it yet). Plus admin V2 price fix. (22.0: loyalty 6th-day waiver snapshot fix.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
