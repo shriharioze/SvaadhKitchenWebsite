@@ -148,6 +148,8 @@ function _reconcileSingleEntry(orderId, entry) {
         profile:          entry.profile,
         lunch:            entry.bulk.lunch,
         dinner:           entry.bulk.dinner,
+        lunchDates:       entry.bulk.lunchDates,   // frozen at checkout (matches the charge)
+        dinnerDates:      entry.bulk.dinnerDates,
         payment_method:   "Bulk (Gateway)",
         payment_status:   "Paid",
         gateway_order_id: orderId,   // shared id on every batch row (dedup + refunds)

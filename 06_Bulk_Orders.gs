@@ -161,19 +161,30 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
   return { rows: rows, total: total, totalFood: totalFood, totalBulkDisc: totalBulkDisc, totalTierDisc: totalTierDisc };
 }
 
-// Fetches the server-authoritative windows for `plan` and prices the batch. The client
-// never supplies dates (anti-tamper). Returns the _bulkPriceFromWindows shape plus
-// { plan, lunch, dinner }, or { error }.
-function _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx) {
-  const win = getBulkWindow(plan);
-  if (win.error) return { error: win.error };
+// Prices the batch. Dates come from `frozen` ({lunchDates,dinnerDates}) when supplied
+// — the gateway freezes the windows at checkout so the CHARGE and the later STORAGE
+// write use identical dates even if a meal cutoff flips in between. Without `frozen`
+// it fetches the live windows (getBulkWindow). Returns the _bulkPriceFromWindows shape
+// plus { plan, lunch, dinner }, or { error }.
+function _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx, frozen) {
   const lunchFood  = _bulkMealFood(lunchItems);
   const dinnerFood = _bulkMealFood(dinnerItems);
   if (lunchFood <= 0 && dinnerFood <= 0) return { error: "Select at least one meal's items." };
-  const lunchDates  = lunchFood  > 0 ? win.lunch  : [];
-  const dinnerDates = dinnerFood > 0 ? win.dinner : [];
+
+  let planName = plan, winLunch, winDinner;
+  const useFrozen = frozen && (Array.isArray(frozen.lunchDates) || Array.isArray(frozen.dinnerDates));
+  if (useFrozen) {
+    winLunch  = frozen.lunchDates  || [];
+    winDinner = frozen.dinnerDates || [];
+  } else {
+    const win = getBulkWindow(plan);
+    if (win.error) return { error: win.error };
+    planName = win.plan; winLunch = win.lunch; winDinner = win.dinner;
+  }
+  const lunchDates  = lunchFood  > 0 ? winLunch  : [];
+  const dinnerDates = dinnerFood > 0 ? winDinner : [];
   const priced = _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx);
-  priced.plan   = win.plan;
+  priced.plan   = planName;
   priced.lunch  = lunchFood  > 0 ? { food: lunchFood,  dates: lunchDates  } : null;
   priced.dinner = dinnerFood > 0 ? { food: dinnerFood, dates: dinnerDates } : null;
   return priced;
@@ -217,7 +228,8 @@ function _bulkAuthoritativeTotal(bulkEntry, phone, profile) {
   const fc = _bulkFeeCtx(phone, profile);
   const priced = _bulkComputeBatch(bulkEntry.plan,
     bulkEntry.lunch  && bulkEntry.lunch.items,
-    bulkEntry.dinner && bulkEntry.dinner.items, fc.ctx);
+    bulkEntry.dinner && bulkEntry.dinner.items, fc.ctx,
+    { lunchDates: bulkEntry.lunchDates, dinnerDates: bulkEntry.dinnerDates });
   return priced.error ? 0 : priced.total;
 }
 
@@ -257,8 +269,10 @@ function submitBulkOrder(body) {
   const isPickup = ctx.isPickup;
   const ss = getSpreadsheet();
 
-  // Price
-  const priced = _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx);
+  // Price — honour frozen dates (gateway passes the windows captured at checkout) so
+  // storage matches the charge exactly; falls back to live windows otherwise.
+  const priced = _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx,
+    { lunchDates: body.lunchDates, dinnerDates: body.dinnerDates });
   if (priced.error)        return { success: false, error: priced.error };
   if (!priced.rows.length) return { success: false, error: "No valid bulk days to place (cutoffs may have passed)." };
 

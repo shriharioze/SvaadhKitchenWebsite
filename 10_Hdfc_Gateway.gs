@@ -1279,6 +1279,18 @@ function hdfc_savePendingOrder(body) {
       wallet_hint:    Number(body.wallet_hint || 0)
     };
 
+    // Bulk: FREEZE the date windows now (checkout time) so the gateway charge and the
+    // later storage write use identical dates even if a meal cutoff flips in between.
+    if (pending[orderId].bulk && typeof getBulkWindow === "function") {
+      try {
+        const _bw = getBulkWindow(pending[orderId].bulk.plan);
+        if (!_bw.error) {
+          pending[orderId].bulk.lunchDates  = pending[orderId].bulk.lunch  ? _bw.lunch  : [];
+          pending[orderId].bulk.dinnerDates = pending[orderId].bulk.dinner ? _bw.dinner : [];
+        }
+      } catch (_) { /* fall back to live windows at compute time */ }
+    }
+
     props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending));
     console.log("hdfc_savePendingOrder: saved order " + orderId);
     return { success: true };
