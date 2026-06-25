@@ -2603,21 +2603,25 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // Calc old day subtotal (including deleted row)
     const oldDaySubtotal = remainingDaySubtotal + (Number(r.Food_Subtotal) || 0);
 
-    // ── BULK cancellation (commitment-discount clawback) ────────────────────
-    // A bulk row's 5% bulk discount is a commitment: the FIRST cancellation in the
-    // batch forfeits the ENTIRE batch bulk discount; later cancellations refund at
-    // full price. Per row: fullPrice = Net_Total + Bulk_Clawback (bulk removed, day-
-    // tier + fees KEPT). The clawback is applied greedily against the batch's total
-    // bulk discount, so an odd first day carries the remainder to the next cancel.
+    // ── BULK cancellation (commitment-discount clawback, PER MEAL) ──────────
+    // A bulk row's 5% bulk discount is a commitment, scoped PER MEAL TYPE: lunch and
+    // dinner are independent week-commitments. Cancelling a LUNCH day breaks only the
+    // lunch streak, so it forfeits the whole LUNCH bulk discount (on the first lunch
+    // cancellation) and leaves dinner's discount intact — and vice versa. Per row:
+    // fullPrice = Net_Total + Bulk_Clawback (bulk removed, day-tier + fees KEPT). The
+    // clawback is applied greedily against THAT MEAL's pool, so an odd first day carries
+    // the remainder to the next cancel of the same meal. Cancelling all of one meal
+    // refunds exactly what was paid for it; the other meal is unaffected.
     // Bulk skips ALL the same-day / loyalty adjustment blocks below (gated on !isBulk).
     const isBulk = !!(String(r.Source || "").trim() === "Bulk" || String(r.Batch_ID || "").trim());
     let bulkFullPrice = 0, bulkClawbackApplied = 0;
     if (isBulk) {
       const _rBatch = String(r.Batch_ID || "").trim();
+      const _rMeal  = String(r.Meal_Type || "").trim(); // pool is per meal type, not whole batch
       const _fp = (x) => (Number(x.Net_Total) || 0) + (Number(x.Bulk_Clawback) || 0);
-      const _batchRows = rows.filter(x => String(x.Batch_ID || "").trim() === _rBatch && _rBatch);
-      const _totalBulk = _batchRows.reduce((s, x) => s + (Number(x.Bulk_Clawback) || 0), 0);
-      const _sumBefore = _batchRows
+      const _poolRows = rows.filter(x => _rBatch && String(x.Batch_ID || "").trim() === _rBatch && String(x.Meal_Type || "").trim() === _rMeal);
+      const _totalBulk = _poolRows.reduce((s, x) => s + (Number(x.Bulk_Clawback) || 0), 0);
+      const _sumBefore = _poolRows
         .filter(x => String(x.Submission_ID) !== String(rowId) && _isOrderCancelled(x.Payment_Status))
         .reduce((s, x) => s + _fp(x), 0);
       bulkFullPrice = _fp(r);

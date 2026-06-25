@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.1; // 2026-06-25: bulk-order backend (pricing/storage/gateway/cancellation) — ADDITIVE & DORMANT on LIVE (no live frontend calls it yet). Plus admin V2 price fix. (22.0: loyalty 6th-day waiver snapshot fix.)
+const CODE_VERSION   = 22.2; // 2026-06-25: bulk cancellation clawback is now PER MEAL TYPE (lunch + dinner are independent week-commitments). Dormant on LIVE. (22.1: bulk backend.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
