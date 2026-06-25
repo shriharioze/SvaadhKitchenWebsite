@@ -677,6 +677,7 @@ function doPost(e) {
 
     // Bulk weekly / 15-day / month order (bulk-orders branch — not yet on LIVE).
     if (action === "submitBulkOrder") return jsonRes(submitBulkOrder(body));
+    if (action === "hdfc_finalizeBulkOrder") return jsonRes(hdfc_finalizeBulkOrder(body)); // instant post-payment write from the frozen stash
 
     // Regular order submission — the ONLY POST with no _action. Anything else
     // (unknown/typo'd actions, malformed debug payloads) must NOT fall through

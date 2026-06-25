@@ -455,3 +455,51 @@ function testBulkCancelSequence() {
   Logger.log("(test batch + refund rows cleaned up)");
   return { paid: paid, totalRefund: totalRefund, match: paid === totalRefund };
 }
+
+// Frontend-triggered finalize for a bulk gateway order — mirrors the order page's
+// post-payment submit so the batch is written INSTANTLY (not on the ~2-min reconciler
+// sweep). Reads the FROZEN bulk stash, verifies the charge (Status API, webhook-log
+// fallback), and writes via submitBulkOrder (idempotent on gateway_order_id). The
+// reconciler stays as the backstop if the browser never calls this (e.g. closed tab).
+function hdfc_finalizeBulkOrder(body) {
+  if (!PAYMENT_GATEWAY_ENABLED) return { success: false, error: "Gateway not enabled." };
+  const orderId = String((body && body.order_id) || "").trim();
+  if (!orderId) return { success: false, error: "order_id required." };
+
+  const props = PropertiesService.getScriptProperties();
+  let entry = null;
+  try { entry = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}")[orderId] || null; } catch (e) {}
+
+  // Already written? (idempotent — the reconciler or a prior call may have done it.)
+  const ws = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
+  const gCol = headerIndex(ws)["Gateway_Order_ID"];
+  if (gCol) {
+    const data = ws.getDataRange().getValues();
+    let n = 0;
+    for (let i = 1; i < data.length; i++) if (String(data[i][gCol - 1] || "").trim() === orderId) n++;
+    if (n > 0) {
+      try { const all = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}"); delete all[orderId]; props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(all)); } catch (e) {}
+      return { success: true, already: true, batch_id: orderId, count: n };
+    }
+  }
+
+  if (!entry || !entry.bulk) return { success: false, error: "No pending bulk order for " + orderId };
+
+  // Verify the charge before writing (never trust the browser alone).
+  let sc; try { sc = hdfc_getOrderStatus(orderId); } catch (e) { sc = { confirmed: false }; }
+  if (!sc.confirmed && typeof _checkWebhookLogForCharge === "function" && _checkWebhookLogForCharge(orderId)) sc = { confirmed: true };
+  if (!sc.confirmed) return { success: false, pending: true, message: "Payment not yet confirmed — will retry." };
+
+  const res = submitBulkOrder({
+    plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
+    lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
+    lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
+    payment_method: "Bulk (Gateway)", payment_status: "Paid",
+    gateway_order_id: orderId, batch_id: orderId
+  });
+  if (res && res.success) {
+    try { const all = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}"); delete all[orderId]; props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(all)); } catch (e) {}
+    return { success: true, batch_id: orderId, count: res.count || 0, already: !!res.already };
+  }
+  return { success: false, error: (res && res.error) || "Could not place the bulk order." };
+}

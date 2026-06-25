@@ -3695,8 +3695,10 @@
             जेवण – सायं ४:३० · रविवार बंद</p>
         </div>
 
-        <!-- ⚡ Order in bulk (week / 15-day / month) entry card -->
-        <div id="bulkEntryCard" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #fdba74;border-radius:14px;padding:13px 15px;margin-bottom:14px;">
+        <!-- ⚡ Order in bulk (week / 15-day / month) entry card — gated for testing:
+             hidden by default; revealed by ?bulk=1 (sticky via localStorage) so it can
+             go to the live domain for payment testing without customers seeing it. -->
+        <div id="bulkEntryCard" style="display:none;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #fdba74;border-radius:14px;padding:13px 15px;margin-bottom:14px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
             <span style="font-size:1.25rem;line-height:1;">⚡</span>
             <span style="font-weight:800;color:#b45309;font-size:0.95rem;">Order in bulk</span>
@@ -4674,7 +4676,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.01";
+    const APP_VERSION = "v26.06.25.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11661,7 +11663,7 @@
       // Bulk batch: the rows are written server-side by the reconciler from the frozen
       // bulk stash — the frontend must NOT rebuild from S.orders (which is empty for a
       // bulk checkout). Divert to the bulk "placed" confirmation + poll.
-      if (S.bulkPayActive) { S.bulkPayActive = false; bulk_showPlaced(gatewayOrderId); return; }
+      if (S.bulkPayActive) { S.bulkPayActive = false; bulk_afterPaid(gatewayOrderId); return; }
       sLoading(true, "Placing your order…");
 
       const orders = [];
@@ -11745,10 +11747,18 @@
     const BK = { plan: null, win: null, items: { Lunch: {}, Dinner: {} } };
     const BULK_PLAN_LABEL = { week: "Week", "15day": "15 Days", month: "Month" };
     let _bulkPlacedShown = false;
+    // Reveal the gated ⚡ bulk card only for testers: ?bulk=1 (sticky) shows it; customers
+    // on the live domain without the flag never see it. Remove this gate when going live.
+    (function () {
+      try {
+        const on = new URLSearchParams(location.search).has("bulk") || localStorage.getItem("sk_bulk_test") === "1";
+        if (on) { try { localStorage.setItem("sk_bulk_test", "1"); } catch (_) {} const card = document.getElementById("bulkEntryCard"); if (card) card.style.display = ""; }
+      } catch (_) {}
+    })();
 
     function _bulkModalEl() {
       let el = document.getElementById("bulkModal");
-      if (el) return el;
+      if (el) { el.style.zIndex = "55000"; return el; } // reset (bulk_showSuccess lowers it)
       el = document.createElement("div");
       el.id = "bulkModal";
       el.style.cssText = "position:fixed;inset:0;z-index:55000;background:rgba(0,0,0,0.55);display:none;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;";
@@ -11828,7 +11838,13 @@
       const it = BK.items[meal] = BK.items[meal] || {};
       it[colKey] = Math.max(0, (it[colKey] || 0) + delta);
       if (it[colKey] === 0) delete it[colKey];
+      // Preserve scroll position across the re-render so adding lunch items (below the
+      // fold) doesn't jump the modal back to the top on every tap.
+      const m = document.getElementById("bulkModal");
+      const sc = m ? m.scrollTop : 0;
       _bulkRenderItems();
+      const m2 = document.getElementById("bulkModal");
+      if (m2) m2.scrollTop = sc;
     }
 
     async function _bulkGoReview() {
@@ -11868,8 +11884,8 @@
     }
 
     // Payment — reuses the HDFC popup + savePendingOrder/createSession. The bulk batch
-    // is stashed (windows frozen server-side) and the row(s) are written by the reconciler
-    // after the charge; S.bulkPayActive diverts hdfc_submitVerifiedOrder to bulk_showPlaced.
+    // is stashed (windows frozen server-side); S.bulkPayActive diverts hdfc_submitVerifiedOrder
+    // to bulk_afterPaid, which finalizes (instant write) + confirms + shows the success screen.
     async function bulk_pay(total) {
       if (S.bulkBusy) return; S.bulkBusy = true; _bulkPlacedShown = false;
       const _w = (screen && screen.availWidth) ? screen.availWidth : 1280, _h = (screen && screen.availHeight) ? screen.availHeight : 800;
@@ -11894,22 +11910,56 @@
         if (blocked) { window.location.href = data.payment_url; return; }
         try { popup.location.href = data.payment_url; } catch (_) { window.location.href = data.payment_url; return; }
         if (typeof _hdfcInstallPopupResultListener === "function") {
-          _hdfcInstallPopupResultListener(tempId, "hdfc_payment", function (d) { try { popup.close(); } catch (_) {} bulk_showPlaced(tempId, d && d.status); });
+          _hdfcInstallPopupResultListener(tempId, "hdfc_payment", function (d) { try { popup.close(); } catch (_) {} bulk_afterPaid(tempId, d && d.status); });
         }
       } catch (e) { S.bulkBusy = false; try { popup && popup.close(); } catch (_) {} await sAlert("Couldn't start payment: " + e.message, "Payment Error", "⚠️"); }
     }
 
-    function bulk_showPlaced(orderId, status) {
+    // Post-payment — mirrors the order page: finalize the batch server-side (instant
+    // write from the frozen stash, idempotent), confirm, then show the success screen
+    // with a "View My Orders" button. The reconciler is the backstop if the browser
+    // never reaches here (closed tab / popup-relay failure on a non-prod origin).
+    async function bulk_afterPaid(orderId, status) {
       if (_bulkPlacedShown) return; _bulkPlacedShown = true; S.bulkPayActive = false;
       try { localStorage.removeItem("svaadh_hdfc_pending_order"); localStorage.removeItem("svaadh_hdfc_pending_ts"); } catch (_) {}
       const ok = !status || ["CHARGED", "SUCCESS", "PENDING", "STARTED"].indexOf(String(status).toUpperCase()) !== -1;
-      if (!ok) { sAlert("Payment was not completed. If money was deducted it auto-refunds — or WhatsApp +91 93222 46765 with order id " + orderId + ".", "Payment Not Completed", "⚠️"); return; }
+      if (!ok) { closeBulkFlow(); await sAlert("Payment was not completed. If money was deducted it auto-refunds — or WhatsApp +91 93222 46765 with order id " + orderId + ".", "Payment Not Completed", "⚠️"); return; }
+      _bulkRender('<div style="padding:34px 24px;text-align:center;">'
+        + '<div style="font-size:2.2rem;">⏳</div>'
+        + '<div style="font-weight:800;font-size:1.05rem;color:#0369a1;margin:10px 0 6px;">Confirming your bulk order…</div>'
+        + '<div style="font-size:0.82rem;color:#555;line-height:1.6;">Payment received — placing your order now. Please don\'t pay again.</div>'
+        + '<div style="margin-top:14px;color:#0284c7;letter-spacing:3px;">● ● ●</div></div>');
+      const mm = document.getElementById("bulkModal"); if (mm) mm.style.display = "flex";
+      // Retry the (idempotent) finalize until the gateway Status API confirms CHARGED.
+      let placed = null;
+      for (let i = 0; i < 18 && !placed; i++) {
+        try {
+          const r = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_finalizeBulkOrder", order_id: orderId }) });
+          const d = await r.json();
+          if (d && d.success) { placed = d; break; }
+        } catch (_) {}
+        await new Promise(function (res) { setTimeout(res, 5000); });
+      }
+      bulk_showSuccess(orderId, placed ? (placed.count || 0) : 0);
+    }
+
+    function bulk_showSuccess(orderId, count) {
+      const done = count > 0;
       _bulkRender('<div style="padding:30px 24px;text-align:center;">'
-        + '<div style="font-size:2.6rem;">✅</div>'
-        + '<div style="font-weight:800;font-size:1.15rem;color:#15803d;margin:8px 0 6px;">Payment received!</div>'
-        + '<div style="font-size:0.85rem;color:#555;line-height:1.6;">Your bulk order is being placed. It will appear in <b>Manage Orders</b> within a minute or two — <b>no need to pay again.</b></div>'
-        + '<button onclick="closeBulkFlow(); if(typeof showManageOrders===\'function\') showManageOrders();" style="margin-top:18px;width:100%;padding:13px;border:none;border-radius:11px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-weight:800;font-size:0.95rem;cursor:pointer;">📋 View My Orders</button></div>');
-      const m = document.getElementById("bulkModal"); if (m) m.style.display = "flex";
+        + '<div style="font-size:2.6rem;">' + (done ? "✅" : "⏳") + '</div>'
+        + '<div style="font-weight:800;font-size:1.18rem;color:' + (done ? "#15803d" : "#0369a1") + ';margin:8px 0 6px;">' + (done ? "Bulk order placed!" : "Payment received") + '</div>'
+        + '<div style="font-size:0.85rem;color:#555;line-height:1.6;">' + (done
+            ? ("Your " + (BULK_PLAN_LABEL[BK.plan] || "bulk") + " order — <b>" + count + " meal-days</b> — is confirmed. 🎉")
+            : "Your bulk order is being placed and will appear in <b>Manage Orders</b> within a minute. <b>No need to pay again.</b>")
+        + '</div>'
+        + '<button onclick="if(typeof showManageOrders===\'function\') showManageOrders();" style="margin-top:18px;width:100%;padding:13px;border:none;border-radius:11px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-weight:800;font-size:0.95rem;cursor:pointer;">📋 View My Orders</button>'
+        + '<button onclick="closeBulkFlow()" style="margin-top:9px;width:100%;padding:11px;border:1px solid #ddd;border-radius:11px;background:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">Done</button></div>');
+      // Drop below the Manage Orders panel (z-index 10001) so opening it overlays this
+      // success screen; closing Manage Orders reveals it again — matching the order
+      // page's success → Manage Orders → back-to-success behaviour. (Set AFTER render,
+      // since _bulkModalEl resets z-index to 55000.)
+      const m = document.getElementById("bulkModal");
+      if (m) { m.style.display = "flex"; m.style.zIndex = "9000"; }
     }
 
 
