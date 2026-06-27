@@ -4676,7 +4676,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.02";
+    const APP_VERSION = "v26.06.25.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11758,7 +11758,7 @@
 
     function _bulkModalEl() {
       let el = document.getElementById("bulkModal");
-      if (el) { el.style.zIndex = "55000"; return el; } // reset (bulk_showSuccess lowers it)
+      if (el) { el.style.zIndex = "55000"; return el; }
       el = document.createElement("div");
       el.id = "bulkModal";
       el.style.cssText = "position:fixed;inset:0;z-index:55000;background:rgba(0,0,0,0.55);display:none;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;";
@@ -11861,22 +11861,47 @@
       } catch (e) { toast("Pricing failed. Please try again."); _bulkRenderItems(); }
     }
 
-    function _bulkRenderReview(q) {
-      const byDate = {}; q.rows.forEach(function (r) { (byDate[r.date] = byDate[r.date] || []).push(r); });
-      let dayRows = "";
-      Object.keys(byDate).sort().forEach(function (d) {
-        const meals = byDate[d]; const dp = String(d).split("-");
-        const net = meals.reduce(function (s, m) { return s + m.net; }, 0);
-        dayRows += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.78rem;border-bottom:1px solid #f5f5f5;"><span>' + dp[2] + '/' + dp[1] + ' · ' + meals.map(function (m) { return m.meal[0]; }).join("+") + '</span><span style="font-weight:700;">₹' + net + '</span></div>';
+    // One meal's itemised block for the bulk review — shows ONE day's items (like the
+    // order page bill), then the per-day food × N days, the bulk discount, any fees,
+    // and the meal subtotal. Aggregates come from the authoritative bulkQuote rows.
+    function _bulkMealBlock(meal, q, icon) {
+      const rows = (q.rows || []).filter(function (r) { return r.meal === meal; });
+      if (!rows.length) return "";
+      const days = rows.length, foodPerDay = rows[0].food;
+      const sum = function (k) { return rows.reduce(function (s, r) { return s + (r[k] || 0); }, 0); };
+      const food = sum("food"), bulk = sum("bulkDisc"), tier = sum("tierDisc"), delivery = sum("delivery"), smallFee = sum("smallFee"), net = sum("net");
+      const ds = rows.map(function (r) { return r.date; }).sort();
+      const f = function (d) { return d.slice(8) + "/" + d.slice(5, 7); };
+      const range = ds.length > 1 ? (f(ds[0]) + " – " + f(ds[ds.length - 1])) : f(ds[0]);
+      const it = BK.items[meal] || {};
+      let items = "", hasSabji = false;
+      Object.keys(it).forEach(function (ck) {
+        const qty = it[ck]; if (qty <= 0) return;
+        if (String(ck).toLowerCase().indexOf("sabji") !== -1) hasSabji = true;
+        const nm = (typeof getItemName === "function") ? getItemName(ck, meal) : ck;
+        items += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#444;"><span>' + qty + ' × ' + nm + '</span><span>₹' + (getPrice(ck, meal) * qty) + '</span></div>';
       });
-      const head = '<div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;"><div style="font-weight:800;font-size:1.05rem;">Review — ' + BULK_PLAN_LABEL[BK.plan] + '</div><div style="font-size:0.72rem;opacity:0.95;margin-top:3px;">' + q.count + ' meal-days · 5% bulk discount applied</div></div>';
-      const body = '<div style="padding:14px 16px;">' + dayRows
-        + '<div style="margin-top:10px;padding-top:8px;border-top:2px solid #eee;">'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#555;"><span>Food (' + q.count + ' meal-days)</span><span>₹' + q.totalFood + '</span></div>'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (5%)</span><span>−₹' + q.totalBulkDisc + '</span></div>'
-        + (q.totalTierDisc > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Volume discount</span><span>−₹' + q.totalTierDisc + '</span></div>' : "")
-        + '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1.05rem;color:#b45309;margin-top:6px;"><span>Total</span><span>₹' + q.total + '</span></div></div>'
-        + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;margin-top:12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 Sabji is the chef\'s choice each day. If you cancel any day, the 5% bulk discount is deducted from that refund (commitment offer).</div></div>';
+      let lines = '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:5px 0;color:#555;border-top:1px solid #f0f0f0;margin-top:4px;"><span>Food (₹' + foodPerDay + '/day × ' + days + ')</span><span>₹' + food + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (5%)</span><span>−₹' + bulk + '</span></div>'
+        + (tier > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Volume discount</span><span>−₹' + tier + '</span></div>' : "")
+        + (delivery > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#777;"><span>🚚 Delivery</span><span>₹' + delivery + '</span></div>' : "")
+        + (smallFee > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#777;"><span>📦 Small-order fee</span><span>₹' + smallFee + '</span></div>' : "")
+        + '<div style="display:flex;justify-content:space-between;font-weight:700;font-size:0.85rem;color:#b45309;padding-top:4px;"><span>' + meal + ' subtotal</span><span>₹' + net + '</span></div>';
+      return '<div style="border:1px solid #fde4c8;border-radius:12px;padding:11px 13px;margin-bottom:12px;">'
+        + '<div style="font-weight:800;color:#92400e;font-size:0.88rem;margin-bottom:6px;">' + icon + ' ' + meal + ' <span style="font-weight:600;color:#999;font-size:0.72rem;">· ' + days + ' days (' + range + ')</span></div>'
+        + items
+        + (hasSabji ? '<div style="font-size:0.7rem;color:#b45309;font-style:italic;margin:4px 0 2px;">🍲 Sabji of the day — chef\'s choice</div>' : "")
+        + lines + '</div>';
+    }
+
+    function _bulkRenderReview(q) {
+      BK.quote = q; // kept for the post-payment success summary
+      const head = '<div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;"><div style="font-weight:800;font-size:1.05rem;">Review — ' + BULK_PLAN_LABEL[BK.plan] + '</div><div style="font-size:0.72rem;opacity:0.95;margin-top:3px;">' + q.count + ' meal-days · same items every working day</div></div>';
+      const body = '<div style="padding:14px 16px;max-height:56vh;overflow-y:auto;">'
+        + _bulkMealBlock("Dinner", q, "🌙") + _bulkMealBlock("Lunch", q, "☀️")
+        + '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;color:#b45309;padding:8px 2px 2px;border-top:2px solid #eee;"><span>Grand Total</span><span>₹' + q.total + '</span></div>'
+        + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + ' with bulk</div>'
+        + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 If you cancel a day, that meal\'s 5% bulk discount comes off the refund (lunch &amp; dinner are independent). Sabji is the chef\'s choice each day.</div></div>';
       const foot = '<div style="padding:13px 16px;border-top:1px solid #eee;display:flex;gap:10px;">'
         + '<button onclick="_bulkRenderItems()" style="padding:11px 16px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;font-size:0.85rem;cursor:pointer;">← Back</button>'
         + '<button onclick="bulk_pay(' + q.total + ')" style="flex:1;padding:11px 16px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;">🔒 Pay ₹' + q.total + '</button></div>';
@@ -11940,26 +11965,25 @@
         } catch (_) {}
         await new Promise(function (res) { setTimeout(res, 5000); });
       }
-      bulk_showSuccess(orderId, placed ? (placed.count || 0) : 0);
-    }
-
-    function bulk_showSuccess(orderId, count) {
-      const done = count > 0;
-      _bulkRender('<div style="padding:30px 24px;text-align:center;">'
-        + '<div style="font-size:2.6rem;">' + (done ? "✅" : "⏳") + '</div>'
-        + '<div style="font-weight:800;font-size:1.18rem;color:' + (done ? "#15803d" : "#0369a1") + ';margin:8px 0 6px;">' + (done ? "Bulk order placed!" : "Payment received") + '</div>'
-        + '<div style="font-size:0.85rem;color:#555;line-height:1.6;">' + (done
-            ? ("Your " + (BULK_PLAN_LABEL[BK.plan] || "bulk") + " order — <b>" + count + " meal-days</b> — is confirmed. 🎉")
-            : "Your bulk order is being placed and will appear in <b>Manage Orders</b> within a minute. <b>No need to pay again.</b>")
-        + '</div>'
-        + '<button onclick="if(typeof showManageOrders===\'function\') showManageOrders();" style="margin-top:18px;width:100%;padding:13px;border:none;border-radius:11px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;font-weight:800;font-size:0.95rem;cursor:pointer;">📋 View My Orders</button>'
-        + '<button onclick="closeBulkFlow()" style="margin-top:9px;width:100%;padding:11px;border:1px solid #ddd;border-radius:11px;background:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">Done</button></div>');
-      // Drop below the Manage Orders panel (z-index 10001) so opening it overlays this
-      // success screen; closing Manage Orders reveals it again — matching the order
-      // page's success → Manage Orders → back-to-success behaviour. (Set AFTER render,
-      // since _bulkModalEl resets z-index to 55000.)
-      const m = document.getElementById("bulkModal");
-      if (m) { m.style.display = "flex"; m.style.zIndex = "9000"; }
+      // Populate the regular cart state from the bulk batch so the EXACT order-page
+      // success flow works: the success card (renderSuccessSummary lists every meal-day)
+      // plus showOrderVerifyModal — which polls getCustomerOrders → "found" → "View in
+      // Manage Orders", with the success page sitting behind it.
+      try {
+        const q = BK.quote || { rows: [] };
+        S.orders = {}; const _dates = [];
+        (q.rows || []).forEach(function (r) {
+          if (!S.orders[r.date]) { S.orders[r.date] = {}; _dates.push(r.date); }
+          S.orders[r.date][r.meal] = { items: Object.assign({}, BK.items[r.meal] || {}), subtotal: r.food };
+        });
+        S.selectedDates = _dates.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort();
+        S.grandTotal = q.total || 0;
+        S.paidViaGateway = true; S.paymentChoice = "Gateway"; S.hdfcGatewayOrderId = orderId;
+        S.isPlaced = true;
+      } catch (_) {}
+      closeBulkFlow();
+      if (typeof showSuccess === "function") showSuccess(orderId); // success card + verify-modal polling
+      else toast("Bulk order placed — check Manage Orders.");
     }
 
 
