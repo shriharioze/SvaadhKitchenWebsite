@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.2; // 2026-06-25: bulk cancellation clawback is now PER MEAL TYPE (lunch + dinner are independent week-commitments). Dormant on LIVE. (22.1: bulk backend.)
+const CODE_VERSION   = 22.3; // 2026-06-25: bulk per-plan discount rates (week 5%, 15day 7.5%, month 10%); review shows the rate. Dormant on LIVE (gated frontend). (22.2: per-meal clawback.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

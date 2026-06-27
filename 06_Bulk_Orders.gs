@@ -10,7 +10,9 @@
 // ============================================================
 
 const TAB_BULK_BATCH_COL = "Batch_ID"; // self-healed column on SK_Orders
-const BULK_DISCOUNT_RATE = 0.05;       // flat 5% on each day's food for bulk orders
+const BULK_DISCOUNT_RATE = 0.05;       // default bulk discount (used if a plan is unknown)
+// Per-plan bulk discount on each day's food — bigger commitment, bigger discount.
+const BULK_PLAN_RATES = { week: 0.05, "15day": 0.075, month: 0.10 };
 // Working (non-Sunday, non-closed) days per plan.
 const BULK_PLANS = { week: 6, "15day": 13, month: 26 };
 
@@ -99,8 +101,9 @@ function _bulkMealFood(items) {
 // every meal-day. ctx: { isFreeArea, isFeeExempt, isPickup } for the delivery point.
 // Returns { rows:[{date, meal, food, bulkDisc, tierDisc, discount, delivery, smallFee,
 // net, items}], total, totalFood, totalBulkDisc, totalTierDisc }.
-function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx) {
+function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx, bulkRate) {
   ctx = ctx || {};
+  const _rate = (typeof bulkRate === "number" && bulkRate > 0) ? bulkRate : BULK_DISCOUNT_RATE;
   const lunchFood  = _bulkMealFood(lunchItems);
   const dinnerFood = _bulkMealFood(dinnerItems);
   const hasLunch  = lunchFood  > 0 && Array.isArray(lunchDates)  && lunchDates.length  > 0;
@@ -132,7 +135,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     let tierRate = 0;
     if (dayFood >= 450) tierRate = 0.075;
     else if (dayFood >= 300) tierRate = 0.05;
-    const dayBulkDisc = Math.round(dayFood * BULK_DISCOUNT_RATE); // flat 5%
+    const dayBulkDisc = Math.round(dayFood * _rate); // plan rate: 5% / 7.5% / 10%
     const dayTierDisc = Math.round(dayFood * tierRate);
 
     let bulkAssigned = 0, tierAssigned = 0;
@@ -183,8 +186,10 @@ function _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx, frozen) {
   }
   const lunchDates  = lunchFood  > 0 ? winLunch  : [];
   const dinnerDates = dinnerFood > 0 ? winDinner : [];
-  const priced = _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx);
-  priced.plan   = planName;
+  const rate = BULK_PLAN_RATES[planName] || BULK_DISCOUNT_RATE; // week 5% / 15day 7.5% / month 10%
+  const priced = _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx, rate);
+  priced.plan     = planName;
+  priced.bulkRate = rate; // surfaced to the frontend review ("Bulk discount (X%)")
   priced.lunch  = lunchFood  > 0 ? { food: lunchFood,  dates: lunchDates  } : null;
   priced.dinner = dinnerFood > 0 ? { food: dinnerFood, dates: dinnerDates } : null;
   return priced;
@@ -294,7 +299,7 @@ function submitBulkOrder(body) {
 
   // Dry run: return the breakdown WITHOUT writing anything.
   if (body.dryRun) {
-    return { success: true, dryRun: true, plan: priced.plan, total: priced.total,
+    return { success: true, dryRun: true, plan: priced.plan, total: priced.total, bulkRate: priced.bulkRate,
              count: priced.rows.length, totalFood: priced.totalFood, totalBulkDisc: priced.totalBulkDisc,
              totalTierDisc: priced.totalTierDisc, lunch: priced.lunch, dinner: priced.dinner,
              rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };

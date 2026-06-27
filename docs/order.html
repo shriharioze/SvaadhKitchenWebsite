@@ -3702,19 +3702,21 @@
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
             <span style="font-size:1.25rem;line-height:1;">⚡</span>
             <span style="font-weight:800;color:#b45309;font-size:0.95rem;">Order in bulk</span>
+            <span style="font-size:0.6rem;font-weight:800;color:#fff;background:#ea580c;border-radius:20px;padding:2px 7px;letter-spacing:0.4px;">BETA</span>
           </div>
           <div style="font-size:0.75rem;color:#92400e;line-height:1.45;margin-bottom:11px;">
-            One order for several working days — same meal each day, <b>5% off</b>. Pick lunch, dinner, or both.
+            One order for several working days — same meal each day, <b>save 5–10%</b>. Pick lunch, dinner, or both.
           </div>
           <div style="display:flex;gap:8px;">
             <button type="button" onclick="openBulkFlow('week')"
-              style="flex:1;padding:10px 6px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.85rem;cursor:pointer;box-shadow:0 3px 10px rgba(234,88,12,0.3);">Week</button>
-            <button type="button" disabled title="Coming soon"
-              style="flex:1;padding:7px 6px;border:1px dashed #fdba74;border-radius:10px;background:#fffbeb;color:#b45309;font-size:0.82rem;cursor:not-allowed;line-height:1.15;">
-              <span style="text-decoration:line-through;opacity:0.65;font-weight:700;">15 Days</span><br><span style="font-size:0.62rem;font-weight:700;opacity:0.8;">coming soon</span></button>
-            <button type="button" disabled title="Coming soon"
-              style="flex:1;padding:7px 6px;border:1px dashed #fdba74;border-radius:10px;background:#fffbeb;color:#b45309;font-size:0.82rem;cursor:not-allowed;line-height:1.15;">
-              <span style="text-decoration:line-through;opacity:0.65;font-weight:700;">Month</span><br><span style="font-size:0.62rem;font-weight:700;opacity:0.8;">coming soon</span></button>
+              style="flex:1;padding:9px 6px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.85rem;cursor:pointer;box-shadow:0 3px 10px rgba(234,88,12,0.3);line-height:1.2;">Week<br><span style="font-size:0.62rem;font-weight:700;opacity:0.9;">5% off</span></button>
+            <button type="button" onclick="openBulkFlow('15day')"
+              style="flex:1;padding:9px 6px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.85rem;cursor:pointer;box-shadow:0 3px 10px rgba(234,88,12,0.3);line-height:1.2;">15 Days<br><span style="font-size:0.62rem;font-weight:700;opacity:0.9;">7.5% off</span></button>
+            <button type="button" onclick="openBulkFlow('month')"
+              style="flex:1;padding:9px 6px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.85rem;cursor:pointer;box-shadow:0 3px 10px rgba(234,88,12,0.3);line-height:1.2;">Month<br><span style="font-size:0.62rem;font-weight:700;opacity:0.9;">10% off</span></button>
+          </div>
+          <div style="font-size:0.66rem;color:#9a6a3a;margin-top:9px;line-height:1.4;font-style:italic;">
+            🧪 Bulk ordering is new (beta) — we're still polishing it, so a few things may change. Thanks for trying it!
           </div>
         </div>
 
@@ -4676,7 +4678,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.03";
+    const APP_VERSION = "v26.06.25.04";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11881,8 +11883,9 @@
         const nm = (typeof getItemName === "function") ? getItemName(ck, meal) : ck;
         items += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#444;"><span>' + qty + ' × ' + nm + '</span><span>₹' + (getPrice(ck, meal) * qty) + '</span></div>';
       });
+      const ratePct = (q.bulkRate ? Math.round(q.bulkRate * 1000) / 10 : 5); // 5 / 7.5 / 10
       let lines = '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:5px 0;color:#555;border-top:1px solid #f0f0f0;margin-top:4px;"><span>Food (₹' + foodPerDay + '/day × ' + days + ')</span><span>₹' + food + '</span></div>'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (5%)</span><span>−₹' + bulk + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (' + ratePct + '%)</span><span>−₹' + bulk + '</span></div>'
         + (tier > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Volume discount</span><span>−₹' + tier + '</span></div>' : "")
         + (delivery > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#777;"><span>🚚 Delivery</span><span>₹' + delivery + '</span></div>' : "")
         + (smallFee > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#777;"><span>📦 Small-order fee</span><span>₹' + smallFee + '</span></div>' : "")
@@ -11901,7 +11904,7 @@
         + _bulkMealBlock("Dinner", q, "🌙") + _bulkMealBlock("Lunch", q, "☀️")
         + '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;color:#b45309;padding:8px 2px 2px;border-top:2px solid #eee;"><span>Grand Total</span><span>₹' + q.total + '</span></div>'
         + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + ' with bulk</div>'
-        + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 If you cancel a day, that meal\'s 5% bulk discount comes off the refund (lunch &amp; dinner are independent). Sabji is the chef\'s choice each day.</div></div>';
+        + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 If you cancel a day, that meal\'s bulk discount comes off the refund (lunch &amp; dinner are independent). Sabji is the chef\'s choice each day.</div></div>';
       const foot = '<div style="padding:13px 16px;border-top:1px solid #eee;display:flex;gap:10px;">'
         + '<button onclick="_bulkRenderItems()" style="padding:11px 16px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;font-size:0.85rem;cursor:pointer;">← Back</button>'
         + '<button onclick="bulk_pay(' + q.total + ')" style="flex:1;padding:11px 16px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;">🔒 Pay ₹' + q.total + '</button></div>';
