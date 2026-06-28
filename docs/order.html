@@ -4678,7 +4678,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.06";
+    const APP_VERSION = "v26.06.25.07";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11922,6 +11922,12 @@
       const now = new Date();
       const tempId = "SK" + now.getFullYear().toString().slice(-2) + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0") + "G" + Math.random().toString(36).substr(2, 9).toUpperCase();
       try { localStorage.setItem("svaadh_hdfc_pending_order", tempId); localStorage.setItem("svaadh_hdfc_pending_ts", String(Date.now())); } catch (_) {}
+      // Popup-mode marker — SET BEFORE the popup navigates (same as hdfc_initiatePayment).
+      // When the popup returns to order.html the relay short-circuit fires on the _popup=1
+      // URL param OR this marker; HDFC sometimes drops the query param on the way back, in
+      // which case the marker is the ONLY signal — without it the popup loaded the FULL
+      // order page (surcharge modal) instead of relaying back, so it never closed.
+      try { localStorage.setItem("svaadh_hdfc_popup_active", JSON.stringify({ kind: "payment", ts: Date.now() })); } catch (_) {}
       if (popup && !blocked) { try { popup.document.write('<!DOCTYPE html><body style="font-family:system-ui,Arial;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fef9f6;"><div style="text-align:center;font-weight:800;color:#c0392b;">Connecting to HDFC…</div></body>'); } catch (_) {} }
       closeBulkFlow();
       try {
