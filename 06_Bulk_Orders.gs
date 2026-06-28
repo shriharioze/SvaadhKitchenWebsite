@@ -118,9 +118,15 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
   const isPickup  = !!ctx.isPickup;
   const smallTh   = PRICING_V2 ? 53 : 50;
 
-  const rows = [];
-  let total = 0, totalFood = 0, totalBulkDisc = 0, totalTierDisc = 0;
-
+  // PASS 1 — build the day list + per-day fee/tier context, and accumulate the batch's
+  // total bulk discount (per-day 5%/7.5%/10% of that day's food, rounded) PLUS each
+  // meal's total food. The bulk discount is then split PER MEAL (below), not per day,
+  // so lunch & dinner each carry a fair share — otherwise a per-day round-up (e.g. ₹1 on
+  // a ₹16 day) always lands on the first meal and lunch hoards the whole discount while
+  // dinner gets ₹0, which makes the per-meal cancellation clawback unfair.
+  const dayList = [];
+  let totalBulkPool = 0;
+  const mealFoodTotal = {}, mealCount = {};
   Object.keys(dayMap).sort().forEach(function (date) {
     const flags = dayMap[date];
     const meals = [];
@@ -135,25 +141,52 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     let tierRate = 0;
     if (dayFood >= 450) tierRate = 0.075;
     else if (dayFood >= 300) tierRate = 0.05;
-    const dayBulkDisc = Math.round(dayFood * _rate); // plan rate: 5% / 7.5% / 10%
     const dayTierDisc = Math.round(dayFood * tierRate);
 
-    let bulkAssigned = 0, tierAssigned = 0;
-    meals.forEach(function (m, i) {
-      const last = (i === meals.length - 1);
-      // Pro-rate the day-level discounts across the day's meals; the LAST meal absorbs
-      // the rounding remainder so the per-day discount totals stay exact.
-      const bulkShare = last ? (dayBulkDisc - bulkAssigned) : Math.round(dayBulkDisc * (m.food / dayFood));
-      const tierShare = last ? (dayTierDisc - tierAssigned) : Math.round(dayTierDisc * (m.food / dayFood));
-      bulkAssigned += bulkShare; tierAssigned += tierShare;
+    totalBulkPool += Math.round(dayFood * _rate); // plan rate: 5% / 7.5% / 10%
+    meals.forEach(function (m) {
+      mealFoodTotal[m.meal] = (mealFoodTotal[m.meal] || 0) + m.food;
+      mealCount[m.meal] = (mealCount[m.meal] || 0) + 1;
+    });
+    dayList.push({ date: date, meals: meals, dayFood: dayFood, isDayFree: isDayFree, dayTierDisc: dayTierDisc });
+  });
 
-      const delivery = (isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
-      const smallFee = (isDayFree || isPickup) ? 0 : (m.food < smallTh ? 10 : 0);
+  // Split the batch's total bulk discount across meals PROPORTIONAL to each meal's food
+  // (the last meal absorbs the rounding remainder). Equal lunch/dinner ⇒ an even split.
+  const grandFood = Object.keys(mealFoodTotal).reduce(function (s, k) { return s + mealFoodTotal[k]; }, 0);
+  const mealKeys = Object.keys(mealFoodTotal);
+  const mealPool = {}; let poolAssigned = 0;
+  mealKeys.forEach(function (mk, i) {
+    if (i === mealKeys.length - 1) mealPool[mk] = totalBulkPool - poolAssigned;
+    else { mealPool[mk] = grandFood > 0 ? Math.round(totalBulkPool * mealFoodTotal[mk] / grandFood) : 0; poolAssigned += mealPool[mk]; }
+  });
+
+  // PASS 2 — build rows. Each meal's pool is spread evenly across its days via a running
+  // cumulative target (keeps per-row integers summing exactly to the meal pool). The
+  // day-tier discount stays per-day, pro-rated across that day's meals.
+  const rows = [];
+  let total = 0, totalFood = 0, totalBulkDisc = 0, totalTierDisc = 0;
+  const mealSeen = {}, mealBulkAssigned = {};
+  dayList.forEach(function (day) {
+    let tierAssigned = 0;
+    day.meals.forEach(function (m, i) {
+      const last = (i === day.meals.length - 1);
+
+      mealSeen[m.meal] = (mealSeen[m.meal] || 0) + 1;
+      const tgt = Math.round((mealPool[m.meal] || 0) * mealSeen[m.meal] / (mealCount[m.meal] || 1));
+      const bulkShare = tgt - (mealBulkAssigned[m.meal] || 0);
+      mealBulkAssigned[m.meal] = tgt;
+
+      const tierShare = last ? (day.dayTierDisc - tierAssigned) : Math.round(day.dayTierDisc * (m.food / day.dayFood));
+      tierAssigned += tierShare;
+
+      const delivery = (day.isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
+      const smallFee = (day.isDayFree || isPickup) ? 0 : (m.food < smallTh ? 10 : 0);
       const discount = bulkShare + tierShare;
       const net = Math.max(0, Math.round(m.food - discount + delivery + smallFee));
 
       rows.push({
-        date: date, meal: m.meal, food: m.food,
+        date: day.date, meal: m.meal, food: m.food,
         bulkDisc: bulkShare, tierDisc: tierShare, discount: discount,
         delivery: delivery, smallFee: smallFee, net: net, items: m.items
       });

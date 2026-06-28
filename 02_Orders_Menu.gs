@@ -2788,7 +2788,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       const lines = [];
       if (isBulk) {
         if (bulkClawbackApplied > 0) {
-          lines.push(`This was a bulk order — the 5% bulk discount is deducted from your refund.`);
+          lines.push(`This was a bulk order — the bulk discount on this meal is deducted from your refund.`);
           lines.push(`Full price ₹${bulkFullPrice} − ₹${bulkClawbackApplied} bulk discount = ₹${refundAmt} refund.`);
         } else {
           lines.push(`Full refund of ₹${refundAmt} (the bulk discount was already recovered on an earlier cancellation in this order).`);
