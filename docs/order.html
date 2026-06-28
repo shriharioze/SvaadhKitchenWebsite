@@ -4678,7 +4678,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.04";
+    const APP_VERSION = "v26.06.25.05";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11786,7 +11786,7 @@
       } catch (e) { _bulkErr("Couldn't load the bulk dates. Please check your connection and try again."); }
     }
 
-    function _bulkFmtDates(arr) { if (!arr || !arr.length) return "—"; return arr.map(function (d) { const p = String(d).split("-"); return p[2] + "/" + p[1]; }).join(", "); }
+    function _bulkFmtDates(arr) { if (!arr || !arr.length) return "—"; const f = function (d) { const p = String(d).split("-"); return p[2] + "/" + p[1]; }; return arr.length === 1 ? f(arr[0]) : (f(arr[0]) + " to " + f(arr[arr.length - 1])); }
     function _bulkItemsArr(meal) { const it = BK.items[meal] || {}; return Object.keys(it).map(function (k) { return { colKey: k, qty: it[k] }; }); }
     function _bulkMealFoodFE(meal) { let s = 0; const it = BK.items[meal] || {}; Object.keys(it).forEach(function (k) { s += getPrice(k, meal) * (it[k] || 0); }); return s; }
 
