@@ -149,7 +149,9 @@ function _reconcileSingleEntry(orderId, entry) {
                          statusCheck.status === "UNKNOWN" ||
                          statusCheck.status === "NEW");
       if (transient) {
-        const webhookProof = _checkWebhookLogForCharge(orderId);
+        // Pass the server-computed stash amount so the webhook-log fallback can trust
+        // HDFC's signed event by amount-match when the Status API is genuinely down.
+        const webhookProof = _checkWebhookLogForCharge(orderId, entry && entry.amount);
         if (webhookProof) {
           Logger.log("reconcile: " + orderId + " — Status API unavailable (" + statusCheck.status + "), but ORDER_SUCCEEDED webhook found in SK_Webhook_Log. Trusting webhook.");
           statusCheck = { confirmed: true, status: "CHARGED", amount: webhookProof.amount };

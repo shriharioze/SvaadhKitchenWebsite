@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.7; // 2026-06-29: on-account monthly bill label spans the real unpaid range ("May–June 2026") when dues carry across months — total already summed all months, only the label said "June". (22.6: reconciler abandoned/failed-entry cleanup.)
+const CODE_VERSION   = 22.8; // 2026-06-29: ROOT CAUSE of 29-Jun lost orders — _checkWebhookLogForCharge re-called the Status API, so the "fallback for when the API is down" failed when the API was down (load/quota burst). Now it trusts HDFC's signed webhook on API-unreachable IF its amount matches the server-computed stash amount (fraud-safe). Removes the Status API as a single point of failure. (22.7: on-account multi-month bill label.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

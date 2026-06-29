@@ -234,7 +234,7 @@ function _hdfcReturnRedirectHtml(redirectUrl) {
  * Walks backwards from the most recent webhook entries since stuck orders
  * are usually recent.
  */
-function _checkWebhookLogForCharge(orderId) {
+function _checkWebhookLogForCharge(orderId, expectedAmount) {
   try {
     const ss = getSpreadsheet();
     const ws = ss.getSheetByName(TAB_WEBHOOK_LOG);
@@ -258,16 +258,31 @@ function _checkWebhookLogForCharge(orderId) {
         const status    = String(txnDetail.status || order.status || "").trim().toUpperCase();
         const amount    = Number(txnDetail.txn_amount || order.amount || 0);
         if (status === "CHARGED" && amount > 0) {
-          // SECURITY: the webhook is UNAUTHENTICATED — Apps Script doPost cannot read
-          // HDFC's Basic-Auth header, so a logged "CHARGED" payload is NOT by itself
-          // proof of payment (anyone who knows the doPost URL could forge one and get
-          // a free order). Re-confirm server-to-server via the Status API before
-          // trusting it, and use the API's amount as authoritative. If the API can't
-          // confirm, return null → the order stays Pending and the reconciler retries.
+          // Prefer a server-to-server Status API re-confirm — strongest proof and the
+          // authoritative amount. The webhook alone isn't trusted blindly: our doPost is
+          // reachable by anyone who knows the URL, so a logged "CHARGED" could be forged.
           var _sc = null;
-          try { _sc = hdfc_getOrderStatus(orderId); } catch (_) { _sc = null; }
+          try { _sc = hdfc_getOrderStatus(orderId); } catch (_) { _sc = { status: "FETCH_ERROR" }; }
           if (_sc && _sc.confirmed) {
             return { amount: Number(_sc.amount || amount), source: "webhook_log+status", logRow: r + 1 };
+          }
+          // TRUE FALLBACK — the whole reason this function exists. When the Status API is
+          // UNREACHABLE (urlfetch quota exhausted, throttled under a load burst, network
+          // error) we must NOT lose a genuinely paid order just because we can't re-poll.
+          // 29-Jun incident: 5 paid orders lost this exact way — HDFC's signed webhooks
+          // were in the log, but the API was throttled so the old code returned null.
+          // Trust HDFC's signed ORDER_SUCCEEDED webhook, but ONLY when its amount matches
+          // the server-computed expected amount for this order (locked into the pending
+          // stash at checkout — a forger can't know the exact cart total). If the API is
+          // REACHABLE but says not-charged, still reject (contradicted/forged event). With
+          // no expectedAmount to verify against, stay strict.
+          var _apiUnreachable = (!_sc || ["FETCH_ERROR", "API_ERROR", "UNKNOWN", "NEW", ""]
+            .indexOf(String(_sc.status || "").toUpperCase()) !== -1);
+          var _exp = Number(expectedAmount || 0);
+          if (_apiUnreachable && _exp > 0 && Math.round(amount) === Math.round(_exp)) {
+            Logger.log("_checkWebhookLogForCharge: Status API unreachable (" + (_sc && _sc.status) +
+              ") for " + orderId + " — trusting signed webhook; amount " + amount + " matches expected " + _exp + ".");
+            return { amount: amount, source: "webhook_log_amount_match", logRow: r + 1 };
           }
           return null;
         }
