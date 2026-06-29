@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.4; // 2026-06-29: lost-order audit now resolves Customer_Name from SK_Customers by phone, emails admin on NEW findings, and runs AUTOMATICALLY daily (setupLostOrderAuditTrigger → dailyLostOrderAudit ~11:15pm IST). fillMissedOrderNames() backfills names on existing rows. Audit found losses back to 17-Jun (pre-existing trickle). (23.3: archive only Paid rows.)
+const CODE_VERSION   = 23.5; // 2026-06-29: lost-order audit now runs EVERY 10 MIN (setupLostOrderAuditTrigger → liveLostOrderAudit, monthsBack=0 live log only) for near-live alerts; SK_Orders read trimmed to the single Gateway_Order_ID column so frequent runs are cheap. Optional setupDailyDeepAuditTrigger() scans archives nightly. (23.4: audit names + email + daily run.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

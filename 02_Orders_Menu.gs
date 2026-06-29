@@ -908,14 +908,19 @@ function auditLostGatewayOrders(monthsBack) {
   const ss = getSpreadsheet();
   monthsBack = (typeof monthsBack === "number" && monthsBack >= 0) ? monthsBack : 4;
 
-  // (1) Gateway_Order_IDs that DID land in SK_Orders
-  const ordWs   = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const ordData = ordWs.getDataRange().getValues();
-  const gCol    = (ordData[0] || []).indexOf("Gateway_Order_ID");
-  const inOrders = new Set();
-  if (gCol !== -1) for (let r = 1; r < ordData.length; r++) {
-    const v = String(ordData[r][gCol] || "").trim();
-    if (v) inOrders.add(v);
+  // (1) Gateway_Order_IDs that DID land in SK_Orders — read ONLY that one column (not the
+  // whole ~55-col sheet) so this is cheap enough to run every 10 minutes.
+  const ordWs      = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const ordLastRow = ordWs.getLastRow();
+  const ordHeader  = ordWs.getRange(1, 1, 1, ordWs.getLastColumn()).getValues()[0] || [];
+  const gCol       = ordHeader.indexOf("Gateway_Order_ID");
+  const inOrders   = new Set();
+  if (gCol !== -1 && ordLastRow > 1) {
+    const gVals = ordWs.getRange(2, gCol + 1, ordLastRow - 1, 1).getValues();
+    for (let i = 0; i < gVals.length; i++) {
+      const v = String(gVals[i][0] || "").trim();
+      if (v) inOrders.add(v);
+    }
   }
 
   // (1b) phone → registered name, from SK_Customers (the webhook payload doesn't always
@@ -1040,24 +1045,38 @@ function auditLostGatewayOrders(monthsBack) {
   return summary;
 }
 
-// AUTOMATIC daily audit (trigger target). Scans the live log + the current/previous
-// month archive (monthsBack=1 — enough to catch anything recent), logs any new
-// charged-but-missing order to SK_Missed_Orders, and emails the admin. The full
-// historical sweep is the manual auditLostGatewayOrders(4).
-function dailyLostOrderAudit() {
-  return auditLostGatewayOrders(1);
+// AUTOMATIC live audit (trigger target — every 10 min). Scans ONLY the live webhook log
+// (monthsBack=0 = today's orders, where fresh losses show up), and reads just the one
+// SK_Orders column it needs, so it's fast and cheap to run frequently. Logs any new
+// charged-but-missing order to SK_Missed_Orders + emails the admin.
+function liveLostOrderAudit() {
+  return auditLostGatewayOrders(0);
 }
 
-// Run ONCE from the editor to schedule the daily audit (~11:15 PM IST — after the
-// dinner rush, while today's webhooks are still in the live log). Idempotent.
+// Run ONCE from the editor to schedule the audit EVERY 10 MINUTES for near-live alerts.
+// Idempotent. (everyMinutes() only allows 1/5/10/15/30.) Clears any prior audit trigger.
 function setupLostOrderAuditTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === "dailyLostOrderAudit") ScriptApp.deleteTrigger(t);
+    var h = t.getHandlerFunction();
+    if (h === "liveLostOrderAudit" || h === "dailyLostOrderAudit") ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger("dailyLostOrderAudit")
-    .timeBased().atHour(23).nearMinute(15).everyDays(1).inTimezone("Asia/Kolkata")
-    .create();
-  return "Daily lost-order audit scheduled ~11:15 PM IST.";
+  ScriptApp.newTrigger("liveLostOrderAudit").timeBased().everyMinutes(10).create();
+  return "Lost-order audit scheduled every 10 minutes.";
+}
+
+// OPTIONAL deeper daily sweep — also scans the last 2 months' archive files, to catch
+// anything that aged out of the live log before a 10-min run saw it. Run
+// setupDailyDeepAuditTrigger() once if you want the extra safety net.
+function dailyDeepLostOrderAudit() {
+  return auditLostGatewayOrders(2);
+}
+function setupDailyDeepAuditTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "dailyDeepLostOrderAudit") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("dailyDeepLostOrderAudit")
+    .timeBased().atHour(23).nearMinute(30).everyDays(1).inTimezone("Asia/Kolkata").create();
+  return "Daily deep lost-order audit scheduled ~11:30 PM IST.";
 }
 
 // Backfill the Customer_Name column for existing SK_Missed_Orders rows that were logged
