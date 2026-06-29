@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.4; // 2026-06-28: bulk discount split PER MEAL proportional to food (was per-day round-up hoarded by lunch) — even pools so per-meal cancellation clawback is fair; cancel msg drops hardcoded "5%". (22.3: per-plan rates.)
+const CODE_VERSION   = 22.5; // 2026-06-29: gateway recovery foolproofing — webhook now WRITES a paid order from the stash when no row exists (was a silent no-op that lost orders); pending-stash TTL 30min→6h + size cap. (22.4: bulk per-meal discount split.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

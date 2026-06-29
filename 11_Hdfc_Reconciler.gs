@@ -181,6 +181,49 @@ function _reconcileSingleEntry(orderId, entry) {
 }
 
 /**
+ * Write ONE paid gateway order from the pending stash, on demand.
+ *
+ * Called by the webhook (hdfc_processWebhookLog) the moment an ORDER_SUCCEEDED event
+ * arrives for an order that has no row yet — so a paid order is recorded immediately,
+ * independent of the customer's browser AND of the 5-min reconciler trigger. Reuses
+ * the exact same proven path as the sweep (_reconcileSingleEntry: per-order lock,
+ * Gateway_Order_ID dedup, CHARGED re-confirmation), so it's idempotent and safe to
+ * race against the sweep or the browser. On success it removes the entry from the
+ * stash so nothing re-processes it.
+ *
+ * @param {string} orderId  e.g. "SK260629G9128V8MTK"
+ * @returns {{outcome:string, ...}}  same shape as _reconcileSingleEntry
+ */
+function hdfc_reconcileOrderFromStash(orderId) {
+  if (!PAYMENT_GATEWAY_ENABLED) return { outcome: "skippedNotCharged", reason: "gateway disabled" };
+  orderId = String(orderId || "").trim();
+  if (!orderId) return { outcome: "errors", reason: "no order id" };
+
+  const props = PropertiesService.getScriptProperties();
+  var pending;
+  try { pending = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}"); }
+  catch (e) { return { outcome: "errors", reason: "malformed pending JSON" }; }
+
+  const entry = pending[orderId];
+  if (!entry) {
+    // No stash entry — either already reconciled (row exists) or the stash expired.
+    // _reconcileSingleEntry can't synthesise a body without items, so report and let
+    // the caller's hdfc_markOrderPaid result stand.
+    return { outcome: "skippedNotCharged", reason: "no stash entry (expired or already written)" };
+  }
+
+  const result = _reconcileSingleEntry(orderId, entry);
+
+  // Drop the entry once it's written (or confirmed already-written) so neither this
+  // path nor the 5-min sweep keeps re-checking it.
+  if (result && (result.outcome === "reconciled" || result.outcome === "skippedAlreadyDone")) {
+    try { delete pending[orderId]; props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending)); } catch (_) {}
+  }
+  Logger.log("hdfc_reconcileOrderFromStash(" + orderId + "): " + JSON.stringify(result));
+  return result;
+}
+
+/**
  * Transform the pending-entry shape (S.orders from the frontend) into
  * the body shape that submitOrder() expects.
  */

@@ -1255,10 +1255,16 @@ function hdfc_savePendingOrder(body) {
     const raw      = props.getProperty("HDFC_PENDING_ORDERS") || "{}";
     const pending  = JSON.parse(raw);
 
-    // Expire entries older than 30 minutes to keep size under control
+    // Expire stale entries. TTL was 30 min, which lost paid orders: the
+    // ORDER_SUCCEEDED webhook can arrive 20-30 min late and the reconciler may miss
+    // its brief window, so the only copy of the order (with its items) got pruned
+    // before anything wrote it. 6h gives the webhook + the 5-min reconciler a wide
+    // window to recover, while still keeping the stash small (written/charged entries
+    // are deleted as soon as they're reconciled).
     const now = Date.now();
+    const HDFC_PENDING_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
     Object.keys(pending).forEach(function(k) {
-      if (now - (pending[k].ts || 0) > 30 * 60 * 1000) delete pending[k];
+      if (now - (pending[k].ts || 0) > HDFC_PENDING_TTL_MS) delete pending[k];
     });
 
     pending[orderId] = {
@@ -1289,6 +1295,16 @@ function hdfc_savePendingOrder(body) {
           pending[orderId].bulk.dinnerDates = pending[orderId].bulk.dinner ? _bw.dinner : [];
         }
       } catch (_) { /* fall back to live windows at compute time */ }
+    }
+
+    // Size guard: a Script Property value is capped (~9KB). With the longer TTL an
+    // unusual burst of abandoned (never-paid) checkouts could otherwise bloat the map
+    // and make setProperty throw — which would break the stash for everyone. Keep the
+    // newest entries (by ts); the current order is freshest so it's always retained.
+    var _keys = Object.keys(pending);
+    if (_keys.length > 80) {
+      _keys.sort(function (a, b) { return (pending[b].ts || 0) - (pending[a].ts || 0); });
+      _keys.slice(80).forEach(function (k) { delete pending[k]; });
     }
 
     props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending));
@@ -1322,10 +1338,10 @@ function hdfc_getPendingOrder(body) {
     const entry = pending[orderId];
     if (!entry) {
       console.warn("hdfc_getPendingOrder: no pending entry for " + orderId);
-      return { error: "Pending order not found. It may have expired (>30 min)." };
+      return { error: "Pending order not found. It may have expired (>6 h)." };
     }
 
-    // Keep the entry — let it expire naturally after 30 minutes.
+    // Keep the entry — let it expire naturally after the TTL.
     // Not deleting here so that if the page reloads or redirects twice,
     // the second call still finds the data.
     console.log("hdfc_getPendingOrder: retrieved order " + orderId);
@@ -1487,6 +1503,26 @@ function hdfc_processWebhookLog() {
           const markResult = hdfc_markOrderPaid(order);
           result = JSON.stringify(markResult);
           if (markResult.error) newStatus = "FAILED";
+
+          // FOOLPROOF WRITE — hdfc_markOrderPaid only FLIPS rows that already exist. A
+          // gateway order the browser/reconciler hasn't written yet has no row to flip
+          // (updated===0), so the webhook used to silently no-op and the order was lost
+          // if the reconciler also missed its window. Now the webhook WRITES it itself,
+          // straight from the stash, via the reconciler's proven single-entry path
+          // (locked, dedups on Gateway_Order_ID, re-confirms CHARGED). This makes the
+          // webhook a fully independent writer — a paid order lands even if the browser
+          // closed early AND the 5-min reconciler trigger is lagging.
+          if (oid && !markResult.error && (markResult.updated || 0) === 0
+              && typeof hdfc_reconcileOrderFromStash === "function") {
+            try {
+              const autoWrite = hdfc_reconcileOrderFromStash(oid);
+              result = JSON.stringify({ markPaid: markResult, autoWrite: autoWrite });
+              if (autoWrite && autoWrite.outcome === "errors") newStatus = "FAILED";
+            } catch (we) {
+              result = JSON.stringify({ markPaid: markResult, autoWriteError: we.message });
+              newStatus = "FAILED";
+            }
+          }
         }
 
       } else if (eventName.indexOf("REFUND") !== -1) {
@@ -1635,10 +1671,10 @@ function hdfc_markOrderPaid(order) {
 
     if (updated === 0) {
       console.warn("HDFC Webhook: order " + orderId + " not found in SK_Orders (or already Paid).");
-      return { success: true, message: "Order " + orderId + " not found or already processed." };
+      return { success: true, updated: 0, message: "Order " + orderId + " not found or already processed." };
     }
 
-    return { success: true, message: "Order " + orderId + " marked paid (" + updated + " row(s))." };
+    return { success: true, updated: updated, message: "Order " + orderId + " marked paid (" + updated + " row(s))." };
 
   } catch (err) {
     console.error("hdfc_markOrderPaid error:", err.message);
@@ -1787,7 +1823,7 @@ function _hdfcConfirmGatewayOrder(gatewayOrderId) {
 // PENDING ORDER STORE
 // Saves the full order payload server-side before the HDFC redirect.
 // Retrieved on return — no sessionStorage/localStorage dependency.
-// Stored in Script Properties as a JSON map, auto-expired after 30 minutes.
+// Stored in Script Properties as a JSON map, auto-expired after 6 hours.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
