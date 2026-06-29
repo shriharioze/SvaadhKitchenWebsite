@@ -49,7 +49,11 @@ function reconcilePendingOrders() {
   if (!orderIds.length) { Logger.log("reconcilePendingOrders: no pending entries, nothing to do."); return; }
 
   const now = Date.now();
-  const summary = { checked: 0, skippedFresh: 0, skippedAlreadyDone: 0, skippedNotCharged: 0, reconciled: 0, errors: 0 };
+  // Reachable-but-still-not-charged this long after checkout = abandoned cart. UPI
+  // (the only method) charges within seconds, so a non-CHARGED status an hour later
+  // means the customer never paid — stop re-polling it for the full 6h TTL.
+  const ABANDON_MS = 60 * 60 * 1000;
+  const summary = { checked: 0, skippedFresh: 0, skippedAlreadyDone: 0, skippedNotCharged: 0, reconciled: 0, errors: 0, prunedFailed: 0, prunedAbandoned: 0 };
 
   for (var i = 0; i < orderIds.length; i++) {
     const orderId = orderIds[i];
@@ -66,6 +70,24 @@ function reconcilePendingOrders() {
       // If reconciled (or already done), remove from pending so we don't keep checking
       if (result.outcome === "reconciled" || result.outcome === "skippedAlreadyDone") {
         delete pending[orderId];
+      } else if (result.outcome === "skippedNotCharged") {
+        // ── Abandoned / failed cleanup ───────────────────────────────────────
+        // Keeps a never-completed checkout from being re-polled every run for the
+        // whole TTL (with a 1-min trigger + 6h TTL that's ~360 wasted Status-API
+        // calls per abandoned cart). SAFE: we only act on a status HDFC actually
+        // returned. A real UPI charge reports CHARGED within seconds; when the
+        // Status API is UNREACHABLE the status is FETCH_ERROR/API_ERROR/UNKNOWN,
+        // which we KEEP — a genuine charge during an outage is still recovered by
+        // the webhook-log fallback and the 6h TTL. We never delete on a transient.
+        const st = String(result.status || "").toUpperCase();
+        const transient = (st === "FETCH_ERROR" || st === "API_ERROR" || st === "UNKNOWN" || st === "");
+        if (HDFC_FAILURE_STATES.indexOf(st) !== -1) {
+          delete pending[orderId];              // HDFC says failed/declined — no order is coming
+          summary.prunedFailed++;
+        } else if (!transient && ageMs > ABANDON_MS) {
+          delete pending[orderId];              // reachable + uncharged long after checkout → abandoned
+          summary.prunedAbandoned++;
+        }
       }
     } catch (e) {
       summary.errors++;

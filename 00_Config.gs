@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.5; // 2026-06-29: gateway recovery foolproofing — webhook now WRITES a paid order from the stash when no row exists (was a silent no-op that lost orders); pending-stash TTL 30min→6h + size cap. (22.4: bulk per-meal discount split.)
+const CODE_VERSION   = 22.6; // 2026-06-29: reconciler prunes abandoned/failed pending entries (terminal HDFC status → drop; reachable-but-uncharged >60min → drop; transients KEPT) so 1-min trigger + 6h TTL stays quota-safe. (22.5: webhook self-writes paid orders + 6h TTL.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
