@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.3; // 2026-06-29: archiveMonth() now archives ONLY Paid/Wallet Paid/Collected rows — On Account/Pending/unpaid (+ Cancelled/Refunded) stay live in SK_Orders for billing; re-run a month after collection and it APPENDS the now-Paid rows to the SAME archive file (find-or-create). On-account gateway settlement verified working. (23.2: audit scans webhook archives.)
+const CODE_VERSION   = 23.4; // 2026-06-29: lost-order audit now resolves Customer_Name from SK_Customers by phone, emails admin on NEW findings, and runs AUTOMATICALLY daily (setupLostOrderAuditTrigger → dailyLostOrderAudit ~11:15pm IST). fillMissedOrderNames() backfills names on existing rows. Audit found losses back to 17-Jun (pre-existing trickle). (23.3: archive only Paid rows.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

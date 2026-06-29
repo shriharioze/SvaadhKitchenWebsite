@@ -918,6 +918,20 @@ function auditLostGatewayOrders(monthsBack) {
     if (v) inOrders.add(v);
   }
 
+  // (1b) phone → registered name, from SK_Customers (the webhook payload doesn't always
+  // carry the name, but the phone does, so look it up — far more reliable).
+  const nameByPhone = {};
+  try {
+    const custWs   = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+    const custData = custWs.getDataRange().getValues();
+    const cH = custData[0] || [];
+    const cP = cH.indexOf("Phone"), cN = cH.indexOf("Customer_Name");
+    if (cP !== -1 && cN !== -1) for (let r = 1; r < custData.length; r++) {
+      const ph = _normalizePhone(custData[r][cP]);
+      if (ph) nameByPhone[ph] = String(custData[r][cN] || "").trim();
+    }
+  } catch (_) {}
+
   // (2) Already-logged in SK_Missed_Orders (so re-runs don't duplicate)
   const missWs   = getOrCreateTab(ss, TAB_MISSED_ORDERS, MISSED_ORDERS_HEADERS);
   const missData = missWs.getDataRange().getValues();
@@ -976,13 +990,15 @@ function auditLostGatewayOrders(monthsBack) {
         name = ((sdk.firstName || "") + " " + (sdk.lastName || "")).trim();
       } catch (_) {}
       if (status && status !== "CHARGED") continue; // only genuinely charged
+      const _regName = nameByPhone[_normalizePhone(phone)]; // prefer the registered name
+      if (_regName) name = _regName;
       seen[oid] = { oid: oid, amount: amount, name: name, phone: phone, rcv: rcv, source: src.label };
     }
   });
 
   // (5) Report + log new findings
   const missing = Object.keys(seen).map(function (k) { return seen[k]; });
-  let newlyLogged = 0;
+  const newRows = [];
   missing.forEach(function (m) {
     if (alreadyLogged.has(m.oid)) return;
     _logMissedOrderRow(ss, {
@@ -991,8 +1007,26 @@ function auditLostGatewayOrders(monthsBack) {
       date: (m.rcv instanceof Date) ? Utilities.formatDate(m.rcv, "Asia/Kolkata", "yyyy-MM-dd") : "",
       meal: "", attempts: ""
     });
-    newlyLogged++;
+    newRows.push(m);
   });
+  const newlyLogged = newRows.length;
+
+  // Notify on NEW findings (in addition to the SK_Missed_Orders tab). MailApp scope is
+  // narrow + usually granted; if not, this is caught and the tab still has everything.
+  if (newlyLogged > 0) {
+    try {
+      const adminEmail = PropertiesService.getScriptProperties().getProperty("ADMIN_EMAIL");
+      if (adminEmail) {
+        const body = newlyLogged + " charged gateway order(s) are NOT in SK_Orders "
+          + "(logged to the SK_Missed_Orders tab — enter manually):\n\n"
+          + newRows.map(function (m) {
+              return "• " + m.oid + " — " + (m.name || "?") + " / " + m.phone + " / ₹" + m.amount
+                + " / " + (m.rcv instanceof Date ? Utilities.formatDate(m.rcv, "Asia/Kolkata", "yyyy-MM-dd") : "");
+            }).join("\n");
+        MailApp.sendEmail(adminEmail, "🚨 Svaadh: " + newlyLogged + " paid order(s) missing from SK_Orders", body);
+      }
+    } catch (e) { console.error("auditLostGatewayOrders email failed: " + e.message); }
+  }
 
   const summary = {
     sourcesScanned: sources.map(function (s) { return s.label; }),
@@ -1004,6 +1038,59 @@ function auditLostGatewayOrders(monthsBack) {
   };
   Logger.log("auditLostGatewayOrders: " + JSON.stringify(summary, null, 2));
   return summary;
+}
+
+// AUTOMATIC daily audit (trigger target). Scans the live log + the current/previous
+// month archive (monthsBack=1 — enough to catch anything recent), logs any new
+// charged-but-missing order to SK_Missed_Orders, and emails the admin. The full
+// historical sweep is the manual auditLostGatewayOrders(4).
+function dailyLostOrderAudit() {
+  return auditLostGatewayOrders(1);
+}
+
+// Run ONCE from the editor to schedule the daily audit (~11:15 PM IST — after the
+// dinner rush, while today's webhooks are still in the live log). Idempotent.
+function setupLostOrderAuditTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "dailyLostOrderAudit") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("dailyLostOrderAudit")
+    .timeBased().atHour(23).nearMinute(15).everyDays(1).inTimezone("Asia/Kolkata")
+    .create();
+  return "Daily lost-order audit scheduled ~11:15 PM IST.";
+}
+
+// Backfill the Customer_Name column for existing SK_Missed_Orders rows that were logged
+// before the name lookup existed (looks each up by Phone in SK_Customers). Run once.
+function fillMissedOrderNames() {
+  const ss = getSpreadsheet();
+  const ws = ss.getSheetByName(TAB_MISSED_ORDERS);
+  if (!ws) return "No " + TAB_MISSED_ORDERS + " tab.";
+  const data = ws.getDataRange().getValues();
+  const H = data[0] || [];
+  const nameCol = H.indexOf("Customer_Name"), phoneCol = H.indexOf("Phone");
+  if (nameCol === -1 || phoneCol === -1) return "Missing Customer_Name/Phone columns.";
+
+  const nameByPhone = {};
+  try {
+    const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+    const cData = custWs.getDataRange().getValues();
+    const cH = cData[0] || [];
+    const cP = cH.indexOf("Phone"), cN = cH.indexOf("Customer_Name");
+    if (cP !== -1 && cN !== -1) for (let r = 1; r < cData.length; r++) {
+      const ph = _normalizePhone(cData[r][cP]);
+      if (ph) nameByPhone[ph] = String(cData[r][cN] || "").trim();
+    }
+  } catch (_) {}
+
+  let filled = 0;
+  for (let r = 1; r < data.length; r++) {
+    if (String(data[r][nameCol] || "").trim()) continue;     // already has a name
+    const nm = nameByPhone[_normalizePhone(data[r][phoneCol])];
+    if (nm) { ws.getRange(r + 1, nameCol + 1).setValue(nm); filled++; }
+  }
+  SpreadsheetApp.flush();
+  return "Filled " + filled + " name(s) in " + TAB_MISSED_ORDERS + ".";
 }
 
 function _verifyAndAlertMissedOrders(ss, submissionIds) {
