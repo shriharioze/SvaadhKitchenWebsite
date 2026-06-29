@@ -3173,9 +3173,6 @@
       <button type="button" class="pd-item" id="pdBillItem" style="display:none;" onclick="closeProfileDrawer(); showOnAccountBillModal();">
         <span class="pd-icon">🧾</span><span class="pd-label">My Bill <span id="pdBillBadge" style="font-size:0.7rem; color:#fff; font-weight:700; background:#dc2626; border-radius:99px; padding:1px 8px; margin-left:4px;">due</span></span>
       </button>
-      <button type="button" class="pd-item" onclick="closeProfileDrawer(); showUpiModal();">
-        <span class="pd-icon">📲</span><span class="pd-label">Pay via UPI <span style="font-size:0.7rem; color:#888; font-weight:500;">(ID &amp; QR)</span></span>
-      </button>
       <button type="button" class="pd-item" onclick="closeProfileDrawer(); openWalletTxn();">
         <span class="pd-icon">💳</span><span class="pd-label">Wallet <span style="font-size:0.7rem; color:#888; font-weight:500;">(transactions)</span></span>
       </button>
@@ -3913,6 +3910,11 @@
         <div style="background:#e8f5e9;border:1.5px solid #81c784;border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.82rem;color:#1b5e20;line-height:1.6;">
           ✅ You'll be redirected to HDFC's secure payment page.<br>
           Supports <strong>UPI · Cards · Net Banking</strong> — all in one place.
+          <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #a5d6a7;font-size:0.74rem;color:#8a6d3b;">
+            ⚠️ Please pay from a <strong>bank account, debit card or net banking</strong>.
+            Credit-linked UPI (RuPay credit card) and prepaid wallets (PPI) aren't accepted,
+            as they carry extra charges we'd have to bear.
+          </div>
         </div>
         <div id="hdfcGatewayAmount"
           style="font-size:2rem;font-weight:800;color:#1a6640;text-align:center;margin:10px 0 18px;">₹0</div>
@@ -5389,7 +5391,7 @@
           <div style="flex:1;">
             <div style="font-size:0.82rem;font-weight:700;color:#b45309;">Start your Svaadh Streak!</div>
             <div style="font-size:0.74rem;color:#92400e;margin-top:2px;line-height:1.4;">
-              Order 6 days in a row → get <strong>all market surcharges back</strong> as a discount.
+              Order 6 days in a row → get <strong>5% back</strong> as a discount.
               Sunday doesn't break it — Sat + Mon still counts! 🎁
             </div>
           </div>
