@@ -1327,6 +1327,29 @@ function setupKeepAliveTrigger() {
   Runs on the 10th of every month — archives the previous calendar month.
   e.g. May 10 → archives April data.
 */
+// Find-or-create the monthly ORDER archive file (so re-running a month APPENDS the
+// newly-Paid rows to the same file instead of spawning a duplicate). On create, moves
+// it into the year folder. Exact-name match, so it never collides with the separate
+// "… Webhook Archive …" file.
+function _findOrCreateOrderArchiveSS(archiveName, folder) {
+  var found = null;
+  try {
+    if (folder) { var it = folder.getFilesByName(archiveName); if (it.hasNext()) found = it.next(); }
+    if (!found)  { var it2 = DriveApp.getFilesByName(archiveName); if (it2.hasNext()) found = it2.next(); }
+  } catch (e) {}
+  if (found) return SpreadsheetApp.openById(found.getId());
+  var ss = SpreadsheetApp.create(archiveName);
+  if (folder) {
+    try {
+      var f = DriveApp.getFileById(ss.getId());
+      var parents = f.getParents();
+      while (parents.hasNext()) { var p = parents.next(); if (p.getId() !== folder.getId()) p.removeFile(f); }
+      folder.addFile(f);
+    } catch (e) {}
+  }
+  return ss;
+}
+
 function archiveMonth(year, month) {
   if (!year || !month || month < 1 || month > 12)
     return {success:false, error:"Invalid year/month"};
@@ -1357,25 +1380,12 @@ function archiveMonth(year, month) {
         : String(v || "").trim().slice(0, 10);
     };
 
-    // ── STEP 1: Create archive spreadsheet IN THE RIGHT YEAR FOLDER ─────────
+    // ── STEP 1: Find-or-create this month's archive file (in the year folder) ──
+    // Find-or-create (not always-create) so a RE-RUN of the same month appends the
+    // newly-Paid rows to the SAME file instead of creating a duplicate.
     var archiveName = "Svaadh Kitchen Archive — " + qr.label;
-    var archiveSS   = SpreadsheetApp.create(archiveName);
-    var archiveFile = DriveApp.getFileById(archiveSS.getId());
-
-    // Move to: Drive > WebBased Ordering > Archive > <year>/
     var yearFolder  = _getArchiveYearFolder(year);
-    if (yearFolder) {
-      try {
-        var parents = archiveFile.getParents();
-        while (parents.hasNext()) {
-          var parent = parents.next();
-          if (parent.getId() !== yearFolder.getId()) parent.removeFile(archiveFile);
-        }
-        yearFolder.addFile(archiveFile);
-      } catch (e) {
-        Logger.log("archiveMonth: could not move file to year folder: " + e.message);
-      }
-    }
+    var archiveSS   = _findOrCreateOrderArchiveSS(archiveName, yearFolder);
 
     var log = [];
 
@@ -1385,34 +1395,49 @@ function archiveMonth(year, month) {
     var oHeaders      = allOrderData[0];
     var oDateIdx      = oHeaders.indexOf("Order_Date");
 
-    // Partition into archive vs keep
+    // Partition into archive vs keep. Archive ONLY fully-PAID rows that fall in the
+    // month; KEEP everything else live — On Account / Pending / unpaid (so dues stay in
+    // SK_Orders for billing and get archived on a later re-run once collected), and also
+    // Cancelled / Refunded. Re-running the month after collection appends the now-Paid
+    // rows to the SAME archive file (STEP 1 find-or-create + STEP 3 append).
+    var oStatusIdx = oHeaders.indexOf("Payment_Status");
+    var PAID_FOR_ARCHIVE = ["paid", "wallet paid", "collected"];
     var toArchiveOrders = [];
     var keepOrders      = [];
     for (var i = 1; i < allOrderData.length; i++) {
-      var d = fmtDate(allOrderData[i][oDateIdx]);
-      if (d >= qr.from && d <= qr.to) {
+      var d  = fmtDate(allOrderData[i][oDateIdx]);
+      var st = String((oStatusIdx !== -1 ? allOrderData[i][oStatusIdx] : "") || "").trim().toLowerCase();
+      if (d >= qr.from && d <= qr.to && PAID_FOR_ARCHIVE.indexOf(st) !== -1) {
         toArchiveOrders.push(allOrderData[i]);
       } else {
-        keepOrders.push(allOrderData[i]);
+        keepOrders.push(allOrderData[i]); // unpaid / out-of-range / cancelled / refunded → keep live
       }
     }
 
-    // ── STEP 3: Write SK_Orders to archive (verify) ─────────────────────────
+    // ── STEP 3: APPEND the Paid rows to the archive's SK_Orders tab (verify) ──
+    // Append (not overwrite) so a re-run adds the newly-Paid rows beneath the ones a
+    // prior run already archived. Verify the append landed BEFORE deleting from live.
     if (toArchiveOrders.length > 0) {
-      var archiveOrderSheet = archiveSS.getActiveSheet();
-      archiveOrderSheet.setName("SK_Orders");
-      archiveOrderSheet.getRange(1, 1, 1, oHeaders.length).setValues([oHeaders]);
-      archiveOrderSheet.getRange(2, 1, toArchiveOrders.length, oHeaders.length)
+      var archiveOrderSheet = archiveSS.getSheetByName("SK_Orders");
+      if (!archiveOrderSheet) {
+        archiveOrderSheet = archiveSS.getSheets()[0]; // reuse the new file's default tab
+        archiveOrderSheet.setName("SK_Orders");
+      }
+      if (archiveOrderSheet.getLastRow() === 0) {
+        archiveOrderSheet.getRange(1, 1, 1, oHeaders.length).setValues([oHeaders]);
+      }
+      var beforeRows = archiveOrderSheet.getLastRow();
+      archiveOrderSheet.getRange(beforeRows + 1, 1, toArchiveOrders.length, oHeaders.length)
                        .setValues(toArchiveOrders);
       SpreadsheetApp.flush();
-      var oWritten = archiveOrderSheet.getLastRow() - 1;
-      if (oWritten !== toArchiveOrders.length) {
+      var oAppended = archiveOrderSheet.getLastRow() - beforeRows;
+      if (oAppended !== toArchiveOrders.length) {
         return {success:false, error:"Order archive verification failed. Expected "
-          + toArchiveOrders.length + ", got " + oWritten + ". Nothing deleted from live sheet."};
+          + toArchiveOrders.length + ", appended " + oAppended + ". Nothing deleted from live sheet."};
       }
-      log.push(toArchiveOrders.length + " orders archived ✓");
+      log.push(toArchiveOrders.length + " Paid orders archived (appended) ✓");
     } else {
-      log.push("No orders found for this month.");
+      log.push("No Paid orders to archive for this month.");
     }
 
     // ── STEPS 4–6: WALLET IS INTENTIONALLY *NOT* ARCHIVED ───────────────────
@@ -1435,7 +1460,9 @@ function archiveMonth(year, month) {
     try {
       var walletWsSnap   = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
       var walletSnapData = walletWsSnap.getDataRange().getValues();
-      if (walletSnapData.length > 0) {
+      if (walletSnapData.length > 0 && !archiveSS.getSheetByName("SK_Wallet_Snapshot")) {
+        // Only on first create — a re-run keeps the existing snapshot (insertSheet would
+        // throw on the duplicate name).
         var snapSheet = archiveSS.insertSheet("SK_Wallet_Snapshot");
         snapSheet.getRange(1, 1, walletSnapData.length, walletSnapData[0].length).setValues(walletSnapData);
         SpreadsheetApp.flush();

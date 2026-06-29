@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.2; // 2026-06-29: auditLostGatewayOrders() now scans LIVE SK_Webhook_Log + the monthly archive files (live log only keeps today's rows), so historical losses are found; _findMonthlyWebhookArchiveSS opens archives read-only. (23.1: audit cross-ref vs SK_Orders.)
+const CODE_VERSION   = 23.3; // 2026-06-29: archiveMonth() now archives ONLY Paid/Wallet Paid/Collected rows — On Account/Pending/unpaid (+ Cancelled/Refunded) stay live in SK_Orders for billing; re-run a month after collection and it APPENDS the now-Paid rows to the SAME archive file (find-or-create). On-account gateway settlement verified working. (23.2: audit scans webhook archives.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
