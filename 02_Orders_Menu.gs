@@ -882,6 +882,97 @@ function backfillMissed29Jun() {
   return "Seeded " + lost.length + " lost orders into " + TAB_MISSED_ORDERS;
 }
 
+// AUDIT: did a paid gateway order ever fail to land before? Run from the editor.
+// Cross-references SK_Webhook_Log (HDFC's own CHARGED record for every order) against
+// SK_Orders' Gateway_Order_ID column. Any CHARGED gateway order with NO row in SK_Orders
+// = a lost/never-recorded order. Logs each new finding to SK_Missed_Orders (idempotent —
+// skips ones already logged) and returns a summary you can read in the execution log.
+// NOTE: only covers what's still in SK_Webhook_Log (older months may be archived to
+// separate files); excludes wallet (…W…), on-account (…A…) and IntentAmplify (IA…) ids.
+function auditLostGatewayOrders() {
+  const ss = getSpreadsheet();
+
+  // (1) Gateway_Order_IDs that DID land in SK_Orders
+  const ordWs   = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const ordData = ordWs.getDataRange().getValues();
+  const gCol    = (ordData[0] || []).indexOf("Gateway_Order_ID");
+  const inOrders = new Set();
+  if (gCol !== -1) for (let r = 1; r < ordData.length; r++) {
+    const v = String(ordData[r][gCol] || "").trim();
+    if (v) inOrders.add(v);
+  }
+
+  // (2) Already-logged in SK_Missed_Orders (so re-runs don't duplicate)
+  const missWs   = getOrCreateTab(ss, TAB_MISSED_ORDERS, MISSED_ORDERS_HEADERS);
+  const missData = missWs.getDataRange().getValues();
+  const missGCol = (missData[0] || []).indexOf("Gateway_Order_ID");
+  const alreadyLogged = new Set();
+  if (missGCol !== -1) for (let r = 1; r < missData.length; r++) {
+    const v = String(missData[r][missGCol] || "").trim();
+    if (v) alreadyLogged.add(v);
+  }
+
+  // (3) Scan SK_Webhook_Log for CHARGED gateway orders
+  const whWs = ss.getSheetByName(TAB_WEBHOOK_LOG);
+  if (!whWs) return { error: "No " + TAB_WEBHOOK_LOG + " tab found." };
+  const whData    = whWs.getDataRange().getValues();
+  const whHeaders = whData[0] || [];
+  const evCol  = whHeaders.indexOf("Event_Name");
+  const oidCol = whHeaders.indexOf("Order_ID");
+  const payCol = whHeaders.indexOf("Raw_Payload");
+  const rcvCol = whHeaders.indexOf("Received_At");
+
+  const now  = Date.now();
+  const seen = {}; // order_id -> details (dedupe the multiple webhooks per order)
+  for (let r = 1; r < whData.length; r++) {
+    if (String(whData[r][evCol] || "").trim() !== "ORDER_SUCCEEDED") continue;
+    const oid = String(whData[r][oidCol] || "").trim();
+    if (!/^SK\d{6}G/.test(oid)) continue;   // regular + bulk gateway ids only
+    if (inOrders.has(oid)) continue;        // it landed — fine
+    const rcv = whData[r][rcvCol];
+    if (rcv instanceof Date && (now - rcv.getTime()) < 5 * 60 * 1000) continue; // too fresh — may still be landing
+
+    let amount = 0, name = "", phone = "", status = "";
+    try {
+      const p = JSON.parse(whData[r][payCol] || "{}");
+      const o = (p.content && p.content.order) || {};
+      status = String((o.txn_detail && o.txn_detail.status) || o.status || "").toUpperCase();
+      amount = Number((o.txn_detail && o.txn_detail.txn_amount) || o.amount || 0);
+      phone  = String(o.customer_phone || o.udf1 || "");
+      let sdk = o.payment_page_sdk_payload;
+      if (typeof sdk === "string") { try { sdk = JSON.parse(sdk); } catch (_) { sdk = {}; } }
+      sdk = sdk || {};
+      name = ((sdk.firstName || "") + " " + (sdk.lastName || "")).trim();
+    } catch (_) {}
+    if (status && status !== "CHARGED") continue; // only genuinely charged
+    seen[oid] = { oid: oid, amount: amount, name: name, phone: phone, rcv: rcv };
+  }
+
+  // (4) Report + log new findings
+  const missing = Object.keys(seen).map(function (k) { return seen[k]; });
+  let newlyLogged = 0;
+  missing.forEach(function (m) {
+    if (alreadyLogged.has(m.oid)) return;
+    _logMissedOrderRow(ss, {
+      status: "FOUND BY AUDIT — charged but not in SK_Orders",
+      sid: "", gatewayId: m.oid, name: m.name, phone: m.phone, amount: m.amount,
+      date: (m.rcv instanceof Date) ? Utilities.formatDate(m.rcv, "Asia/Kolkata", "yyyy-MM-dd") : "",
+      meal: "", attempts: ""
+    });
+    newlyLogged++;
+  });
+
+  const summary = {
+    webhookRowsScanned: whData.length - 1,
+    ordersInSheet: inOrders.size,
+    chargedButMissing: missing.length,
+    newlyLoggedToTab: newlyLogged,
+    details: missing.map(function (m) { return m.oid + " — " + m.name + " / " + m.phone + " / ₹" + m.amount; })
+  };
+  Logger.log("auditLostGatewayOrders: " + JSON.stringify(summary, null, 2));
+  return summary;
+}
+
 function _verifyAndAlertMissedOrders(ss, submissionIds) {
   try {
     const props  = PropertiesService.getScriptProperties();

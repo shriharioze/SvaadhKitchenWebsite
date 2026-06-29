@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.0; // 2026-06-29: durable SK_Missed_Orders audit tab — logs every dropped-write detection (Auto-recovered / STILL MISSING) with id, gateway id, name, phone, amount, so it's checkable even if the alert email is missed. backfillMissed29Jun() seeds the 5 lost orders. (22.9: verify-and-retry re-append.)
+const CODE_VERSION   = 23.1; // 2026-06-29: auditLostGatewayOrders() — cross-references SK_Webhook_Log (HDFC's CHARGED record) vs SK_Orders.Gateway_Order_ID to find ANY paid gateway order that never landed (historical), logs findings to SK_Missed_Orders (idempotent). Supersedes the hardcoded backfill. (23.0: SK_Missed_Orders audit tab.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
