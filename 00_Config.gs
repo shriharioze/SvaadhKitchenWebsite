@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.8; // 2026-06-29: ROOT CAUSE of 29-Jun lost orders — _checkWebhookLogForCharge re-called the Status API, so the "fallback for when the API is down" failed when the API was down (load/quota burst). Now it trusts HDFC's signed webhook on API-unreachable IF its amount matches the server-computed stash amount (fraud-safe). Removes the Status API as a single point of failure. (22.7: on-account multi-month bill label.)
+const CODE_VERSION   = 22.9; // 2026-06-29: TRUE ROOT CAUSE of 29-Jun lost orders — under dinner-rush load (~30 concurrent execs) GAS silently DROPPED appendRow writes, and the missed-order safety net's single re-append was unverified (logged "succeeded" if appendRow didn't throw, but it was dropped too). Now _reappendUntilPresent re-appends + re-reads to CONFIRM, retrying with backoff (present-check prevents dupes); failed rows kept queued; alert email GmailApp→MailApp so it actually sends. (22.8: webhook-log API-down fallback.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

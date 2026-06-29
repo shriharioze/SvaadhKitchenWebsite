@@ -806,6 +806,36 @@ function _missedOrderSafetyNet(ss, sid, row, phone) {
   }
 }
 
+// Re-append a dropped order row and CONFIRM it actually landed, retrying under load.
+// Google silently drops appendRow writes when the sheet is hammered by concurrent
+// executions (dinner-rush: ~30 simultaneous doGet/doPost + triggers). A single
+// unverified re-append is not enough — it gets dropped too. This re-reads after each
+// append to confirm persistence, and checks presence BEFORE each append so a row that
+// did land (this loop, or a concurrent reconciler/webhook write) never gets duplicated.
+// Returns the attempt number that confirmed it present, or 0 if still missing after all.
+function _reappendUntilPresent(ws, sidCol, sid, row, maxAttempts) {
+  maxAttempts = maxAttempts || 5;
+  const _present = function () {
+    try {
+      const lastRow = ws.getLastRow();
+      const start = Math.max(2, lastRow - 50);
+      const n = lastRow - start + 1;
+      if (n <= 0) return false;
+      const sids = ws.getRange(start, sidCol, n, 1).getValues();
+      for (let i = 0; i < sids.length; i++) if (String(sids[i][0]) === String(sid)) return true;
+      return false;
+    } catch (_) { return false; }
+  };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (_present()) return attempt;                 // already there → never duplicate
+    try { ws.appendRow(row); } catch (_) {}         // swallow; the re-read is the source of truth
+    try { SpreadsheetApp.flush(); } catch (_) {}
+    if (_present()) return attempt;                 // confirmed landed
+    try { Utilities.sleep(350 * attempt); } catch (_) {} // back off so the load can ease
+  }
+  return _present() ? maxAttempts : 0;
+}
+
 function _verifyAndAlertMissedOrders(ss, submissionIds) {
   try {
     const props  = PropertiesService.getScriptProperties();
@@ -830,29 +860,44 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
     Object.entries(store).forEach(([sid, entry]) => {
       if (!inSheet.has(sid)) {
         console.error("MISSED ORDER DETECTED — " + sid + " not found in sheet after flush!");
-        missed.push({ sid, phone: entry.phone, row: entry.row });
-        // Emergency re-append
-        try {
-          ws.appendRow(entry.row);
-          console.log("Emergency re-append succeeded for " + sid);
-        } catch(e2) {
-          console.error("Emergency re-append FAILED for " + sid + ": " + e2.message);
+        // Re-append AND verify it actually landed (retry under load). The old code
+        // appended once and logged "succeeded" if appendRow didn't throw — but the
+        // re-append was silently dropped too, so paid orders vanished with a success log
+        // (29-Jun: 5 lost). _reappendUntilPresent re-reads to confirm and retries.
+        const okAttempt = _reappendUntilPresent(ws, sidCol, sid, entry.row, 5);
+        if (okAttempt) {
+          console.log("Emergency re-append CONFIRMED for " + sid + " (attempt " + okAttempt + ")");
+          missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: true });
+          delete store[sid]; // safely landed → clear from queue
+        } else {
+          console.error("Emergency re-append STILL MISSING for " + sid + " after retries — kept in queue for the next pass.");
+          missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: false });
+          // Do NOT delete — leave it in PENDING_ORDER_ROWS so the next submitOrder's
+          // safety-net pass gets another shot before the 10-min TTL drops it.
         }
+      } else {
+        delete store[sid]; // landed on the first write → clear from queue
       }
-      delete store[sid]; // clear from queue regardless
     });
 
     props.setProperty("PENDING_ORDER_ROWS", JSON.stringify(store));
 
     if (missed.length > 0) {
-      // Email admin alert
+      // Email admin alert. Use MailApp (scope auth/script.send_mail — usually already
+      // granted) instead of GmailApp (broad Gmail scopes that weren't authorized, so the
+      // 29-Jun alerts silently failed and you got no warning).
       try {
         const adminEmail = PropertiesService.getScriptProperties().getProperty("ADMIN_EMAIL");
         if (adminEmail) {
+          const anyLost = missed.some(m => m.recovered === false);
+          const subject = anyLost
+            ? "🚨 Svaadh: ORDER ROW LOST — manual entry needed"
+            : "⚠️ Svaadh: missed order row auto-recovered";
           const body = missed.map(m =>
+            (m.recovered === false ? "[STILL MISSING — enter manually] " : "[auto-recovered] ") +
             `SK Order ID: ${m.sid}\nPhone: ${m.phone}\nRow data: ${JSON.stringify(m.row)}`
           ).join("\n\n---\n\n");
-          GmailApp.sendEmail(adminEmail, "⚠️ Svaadh: Missed Order Row Detected & Auto-Recovered", body);
+          MailApp.sendEmail(adminEmail, subject, body);
         }
       } catch(e) { console.error("Alert email failed:", e.message); }
     }
