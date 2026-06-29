@@ -882,15 +882,31 @@ function backfillMissed29Jun() {
   return "Seeded " + lost.length + " lost orders into " + TAB_MISSED_ORDERS;
 }
 
+// Open (WITHOUT creating) a monthly webhook-archive spreadsheet, or null if none.
+// Mirrors _getOrCreateMonthlyWebhookArchiveSS's naming but never creates an empty file.
+function _findMonthlyWebhookArchiveSS(year, month) {
+  var MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var name = "Svaadh Kitchen Webhook Archive — " + MONTH_NAMES[month - 1] + " " + year;
+  try {
+    var folder = (typeof _getArchiveYearFolder === "function") ? _getArchiveYearFolder(year) : null;
+    if (folder) { var it = folder.getFilesByName(name); if (it.hasNext()) return SpreadsheetApp.openById(it.next().getId()); }
+    var it2 = DriveApp.getFilesByName(name); if (it2.hasNext()) return SpreadsheetApp.openById(it2.next().getId());
+  } catch (e) {}
+  return null;
+}
+
 // AUDIT: did a paid gateway order ever fail to land before? Run from the editor.
-// Cross-references SK_Webhook_Log (HDFC's own CHARGED record for every order) against
-// SK_Orders' Gateway_Order_ID column. Any CHARGED gateway order with NO row in SK_Orders
-// = a lost/never-recorded order. Logs each new finding to SK_Missed_Orders (idempotent —
+// Cross-references HDFC's own CHARGED record (SK_Webhook_Log — LIVE plus the monthly
+// archive files, since the live log only keeps today's rows) against SK_Orders'
+// Gateway_Order_ID column. Any CHARGED gateway order with NO row in SK_Orders = a
+// lost/never-recorded order. Logs each new finding to SK_Missed_Orders (idempotent —
 // skips ones already logged) and returns a summary you can read in the execution log.
-// NOTE: only covers what's still in SK_Webhook_Log (older months may be archived to
-// separate files); excludes wallet (…W…), on-account (…A…) and IntentAmplify (IA…) ids.
-function auditLostGatewayOrders() {
+// monthsBack (default 4) = how many prior monthly archive files to also scan; the
+// gateway went live mid-June so 4 covers all history. Excludes wallet (…W…),
+// on-account (…A…) and IntentAmplify (IA…) ids.
+function auditLostGatewayOrders(monthsBack) {
   const ss = getSpreadsheet();
+  monthsBack = (typeof monthsBack === "number" && monthsBack >= 0) ? monthsBack : 4;
 
   // (1) Gateway_Order_IDs that DID land in SK_Orders
   const ordWs   = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
@@ -912,43 +928,59 @@ function auditLostGatewayOrders() {
     if (v) alreadyLogged.add(v);
   }
 
-  // (3) Scan SK_Webhook_Log for CHARGED gateway orders
-  const whWs = ss.getSheetByName(TAB_WEBHOOK_LOG);
-  if (!whWs) return { error: "No " + TAB_WEBHOOK_LOG + " tab found." };
-  const whData    = whWs.getDataRange().getValues();
-  const whHeaders = whData[0] || [];
-  const evCol  = whHeaders.indexOf("Event_Name");
-  const oidCol = whHeaders.indexOf("Order_ID");
-  const payCol = whHeaders.indexOf("Raw_Payload");
-  const rcvCol = whHeaders.indexOf("Received_At");
-
-  const now  = Date.now();
-  const seen = {}; // order_id -> details (dedupe the multiple webhooks per order)
-  for (let r = 1; r < whData.length; r++) {
-    if (String(whData[r][evCol] || "").trim() !== "ORDER_SUCCEEDED") continue;
-    const oid = String(whData[r][oidCol] || "").trim();
-    if (!/^SK\d{6}G/.test(oid)) continue;   // regular + bulk gateway ids only
-    if (inOrders.has(oid)) continue;        // it landed — fine
-    const rcv = whData[r][rcvCol];
-    if (rcv instanceof Date && (now - rcv.getTime()) < 5 * 60 * 1000) continue; // too fresh — may still be landing
-
-    let amount = 0, name = "", phone = "", status = "";
-    try {
-      const p = JSON.parse(whData[r][payCol] || "{}");
-      const o = (p.content && p.content.order) || {};
-      status = String((o.txn_detail && o.txn_detail.status) || o.status || "").toUpperCase();
-      amount = Number((o.txn_detail && o.txn_detail.txn_amount) || o.amount || 0);
-      phone  = String(o.customer_phone || o.udf1 || "");
-      let sdk = o.payment_page_sdk_payload;
-      if (typeof sdk === "string") { try { sdk = JSON.parse(sdk); } catch (_) { sdk = {}; } }
-      sdk = sdk || {};
-      name = ((sdk.firstName || "") + " " + (sdk.lastName || "")).trim();
-    } catch (_) {}
-    if (status && status !== "CHARGED") continue; // only genuinely charged
-    seen[oid] = { oid: oid, amount: amount, name: name, phone: phone, rcv: rcv };
+  // (3) Gather webhook data sources: LIVE log + each recent month's archive file.
+  const sources = [];
+  const liveWh = ss.getSheetByName(TAB_WEBHOOK_LOG);
+  if (liveWh && liveWh.getLastRow() > 1) sources.push({ label: TAB_WEBHOOK_LOG + " (live)", data: liveWh.getDataRange().getValues() });
+  const d = new Date();
+  for (let mb = 0; mb <= monthsBack; mb++) {
+    const dt = new Date(d.getFullYear(), d.getMonth() - mb, 1);
+    const arSS = _findMonthlyWebhookArchiveSS(dt.getFullYear(), dt.getMonth() + 1);
+    if (!arSS) continue;
+    const sh = arSS.getSheetByName("SK_Webhook_Log");
+    if (sh && sh.getLastRow() > 1) sources.push({ label: arSS.getName(), data: sh.getDataRange().getValues() });
   }
 
-  // (4) Report + log new findings
+  // (4) Scan every source for CHARGED gateway orders missing from SK_Orders.
+  const now  = Date.now();
+  const seen = {}; // order_id -> details (dedupe multiple webhooks / sources per order)
+  let totalRows = 0;
+  sources.forEach(function (src) {
+    const data    = src.data;
+    const headers = data[0] || [];
+    const evCol  = headers.indexOf("Event_Name");
+    const oidCol = headers.indexOf("Order_ID");
+    const payCol = headers.indexOf("Raw_Payload");
+    const rcvCol = headers.indexOf("Received_At");
+    if (oidCol === -1 || evCol === -1) return;
+    totalRows += data.length - 1;
+    for (let r = 1; r < data.length; r++) {
+      if (String(data[r][evCol] || "").trim() !== "ORDER_SUCCEEDED") continue;
+      const oid = String(data[r][oidCol] || "").trim();
+      if (!/^SK\d{6}G/.test(oid)) continue;   // regular + bulk gateway ids only
+      if (inOrders.has(oid)) continue;        // it landed — fine
+      if (seen[oid]) continue;                // already captured from another row/source
+      const rcv = data[r][rcvCol];
+      if (rcv instanceof Date && (now - rcv.getTime()) < 5 * 60 * 1000) continue; // too fresh
+
+      let amount = 0, name = "", phone = "", status = "";
+      try {
+        const p = JSON.parse(data[r][payCol] || "{}");
+        const o = (p.content && p.content.order) || {};
+        status = String((o.txn_detail && o.txn_detail.status) || o.status || "").toUpperCase();
+        amount = Number((o.txn_detail && o.txn_detail.txn_amount) || o.amount || 0);
+        phone  = String(o.customer_phone || o.udf1 || "");
+        let sdk = o.payment_page_sdk_payload;
+        if (typeof sdk === "string") { try { sdk = JSON.parse(sdk); } catch (_) { sdk = {}; } }
+        sdk = sdk || {};
+        name = ((sdk.firstName || "") + " " + (sdk.lastName || "")).trim();
+      } catch (_) {}
+      if (status && status !== "CHARGED") continue; // only genuinely charged
+      seen[oid] = { oid: oid, amount: amount, name: name, phone: phone, rcv: rcv, source: src.label };
+    }
+  });
+
+  // (5) Report + log new findings
   const missing = Object.keys(seen).map(function (k) { return seen[k]; });
   let newlyLogged = 0;
   missing.forEach(function (m) {
@@ -963,11 +995,12 @@ function auditLostGatewayOrders() {
   });
 
   const summary = {
-    webhookRowsScanned: whData.length - 1,
+    sourcesScanned: sources.map(function (s) { return s.label; }),
+    webhookRowsScanned: totalRows,
     ordersInSheet: inOrders.size,
     chargedButMissing: missing.length,
     newlyLoggedToTab: newlyLogged,
-    details: missing.map(function (m) { return m.oid + " — " + m.name + " / " + m.phone + " / ₹" + m.amount; })
+    details: missing.map(function (m) { return m.oid + " — " + m.name + " / " + m.phone + " / ₹" + m.amount + " [" + m.source + "]"; })
   };
   Logger.log("auditLostGatewayOrders: " + JSON.stringify(summary, null, 2));
   return summary;

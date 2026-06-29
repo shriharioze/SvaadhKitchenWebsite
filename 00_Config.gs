@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.1; // 2026-06-29: auditLostGatewayOrders() — cross-references SK_Webhook_Log (HDFC's CHARGED record) vs SK_Orders.Gateway_Order_ID to find ANY paid gateway order that never landed (historical), logs findings to SK_Missed_Orders (idempotent). Supersedes the hardcoded backfill. (23.0: SK_Missed_Orders audit tab.)
+const CODE_VERSION   = 23.2; // 2026-06-29: auditLostGatewayOrders() now scans LIVE SK_Webhook_Log + the monthly archive files (live log only keeps today's rows), so historical losses are found; _findMonthlyWebhookArchiveSS opens archives read-only. (23.1: audit cross-ref vs SK_Orders.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
