@@ -3003,8 +3003,26 @@ function getOnAccountBill(phone) {
     orders.sort(function (a, b) { return a.date.localeCompare(b.date); });
 
     const prevMonth   = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const periodLabel = Utilities.formatDate(prevMonth, 'Asia/Kolkata', 'MMMM yyyy');
     const lastDayPrev = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 0), 'Asia/Kolkata', 'yyyy-MM-dd');
+
+    // Period label spans the ACTUAL unpaid range. The total above already sums EVERY
+    // pending month, so when dues carry across months (e.g. May still unpaid when June
+    // closes) the label must say "May–June 2026", not just the previous month — otherwise
+    // the customer sees a "June" bill whose amount is really May+June and thinks it's wrong.
+    const _ep = String(earliest).split('-');
+    const earliestDate = (_ep.length === 3)
+      ? new Date(Number(_ep[0]), Number(_ep[1]) - 1, Number(_ep[2]))
+      : prevMonth;
+    const _startMY = Utilities.formatDate(earliestDate, 'Asia/Kolkata', 'MMMM yyyy'); // "May 2026"
+    const _endMY   = Utilities.formatDate(prevMonth,    'Asia/Kolkata', 'MMMM yyyy'); // "June 2026"
+    let periodLabel;
+    if (_startMY === _endMY) {
+      periodLabel = _endMY;                                                            // single month → "June 2026"
+    } else if (earliestDate.getFullYear() === prevMonth.getFullYear()) {
+      periodLabel = Utilities.formatDate(earliestDate, 'Asia/Kolkata', 'MMMM') + '–' + _endMY; // "May–June 2026"
+    } else {
+      periodLabel = _startMY + ' – ' + _endMY;                                         // "December 2025 – January 2026"
+    }
 
     return {
       due:         true,
