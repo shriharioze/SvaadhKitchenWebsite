@@ -836,6 +836,52 @@ function _reappendUntilPresent(ws, sidCol, sid, row, maxAttempts) {
   return _present() ? maxAttempts : 0;
 }
 
+// Durable audit log of every dropped-write detection, in its own low-contention tab.
+// Email can be missed; this tab can't. Open SK_Missed_Orders and cross-check each row
+// against SK_Orders: "Auto-recovered" rows SHOULD be in SK_Orders, "STILL MISSING" rows
+// need manual entry.
+const TAB_MISSED_ORDERS    = "SK_Missed_Orders";
+const MISSED_ORDERS_HEADERS = [
+  "Detected_At", "Status", "Submission_ID", "Gateway_Order_ID",
+  "Customer_Name", "Phone", "Amount", "Order_Date", "Meal", "Re_append_Attempts"
+];
+
+function _logMissedOrderRow(ss, rec) {
+  try {
+    const ws = getOrCreateTab(ss, TAB_MISSED_ORDERS, MISSED_ORDERS_HEADERS);
+    ws.appendRow([
+      new Date(), rec.status || "", rec.sid || "", rec.gatewayId || "",
+      rec.name || "", rec.phone || "", rec.amount || "", rec.date || "", rec.meal || "",
+      (rec.attempts == null ? "" : rec.attempts)
+    ]);
+    SpreadsheetApp.flush();
+  } catch (e) {
+    console.error("_logMissedOrderRow failed for " + (rec && rec.sid) + ": " + e.message);
+  }
+}
+
+// ONE-TIME: run this once from the Apps Script editor to seed the SK_Missed_Orders tab
+// with the 5 orders lost in the 29-Jun rush, so you have them in one place to cross-check
+// / re-enter. Safe to re-run (it just appends; dedupe by eye). Items were not recoverable.
+function backfillMissed29Jun() {
+  const ss = getSpreadsheet();
+  const lost = [
+    { gatewayId: "SK260629G9128V8MTK", name: "Shrikar Deshmukh", phone: "9561177999", amount: 77 },
+    { gatewayId: "SK260629GG7VNG9EYR", name: "Shankar Dorge",    phone: "9822675531", amount: 171 },
+    { gatewayId: "SK260629G7D0VVIM59", name: "Omkar Bura",       phone: "9920401403", amount: 165 },
+    { gatewayId: "SK260629G322YG68HX", name: "Anamika Gupta",    phone: "9884015722", amount: 82 },
+    { gatewayId: "SK260629GKCTGNNDSE", name: "Pranshu Pandey",   phone: "9755510348", amount: 173 }
+  ];
+  lost.forEach(function (o) {
+    _logMissedOrderRow(ss, {
+      status: "LOST 29-Jun (paid, items unrecoverable — enter manually)",
+      sid: "", gatewayId: o.gatewayId, name: o.name, phone: o.phone,
+      amount: o.amount, date: "2026-06-29", meal: "", attempts: ""
+    });
+  });
+  return "Seeded " + lost.length + " lost orders into " + TAB_MISSED_ORDERS;
+}
+
 function _verifyAndAlertMissedOrders(ss, submissionIds) {
   try {
     const props  = PropertiesService.getScriptProperties();
@@ -864,14 +910,27 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
         // appended once and logged "succeeded" if appendRow didn't throw — but the
         // re-append was silently dropped too, so paid orders vanished with a success log
         // (29-Jun: 5 lost). _reappendUntilPresent re-reads to confirm and retries.
+        // Pull the human-readable fields off the saved row (by header name, so dynamic
+        // columns like Gateway_Order_ID are handled) for the audit tab.
+        const _hf = function (nm) { const c = hIdx[nm]; return (c && entry.row[c - 1] != null) ? String(entry.row[c - 1]) : ""; };
+        const _rec = {
+          sid: sid, gatewayId: _hf("Gateway_Order_ID"), name: _hf("Customer_Name"),
+          phone: entry.phone || _hf("Phone"), amount: _hf("Net_Total"),
+          date: _hf("Order_Date"), meal: _hf("Meal_Type")
+        };
+
         const okAttempt = _reappendUntilPresent(ws, sidCol, sid, entry.row, 5);
         if (okAttempt) {
           console.log("Emergency re-append CONFIRMED for " + sid + " (attempt " + okAttempt + ")");
           missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: true });
+          _rec.status = "Auto-recovered"; _rec.attempts = okAttempt;
+          _logMissedOrderRow(ss, _rec);
           delete store[sid]; // safely landed → clear from queue
         } else {
           console.error("Emergency re-append STILL MISSING for " + sid + " after retries — kept in queue for the next pass.");
           missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: false });
+          _rec.status = "STILL MISSING — enter manually"; _rec.attempts = 5;
+          _logMissedOrderRow(ss, _rec);
           // Do NOT delete — leave it in PENDING_ORDER_ROWS so the next submitOrder's
           // safety-net pass gets another shot before the 10-min TTL drops it.
         }

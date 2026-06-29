@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 22.9; // 2026-06-29: TRUE ROOT CAUSE of 29-Jun lost orders — under dinner-rush load (~30 concurrent execs) GAS silently DROPPED appendRow writes, and the missed-order safety net's single re-append was unverified (logged "succeeded" if appendRow didn't throw, but it was dropped too). Now _reappendUntilPresent re-appends + re-reads to CONFIRM, retrying with backoff (present-check prevents dupes); failed rows kept queued; alert email GmailApp→MailApp so it actually sends. (22.8: webhook-log API-down fallback.)
+const CODE_VERSION   = 23.0; // 2026-06-29: durable SK_Missed_Orders audit tab — logs every dropped-write detection (Auto-recovered / STILL MISSING) with id, gateway id, name, phone, amount, so it's checkable even if the alert email is missed. backfillMissed29Jun() seeds the 5 lost orders. (22.9: verify-and-retry re-append.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
