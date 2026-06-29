@@ -4683,7 +4683,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.08";
+    const APP_VERSION = "v26.06.25.09";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6558,18 +6558,29 @@
     // ═══════════════════════════════════════════════════════════
     async function loadMealScreen() {
       $("mealSelectionContent").innerHTML = `<div class="loader"><div class="spinner"></div><p style="font-size:0.78rem;color:#888;margin-top:4px;">${t('loading_menu')}</p></div>`;
-      const datesToFetch = S.selectedDates.filter(d => !S.menuCache[d]);
+      // Refetch a date's menu if it's missing OR older than 45s — so admin changes
+      // (sold-out items, delivery caps) reach a customer who's had the page open a while,
+      // instead of being stuck on the once-per-session in-memory copy.
+      const _menuTTL = 45 * 1000;
+      const _nowMs = Date.now();
+      const datesToFetch = S.selectedDates.filter(d => {
+        const c = S.menuCache[d];
+        return !c || !c._fetchedAt || (_nowMs - c._fetchedAt) > _menuTTL;
+      });
       if (datesToFetch.length > 0) {
         try {
-          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${datesToFetch.join(',')}`);
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${datesToFetch.join(',')}&_t=${Date.now()}`);
           const data = await res.json();
           datesToFetch.forEach(d => {
-            S.menuCache[d] = data[d] || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+            const m = data[d] || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+            m._fetchedAt = Date.now();
+            S.menuCache[d] = m;
           });
         } catch (fetchErr) {
           console.error('[DEBUG] batch fetch failed for', datesToFetch, fetchErr);
           datesToFetch.forEach(d => {
-            S.menuCache[d] = { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+            // On error, KEEP any existing (stale) menu rather than wiping it to empty.
+            if (!S.menuCache[d]) S.menuCache[d] = { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
           });
         }
       }
@@ -10961,9 +10972,24 @@
      * Shows HDFC gateway card instead of UPI if gateway is enabled
      * and customer's payment choice is UPI (not wallet/on-account).
      */
+    // Force-refresh the cart dates' menus (bypassing the 45s TTL) so the sold-out /
+    // delivery-cap / out-of-stock state is current at the payment step — fire-and-forget,
+    // it completes while the customer reads the gateway card, so the pay-click cap check
+    // (_soldOutDeliveryMealsInCart) sees fresh data without blocking the in-gesture popup.
+    async function _forceRefreshCartMenus() {
+      const dates = [...new Set((S.selectedDates || []).filter(Boolean))];
+      if (!dates.length) return;
+      try {
+        const res  = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${dates.join(',')}&_t=${Date.now()}`, {}, { silent: true });
+        const data = await res.json();
+        dates.forEach(d => { if (data[d]) { data[d]._fetchedAt = Date.now(); S.menuCache[d] = data[d]; } });
+      } catch (_) {}
+    }
+
     function hdfc_showGatewayIfEnabled() {
       if (!S.gatewayEnabled) return;
       if (S.paymentChoice === "Wallet" || S.paymentChoice === "OnAccount") return;
+      _forceRefreshCartMenus(); // refresh sold-out / cap / OOS for the cart before payment
 
       if (S.paymentChoice === "Split") {
         // Split mode: hide manual UPI section + confirm checkbox, show the gateway button
