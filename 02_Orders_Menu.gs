@@ -3251,7 +3251,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         String(r.Payment_Method || "").trim().indexOf("Gateway") !== -1 ||  // "Gateway (HDFC/UPI/Card)" AND "Bulk (Gateway)"
         String(r.Payment_Method || "").trim() === "Split (HDFC)"
       );
-      let _autoRefundOk = false;
+      let _autoRefundOk = false, _autoRefundErr = "";
       if (_isGatewayPaid && refundAmt > 0 && typeof hdfc_initiateRefund === "function") {
         try {
           // unique_request_id MUST be "RF" + Submission_ID — that's exactly what
@@ -3267,14 +3267,23 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
             refWs.appendRow([rowId, phone, custName, refundAmt, r.Meal_Type, orderDateStr, "Processing", now,
               (note ? note + " | " : "") + "Auto-refund HDFC " + _gwOrderId + " req=" + _reqId, "gateway"]);
           } else {
-            console.warn("Auto-refund failed (" + _gwOrderId + "): " + (_rf && _rf.error) + " — queuing manual UPI.");
+            _autoRefundErr = (_rf && _rf.error) || "unknown";
+            console.warn("Auto-refund failed (" + _gwOrderId + "): " + _autoRefundErr + " — queuing manual UPI.");
           }
         } catch (e) {
+          _autoRefundErr = e.message;
           console.warn("Auto-refund exception (" + _gwOrderId + "): " + e.message + " — queuing manual UPI.");
         }
       }
       if (!_autoRefundOk) {
-        refWs.appendRow([rowId, phone, custName, refundAmt, r.Meal_Type, orderDateStr, "Pending", now, note, "upi"]);
+        // A gateway-paid order that couldn't auto-refund (e.g. HDFC refund access not yet
+        // enabled) is tagged "auto-refund FAILED" + its gateway id, so retryQueuedRefunds()
+        // can re-attempt it in bulk once HDFC enables refunds. Genuinely-manual (non-gateway)
+        // refunds keep the plain note.
+        const _fbNote = _isGatewayPaid
+          ? ((note ? note + " | " : "") + "auto-refund FAILED (" + (_autoRefundErr || "no gateway refund access") + ") HDFC " + _gwOrderId)
+          : note;
+        refWs.appendRow([rowId, phone, custName, refundAmt, r.Meal_Type, orderDateStr, "Pending", now, _fbNote, "upi"]);
       }
 
       const upiLine = cancellationCharge > 0

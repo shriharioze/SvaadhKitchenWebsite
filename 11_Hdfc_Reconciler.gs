@@ -606,13 +606,18 @@ function retryQueuedRefunds() {
   for (var i = 1; i < data.length; i++) {
     var status = String(data[i][cStatus] || "").trim().toLowerCase();
     var note   = String(data[i][cNote] || "");
-    if (status !== "pending" || note.indexOf("auto-refund FAILED") === -1) continue;
+    var mode   = cMode !== -1 ? String(data[i][cMode] || "").trim().toLowerCase() : "";
+    // Retry every un-processed ("Pending") refund for a GATEWAY-paid order — whether
+    // it's the newer "auto-refund FAILED" tag or an older plain fallback row. The
+    // gateway-order-id presence check below skips genuinely-manual (non-gateway) refunds,
+    // and we skip rows already in the gateway pipeline (Mode "gateway" / Processing).
+    if (status !== "pending" || mode === "gateway") continue;
 
     var sid = String(data[i][cSid] || "").trim();
     var gOrderId = gwMap[sid] || "";
     var amt = Number(data[i][cAmt]) || 0;
     var phone = String(data[i][cPhone] || "");
-    if (!gOrderId || !(amt > 0)) continue;
+    if (!gOrderId || !(amt > 0)) continue;   // no gateway id ⇒ genuinely manual refund — skip
 
     retried++;
     var reqId = ("RF" + sid).replace(/[^A-Za-z0-9]/g, "").slice(0, 20);

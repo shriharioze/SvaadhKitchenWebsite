@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.5; // 2026-06-29: lost-order audit now runs EVERY 10 MIN (setupLostOrderAuditTrigger → liveLostOrderAudit, monthsBack=0 live log only) for near-live alerts; SK_Orders read trimmed to the single Gateway_Order_ID column so frequent runs are cheap. Optional setupDailyDeepAuditTrigger() scans archives nightly. (23.4: audit names + email + daily run.)
+const CODE_VERSION   = 23.6; // 2026-06-30: refund flow is auto-first (hdfc_initiateRefund on cancel) + manual fallback; fixed the backlog-clearing helper — failed auto-refunds are now tagged "auto-refund FAILED" and retryQueuedRefunds() re-attempts ANY Pending gateway-paid refund (was filtering on a string never written → matched nothing). Ready for HDFC to enable refund access. (23.5: 10-min lost-order audit.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
