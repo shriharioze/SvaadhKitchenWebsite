@@ -4668,7 +4668,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.12";
+    const APP_VERSION = "v26.06.25.13";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9197,6 +9197,27 @@
       }
     }
 
+    // AUTO update prompt — catches customers stuck on an OLD cached build (e.g. from before
+    // the gateway existed, so they only see manual UPI). checkAppVersion() fetches the LIVE
+    // file cache-busted, so a stale cache is detected even though a plain reload would just
+    // re-serve the old file. On mismatch we show a confirmation; "Update now" hard-refreshes
+    // to the new build — the SAME action as the drawer "tap to update". Once per session.
+    async function _promptUpdateIfStale() {
+      try { if (sessionStorage.getItem("sk_update_prompted") === "1") return; } catch (_) {}
+      try { await checkAppVersion(); } catch (_) { return; }
+      if (_updateAvailable !== true) return;
+      try { sessionStorage.setItem("sk_update_prompted", "1"); } catch (_) {}
+      const ok = await sConfirm(
+        "A newer version of Svaadh Kitchen is ready — with our latest fixes and secure one-tap UPI payment.<br><br>Please click below to update to the latest version.",
+        "Update available", "⬆️", "",
+        { confirmLabel: "Update to latest", cancelLabel: "Later" }
+      );
+      if (!ok) return;
+      const base = window.location.href.split("#")[0];
+      const sep  = base.indexOf("?") === -1 ? "?" : "&";
+      window.location.replace(base + sep + "_v=" + Date.now()); // hard refresh to the new build
+    }
+
     function openProfileDrawer() {
       _refreshProfileAvatar();
       checkAppVersion();
@@ -12088,6 +12109,10 @@
       console.log(`Svaadh Kitchen ${APP_VERSION} Loaded - Split HDFC Flow`);
       applyThemeIcon();
       hdfc_init();   // Check gateway config + handle any HDFC return URL params
+
+      // Catch customers stuck on an old cached build (manual pay / no gateway): after the
+      // page settles, do a LIVE version check and prompt them to update to the latest.
+      setTimeout(function () { try { _promptUpdateIfStale(); } catch (_) {} }, 2500);
 
       // Refresh nudge is shown when user reaches the calendar (step 2) — see updateNav()
 
