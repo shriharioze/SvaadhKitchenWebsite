@@ -3909,12 +3909,11 @@
            (detected via getConfig on page load)
       ════════════════════════════════════════════════ -->
       <div class="card" id="hdfcGatewayCard" style="display:none;">
-        <h2>🏦 Pay Securely via HDFC</h2>
+        <h2>💳 Almost done — pay with UPI</h2>
         <div style="background:#e8f5e9;border:1.5px solid #81c784;border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.82rem;color:#1b5e20;line-height:1.6;">
-          ✅ You'll be redirected to HDFC's secure payment page.<br>
-          Supports <strong>UPI only</strong>.
+          ✅ Tap the button below to open HDFC's secure payment page, then pay with any UPI app — <strong>GPay, PhonePe, Paytm, BHIM</strong> &amp; more.
           <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #a5d6a7;font-size:0.74rem;color:#8a6d3b;">
-            ⚠️ Please use a <strong>bank-account UPI</strong>. Credit-linked UPI (RuPay credit
+            ⚠️ Please pay from a <strong>bank-account UPI</strong>. Credit-linked UPI (RuPay credit
             card) and prepaid wallets (PPI) aren't accepted, as they carry extra charges we'd
             have to bear.
           </div>
@@ -3924,10 +3923,10 @@
 
         <button id="hdfcPayBtn" onclick="hdfc_initiatePayment()"
           style="width:100%;padding:14px;background:linear-gradient(135deg,#1565c0,#0d47a1);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 14px rgba(13,71,161,0.35);">
-          🔒 Pay ₹<span id="hdfcPayBtnAmt">0</span> via HDFC Gateway
+          🔒 Click here to Pay ₹<span id="hdfcPayBtnAmt">0</span>
         </button>
         <p style="font-size:0.7rem;color:#888;text-align:center;margin-top:8px;">
-          Secured by HDFC SmartGateway · 256-bit SSL
+          Secured by HDFC SmartGateway · 256-bit SSL · your payment is safe
         </p>
         <!-- Manual "Pay via UPI instead" escape removed on purpose: when the gateway
              is live, all UPI payments must go through it (no manual-UPI fallback).
@@ -4669,7 +4668,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.11";
+    const APP_VERSION = "v26.06.25.12";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5552,7 +5551,10 @@
       } else if (S.paymentChoice === "Free") {
         isChecked = $("freeOrderConfirmCheck")?.checked;
       } else {
-        isChecked = $("paidConfirm")?.checked;
+        // UPI: in gateway mode the "Pay via HDFC" button IS the action (there's no manual
+        // checkbox), so keep the Place Order button ENABLED — it routes to the gateway.
+        // Manual UPI (gateway off) still needs the "I'll complete payment" checkbox.
+        isChecked = S.gatewayEnabled ? true : $("paidConfirm")?.checked;
       }
       const btn = $("btnNext");
       if (!btn) return;
@@ -5808,7 +5810,15 @@
         }
         return;
       }
-      if (S.step === 4) { await placeOrder(); return; }
+      if (S.step === 4) {
+        // Gateway + UPI: the Place Order button opens the HDFC payment page — the SAME
+        // action as the gateway card's own button (so a disabled/greyed button never
+        // confuses anyone). Wallet / On-Account / Free / Split / manual-UPI go through the
+        // normal placeOrder flow.
+        if (S.gatewayEnabled && S.paymentChoice === "UPI") { await hdfc_initiatePayment(); return; }
+        await placeOrder();
+        return;
+      }
       S.step++; updateNav(); window.scrollTo(0, 0);
     }
     function goToStep(s) {
