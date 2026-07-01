@@ -4683,7 +4683,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.09";
+    const APP_VERSION = "v26.06.25.10";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -12018,10 +12018,18 @@
       try { localStorage.removeItem("svaadh_hdfc_pending_order"); localStorage.removeItem("svaadh_hdfc_pending_ts"); } catch (_) {}
       const ok = !status || ["CHARGED", "SUCCESS", "PENDING", "STARTED"].indexOf(String(status).toUpperCase()) !== -1;
       if (!ok) { closeBulkFlow(); await sAlert("Payment was not completed. If money was deducted it auto-refunds — or WhatsApp +91 93222 46765 with order id " + orderId + ".", "Payment Not Completed", "⚠️"); return; }
+      // Bigger plans place many meal-days (15-day = 13, month = 26 working days), so the
+      // write takes a little longer — tell the customer to be patient and not close/pay again.
+      const _bigPlan = (BK.plan === "15day" || BK.plan === "month");
+      const _daysWord = BK.plan === "month" ? "a full month of" : (BK.plan === "15day" ? "15 days of" : "");
       _bulkRender('<div style="padding:34px 24px;text-align:center;">'
         + '<div style="font-size:2.2rem;">⏳</div>'
-        + '<div style="font-weight:800;font-size:1.05rem;color:#0369a1;margin:10px 0 6px;">Confirming your bulk order…</div>'
-        + '<div style="font-size:0.82rem;color:#555;line-height:1.6;">Payment received — placing your order now. Please don\'t pay again.</div>'
+        + '<div style="font-weight:800;font-size:1.05rem;color:#0369a1;margin:10px 0 6px;">Placing your bulk order…</div>'
+        + '<div style="font-size:0.82rem;color:#555;line-height:1.6;">Payment received ✅ We\'re now booking '
+          + (_bigPlan ? ('<b>' + _daysWord + ' meals</b> — this can take up to a minute. Please <b>keep this window open</b> and don\'t pay again.')
+                      : 'each day of your order. Please don\'t pay again.')
+        + '</div>'
+        + (_bigPlan ? '<div style="font-size:0.72rem;color:#94a3b8;margin-top:8px;">Sit tight — we\'ll show your confirmation as soon as every day is booked.</div>' : '')
         + '<div style="margin-top:14px;color:#0284c7;letter-spacing:3px;">● ● ●</div></div>');
       const mm = document.getElementById("bulkModal"); if (mm) mm.style.display = "flex";
       // Retry the (idempotent) finalize until the gateway confirms CHARGED. A real

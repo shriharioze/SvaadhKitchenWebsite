@@ -314,21 +314,8 @@ function submitBulkOrder(body) {
   if (priced.error)        return { success: false, error: priced.error };
   if (!priced.rows.length) return { success: false, error: "No valid bulk days to place (cutoffs may have passed)." };
 
-  // Idempotency: if a gateway order id is supplied and rows already exist for it
-  // (frontend POST + reconciler can both fire), do NOT double-write the batch.
-  if (!body.dryRun && body.gateway_order_id) {
-    const gid = String(body.gateway_order_id).trim();
-    const _ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-    const _gCol = headerIndex(_ws)["Gateway_Order_ID"];
-    if (_gCol) {
-      const _data = _ws.getDataRange().getValues();
-      for (let _i = 1; _i < _data.length; _i++) {
-        if (String(_data[_i][_gCol - 1] || "").trim() === gid) {
-          return { success: true, already: true, batch_id: gid, total: priced.total, count: priced.rows.length };
-        }
-      }
-    }
-  }
+  // (Idempotency is handled per-(date,meal) in the write loop below, so a retry / the
+  // reconciler COMPLETES a partial batch instead of short-circuiting on the first row.)
 
   // Dry run: return the breakdown WITHOUT writing anything.
   if (body.dryRun) {
@@ -361,8 +348,26 @@ function submitBulkOrder(body) {
   const _custAddrLine = [wing && ("Wing " + wing), flat && ("Flat " + flat), floor && (floor + " Floor"), society].filter(Boolean).join(", ");
   const fullAddr = isPickup ? "Self Pickup (A 104, Shree laxmi vihar society, Hadapsar)" : [_custAddrLine, area].filter(Boolean).join(", ");
 
-  const written = [];
+  // IDEMPOTENT: which (date|meal) rows already exist for this gateway id? A retry (finalize
+  // re-fire / reconciler) must COMPLETE a partially-written batch, never double-write it.
+  const _fmtD = function (v) { return v instanceof Date ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd") : String(v || "").trim().slice(0, 10); };
+  const existingKeys = {};
+  if (gatewayOrderId) {
+    const _gCol = hIdx["Gateway_Order_ID"], _dCol = hIdx["Order_Date"], _mCol = hIdx["Meal_Type"];
+    if (_gCol && _dCol && _mCol) {
+      const _data = ordersWs.getDataRange().getValues();
+      for (let _i = 1; _i < _data.length; _i++) {
+        if (String(_data[_i][_gCol - 1] || "").trim() === gatewayOrderId) {
+          existingKeys[_fmtD(_data[_i][_dCol - 1]) + "|" + String(_data[_i][_mCol - 1] || "").trim()] = true;
+        }
+      }
+    }
+  }
+
+  const written  = []; // rows appended THIS call
+  const toVerify = []; // { sid, row } — confirm each actually landed
   priced.rows.forEach(function (r) {
+    if (existingKeys[_fmtD(r.date) + "|" + r.meal]) return; // already written — skip (idempotent)
     const sid = generateSubmissionID();
     const itemsObj = {};
     r.items.forEach(function (it) { itemsObj[_bulkResolveName(it.colKey)] = it.qty; });
@@ -396,13 +401,53 @@ function submitBulkOrder(body) {
     set("Batch_ID", batchId);
     set("Bulk_Clawback", r.bulkDisc); // per-row bulk discount = the clawback-able amount
     ordersWs.appendRow(row);
+    toVerify.push({ sid: sid, row: row });
     written.push({ sid: sid, date: r.date, meal: r.meal, net: r.net });
   });
 
+  // ── VERIFY every appended row actually landed; re-append any GAS silently dropped ──
+  // (Same failure the missed-order safety net catches for regular orders: appendRow can be
+  // dropped under load. For a MONTH batch that's up to ~52 rows in one call.)
+  SpreadsheetApp.flush();
+  const _sidCol = hIdx["Submission_ID"];
+  const stillMissing = [];
+  if (toVerify.length && _sidCol) {
+    const _lastRow = ordersWs.getLastRow();
+    const _from = Math.max(2, _lastRow - Math.max(300, toVerify.length * 4));
+    const _present = {};
+    if (_lastRow >= _from) {
+      ordersWs.getRange(_from, _sidCol, _lastRow - _from + 1, 1).getValues().forEach(function (x) { _present[String(x[0])] = true; });
+    }
+    toVerify.forEach(function (w) {
+      if (_present[String(w.sid)]) return; // landed on the first append
+      const okAttempt = (typeof _reappendUntilPresent === "function") ? _reappendUntilPresent(ordersWs, _sidCol, w.sid, w.row, 5) : 1;
+      if (!okAttempt) stillMissing.push(w);
+    });
+  }
+
+  if (stillMissing.length) {
+    // Couldn't persist some rows even after retries → DO NOT report success. The frontend
+    // keeps its "confirming…" retry loop (or shows the safe "will appear shortly" message)
+    // and the next finalize/reconciler call completes the batch (idempotent). Audit-log each.
+    try {
+      stillMissing.forEach(function (w) {
+        const wr = written.filter(function (x) { return x.sid === w.sid; })[0] || {};
+        if (typeof _logMissedOrderRow === "function") _logMissedOrderRow(ss, {
+          status: "BULK ROW DROPPED — retry pending", sid: w.sid, gatewayId: gatewayOrderId,
+          name: name, phone: phone, amount: wr.net || "", date: wr.date || "", meal: wr.meal || "", attempts: 5
+        });
+      });
+    } catch (_) {}
+    return { success: false, partial: true, error: "Some bulk rows did not persist (" + stillMissing.length + " of " + priced.rows.length + "). Retry will complete it.",
+             batch_id: batchId, rows_written: written.length - stillMissing.length, expected: priced.rows.length };
+  }
+
   if (typeof updateCustomerLastOrder === "function") { try { updateCustomerLastOrder(phone); } catch (_) {} }
 
-  return { success: true, batch_id: batchId, total: priced.total, count: written.length,
-           rows: written, lunch: priced.lunch, dinner: priced.dinner };
+  // Success = every priced row is now present (skipped-existing + newly-verified).
+  return { success: true, batch_id: batchId, total: priced.total,
+           count: Object.keys(existingKeys).length + written.length, rows_written: written.length,
+           already: written.length === 0, rows: written, lunch: priced.lunch, dinner: priced.dinner };
 }
 
 // ── TEST HELPERS (run from the Apps Script editor; remove before any LIVE wiring) ──
@@ -508,17 +553,17 @@ function hdfc_finalizeBulkOrder(body) {
   let entry = null;
   try { entry = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}")[orderId] || null; } catch (e) {}
 
-  // Already written? (idempotent — the reconciler or a prior call may have done it.)
+  // Fully written already? ONLY if rows exist AND the stash is gone — the stash is deleted
+  // just below on a COMPLETE write, so "rows exist + no stash" == done. If rows exist but
+  // the stash is still here, the batch is PARTIAL: fall through so submitBulkOrder (which is
+  // idempotent + self-completing + verified) writes the missing rows before we call it done.
   const ws = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
   const gCol = headerIndex(ws)["Gateway_Order_ID"];
-  if (gCol) {
+  if (gCol && !entry) {
     const data = ws.getDataRange().getValues();
     let n = 0;
     for (let i = 1; i < data.length; i++) if (String(data[i][gCol - 1] || "").trim() === orderId) n++;
-    if (n > 0) {
-      try { const all = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}"); delete all[orderId]; props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(all)); } catch (e) {}
-      return { success: true, already: true, batch_id: orderId, count: n };
-    }
+    if (n > 0) return { success: true, already: true, batch_id: orderId, count: n };
   }
 
   if (!entry || !entry.bulk) return { success: false, error: "No pending bulk order for " + orderId };

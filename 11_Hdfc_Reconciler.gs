@@ -119,15 +119,20 @@ function _reconcileSingleEntry(orderId, entry) {
     }
 
     // ── Regular / split order: check SK_Orders dedup first ───────────────────
-    const ss     = getSpreadsheet();
-    const ws     = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-    const data   = ws.getDataRange().getValues();
-    const headers= data[0] || [];
-    const gCol   = headers.indexOf("Gateway_Order_ID");
-    if (gCol !== -1) {
-      for (var r = 1; r < data.length; r++) {
-        if (String(data[r][gCol] || "").trim() === orderId) {
-          return { outcome: "skippedAlreadyDone", row: r + 1 };
+    // SKIP this for bulk: submitBulkOrder is idempotent per (date,meal) and SELF-COMPLETES
+    // a partially-written batch, so a bulk entry must reach it even when SOME rows already
+    // exist (a blanket "any row exists → done" would strand a partial month batch forever).
+    if (!entry.bulk) {
+      const ss     = getSpreadsheet();
+      const ws     = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+      const data   = ws.getDataRange().getValues();
+      const headers= data[0] || [];
+      const gCol   = headers.indexOf("Gateway_Order_ID");
+      if (gCol !== -1) {
+        for (var r = 1; r < data.length; r++) {
+          if (String(data[r][gCol] || "").trim() === orderId) {
+            return { outcome: "skippedAlreadyDone", row: r + 1 };
+          }
         }
       }
     }
