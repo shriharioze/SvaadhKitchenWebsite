@@ -3052,8 +3052,8 @@
           <p class="mr-note">भोसले गार्डन — मोफत डिलिव्हरी · इतर ठिकाणी ₹१०/जेवण (जर ऑर्डर ₹१०० पेक्षा कमी असेल)</p>
         </div>
         <div class="how-info-box">
-          <div class="hi-label">📈 Market Surcharge</div>
-          <div class="hi-val">≈6% surcharge on each meal's food total to handle rising ingredient costs.</div>
+          <div class="hi-label">🔥 Loyalty Reward</div>
+          <div class="hi-val">Order 6 days in a row → get 5% of your 6-day food total back on day 6. Sundays don't break the streak.</div>
         </div>
         <div class="how-info-box">
           <div class="hi-label" data-i18n="how_help_label">❓ Help</div>
@@ -4393,26 +4393,13 @@
             </div>
           </div>
 
-          <!-- MARKET SURCHARGE -->
-          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #2D1A5E;">
-            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📈 Market Surcharge</div>
-            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              A small surcharge of <b>≈6%</b> of the food bill is added per meal to help us manage rising ingredient costs.<br><br>
-              <b>Examples:</b><br>
-              ₹40 meal → ₹3 surcharge<br>
-              ₹100 meal → ₹6 surcharge<br>
-              ₹150 meal → ₹9 surcharge
-            </div>
-          </div>
-
           <!-- LOYALTY STREAK -->
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #f39c12;">
-            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🔥 6th Day Loyalty Reward</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🔥 6-Day Loyalty Reward</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              Order on <b>5 consecutive days</b> → your <b>6th consecutive day is surcharge-free</b>.<br>
-              All market surcharges from the previous 5 days are also <b>credited back</b> on that 6th day.<br><br>
+              Order on <b>6 consecutive days</b> → on the 6th day, get <b>5% of your 6 days' food total</b> back as a discount.<br><br>
               <span style="background:#fef9e7;border-radius:6px;padding:6px 10px;display:block;font-size:0.75rem;color:#7d6608;">
-                💡 <b>Sundays don't count</b> — since we're closed on Sundays, the streak continues through the weekend. Saturday + Monday = consecutive days. This resets every 6 days — keep ordering to keep earning!
+                💡 <b>Sundays don't count</b> — since we're closed on Sundays, the streak continues through the weekend. Saturday + Monday = consecutive days. It resets every 6 days — keep ordering to keep earning!
               </span>
             </div>
           </div>
@@ -4431,10 +4418,9 @@
             <div style="font-size:0.82rem;font-weight:700;color:#7d5a00;margin-bottom:8px;">🧾 Full Example (Magarpatta, single Lunch order)</div>
             <div style="font-size:0.75rem;color:#5d4037;line-height:1.8;">
               Chapati ×4 (₹36) + Dry Sabji Mini (₹22) + Dal (₹22) = <b>₹80 food</b><br>
-              + Market surcharge: ₹5 (≈6% of ₹80)<br>
-              + Delivery: ₹11 (Magarpatta, below ₹100 threshold)<br>
-              <b>= ₹94 total</b><br><br>
-              Now add Dinner (₹90) same day → day total = ₹170 ≥ ₹150<br>
+              + Delivery: ₹11 (Magarpatta, below ₹106 threshold)<br>
+              <b>= ₹91 total</b><br><br>
+              Now add Dinner (₹90) same day → day total = ₹170 ≥ ₹159<br>
               → Delivery waived on Dinner + ₹11 credited back → <b>you save ₹22</b>
             </div>
           </div>
@@ -4456,7 +4442,7 @@
           <div style="display:flex;flex-direction:column;gap:10px;">
             <button onclick="hideGuideHub();showPricingInfo()" style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:#f8f9fa;border:1.5px solid #e0e0e0;border-radius:12px;cursor:pointer;text-align:left;width:100%;">
               <span style="font-size:1.4rem;">💡</span>
-              <div><div style="font-size:0.85rem;font-weight:700;color:#1a252f;">How Billing Works</div><div style="font-size:0.72rem;color:#888;margin-top:2px;">Delivery charges, discounts, surcharge, loyalty reward</div></div>
+              <div><div style="font-size:0.85rem;font-weight:700;color:#1a252f;">How Billing Works</div><div style="font-size:0.72rem;color:#888;margin-top:2px;">Delivery charges, discounts, loyalty reward</div></div>
               <span style="margin-left:auto;color:#bbb;font-size:1rem;">›</span>
             </button>
             <button onclick="hideGuideHub();showGuide('wallet')" style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:#f8f9fa;border:1.5px solid #e0e0e0;border-radius:12px;cursor:pointer;text-align:left;width:100%;">
@@ -4683,7 +4669,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.10";
+    const APP_VERSION = "v26.06.25.11";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5305,7 +5291,7 @@
       <strong>💰 ${t('how_discounts_label').replace('💰 ', '')}</strong>: 5% off ≥₹300 · 7.5% off ≥₹450 per day<br>
       <strong>🚚 ${t('how_delivery_label').replace('🚚 ', '')}</strong>: Free in Bhosale Nagar · ₹11/meal elsewhere (Waived if Self Pickup)<br>
       <strong>📦 Small Order Fee:</strong> ₹10 for Lunch/Dinner if bill &lt; ₹50 (Waived if Self Pickup)<br>
-      <strong>📈 Market Surcharge:</strong> ₹1 per ₹20 of food bill<br>
+      <strong>🔥 Loyalty Reward:</strong> Order 6 days in a row → 5% of your 6-day total back on day 6<br>
       <strong>📍 Address:</strong> Each meal can go to a different location<br>
       <strong>🗓️ Advance orders:</strong> Select multiple dates at once — order for the whole week!<br>
       <div style="margin-top:12px; padding:10px; background:#fff3cd; border:1px solid #ffeeba; border-radius:8px; color:#856404;">
@@ -5331,7 +5317,7 @@
       { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
       { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually. Use the <strong>Copy</strong> button to clone a meal you built to other selected dates." },
       { q: "How do discounts work?", a: "If your total for a single day is ₹300+, you get <strong>5% off</strong>. ₹450+, you get <strong>7.5% off</strong>. Applied automatically on the bill screen. Discounts are per-day, not per-order." },
-      { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, the surcharge accumulated from your previous 5 days is refunded back into your bill as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
+      { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, you get <strong>5% of your 6 days' food total</strong> back as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
       { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. To make corrections, <strong>delete</strong> the existing order from Manage Orders and place a <strong>new</strong> one before the cutoff. Wallet payments are refunded instantly to the wallet; UPI refunds are processed within 1–2 working days." },
       { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
       { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. If it's missing, place again and choose 'Already Paid' if you've already completed the UPI payment." },
@@ -5394,7 +5380,7 @@
           <div style="flex:1;">
             <div style="font-size:0.82rem;font-weight:700;color:#b45309;">Start your Svaadh Streak!</div>
             <div style="font-size:0.74rem;color:#92400e;margin-top:2px;line-height:1.4;">
-              Order 6 days in a row → get <strong>5% back</strong> as a discount.
+              Order 6 days in a row → on day 6, get <strong>5% of your 6-day total</strong> back as a discount.
               Sunday doesn't break it — Sat + Mon still counts! 🎁
             </div>
           </div>
@@ -5420,8 +5406,8 @@
           <div style="display:flex;margin-bottom:9px;">${segments}</div>
           <div style="font-size:0.75rem;color:#9a3412;margin-bottom:6px;font-weight:700;opacity:0.8;">📅 Period: ${periodStr}</div>
           <div style="font-size:0.78rem;color:#78350f;line-height:1.5;">
-            <strong>${remaining} more day${remaining>1?'s':''}</strong> to unlock your reward —
-            <strong>₹${surcharge > 0 ? surcharge : '~' + Math.round(sc*10)}</strong> surcharge refund coming your way!
+            <strong>${remaining} more day${remaining>1?'s':''}</strong> to unlock your reward — a
+            <strong>₹${surcharge > 0 ? surcharge : '~' + Math.round(sc*10)}</strong> loyalty reward (5% of your total) coming your way!
           </div>
         </div>`;
       } else if (sc === 5) {
@@ -5454,7 +5440,7 @@
           </div>
           <div style="font-size:0.75rem;color:#047857;margin-bottom:6px;font-weight:700;opacity:0.9;">📅 Period: ${periodStr}</div>
           <div style="font-size:0.82rem;color:#047857;line-height:1.4;font-weight:600;">
-            Awesome! Your 6-day streak reward is applied to this order. All your market surcharges (₹${surcharge}) are being refunded! 🔥
+            Awesome! Your 6-day streak reward is applied to this order — 5% of your 6-day total (₹${surcharge}) is back in your pocket! 🔥
           </div>
         </div>`;
       }
@@ -7217,7 +7203,7 @@
                 </div>
                 <div style="font-size:0.72rem;color:#047857;margin-bottom:6px;font-weight:700;opacity:0.8;">📅 Period: ${periodStr}</div>
                 <div style="font-size:0.8rem;color:#047857;line-height:1.4;font-weight:600;">
-                  Awesome! Your 6-day streak reward is applied to this bill. All market surcharges are being refunded! 🔥
+                  Awesome! Your 6-day streak reward is applied to this bill — 5% of your 6-day total is back in your pocket! 🔥
                 </div>
               </div>`;
             streakBadge.style.display = "block";
@@ -7245,10 +7231,10 @@
                 <div style="display:flex;margin-bottom:8px;">${segments}</div>
                 <div style="font-size:0.72rem;color:#9a3412;margin-bottom:6px;font-weight:700;opacity:0.8;">📅 Period: ${periodStr}</div>
                 <div style="font-size:0.78rem;color:#6b7280;margin-bottom:4px;">
-                  ${remaining} more consecutive day${remaining > 1 ? 's' : ''} to unlock your surcharge refund!
+                  ${remaining} more consecutive day${remaining > 1 ? 's' : ''} to unlock your loyalty reward!
                 </div>
                 <div style="font-size:0.75rem;color:#059669;font-weight:600;">
-                  🎁 Reward: Full surcharge refund on day 6
+                  🎁 Reward: 5% of your 6-day food total, back on day 6
                 </div>
               </div>`;
             streakBadge.style.display = "block";
@@ -12279,7 +12265,7 @@
       "Spend ₹300 or more in a day to unlock 5% off automatically — no code needed.",
       "Spend ₹450 or more in a day for 7.5% off — the discount applies to the whole day's order.",
       "Delivery is free if your meal total is ₹100 or more (or if you're in Bhosale Nagar).",
-      "Order 6 days in a row to earn a loyalty reward — all market surcharge from the last 6 days gets credited back as a discount!",
+      "Order 6 days in a row to earn a loyalty reward — 5% of your last 6 days' total comes back as a discount on day 6!",
       "Sundays don't break your streak — Saturday + Monday still counts as consecutive days.",
       // 💳 Wallet
       "Load your Svaadh Wallet for instant 1-tap checkout — no UPI app needed every time.",
