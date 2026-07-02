@@ -223,7 +223,7 @@
       "name": "Do you offer discounts?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes — 5% discount on orders above ₹300 and 7.5% discount on orders above ₹450. Discounts apply automatically. Earn an extra 10% off your next order by leaving a 5-star Google review."
+        "text": "Yes — 5% off when your day's food total is ₹325 or more, 7.5% off at ₹485 or more, and 10% off at ₹750 or more. Discounts apply automatically. Earn an extra 10% off your next order by leaving a 5-star Google review."
       }
     },
     {
@@ -3042,8 +3042,8 @@
         </div>
         <div class="how-info-box">
           <div class="hi-label" data-i18n="how_discounts_label">💰 Discounts</div>
-          <div class="hi-val">5% off ≥ ₹300/day<br>7.5% off ≥ ₹450/day</div>
-          <p class="mr-note">₹३०० पेक्षा जास्त — ५% सूट · ₹४५० पेक्षा जास्त — ७.५% सूट</p>
+          <div class="hi-val">5% off ≥ ₹325/day<br>7.5% off ≥ ₹485/day<br>10% off ≥ ₹750/day</div>
+          <p class="mr-note">₹३२५+ — ५% सूट · ₹४८५+ — ७.५% सूट · ₹७५०+ — १०% सूट</p>
         </div>
         <div class="how-info-box">
           <div class="hi-label" data-i18n="how_delivery_label">🚚 Delivery & Fees</div>
@@ -3755,9 +3755,9 @@
         <h2 data-i18n="step4_title">🍱 Choose Your Meals</h2>
         <div id="streakBannerMeals" style="margin-top:10px;"></div>
         <div class="info-box-gold" style="margin-top:4px;" data-i18n-html="step3_tip">
-          🚚 <strong>Free delivery</strong> if meal total ≥ ₹100 &nbsp;·&nbsp; <strong>5% off</strong> ≥ ₹300/day &nbsp;·&nbsp; <strong>7.5% off</strong> ≥ ₹450/day
+          🚚 <strong>Free delivery</strong> if meal total ≥ ₹106 &nbsp;·&nbsp; <strong>5% off</strong> ≥ ₹325/day &nbsp;·&nbsp; <strong>7.5% off</strong> ≥ ₹485/day &nbsp;·&nbsp; <strong>10% off</strong> ≥ ₹750/day
         </div>
-        <p class="mr-note" style="margin-bottom:0;">🚚 १ जेवण असल्यास ₹१०० वर <strong>मोफत डिलिव्हरी</strong>, २ किंवा अधिक असल्यास ₹१५० वर मोफत &nbsp;·&nbsp; 🎉 ₹३०० वर <strong>५% सूट</strong> · ₹४५० वर <strong>७.५% सूट</strong></p>
+        <p class="mr-note" style="margin-bottom:0;">🚚 १ जेवण असल्यास ₹१०६ वर <strong>मोफत डिलिव्हरी</strong>, २ किंवा अधिक असल्यास ₹१५९ वर मोफत &nbsp;·&nbsp; 🎉 ₹३२५ वर <strong>५% सूट</strong> · ₹४८५ वर <strong>७.५% सूट</strong> · ₹७५० वर <strong>१०% सूट</strong></p>
       </div>
       <div style="margin-bottom:8px;">
         <div id="dateTabsWrap"
@@ -4383,11 +4383,12 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #9b59b6;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🏷️ Discounts (Auto-applied)</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              <b>5% off</b> when your total food spend for the day ≥ ₹300<br>
-              <b>7.5% off</b> when your total food spend for the day ≥ ₹450<br><br>
-              This is based on your <b>entire day's total</b> — so if you order multiple meals across the day and cross ₹300, the discount applies to everything placed that day (including earlier orders).<br><br>
+              <b>5% off</b> when your total food spend for the day ≥ ₹325<br>
+              <b>7.5% off</b> when your total food spend for the day ≥ ₹485<br>
+              <b>10% off</b> when your total food spend for the day ≥ ₹750<br><br>
+              This is based on your <b>entire day's total</b> — so if you order multiple meals across the day and cross ₹325, the discount applies to everything placed that day (including earlier orders).<br><br>
               <span style="background:#f5eef8;border-radius:6px;padding:6px 10px;display:block;font-size:0.75rem;color:#6c3483;">
-                💡 <b>Example:</b> You order Breakfast ₹150 + Lunch ₹170 = ₹320 combined → 5% discount applied to the whole day automatically.
+                💡 <b>Example:</b> You order Breakfast ₹160 + Lunch ₹170 = ₹330 combined → 5% discount applied to the whole day automatically.
               </span>
             </div>
           </div>
@@ -4668,14 +4669,15 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.13";
+    const APP_VERSION = "v26.06.25.14";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
     const DELIVERY_CHARGE = 11;
     const FREE_THRESHOLD = 150;
-    const DISC_T1 = { min: 300, rate: 0.05 };
-    const DISC_T2 = { min: 450, rate: 0.075 };
+    const DISC_T1 = { min: 325, rate: 0.05 };
+    const DISC_T2 = { min: 485, rate: 0.075 };
+    const DISC_T3 = { min: 750, rate: 0.10 };
     let CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
     const ICONS = { Breakfast: "🍳", Lunch: "🍱", Dinner: "🍽️" };
     const GRACE_MINUTES = 5; // extra minutes allowed after cutoff to complete & submit
@@ -5287,7 +5289,7 @@
     <div style="font-size:0.82rem;color:#555;line-height:1.8;">
       <strong>🔐 Security:</strong> 4-digit PIN to secure your wallet<br>
       <strong>⏰ ${t('how_cutoffs_label').replace('⏰ ', '')}</strong>: Breakfast 7AM · Lunch 9:00AM · Dinner 4:30PM<br>
-      <strong>💰 ${t('how_discounts_label').replace('💰 ', '')}</strong>: 5% off ≥₹300 · 7.5% off ≥₹450 per day<br>
+      <strong>💰 ${t('how_discounts_label').replace('💰 ', '')}</strong>: 5% off ≥₹325 · 7.5% off ≥₹485 · 10% off ≥₹750 per day<br>
       <strong>🚚 ${t('how_delivery_label').replace('🚚 ', '')}</strong>: Free in Bhosale Nagar · ₹11/meal elsewhere (Waived if Self Pickup)<br>
       <strong>📦 Small Order Fee:</strong> ₹10 for Lunch/Dinner if bill &lt; ₹50 (Waived if Self Pickup)<br>
       <strong>🔥 Loyalty Reward:</strong> Order 6 days in a row → 5% of your 6-day total back on day 6<br>
@@ -5315,7 +5317,7 @@
       { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹9 · Without Oil Chapati ₹8 · Phulka ₹7 · Ghee Phulka ₹10 · Jowar/Bajra Bhakri ₹20<br>🥘 <strong>Sabji</strong>: Mini 100ml ₹22 · Full 250ml ₹45 (changes daily)<br>🍲 <strong>Dal</strong> 200ml ₹22 · <strong>Rice</strong> 100g ₹12 · <strong>Salad</strong> 40g ₹7 · <strong>Curd</strong> 50g ₹12<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha &amp; more." },
       { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
       { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually. Use the <strong>Copy</strong> button to clone a meal you built to other selected dates." },
-      { q: "How do discounts work?", a: "If your total for a single day is ₹300+, you get <strong>5% off</strong>. ₹450+, you get <strong>7.5% off</strong>. Applied automatically on the bill screen. Discounts are per-day, not per-order." },
+      { q: "How do discounts work?", a: "If your total for a single day is ₹325+, you get <strong>5% off</strong>. ₹485+, you get <strong>7.5% off</strong>. ₹750+, you get <strong>10% off</strong>. Applied automatically on the bill screen. Discounts are per-day, not per-order." },
       { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, you get <strong>5% of your 6 days' food total</strong> back as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
       { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. To make corrections, <strong>delete</strong> the existing order from Manage Orders and place a <strong>new</strong> one before the cutoff. Wallet payments are refunded instantly to the wallet; UPI refunds are processed within 1–2 working days." },
       { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
@@ -7297,7 +7299,8 @@
           const _exft = Object.values(_ex).reduce((s,m) => s+(m.subtotal||0), 0);
           const _cdt = _dft + _exft;
           let _dr = 0;
-          if (_cdt >= DISC_T2.min) _dr = DISC_T2.rate;
+          if (_cdt >= DISC_T3.min) _dr = DISC_T3.rate;
+          else if (_cdt >= DISC_T2.min) _dr = DISC_T2.rate;
           else if (_cdt >= DISC_T1.min) _dr = DISC_T1.rate;
           const _exDisc = Object.values(_ex).reduce((s,m) => s+(m.discount_applied||0), 0);
           // Per-meal surcharge sum — matches what is actually CHARGED (each meal
@@ -7391,7 +7394,8 @@
 
         // Retroactive discount credit: if existing orders didn't get a discount but combined now qualifies
         let discRate = 0, discLabel = "";
-        if (combinedDayTotal >= DISC_T2.min) { discRate = DISC_T2.rate; discLabel = `7.5% off (≥ ₹${DISC_T2.min})`; }
+        if (combinedDayTotal >= DISC_T3.min) { discRate = DISC_T3.rate; discLabel = `10% off (≥ ₹${DISC_T3.min})`; }
+        else if (combinedDayTotal >= DISC_T2.min) { discRate = DISC_T2.rate; discLabel = `7.5% off (≥ ₹${DISC_T2.min})`; }
         else if (combinedDayTotal >= DISC_T1.min) { discRate = DISC_T1.rate; discLabel = `5% off (≥ ₹${DISC_T1.min})`; }
         const existingDiscountTotal = Object.values(existDay).reduce((s, m) => s + (m.discount_applied || 0), 0);
         const existingEntitledDiscount = Math.round(existingDayFoodTotal * discRate);
@@ -7480,10 +7484,15 @@
           html += `<div style="font-size:0.72rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
         🎯 Add <strong>₹${diff}</strong> more to this day's order to get <strong>5% off</strong> your total!
       </div>`;
-        } else if (combinedDayTotal >= DISC_T1.min && combinedDayTotal < DISC_T2.min) {
+        } else if (combinedDayTotal < DISC_T2.min) {
           const diff = DISC_T2.min - combinedDayTotal;
           html += `<div style="font-size:0.75rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
         🎯 Add <strong>₹${diff}</strong> more to upgrade to <strong>7.5% off</strong>!
+      </div>`;
+        } else if (combinedDayTotal < DISC_T3.min) {
+          const diff = DISC_T3.min - combinedDayTotal;
+          html += `<div style="font-size:0.75rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
+        🎯 Add <strong>₹${diff}</strong> more to upgrade to <strong>10% off</strong>!
       </div>`;
         }
         let totalDelivery = 0;
@@ -9582,7 +9591,7 @@
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">💰 Discounts Across Multiple Days</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               Discounts are calculated <b>per day</b>, not per order. Each day's food total is assessed independently.<br>
-              If one day's total reaches ₹300 → 5% off that day. Another day at ₹250 → no discount that day.<br><br>
+              If one day's total reaches ₹325 → 5% off that day. Another day at ₹300 → no discount that day.<br><br>
               The 6th-day loyalty reward also tracks across multi-day orders.
             </div>
           </div>
@@ -9598,7 +9607,7 @@
 
           <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;">
             <div style="font-size:0.78rem;color:#5d4037;line-height:1.7;">
-              💡 <b>Tip:</b> Order for the full week on Sunday night / Monday morning — you won't have to think about it again, and you'll likely hit the ₹300+ discount threshold on most days!
+              💡 <b>Tip:</b> Order for the full week on Sunday night / Monday morning — you won't have to think about it again, and you'll likely hit the ₹325+ discount threshold on most days!
             </div>
           </div>`
       }
@@ -12297,8 +12306,8 @@
       "The cutoff timer on the meal card counts down live — watch it tick!",
       "Missed today's cutoff? You can still order for tomorrow and beyond.",
       // 💰 Discounts & Savings
-      "Spend ₹300 or more in a day to unlock 5% off automatically — no code needed.",
-      "Spend ₹450 or more in a day for 7.5% off — the discount applies to the whole day's order.",
+      "Spend ₹325 or more in a day to unlock 5% off automatically — no code needed.",
+      "Spend ₹485 or more in a day for 7.5% off — or ₹750+ for 10% off — applied to the whole day's order.",
       "Delivery is free if your meal total is ₹100 or more (or if you're in Bhosale Nagar).",
       "Order 6 days in a row to earn a loyalty reward — 5% of your last 6 days' total comes back as a discount on day 6!",
       "Sundays don't break your streak — Saturday + Monday still counts as consecutive days.",
@@ -12331,7 +12340,7 @@
       "Tap the ₹ badge next to a meal to see your running subtotal for that meal.",
       "The step indicator at the top shows exactly where you are in the ordering process.",
       // 🌟 Pro Tips
-      "Order for multiple days at once to more easily hit the ₹300+ daily discount threshold.",
+      "Order for multiple days at once to more easily hit the ₹325+ daily discount threshold.",
       "The review discount (10% off next 3 orders) stacks with the daily volume discount!",
       "Separate kitchen and driver notes — message the kitchen team and driver independently for precise instructions."
     ];

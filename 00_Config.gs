@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.7; // 2026-06-30: bulk write foolproofed — submitBulkOrder now idempotent per (date,meal) + VERIFIES every appended row landed (re-appends dropped ones via _reappendUntilPresent) + returns success ONLY when all rows present (logs unrecoverable to SK_Missed_Orders). hdfc_finalizeBulkOrder marks done only when stash consumed (partial → completes); reconciler skips its dedup for bulk so it can complete a partial batch. Frontend shows a patience message for 15-day/month. (23.6: auto-first refund flow.)
+const CODE_VERSION   = 23.8; // 2026-06-30: day-tier discount thresholds bumped + new tier — 5% ≥₹325, 7.5% ≥₹485, 10% ≥₹750 (was 5%≥300/7.5%≥450). Updated in ALL engines that must agree: submitOrder (02), gateway recompute (10), bulk day-tier stacking (06), reports (04) + frontend DISC_T1/T2/T3 (order.html) + all copy/FAQ/SEO. Charge==cart preserved. (23.7: bulk write foolproofing.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

@@ -1712,9 +1712,12 @@ function _submitOrderInternal(body) {
     const combinedDayTotal = submissionDayFoodTotal + prevDayFoodTotal;
 
     // Calculate day-level discount once across all meals for this date (including previous ones)
+    // Tiers on the day's combined FOOD total: ≥₹750 → 10%, ≥₹485 → 7.5%, ≥₹325 → 5%.
+    // MUST mirror the frontend (DISC_T1/T2/T3) and the gateway recompute exactly.
     let discRate = 0;
-    if (combinedDayTotal >= 450) discRate = 0.075;
-    else if (combinedDayTotal >= 300) discRate = 0.05;
+    if (combinedDayTotal >= 750) discRate = 0.10;
+    else if (combinedDayTotal >= 485) discRate = 0.075;
+    else if (combinedDayTotal >= 325) discRate = 0.05;
     
     const totalDayDiscAmt = Math.round(combinedDayTotal * discRate);
     // Find how much discount was already applied to previous orders for this date

@@ -71,7 +71,7 @@ function getBulkWindow(plan) {
 // Each day is priced ATOMICALLY (both meals known up front), so unlike submitOrder
 // there is no incremental retroactive delivery/fee credit — the free-delivery
 // threshold is evaluated on the day's full lunch+dinner food in one shot.
-// Day discount = bulk 5% (always) + day-tier (stacks): ≥₹450 → +7.5%, ≥₹300 → +5%.
+// Day discount = bulk plan rate (always) + day-tier (stacks): ≥₹750 → +10%, ≥₹485 → +7.5%, ≥₹325 → +5%.
 
 const BULK_DELIVERY = 11; // MUST equal submitOrder/_computeAuthoritativeTotal DELIVERY
 // L/D base prices — MUST mirror _computeAuthoritativeTotal's LD_PRICE (10_Hdfc_Gateway.gs).
@@ -139,8 +139,9 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     const isDayFree = feeExempt || (dayFood >= freeThreshold);
 
     let tierRate = 0;
-    if (dayFood >= 450) tierRate = 0.075;
-    else if (dayFood >= 300) tierRate = 0.05;
+    if (dayFood >= 750) tierRate = 0.10;
+    else if (dayFood >= 485) tierRate = 0.075;
+    else if (dayFood >= 325) tierRate = 0.05;
     const dayTierDisc = Math.round(dayFood * tierRate);
 
     totalBulkPool += Math.round(dayFood * _rate); // plan rate: 5% / 7.5% / 10%

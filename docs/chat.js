@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div class="menu-note">
           💡 <em>Mix and match to build your perfect meal!</em><br>
-          🎉 5% off ≥ ₹300/day &nbsp;|&nbsp; 7.5% off ≥ ₹450/day
+          🎉 5% off ≥ ₹325/day &nbsp;|&nbsp; 7.5% off ≥ ₹485/day &nbsp;|&nbsp; 10% off ≥ ₹750/day
         </div>
       </div>
     `;

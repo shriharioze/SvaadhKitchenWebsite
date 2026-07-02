@@ -85,7 +85,7 @@ function buildSystemPrompt(extraMenu) {
     +"Breakfast: daily rotating ₹35–₹70. "+B.menu.breakfast_note+"\n"
     +"Self pickup also available (no delivery charge).\n"
     +"Uses Pure Ghee & Groundnut refined oil. Pure Veg kitchen.\n"
-    +"Discounts(auto): 5% off≥₹300/day, 7.5% off≥₹450/day.\n"
+    +"Discounts(auto): 5% off≥₹325/day, 7.5% off≥₹485/day, 10% off≥₹750/day.\n"
     +"Payment: Wallet (Prepaid) or UPI("+B.payment.upi_id+"), prepaid cycle (requires wallet balance).\n"
     +"Order: "+B.ordering.order_url+" — no login needed, phone=identity, can book multiple days.\n"
     +"WhatsApp: "+B.contact.whatsapp+" | WA group: "+B.contact.whatsapp_group+"\n"
@@ -589,7 +589,7 @@ function markOrdersStatus(body) {
       });
       const scRemaining = scSameDayRows.reduce((s, x) => s + (Number(x.Food_Subtotal) || 0), 0);
       const scOldTotal  = scRemaining + (Number(r.Food_Subtotal) || 0);
-      const scDiscRate  = (sub) => sub >= 450 ? 0.075 : sub >= 300 ? 0.05 : 0;
+      const scDiscRate  = (sub) => sub >= 750 ? 0.10 : sub >= 485 ? 0.075 : sub >= 325 ? 0.05 : 0;
       const scOldRate   = scDiscRate(scOldTotal);
       const scNewRate   = scDiscRate(scRemaining);
 

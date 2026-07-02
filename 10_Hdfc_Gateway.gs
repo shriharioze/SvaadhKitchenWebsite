@@ -310,7 +310,7 @@ function _checkWebhookLogForCharge(orderId, expectedAmount) {
  *
  * Pricing factors covered:
  *   - Item subtotals (Σ qty × authoritative menu price)
- *   - Day-tier discount (5% ≥ ₹300, 7.5% ≥ ₹450, on combined day total)
+ *   - Day-tier discount (5% ≥ ₹325, 7.5% ≥ ₹485, 10% ≥ ₹750, on combined day total)
  *   - Per-area free delivery (SK_Areas.free)
  *   - VIP customers / Fee_Exempt = Yes → no delivery, no small-order fee
  *   - Self-pickup → no delivery, no small-order fee
@@ -486,10 +486,12 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     // whose earlier same-day orders were charged fees gets them credited back.
     const isDayFree           = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
 
-    // Day-tier discount (5%/7.5%) — pro-rated to this submission
+    // Day-tier discount (5%/7.5%/10%) — pro-rated to this submission. MUST mirror the
+    // frontend (DISC_T1/T2/T3) and submitOrder exactly so the charge == the cart total.
     let discRate = 0;
-    if (combinedDayTotal >= 450)      discRate = 0.075;
-    else if (combinedDayTotal >= 300) discRate = 0.05;
+    if (combinedDayTotal >= 750)      discRate = 0.10;
+    else if (combinedDayTotal >= 485) discRate = 0.075;
+    else if (combinedDayTotal >= 325) discRate = 0.05;
     const totalDayDiscAmt   = Math.round(combinedDayTotal * discRate);
     const prevDayDiscAmt    = Object.values(existingDateInfo).reduce(function(s, m){ return s + (Number(m.discount_applied)||0); }, 0);
     const submissionDateDiscAmt = Math.max(0, totalDayDiscAmt - prevDayDiscAmt);
