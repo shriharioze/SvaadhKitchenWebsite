@@ -135,7 +135,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     const dayFood = meals.reduce(function (s, m) { return s + m.food; }, 0);
     if (dayFood <= 0) return;
 
-    const freeThreshold = meals.length <= 1 ? (PRICING_V2 ? 106 : 100) : (PRICING_V2 ? 159 : 150);
+    const freeThreshold = meals.length <= 1 ? (PRICING_V2 ? 106 : 100) : meals.length === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
     const isDayFree = feeExempt || (dayFood >= freeThreshold);
 
     let tierRate = 0;
@@ -182,7 +182,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
       tierAssigned += tierShare;
 
       const delivery = (day.isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
-      const smallFee = (day.isDayFree || isPickup) ? 0 : (m.food < smallTh ? 10 : 0);
+      const smallFee = (day.isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
       const discount = bulkShare + tierShare;
       const net = Math.max(0, Math.round(m.food - discount + delivery + smallFee));
 

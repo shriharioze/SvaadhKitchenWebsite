@@ -76,7 +76,7 @@ function buildSystemPrompt(extraMenu) {
   const prompt = "You are a helpful assistant for Svaadh Kitchen, a vegetarian cloud kitchen in Hadapsar, Pune."
     +" Closed Sundays. Over 2.5 years of service (since Aug 2023). Cutoffs: BF<7AM, Lunch<9AM, Dinner<4:30PM."
     +" AREAS: " + B.locations_served.join(", ") + ".\n"
-    +" DELIVERY POLICY: FREE for Bhosale Nagar, Triveni Nagar, and Self Pickup. Other areas ₹11/meal if subtotal < ₹100. "
+    +" DELIVERY POLICY: FREE for Bhosale Nagar, Triveni Nagar, and Self Pickup. Other areas ₹11/meal unless the day's food total reaches the free threshold: ₹106 (1 meal), ₹159 (2 meals), ₹190 (3 meals). Small-order fee ₹11 if a Lunch/Dinner is under ₹53. "
     + B.delivery.outside_policy + "\n"
     +" PRIVACY & SECURITY: DO NOT disclose user phone numbers, PINs, transaction IDs, UPI details, or specific refund info. If a user asks about their payment or refund, tell them to check their 'Svaadh Wallet' or 'View/Edit existing orders' dashboard, or message us on WhatsApp at " + B.contact.whatsapp + ".\n"
     + todayLine + (extraMenu || "")
@@ -624,10 +624,11 @@ function markOrdersStatus(body) {
       const scFreeAreas  = getAreas().filter(a => a.free).map(a => a.name);
       const scIsNonFree  = (area) => !scFreeAreas.includes(area) && area !== "Self Pickup";
       // Dynamic free-delivery threshold by remaining meal count (matches submitOrder
-      // and _deleteOrderInternal): 1 meal → ₹100, 2+ → ₹150. Was a static ₹150.
+      // and _deleteOrderInternal): 1 meal → ₹106, 2 → ₹159, 3 → ₹190 (V2).
       const _scMeals = (arr) => new Set(arr.filter(x => (Number(x.Food_Subtotal) || 0) > 0).map(x => String(x.Meal_Type).trim())).size;
-      const scOldThr = _scMeals(scSameDayRows.concat([r])) <= 1 ? 100 : 150;
-      const scRemThr = _scMeals(scSameDayRows) <= 1 ? 100 : 150;
+      const _scThr   = (n) => n <= 1 ? (PRICING_V2 ? 106 : 100) : n === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
+      const scOldThr = _scThr(_scMeals(scSameDayRows.concat([r])));
+      const scRemThr = _scThr(_scMeals(scSameDayRows));
       if (scOldTotal >= scOldThr && scRemaining < scRemThr) {
         const scHIdx2    = headerIndex(ws);
         const scDelCol   = scHIdx2["Delivery_Charge"];
@@ -642,10 +643,10 @@ function markOrdersStatus(body) {
             scDeliveryOwed += 11; scNetDelta += 11;
             if (scDelCol) ws.getRange(x._row, scDelCol).setValue(11);
           }
-          if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < 50
+          if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
               && (Number(x.Small_Order_Fee) || 0) === 0) {
-            scSmallFeeOwed += 10; scNetDelta += 10;
-            if (scSmallCol) ws.getRange(x._row, scSmallCol).setValue(10);
+            scSmallFeeOwed += 11; scNetDelta += 11;
+            if (scSmallCol) ws.getRange(x._row, scSmallCol).setValue(11);
           }
           if (scNetDelta > 0 && scNetCol2) {
             ws.getRange(x._row, scNetCol2).setValue((Number(x.Net_Total) || 0) + scNetDelta);

@@ -481,7 +481,9 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     const mealsThisSubmission = Object.keys(mealSubs);
     const existingMeals       = Object.keys(existingDateInfo).filter(function(t){ return (Number(existingDateInfo[t].subtotal)||0) > 0; });
     const totalMealsCount     = Array.from(new Set(mealsThisSubmission.concat(existingMeals))).length;
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : (PRICING_V2 ? 159 : 150);
+    // Free-delivery threshold by delivery-meal count: 1 → ₹106, 2 → ₹159, 3 → ₹190.
+    // MUST mirror the frontend (_freeTh) and submitOrder so the charge == the cart total.
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : totalMealsCount === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
     // VIP counts as a "free day" too — matches frontend + submitOrder, so a VIP
     // whose earlier same-day orders were charged fees gets them credited back.
     const isDayFree           = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
@@ -564,7 +566,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
 
       let smallOrderFee = 0;
       if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
-        smallOrderFee = 10;
+        smallOrderFee = 11;
       }
 
       // Retroactive credits if today crossed the day-free threshold.

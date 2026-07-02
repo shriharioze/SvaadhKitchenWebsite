@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.8; // 2026-06-30: day-tier discount thresholds bumped + new tier — 5% ≥₹325, 7.5% ≥₹485, 10% ≥₹750 (was 5%≥300/7.5%≥450). Updated in ALL engines that must agree: submitOrder (02), gateway recompute (10), bulk day-tier stacking (06), reports (04) + frontend DISC_T1/T2/T3 (order.html) + all copy/FAQ/SEO. Charge==cart preserved. (23.7: bulk write foolproofing.)
+const CODE_VERSION   = 23.9; // 2026-06-30: small-order fee ₹10→₹11 (unchanged <₹53 trigger) + free-delivery threshold now 3-tiered by meal count: 1→₹106, 2→₹159, 3→₹190 (was 1→106/2+→159). Updated in ALL fee engines: submitOrder (02) + clawback, gateway recompute (10), bulk (06), reports/cancel-recompute (04) + frontend _freeTh & small fee (order.html) + all copy/FAQ/SEO/i18n. Charge==cart preserved. (23.8: day-tier discounts 325/485/750.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

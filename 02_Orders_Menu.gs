@@ -1703,7 +1703,9 @@ function _submitOrderInternal(body) {
     const existingMeals = Object.keys(existingDateInfo).filter(mType => (Number(existingDateInfo[mType].subtotal) || 0) > 0);
     const allMealsOnDate = Array.from(new Set([...mealsThisSubmission, ...existingMeals]));
     const totalMealsCount = allMealsOnDate.length;
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : (PRICING_V2 ? 159 : 150);
+    // Free-delivery threshold by delivery-meal count: 1 → ₹106, 2 → ₹159, 3 → ₹190.
+    // MUST mirror the frontend (_freeTh) and the gateway recompute exactly.
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : totalMealsCount === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
 
     // Calculate total food subtotal for this specific submission's date
     const submissionDayFoodTotal = order.meals.reduce((s, m) => s + (Number(m.subtotal) || 0), 0);
@@ -1809,7 +1811,7 @@ function _submitOrderInternal(body) {
 
       let smallOrderFee = 0;
       if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
-        smallOrderFee = 10;
+        smallOrderFee = 11;
       }
 
       // Calculation of credits for previously paid fees on the same day (Retroactive waiver)
@@ -3048,13 +3050,13 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
           if (delivColIdx && !opts.dryRun) ws.getRange(x._row, delivColIdx).setValue(11);
         }
 
-        // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹50 was waived due to threshold
+        // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹53 was waived due to threshold
         const xMeal = String(x.Meal_Type).trim();
-        if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < 50
+        if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
             && (Number(x.Small_Order_Fee) || 0) === 0) {
-          smallFeeOwed += 10;
-          netDelta += 10;
-          if (smallFeeColIdx && !opts.dryRun) ws.getRange(x._row, smallFeeColIdx).setValue(10);
+          smallFeeOwed += 11;
+          netDelta += 11;
+          if (smallFeeColIdx && !opts.dryRun) ws.getRange(x._row, smallFeeColIdx).setValue(11);
         }
 
         // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback)
@@ -3146,7 +3148,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         lines.push(`  • -₹${deliveryOwed} — delivery fee: your remaining ${numOrders > 1 ? numOrders + " orders" : "order"} had free delivery because the day total met the free-delivery threshold. It now drops below ₹${remThreshold}, so ₹11 delivery applies.`);
       }
       if (smallFeeOwed > 0) {
-        lines.push(`  • -₹${smallFeeOwed} — small cart fee: a remaining order under ₹50 had its ₹10 small cart fee waived (day total met the threshold). Now that drops below ₹${remThreshold}, the fee applies.`);
+        lines.push(`  • -₹${smallFeeOwed} — small cart fee: a remaining order under ₹53 had its ₹11 small cart fee waived (day total met the threshold). Now that drops below ₹${remThreshold}, the fee applies.`);
       }
       if (loyaltyClawback > 0) {
         lines.push(`  • -₹${loyaltyClawback} — loyalty reward reversal: ${loyaltyClawbackNote}`);
