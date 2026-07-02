@@ -3695,14 +3695,14 @@
             जेवण – सायं ४:३० · रविवार बंद</p>
         </div>
 
-        <!-- ⚡ Order in bulk (week / 15-day / month) entry card — gated for testing:
-             hidden by default; revealed by ?bulk=1 (sticky via localStorage) so it can
-             go to the live domain for payment testing without customers seeing it. -->
-        <div id="bulkEntryCard" style="display:none;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #fdba74;border-radius:14px;padding:13px 15px;margin-bottom:14px;">
+        <!-- ⚡ Order in bulk (week / 15-day / month) entry card — LIVE for all customers
+             (was gated behind ?bulk=1 during the beta test; ungated 2026-06-30 after the
+             full flow — pricing, gateway, write-verification, cancellation — was verified). -->
+        <div id="bulkEntryCard" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #fdba74;border-radius:14px;padding:13px 15px;margin-bottom:14px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
             <span style="font-size:1.25rem;line-height:1;">⚡</span>
             <span style="font-weight:800;color:#b45309;font-size:0.95rem;">Order in bulk</span>
-            <span style="font-size:0.6rem;font-weight:800;color:#fff;background:#ea580c;border-radius:20px;padding:2px 7px;letter-spacing:0.4px;">BETA</span>
+            <span style="font-size:0.6rem;font-weight:800;color:#fff;background:#16a34a;border-radius:20px;padding:2px 7px;letter-spacing:0.4px;">NEW</span>
           </div>
           <div style="font-size:0.75rem;color:#92400e;line-height:1.45;margin-bottom:11px;">
             One order for several working days — same meal each day, <b>save 5–10%</b>. Pick lunch, dinner, or both.
@@ -3715,8 +3715,8 @@
             <button type="button" onclick="openBulkFlow('month')"
               style="flex:1;padding:9px 6px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.85rem;cursor:pointer;box-shadow:0 3px 10px rgba(234,88,12,0.3);line-height:1.2;">Month<br><span style="font-size:0.62rem;font-weight:700;opacity:0.9;">10% off</span></button>
           </div>
-          <div style="font-size:0.66rem;color:#9a6a3a;margin-top:9px;line-height:1.4;font-style:italic;">
-            🧪 Bulk ordering is new (beta) — we're still polishing it, so a few things may change. Thanks for trying it!
+          <div style="font-size:0.66rem;color:#9a6a3a;margin-top:9px;line-height:1.4;">
+            🗓️ Sundays &amp; holidays are skipped automatically · plans change? Cancel any day before its cutoff for a refund.
           </div>
         </div>
 
@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.25.15";
+    const APP_VERSION = "v26.06.30.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11817,14 +11817,8 @@
     const BK = { plan: null, win: null, items: { Lunch: {}, Dinner: {} } };
     const BULK_PLAN_LABEL = { week: "Week", "15day": "15 Days", month: "Month" };
     let _bulkPlacedShown = false;
-    // Reveal the gated ⚡ bulk card only for testers: ?bulk=1 (sticky) shows it; customers
-    // on the live domain without the flag never see it. Remove this gate when going live.
-    (function () {
-      try {
-        const on = new URLSearchParams(location.search).has("bulk") || localStorage.getItem("sk_bulk_test") === "1";
-        if (on) { try { localStorage.setItem("sk_bulk_test", "1"); } catch (_) {} const card = document.getElementById("bulkEntryCard"); if (card) card.style.display = ""; }
-      } catch (_) {}
-    })();
+    // (Beta gate removed 2026-06-30 — the ⚡ bulk card is live for all customers. The old
+    // ?bulk=1 / sk_bulk_test reveal is gone; stale tester flags in localStorage are harmless.)
 
     function _bulkModalEl() {
       let el = document.getElementById("bulkModal");
