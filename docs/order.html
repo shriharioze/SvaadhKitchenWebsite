@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.30.01";
+    const APP_VERSION = "v26.06.30.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8191,9 +8191,9 @@
     // (no capped meals, or all capped meals are already on our delivery route).
     async function _ensureDeliveryCapResolved() {
       // Enkin (bulk/internal customer) bypasses the delivery cap entirely — never
-      // forced to Self Pickup / Porter, even when the meal is full. (submitOrder
-      // enforces the same bypass server-side.)
-      if (String((S.profile && S.profile.name) || "").trim().toLowerCase() === "enkin") return true;
+      // forced to Self Pickup / Porter, even when the meal is full. Contains-match
+      // ("Enkin Kumar", "Enkin 2" …) — submitOrder enforces the same bypass server-side.
+      if (String((S.profile && S.profile.name) || "").toLowerCase().indexOf("enkin") !== -1) return true;
       const _soldOut = _soldOutDeliveryMealsInCart();
       if (!_soldOut.length) return true;
       _capCheckOverlay(true);

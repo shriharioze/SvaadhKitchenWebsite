@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.0; // 2026-06-30: STOCK COUNTING FIX — Items_JSON stores suffix-STRIPPED names ("Dry Sabji Mini") but stock keys are full display names ("Dry Sabji Mini (100ml)"), so every count lookup missed → "0 ordered" forever, units_remaining never decremented, auto-sold-out never fired, submit stock-block never saw cumulative usage. Now _stripItemSuffix canonicalizes BOTH sides (itemsJsonKey + countOrderedUnits + getAdminData countsByDate). (23.9: fee changes.)
+const CODE_VERSION   = 24.1; // 2026-06-30: delivery-cap Enkin match is now CONTAINS ("Enkin Kumar"/"Enkin 2" count as the one Enkin slot + bypass the cap) in _countActiveMealOrders + submitOrder guard + order.html gate — was exact-match "enkin" only. Cap flow verified end-to-end (count collapse Enkin/IA=1, pickup/porter excluded, free areas allowed, piggyback). (24.0: stock counting fix.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

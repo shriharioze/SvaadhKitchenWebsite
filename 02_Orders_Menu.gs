@@ -346,7 +346,9 @@ function _countActiveMealOrders(rows, dateStr) {
   // once the cap is hit — until then everyone is counted 1:1 anyway.
   const sawEnkin = { Breakfast: false, Lunch: false, Dinner: false };
   const sawIA    = { Breakfast: false, Lunch: false, Dinner: false };
-  const _isEnkin = function (nm) { return String(nm || "").trim().toLowerCase() === "enkin"; };
+  // "Enkin" ANYWHERE in the name (per spec: "Enkin Kumar", "Enkin 2" etc. all belong
+  // to the one Enkin batch-delivery group). Must match submitOrder's guard + order.html.
+  const _isEnkin = function (nm) { return String(nm || "").toLowerCase().indexOf("enkin") !== -1; };
   const _isIA    = function (nm) { return String(nm || "").trim().toLowerCase().indexOf("[ia]") === 0; };
   for (var i = 0; i < rows.length; i++) {
     const r = rows[i];
@@ -1433,8 +1435,9 @@ function _submitOrderInternal(body) {
         const _capExceededW = _capW > 0 && _capCountsW && (_capCountsW[_mt] || 0) >= _capW;
         if (_capExceededW) {
           // Enkin (bulk/internal customer) bypasses the delivery cap entirely —
-          // always allowed even when the meal is full.
-          const _isEnkinOrderW = String(profile.name || "").trim().toLowerCase() === "enkin";
+          // always allowed even when the meal is full. Contains-match ("Enkin Kumar",
+          // "Enkin 2" …) — must stay in sync with _countActiveMealOrders + order.html.
+          const _isEnkinOrderW = String(profile.name || "").toLowerCase().indexOf("enkin") !== -1;
           if (!_isEnkinOrderW) {
           // Cap is a DELIVERY limit. Self Pickup / Porter bypass it ONLY when the
           // admin left alternatives ON for this meal (default). If turned OFF, the
