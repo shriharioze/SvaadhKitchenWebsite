@@ -948,12 +948,29 @@ function _isOrderCancelled(paymentStatus) {
 }
 
 // ── STOCK LIMIT HELPERS ─────────────────────────────────────
-// Map admin-stock colKey to the name used in Items_JSON.
+// Canonical item key: strip weight/measure display suffixes like "[200g]",
+// "(100ml)", "(2 pcs)". submitOrder writes Items_JSON with STRIPPED names
+// (via its stripDisplaySuffix), while stock limits are keyed by the FULL
+// display/master name ("Dry Sabji Mini (100ml)", "Sabudana Khichdi [200g]").
+// Without stripping on BOTH sides the count lookup never matched → every item
+// showed "0 ordered", units_remaining never decremented, auto-sold-out never
+// fired, and the submit-time stock block never saw cumulative usage.
+function _stripItemSuffix(name) {
+  return String(name)
+    .replace(/\s*\[.*?\]\s*/g, '')
+    .replace(/\s*\(.*?\)\s*/g, '')
+    .trim();
+}
+
+// Map admin-stock colKey to the canonical name used in Items_JSON.
 // Breakfast Curd is stored as "Breakfast Curd" (new rows) — old rows stored it
 // as plain "Curd". countOrderedUnits handles both for backward compat.
-function itemsJsonKey(colKey) { return colKey === "B_CURD" ? "Breakfast Curd" : colKey; }
+function itemsJsonKey(colKey) {
+  return colKey === "B_CURD" ? "Breakfast Curd" : _stripItemSuffix(colKey);
+}
 
 // Count ordered units per meal/item for a given date, excluding cancelled orders.
+// Keys are CANONICAL (suffix-stripped) so lookups via itemsJsonKey always join.
 function countOrderedUnits(ordersRows, dateStr) {
   const counts = { Breakfast: {}, Lunch: {}, Dinner: {} };
   ordersRows.forEach(row => {
@@ -969,8 +986,8 @@ function countOrderedUnits(ordersRows, dateStr) {
     Object.entries(items).forEach(([name, qty]) => {
       // Backward compat: old Breakfast rows stored Curd as "Curd". Normalize to
       // "Breakfast Curd" so aggregates match the new canonical key.
-      let k = name;
-      if (meal === "Breakfast" && name === "Curd") k = "Breakfast Curd";
+      let k = _stripItemSuffix(name);
+      if (meal === "Breakfast" && k === "Curd") k = "Breakfast Curd";
       counts[meal][k] = (counts[meal][k] || 0) + Number(qty || 0);
     });
   });

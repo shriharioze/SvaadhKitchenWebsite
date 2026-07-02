@@ -60,7 +60,9 @@ function _getAdminDataUncached() {
     let items = {};
     try { items = JSON.parse(row.Items_JSON || "{}"); } catch (e) {}
     Object.entries(items).forEach(function(pair) {
-      let k = pair[0];
+      // Canonical (suffix-stripped) key — MUST match itemsJsonKey/countOrderedUnits,
+      // else the admin stock panel shows "0 ordered" forever (the 30-Jun idli case).
+      let k = _stripItemSuffix(pair[0]);
       if (meal === "Breakfast" && k === "Curd") k = "Breakfast Curd";
       countsByDate[dd][meal][k] = (countsByDate[dd][meal][k] || 0) + Number(pair[1] || 0);
     });

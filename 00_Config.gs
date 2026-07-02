@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 23.9; // 2026-06-30: small-order fee ₹10→₹11 (unchanged <₹53 trigger) + free-delivery threshold now 3-tiered by meal count: 1→₹106, 2→₹159, 3→₹190 (was 1→106/2+→159). Updated in ALL fee engines: submitOrder (02) + clawback, gateway recompute (10), bulk (06), reports/cancel-recompute (04) + frontend _freeTh & small fee (order.html) + all copy/FAQ/SEO/i18n. Charge==cart preserved. (23.8: day-tier discounts 325/485/750.)
+const CODE_VERSION   = 24.0; // 2026-06-30: STOCK COUNTING FIX — Items_JSON stores suffix-STRIPPED names ("Dry Sabji Mini") but stock keys are full display names ("Dry Sabji Mini (100ml)"), so every count lookup missed → "0 ordered" forever, units_remaining never decremented, auto-sold-out never fired, submit stock-block never saw cumulative usage. Now _stripItemSuffix canonicalizes BOTH sides (itemsJsonKey + countOrderedUnits + getAdminData countsByDate). (23.9: fee changes.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
