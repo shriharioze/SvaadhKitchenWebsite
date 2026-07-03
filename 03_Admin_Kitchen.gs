@@ -1122,17 +1122,31 @@ function buildDeliveryRoute(days) {
     // Write each meal to ITS OWN tab (SK_Delivery_Route_Breakfast/_Lunch/_Dinner).
     // One common rebuild, but stored & retrieved per meal type. Empty meals are
     // cleared too, so a meal with no recent deliveries shows a blank tab.
-    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated", "Key"];
+    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated", "Key", "Pinned_Rank"];
     var stamp = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd HH:mm");
     var total = 0;
     var perMeal = {};
     ROUTE_MEALS.forEach(function (meal) {
       var ws = getOrCreateTab(ss, _routeTabName(meal), headers);
-      // Self-heal: pre-existing tabs have 5 headers — add the Key header.
+      // Self-heal: pre-existing tabs may lack the Key / Pinned_Rank headers.
       if (String(ws.getRange(1, 6).getValue() || "") !== "Key") ws.getRange(1, 6).setValue("Key");
-      if (ws.getLastRow() > 1) ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).clearContent();
+      if (String(ws.getRange(1, 7).getValue() || "") !== "Pinned_Rank") ws.getRange(1, 7).setValue("Pinned_Rank");
+      // PRESERVE admin pins across rebuilds — Pinned_Rank is the admin's manual
+      // correction ("this society is actually stop #2") and always wins over the
+      // learned rank. Keyed canonically so pins survive spelling merges too.
+      var pinnedByKey = {};
+      getAllRows(ws).forEach(function (r) {
+        var pv = Number(r.Pinned_Rank);
+        if (!pv || pv <= 0) return;
+        var k = _normSocietyKey(String(r.Key || r.Society || ""));
+        if (k && pinnedByKey[k] === undefined) pinnedByKey[k] = pv;
+      });
+      if (ws.getLastRow() > 1) ws.getRange(2, 1, ws.getLastRow() - 1, Math.max(ws.getLastColumn(), headers.length)).clearContent();
       var rows = byMealRows[meal] || [];
-      var out = rows.map(function (row) { return [row[0], row[1], row[2], row[3], stamp, row[4]]; });
+      var out = rows.map(function (row) {
+        var pin = pinnedByKey[row[4]];
+        return [row[0], row[1], row[2], row[3], stamp, row[4], (pin !== undefined ? pin : "")];
+      });
       if (out.length) ws.getRange(2, 1, out.length, headers.length).setValues(out);
       total += out.length;
       perMeal[meal] = out.length;
@@ -1152,15 +1166,18 @@ function buildDeliveryRoute(days) {
 function getDeliveryRoute() {
   try {
     var ss = getSpreadsheet();
-    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated", "Key"];
+    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated", "Key", "Pinned_Rank"];
     var map = {};
     var updated = "";
     ROUTE_MEALS.forEach(function (meal) {
       var ws = getOrCreateTab(ss, _routeTabName(meal), headers);
       map[meal] = {};
       getAllRows(ws).forEach(function (r) {
-        var soc  = _normSocietyKey(String(r.Key || r.Society || ""));
-        var rank = Number(r.Rank || 0);
+        var soc    = _normSocietyKey(String(r.Key || r.Society || ""));
+        // Admin's Pinned_Rank (manual correction) always beats the learned Rank.
+        // Decimals allowed — pin 2.5 to slot a society between stops 2 and 3.
+        var pinned = Number(r.Pinned_Rank || 0);
+        var rank   = (pinned > 0) ? pinned : Number(r.Rank || 0);
         if (!soc || !rank) return;
         // Variants of one society may collapse to the same canonical key on old-format
         // tabs — keep the EARLIEST (best) rank until a rebuild merges them properly.

@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.4; // 2026-07-03: delivery-route learning goes CANONICAL — _routeSocietyKey now uses _normSocietyKey (aliases apply), so spelling variants learn into ONE route stop; route tabs get readable Society (most-used spelling) + new Key column (canonical); getDeliveryRoute keys canonically (old rows too, best rank on collision) and returns alias_rules for the driver page's mirrored _canonSocKey. ROUTE_DATA_TO cap (2026-07-04 — would've frozen learning) → 2099. Rebuild via buildDeliveryRoute to merge existing split rows. (24.3: alias contains-rules.)
+const CODE_VERSION   = 24.5; // 2026-07-03: route Pinned_Rank column — admin's manual position correction (decimals ok, e.g. 2.5 slots between stops); always beats the learned Rank in getDeliveryRoute and is PRESERVED across buildDeliveryRoute rebuilds (keyed canonically). Driver page pins Self Pickup to rank 0 (always first — drop at pickup point, then start the route). (24.4: canonical route learning + open-ended window.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

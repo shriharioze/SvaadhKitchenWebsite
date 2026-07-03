@@ -622,6 +622,10 @@ function renderAll(data) {
     const routeMap = _deliveryRoute[meal] || {};
     const socKey = (o) => _canonSocKey(o.society || o.area || "");
     const routeRank = (o) => {
+      // Self Pickup is ALWAYS first — the driver drops those at the pickup point,
+      // marks them delivered, and then starts the actual delivery route.
+      const _a = String(o.society || o.area || "").toLowerCase();
+      if (_a.indexOf("pickup") !== -1) return 0;
       const r = routeMap[socKey(o)];
       return (typeof r === "number" && r > 0) ? r : 9999; // unknown → bottom
     };
