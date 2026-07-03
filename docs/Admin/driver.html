@@ -279,9 +279,25 @@ const KITCHEN = { lat: 18.5034868, lng: 73.9337571 };
 let D = { pin: "", sessionPin: "" };
 let _ordersData = { Breakfast: [], Lunch: [], Dinner: [] };
 let _pollTimer  = null;
-// Learned delivery route: { meal: { societyKey: rank } } — drives undelivered sort.
+// Learned delivery route: { meal: { canonicalKey: rank } } — drives undelivered sort.
 let _deliveryRoute = {};
 let _routeUpdated  = "";
+// Canonical matching rules from the server (SK_Society_Aliases): { exact:{base→canon},
+// contains:[[needle,canon],…] }. Must mirror the backend _normSocietyKey so the order's
+// society resolves to the SAME key the route map uses. null until the route is fetched.
+let _routeAliasRules = null;
+// Base-normalize + alias rules → canonical society key (mirror of backend _normSocietyKey).
+function _canonSocKey(s) {
+  const base = String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!base) return "";
+  const r = _routeAliasRules;
+  if (r) {
+    if (r.exact && r.exact[base]) return r.exact[base];
+    const cs = r.contains || [];
+    for (let i = 0; i < cs.length; i++) { if (base.indexOf(cs[i][0]) !== -1) return cs[i][1]; }
+  }
+  return base;
+}
 let _lastData      = null; // last driver payload, for re-render on sort toggle
 // Undelivered sort mode: "route" (learned building order) or "name" (A–Z). Persisted.
 let _sortMode      = localStorage.getItem("sk_driver_sort") || "route";
@@ -476,7 +492,11 @@ async function loadOrders() {
     if (routeRes) {
       try {
         const rd = await routeRes.json();
-        if (rd && rd.success) { _deliveryRoute = rd.route || {}; _routeUpdated = rd.updated || ""; }
+        if (rd && rd.success) {
+          _deliveryRoute = rd.route || {};
+          _routeUpdated = rd.updated || "";
+          _routeAliasRules = rd.alias_rules || null; // canonical matching rules (SK_Society_Aliases)
+        }
       } catch (e) {}
     }
     updateRouteStatus();
@@ -600,7 +620,7 @@ function renderAll(data) {
     //   "name"  → simple A–Z by customer name (helpful early, before route is learned)
     // Delivered (bottom): always by time delivered (oldest→newest) — a running log.
     const routeMap = _deliveryRoute[meal] || {};
-    const socKey = (o) => String(o.society || o.area || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const socKey = (o) => _canonSocKey(o.society || o.area || "");
     const routeRank = (o) => {
       const r = routeMap[socKey(o)];
       return (typeof r === "number" && r > 0) ? r : 9999; // unknown → bottom

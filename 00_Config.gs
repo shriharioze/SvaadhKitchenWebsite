@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.3; // 2026-07-03: SK_Society_Aliases now supports CONTAINS rules — alias starting with "*" matches anywhere in the name ("*gold tower" catches "T43 2502 Gold Tower Amanora" and every future flat/tower prefix; Amanora-township entries made enumeration impossible). Exact rows win over contains; contains apply in sheet order. Node-tested 19 cases. (24.2: exact alias layer + listSocieties audit.)
+const CODE_VERSION   = 24.4; // 2026-07-03: delivery-route learning goes CANONICAL — _routeSocietyKey now uses _normSocietyKey (aliases apply), so spelling variants learn into ONE route stop; route tabs get readable Society (most-used spelling) + new Key column (canonical); getDeliveryRoute keys canonically (old rows too, best rank on collision) and returns alias_rules for the driver page's mirrored _canonSocKey. ROUTE_DATA_TO cap (2026-07-04 — would've frozen learning) → 2099. Rebuild via buildDeliveryRoute to merge existing split rows. (24.3: alias contains-rules.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

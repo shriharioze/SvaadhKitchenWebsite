@@ -1003,11 +1003,21 @@ function getDriverOrders(date) {
 // undelivered orders by this learned order so deliveries follow his route.
 // ════════════════════════════════════════════════════════════════════
 
-// Canonical grouping key for an order row: Society, falling back to Area.
+// Canonical grouping key for an order row: Society, falling back to Area — via
+// _normSocietyKey (base-normalize + SK_Society_Aliases exact/contains rules), so
+// "Jasminium society" / "F1-201, jasminium…" / "T43 2502 Gold Tower" all learn
+// into ONE route stop instead of splitting the samples across spellings.
 function _routeSocietyKey(r) {
   var s = String((r && (r.Society !== undefined ? r.Society : r.society)) || "").trim();
   if (!s) s = String((r && (r.Area !== undefined ? r.Area : r.area)) || "").trim();
-  return s.toLowerCase().replace(/\s+/g, " ");
+  return _normSocietyKey(s);
+}
+
+// Raw display spelling for an order row (for the human-readable Society column).
+function _routeRawName(r) {
+  var s = String((r && (r.Society !== undefined ? r.Society : r.society)) || "").trim();
+  if (!s) s = String((r && (r.Area !== undefined ? r.Area : r.area)) || "").trim();
+  return s.replace(/\s+/g, " ");
 }
 
 // Each meal stores its learned route in its OWN tab, since the driver can take a
@@ -1019,7 +1029,9 @@ function _routeTabName(meal) { return "SK_Delivery_Route_" + meal; }
 // OUTSIDE this range are ignored — data before 5 Jun 2026 was unreliable and
 // would corrupt the learned route. Update these two dates to shift the window.
 var ROUTE_DATA_FROM = "2026-06-05";
-var ROUTE_DATA_TO   = "2026-07-04";
+// Open-ended upper bound — the old cap ("2026-07-04") would have silently FROZEN
+// route learning after that date. FROM still excludes the unreliable pre-Jun-5 data.
+var ROUTE_DATA_TO   = "2099-12-31";
 
 // Rebuild the SK_Delivery_Route config from the last `days` (default 30) of
 // delivered orders. Non-destructive to orders; only rewrites the route tab.
@@ -1044,6 +1056,9 @@ function buildDeliveryRoute(days) {
 
     // meal → orderDate → [{ soc, t }]
     var byMealDay = {};
+    // canonical key → { rawSpelling → count } — for the human-readable Society column
+    // (the canonical key itself is squashed, e.g. "goldtower").
+    var prettyAcc = {};
     getAllRows(ordersWs).forEach(function (r) {
       var sid = String(r.Submission_ID || "").trim();
       var t   = delMap[sid];
@@ -1058,10 +1073,20 @@ function buildDeliveryRoute(days) {
         : String(r.Order_Date).trim();
       // Only learn from the trusted data window — ignore earlier (bad) data.
       if (od < ROUTE_DATA_FROM || od > ROUTE_DATA_TO) return;
+      var raw = _routeRawName(r);
+      if (raw) { (prettyAcc[soc] = prettyAcc[soc] || {})[raw] = (prettyAcc[soc][raw] || 0) + 1; }
       byMealDay[meal] = byMealDay[meal] || {};
       byMealDay[meal][od] = byMealDay[meal][od] || [];
       byMealDay[meal][od].push({ soc: soc, t: t });
     });
+
+    // Most-used raw spelling per canonical key → readable Society column.
+    var prettyOf = function (soc) {
+      var m = prettyAcc[soc] || {};
+      var best = "", n = -1;
+      Object.keys(m).forEach(function (raw) { if (m[raw] > n) { best = raw; n = m[raw]; } });
+      return best || soc;
+    };
 
     // Per-meal rows: meal → [ [Society, Rank, Avg_Position, Samples], ... ]
     var byMealRows = {};
@@ -1089,22 +1114,25 @@ function buildDeliveryRoute(days) {
       // Earlier median position → earlier in route. Ties: more samples first.
       stats.sort(function (a, b) { return (a.med - b.med) || (b.samples - a.samples); });
       byMealRows[meal] = stats.map(function (s, i) {
-        return [s.soc, i + 1, Math.round(s.med * 1000) / 1000, s.samples];
+        // Society = readable most-used spelling; Key = canonical matching key.
+        return [prettyOf(s.soc), i + 1, Math.round(s.med * 1000) / 1000, s.samples, s.soc];
       });
     });
 
     // Write each meal to ITS OWN tab (SK_Delivery_Route_Breakfast/_Lunch/_Dinner).
     // One common rebuild, but stored & retrieved per meal type. Empty meals are
     // cleared too, so a meal with no recent deliveries shows a blank tab.
-    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated"];
+    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated", "Key"];
     var stamp = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd HH:mm");
     var total = 0;
     var perMeal = {};
     ROUTE_MEALS.forEach(function (meal) {
       var ws = getOrCreateTab(ss, _routeTabName(meal), headers);
+      // Self-heal: pre-existing tabs have 5 headers — add the Key header.
+      if (String(ws.getRange(1, 6).getValue() || "") !== "Key") ws.getRange(1, 6).setValue("Key");
       if (ws.getLastRow() > 1) ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).clearContent();
       var rows = byMealRows[meal] || [];
-      var out = rows.map(function (row) { return row.concat([stamp]); });
+      var out = rows.map(function (row) { return [row[0], row[1], row[2], row[3], stamp, row[4]]; });
       if (out.length) ws.getRange(2, 1, out.length, headers.length).setValues(out);
       total += out.length;
       perMeal[meal] = out.length;
@@ -1116,26 +1144,33 @@ function buildDeliveryRoute(days) {
   }
 }
 
-// Returns the learned route as { meal: { societyKey: rank } } for the driver page,
-// reading each meal from its own per-meal tab.
+// Returns the learned route as { meal: { canonicalKey: rank } } for the driver page,
+// reading each meal from its own per-meal tab. Keys are CANONICAL (_normSocietyKey);
+// old-format rows (no Key column) canonicalize through the Society column, so aliases
+// apply even before the first rebuild. Also returns the alias rules so the driver page
+// can compute the SAME canonical key client-side for each order.
 function getDeliveryRoute() {
   try {
     var ss = getSpreadsheet();
-    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated"];
+    var headers = ["Society", "Rank", "Avg_Position", "Samples", "Updated", "Key"];
     var map = {};
     var updated = "";
     ROUTE_MEALS.forEach(function (meal) {
       var ws = getOrCreateTab(ss, _routeTabName(meal), headers);
       map[meal] = {};
       getAllRows(ws).forEach(function (r) {
-        var soc  = String(r.Society || "").trim().toLowerCase().replace(/\s+/g, " ");
+        var soc  = _normSocietyKey(String(r.Key || r.Society || ""));
         var rank = Number(r.Rank || 0);
         if (!soc || !rank) return;
-        map[meal][soc] = rank;
+        // Variants of one society may collapse to the same canonical key on old-format
+        // tabs — keep the EARLIEST (best) rank until a rebuild merges them properly.
+        if (map[meal][soc] === undefined || rank < map[meal][soc]) map[meal][soc] = rank;
         if (r.Updated) updated = String(r.Updated);
       });
     });
-    return { success: true, route: map, updated: updated };
+    var rules = _societyAliasMap();
+    return { success: true, route: map, updated: updated,
+             alias_rules: { exact: rules.exact || {}, contains: rules.contains || [] } };
   } catch (e) {
     return { success: false, route: {}, error: String(e) };
   }
