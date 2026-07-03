@@ -287,56 +287,77 @@ function _normSocietyBase(s) {
   return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// SOCIETY ALIAS MAP — admin-managed SK_Society_Aliases tab (Alias | Canonical), one
-// row per alternate spelling: e.g. "Jasminium" → "Jasminum", "Pentagon-I" →
-// "Pentagon 1". Both sides are base-normalized, so only REAL spelling differences
-// need rows (spacing/case/punctuation are already handled by _normSocietyBase).
-// Cached 5 min (CacheService) + per-execution memo, so the hot per-row loops in
+// SOCIETY ALIAS MAP — admin-managed SK_Society_Aliases tab (Alias | Canonical).
+// Two kinds of rows:
+//   1. EXACT:    "Jasminium society" → "Jasminium"  (whole name is this spelling)
+//   2. CONTAINS: "*gold tower"       → "Gold Tower" (name CONTAINS this anywhere —
+//      catches "T43 2502 Gold Tower", "Amanora gold tower", any future flat/tower
+//      prefix; Amanora-township style entries make enumeration impossible).
+// Both sides are base-normalized, so spacing/case/punctuation never matter — only
+// real word differences need rows. Exact rows win over contains rows; contains
+// rows apply in sheet order (put more specific needles first). Cached 5 min
+// (CacheService) + per-execution memo, so the hot per-row loops in
 // _activeDeliveryIndex never re-read the sheet. Run setupSocietyAliasTab() once
 // from the editor to create the tab.
 var _socAliasMemo = null;
 function _societyAliasMap() {
   if (_socAliasMemo) return _socAliasMemo;
   try {
-    const hit = CacheService.getScriptCache().get("society_aliases_v1");
+    const hit = CacheService.getScriptCache().get("society_aliases_v2");
     if (hit !== null) { _socAliasMemo = JSON.parse(hit); return _socAliasMemo; }
   } catch (_) {}
-  const map = {};
+  const exact = {};
+  const contains = []; // [needle, canonical] in sheet order
   try {
     const ws = getSpreadsheet().getSheetByName("SK_Society_Aliases");
     if (ws && ws.getLastRow() > 1) {
       ws.getRange(2, 1, ws.getLastRow() - 1, 2).getValues().forEach(function (r) {
-        const alias = _normSocietyBase(r[0]);
+        const rawAlias = String(r[0] == null ? "" : r[0]).trim();
         const canon = _normSocietyBase(r[1]);
-        if (alias && canon && alias !== canon) map[alias] = canon;
+        if (!rawAlias || !canon) return;
+        if (rawAlias.charAt(0) === "*") {
+          const needle = _normSocietyBase(rawAlias.slice(1));
+          if (needle) contains.push([needle, canon]);
+        } else {
+          const alias = _normSocietyBase(rawAlias);
+          if (alias && alias !== canon) exact[alias] = canon;
+        }
       });
     }
   } catch (_) {}
-  _socAliasMemo = map;
-  try { CacheService.getScriptCache().put("society_aliases_v1", JSON.stringify(map), 300); } catch (_) {}
-  return map;
+  _socAliasMemo = { exact: exact, contains: contains };
+  try { CacheService.getScriptCache().put("society_aliases_v2", JSON.stringify(_socAliasMemo), 300); } catch (_) {}
+  return _socAliasMemo;
 }
 
-// One-time (editor): create the alias tab with headers + an example row.
+// One-time (editor): create the alias tab with headers + example rows.
 function setupSocietyAliasTab() {
   const ss = getSpreadsheet();
   let ws = ss.getSheetByName("SK_Society_Aliases");
   if (!ws) {
     ws = ss.insertSheet("SK_Society_Aliases");
     ws.getRange(1, 1, 1, 2).setValues([["Alias", "Canonical"]]);
-    ws.getRange(2, 1, 1, 2).setValues([["Jasminium", "Jasminum"]]);
+    ws.getRange(2, 1, 2, 2).setValues([
+      ["Jasminium society", "Jasminium"],   // exact: this whole spelling → canonical
+      ["*gold tower", "Gold Tower"]         // contains: any name containing "gold tower"
+    ]);
   }
-  try { CacheService.getScriptCache().remove("society_aliases_v1"); } catch (_) {}
-  return "SK_Society_Aliases ready — one row per alternate spelling (Alias → Canonical). Changes go live within ~5 min.";
+  try { CacheService.getScriptCache().remove("society_aliases_v2"); } catch (_) {}
+  return "SK_Society_Aliases ready. Exact rows: 'Alias → Canonical'. Contains rows: start the alias with * (e.g. '*gold tower' matches 'T43 2502 Gold Tower Amanora'). Changes go live within ~5 min.";
 }
 
-// Canonical matching key: base-normalize, then map through the alias table.
-// "Jasminium"→"jasminium"→(alias row)→"jasminum" — same key as "Jasminum".
+// Canonical matching key: base-normalize, then exact-alias, then contains-rules.
+// "T43 2502 Gold Tower" → "t432502goldtower" → (contains '*gold tower') → "goldtower".
 function _normSocietyKey(s) {
   const base = _normSocietyBase(s);
   if (!base) return "";
-  const map = _societyAliasMap();
-  return map[base] || base;
+  const m = _societyAliasMap();
+  if (m.exact && m.exact[base]) return m.exact[base];
+  const rules = m.contains || [];
+  for (var i = 0; i < rules.length; i++) {
+    if (base.indexOf(rules[i][0]) !== -1) return rules[i][1];
+  }
+  return base;
 }
 
 // AUDIT (editor or ?action=listSocieties): every distinct society/building spelling

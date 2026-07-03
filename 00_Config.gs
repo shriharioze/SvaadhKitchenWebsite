@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.2; // 2026-07-03: society ALIAS layer for the cap piggyback — _normSocietyKey now maps through the admin-managed SK_Society_Aliases tab (Alias→Canonical, base-normalized, 5-min cache) so real spelling variants ("Jasminium"→"Jasminum") match one society. setupSocietyAliasTab() creates the tab; listDistinctSocieties() (+ ?action=listSocieties) audits every spelling in SK_Orders/SK_Customers for building the list. (24.1: Enkin contains-match.)
+const CODE_VERSION   = 24.3; // 2026-07-03: SK_Society_Aliases now supports CONTAINS rules — alias starting with "*" matches anywhere in the name ("*gold tower" catches "T43 2502 Gold Tower Amanora" and every future flat/tower prefix; Amanora-township entries made enumeration impossible). Exact rows win over contains; contains apply in sheet order. Node-tested 19 cases. (24.2: exact alias layer + listSocieties audit.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────
