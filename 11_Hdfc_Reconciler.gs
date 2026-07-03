@@ -34,6 +34,13 @@ function reconcilePendingOrders() {
   // reaches "Refunded" even if the HDFC REFUND_SUCCEEDED webhook never arrives.
   try { reconcilePendingRefunds(); } catch (e) { Logger.log("reconcilePendingRefunds error: " + e.message); }
 
+  // Re-verify recently-written order rows every minute (PENDING_ORDER_ROWS backup,
+  // 60-min window). GAS can drop an appendRow AFTER the in-execution verification
+  // passed (3-Jul ₹104 loss) — previously the re-check only ran when the NEXT customer
+  // placed an order, which could be too late. Cheap: exits instantly when the backup
+  // store is empty.
+  try { _verifyAndAlertMissedOrders(getSpreadsheet()); } catch (e) { Logger.log("missed-order re-verify error: " + e.message); }
+
   // IntentAmplify orders write to IA_Orders via ia_hdfc_verifyAndSubmit (not
   // submitOrder), so the SK sweep below doesn't cover them. Run the IA sweep on
   // this same 5-min trigger so a paid IA order self-heals even if every webhook

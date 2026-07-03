@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.5; // 2026-07-03: route Pinned_Rank column — admin's manual position correction (decimals ok, e.g. 2.5 slots between stops); always beats the learned Rank in getDeliveryRoute and is PRESERVED across buildDeliveryRoute rebuilds (keyed canonically). Driver page pins Self Pickup to rank 0 (always first — drop at pickup point, then start the route). (24.4: canonical route learning + open-ended window.)
+const CODE_VERSION   = 24.6; // 2026-07-03: post-verification write-loss hardening (₹104 Nitin loss) — PENDING_ORDER_ROWS row-backup TTL 10min→60min; entries KEPT for the full window even after confirmed present (a row can vanish AFTER verification) with TTL pruning in the verifier; the 1-min reconciler now re-runs _verifyAndAlertMissedOrders so a dropped row re-appends within ~1 min. Frontend: hdfc_initiatePayment + bulk_pay HARD-FAIL if hdfc_savePendingOrder didn't stick (the stash is the only holder of items — never let payment proceed without it). (24.5: route Pinned_Rank + pickup-first.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

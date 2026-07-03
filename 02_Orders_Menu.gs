@@ -907,9 +907,11 @@ function _missedOrderSafetyNet(ss, sid, row, phone) {
     const props  = PropertiesService.getScriptProperties();
     const raw    = props.getProperty("PENDING_ORDER_ROWS") || "{}";
     const store  = JSON.parse(raw);
-    // Expire entries older than 10 minutes
+    // Expire entries older than 60 minutes. Was 10 — too short: the 3-Jul ₹104 loss
+    // showed GAS can drop a row AFTER the in-execution verification passed, and the
+    // 10-min backup had already expired by the time anything could re-append it.
     const now    = Date.now();
-    Object.keys(store).forEach(k => { if (now - store[k].ts > 10 * 60 * 1000) delete store[k]; });
+    Object.keys(store).forEach(k => { if (now - store[k].ts > 60 * 60 * 1000) delete store[k]; });
     store[sid]   = { ts: now, phone: String(phone || ""), row: row };
     props.setProperty("PENDING_ORDER_ROWS", JSON.stringify(store));
   } catch(e) {
@@ -1266,20 +1268,25 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
           missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: true });
           _rec.status = "Auto-recovered"; _rec.attempts = okAttempt;
           _logMissedOrderRow(ss, _rec);
-          delete store[sid]; // safely landed → clear from queue
+          // KEEP the entry — a row can vanish again even after a confirmed re-append
+          // (3-Jul ₹104 loss). It stays re-checkable every minute until the 60-min TTL.
         } else {
           console.error("Emergency re-append STILL MISSING for " + sid + " after retries — kept in queue for the next pass.");
           missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: false });
           _rec.status = "STILL MISSING — enter manually"; _rec.attempts = 5;
           _logMissedOrderRow(ss, _rec);
-          // Do NOT delete — leave it in PENDING_ORDER_ROWS so the next submitOrder's
-          // safety-net pass gets another shot before the 10-min TTL drops it.
+          // Kept in PENDING_ORDER_ROWS — the reconciler's 1-min pass retries it.
         }
-      } else {
-        delete store[sid]; // landed on the first write → clear from queue
       }
+      // NOTE: present-and-fine entries are also KEPT (not deleted) for the full 60-min
+      // TTL, so a post-verification drop still has a live backup to re-append from.
+      // TTL pruning below keeps the store from growing.
     });
 
+    // Prune expired entries here too — this function now also runs from the 1-min
+    // reconciler, which must not depend on the next submitOrder call to prune.
+    const _vNow = Date.now();
+    Object.keys(store).forEach(k => { if (_vNow - (store[k].ts || 0) > 60 * 60 * 1000) delete store[k]; });
     props.setProperty("PENDING_ORDER_ROWS", JSON.stringify(store));
 
     if (missed.length > 0) {

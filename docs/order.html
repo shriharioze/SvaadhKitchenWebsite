@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.03.01";
+    const APP_VERSION = "v26.07.03.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11525,24 +11525,40 @@
         });
       });
 
-      try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            _action:        "hdfc_savePendingOrder",
-            order_id:       tempId,
-            phone:          S.phone         || "",
-            amount:         S.grandTotal    || 0,
-            orders:         ordersForServer,
-            selectedDates:  S.selectedDates || [],
-            profile:        S.profile       || {},
-            mealAddrs:      S.mealAddrs     || {},
-            isFirstTime:    S.isFirstTime   || false,
-            payment_choice: String(S.paymentChoice || "Gateway"),
-            wallet_hint:    walletHint
-          })
-        });
-      } catch(_) {}
+      // The stash is the ONLY place the order's ITEMS live until a writer runs — if
+      // this save fails and the customer pays anyway, the money is captured but no
+      // system can ever reconstruct the order (3-Jul ₹104 loss). So HARD-FAIL: verify
+      // the save (2 attempts), and abort the payment if it didn't stick.
+      let _stashSaved = false;
+      for (let _sa = 0; _sa < 2 && !_stashSaved; _sa++) {
+        try {
+          const _sr = await fetch(APPS_SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify({
+              _action:        "hdfc_savePendingOrder",
+              order_id:       tempId,
+              phone:          S.phone         || "",
+              amount:         S.grandTotal    || 0,
+              orders:         ordersForServer,
+              selectedDates:  S.selectedDates || [],
+              profile:        S.profile       || {},
+              mealAddrs:      S.mealAddrs     || {},
+              isFirstTime:    S.isFirstTime   || false,
+              payment_choice: String(S.paymentChoice || "Gateway"),
+              wallet_hint:    walletHint
+            })
+          });
+          const _sd = await _sr.json();
+          _stashSaved = !!(_sd && _sd.success);
+        } catch(_) {}
+      }
+      if (!_stashSaved) {
+        try { popup && popup.close(); } catch(_) {}
+        try { localStorage.removeItem("svaadh_hdfc_popup_active"); } catch(_) {}
+        payBtns.forEach(b => { b.disabled = false; b.innerHTML = origBtnHtml[b.id] || b.innerHTML; });
+        await sAlert("We couldn't prepare your order for payment (network hiccup). Nothing was charged — please tap Pay again.", "Please try again", "📶");
+        return;
+      }
 
       try {
         const res = await fetch(APPS_SCRIPT_URL, {
@@ -12033,7 +12049,23 @@
         const bulkPayload = { plan: BK.plan };
         if (dinner.length) bulkPayload.dinner = { items: dinner };
         if (lunch.length) bulkPayload.lunch = { items: lunch };
-        await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_savePendingOrder", order_id: tempId, phone: S.phone, amount: total, bulk: bulkPayload, profile: S.profile }) });
+        // Stash is the ONLY holder of the batch items — verify the save stuck (2 tries)
+        // and ABORT payment if not, same as the regular flow.
+        let _bkStashed = false;
+        for (let _sa = 0; _sa < 2 && !_bkStashed; _sa++) {
+          try {
+            const _sr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_savePendingOrder", order_id: tempId, phone: S.phone, amount: total, bulk: bulkPayload, profile: S.profile }) });
+            const _sd = await _sr.json();
+            _bkStashed = !!(_sd && _sd.success);
+          } catch (_) {}
+        }
+        if (!_bkStashed) {
+          S.bulkBusy = false;
+          try { popup && popup.close(); } catch (_) {}
+          try { localStorage.removeItem("svaadh_hdfc_popup_active"); } catch (_) {}
+          await sAlert("We couldn't prepare your bulk order for payment (network hiccup). Nothing was charged — please tap Pay again.", "Please try again", "📶");
+          return;
+        }
         const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_createSession", phone: S.phone, name: (S.profile && S.profile.name) || "Customer", amount: total, order_id: tempId, description: "Svaadh Bulk " + (BULK_PLAN_LABEL[BK.plan] || "") + " - " + S.phone }) });
         const data = await res.json();
         S.bulkBusy = false;
