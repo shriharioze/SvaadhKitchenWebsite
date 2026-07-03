@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.1; // 2026-06-30: delivery-cap Enkin match is now CONTAINS ("Enkin Kumar"/"Enkin 2" count as the one Enkin slot + bypass the cap) in _countActiveMealOrders + submitOrder guard + order.html gate — was exact-match "enkin" only. Cap flow verified end-to-end (count collapse Enkin/IA=1, pickup/porter excluded, free areas allowed, piggyback). (24.0: stock counting fix.)
+const CODE_VERSION   = 24.2; // 2026-07-03: society ALIAS layer for the cap piggyback — _normSocietyKey now maps through the admin-managed SK_Society_Aliases tab (Alias→Canonical, base-normalized, 5-min cache) so real spelling variants ("Jasminium"→"Jasminum") match one society. setupSocietyAliasTab() creates the tab; listDistinctSocieties() (+ ?action=listSocieties) audits every spelling in SK_Orders/SK_Customers for building the list. (24.1: Enkin contains-match.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
 // ── PAYMENT GATEWAY CONFIG ───────────────────────────────────

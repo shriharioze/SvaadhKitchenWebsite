@@ -281,10 +281,98 @@ function getWalletTransactions(phone) {
 }
 
 // ── GET MENU ─────────────────────────────────────────────────
-// Normalize a society/building name for LENIENT matching (lowercase + drop all
-// non-alphanumerics) so "Pentagon 1" / "pentagon-1" / "Pentagon1" all match.
-function _normSocietyKey(s) {
+// Base-normalize a society/building name (lowercase + drop all non-alphanumerics)
+// so "Pentagon 1" / "pentagon-1" / "Pentagon1" all match.
+function _normSocietyBase(s) {
   return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// SOCIETY ALIAS MAP — admin-managed SK_Society_Aliases tab (Alias | Canonical), one
+// row per alternate spelling: e.g. "Jasminium" → "Jasminum", "Pentagon-I" →
+// "Pentagon 1". Both sides are base-normalized, so only REAL spelling differences
+// need rows (spacing/case/punctuation are already handled by _normSocietyBase).
+// Cached 5 min (CacheService) + per-execution memo, so the hot per-row loops in
+// _activeDeliveryIndex never re-read the sheet. Run setupSocietyAliasTab() once
+// from the editor to create the tab.
+var _socAliasMemo = null;
+function _societyAliasMap() {
+  if (_socAliasMemo) return _socAliasMemo;
+  try {
+    const hit = CacheService.getScriptCache().get("society_aliases_v1");
+    if (hit !== null) { _socAliasMemo = JSON.parse(hit); return _socAliasMemo; }
+  } catch (_) {}
+  const map = {};
+  try {
+    const ws = getSpreadsheet().getSheetByName("SK_Society_Aliases");
+    if (ws && ws.getLastRow() > 1) {
+      ws.getRange(2, 1, ws.getLastRow() - 1, 2).getValues().forEach(function (r) {
+        const alias = _normSocietyBase(r[0]);
+        const canon = _normSocietyBase(r[1]);
+        if (alias && canon && alias !== canon) map[alias] = canon;
+      });
+    }
+  } catch (_) {}
+  _socAliasMemo = map;
+  try { CacheService.getScriptCache().put("society_aliases_v1", JSON.stringify(map), 300); } catch (_) {}
+  return map;
+}
+
+// One-time (editor): create the alias tab with headers + an example row.
+function setupSocietyAliasTab() {
+  const ss = getSpreadsheet();
+  let ws = ss.getSheetByName("SK_Society_Aliases");
+  if (!ws) {
+    ws = ss.insertSheet("SK_Society_Aliases");
+    ws.getRange(1, 1, 1, 2).setValues([["Alias", "Canonical"]]);
+    ws.getRange(2, 1, 1, 2).setValues([["Jasminium", "Jasminum"]]);
+  }
+  try { CacheService.getScriptCache().remove("society_aliases_v1"); } catch (_) {}
+  return "SK_Society_Aliases ready — one row per alternate spelling (Alias → Canonical). Changes go live within ~5 min.";
+}
+
+// Canonical matching key: base-normalize, then map through the alias table.
+// "Jasminium"→"jasminium"→(alias row)→"jasminum" — same key as "Jasminum".
+function _normSocietyKey(s) {
+  const base = _normSocietyBase(s);
+  if (!base) return "";
+  const map = _societyAliasMap();
+  return map[base] || base;
+}
+
+// AUDIT (editor or ?action=listSocieties): every distinct society/building spelling
+// seen in SK_Orders + SK_Customers, grouped by base-normalized key so variants that
+// differ only in case/spacing/punctuation cluster together. Spelling variants that
+// DON'T cluster (e.g. "Jasminium" vs "Jasminum") appear as separate groups — those
+// are the ones needing an SK_Society_Aliases row. Sorted by usage.
+function listDistinctSocieties() {
+  const ss = getSpreadsheet();
+  const variants = {}; // baseKey → { spelling → {orders, customers} }
+  const bump = function (name, field) {
+    const raw = String(name || "").trim().replace(/\s+/g, " ");
+    if (!raw) return;
+    const key = _normSocietyBase(raw);
+    if (!key) return;
+    if (!variants[key]) variants[key] = {};
+    if (!variants[key][raw]) variants[key][raw] = { orders: 0, customers: 0 };
+    variants[key][raw][field]++;
+  };
+  try { getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS)).forEach(function (r) {
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    bump(r.Society, "orders");
+  }); } catch (_) {}
+  try { getAllRows(getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS)).forEach(function (r) {
+    bump(r.Society, "customers");
+  }); } catch (_) {}
+
+  const aliasMap = _societyAliasMap();
+  const groups = Object.keys(variants).map(function (key) {
+    const names = Object.keys(variants[key]).map(function (nm) {
+      return { name: nm, orders: variants[key][nm].orders, customers: variants[key][nm].customers };
+    }).sort(function (a, b) { return (b.orders + b.customers) - (a.orders + a.customers); });
+    const tot = names.reduce(function (s, x) { return s + x.orders + x.customers; }, 0);
+    return { key: key, aliasedTo: aliasMap[key] || "", totalUses: tot, spellings: names };
+  }).sort(function (a, b) { return b.totalUses - a.totalUses; });
+  return { groups: groups, count: groups.length };
 }
 // For one date, per meal, the sets of normalized societies AND normalized phones
 // we ALREADY have an active DELIVERY order for. Lets a customer through the

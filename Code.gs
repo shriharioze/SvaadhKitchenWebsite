@@ -237,6 +237,7 @@ function doGet(e) {
     if (action === "getWalletValue") return jsonRes({wallet_balance: _calculateWalletBalance(p.phone)});
     if (action === "getWalletTransactions") return jsonRes(getWalletTransactions(p.phone));
     if (action === "getDayTotalsForDates") return jsonRes(getDayTotalsForDates(p.phone, p.dates));
+    if (action === "listSocieties") return jsonRes(listDistinctSocieties()); // admin audit: distinct society spellings (for SK_Society_Aliases)
 
     // ── IntentAmplify (corporate channel) — GET ────────────────
     if (action === "ia_config")          return jsonRes(ia_config());
