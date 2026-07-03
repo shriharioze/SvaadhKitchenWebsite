@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.06.30.02";
+    const APP_VERSION = "v26.07.03.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9214,18 +9214,37 @@
     // re-serve the old file. On mismatch we show a confirmation; "Update now" hard-refreshes
     // to the new build — the SAME action as the drawer "tap to update". Once per session.
     async function _promptUpdateIfStale() {
-      try { if (sessionStorage.getItem("sk_update_prompted") === "1") return; } catch (_) {}
       try { await checkAppVersion(); } catch (_) { return; }
       if (_updateAvailable !== true) return;
-      try { sessionStorage.setItem("sk_update_prompted", "1"); } catch (_) {}
-      const ok = await sConfirm(
-        "A newer version of Svaadh Kitchen is ready — with our latest fixes and secure one-tap UPI payment.<br><br>Please click below to update to the latest version.",
-        "Update available", "⬆️", "",
-        { confirmLabel: "Update to latest", cancelLabel: "Later" }
-      );
-      if (!ok) return;
+      // NEVER interrupt an in-flight payment (popup open / gateway pending / bulk).
+      try { if (localStorage.getItem("svaadh_hdfc_popup_active")) return; } catch (_) {}
+      if (S.bulkPayActive || S.bulkBusy) return;
       const base = window.location.href.split("#")[0];
       const sep  = base.indexOf("?") === -1 ? "?" : "&";
+      // Cart empty → SILENT auto-update (how big sites do it): reload straight onto
+      // the new build, no prompt. Loop guard: at most one auto-reload per 10 min so a
+      // stubborn cache can't reload-loop the customer.
+      let cartFull = false;
+      try { cartFull = (typeof hasAnyOrder === "function" && hasAnyOrder()); } catch (_) {}
+      if (!cartFull) { try { cartFull = Object.keys(JSON.parse(localStorage.getItem("sk_orders") || "{}")).length > 0; } catch (_) {} }
+      if (!cartFull) {
+        try {
+          const last = Number(localStorage.getItem("sk_auto_upd_ts") || 0);
+          if (Date.now() - last < 10 * 60 * 1000) return;
+          localStorage.setItem("sk_auto_upd_ts", String(Date.now()));
+        } catch (_) {}
+        window.location.replace(base + sep + "_v=" + Date.now()); // silent hard refresh
+        return;
+      }
+      // Cart has items — a reload would clear it, so ASK (once per session).
+      try { if (sessionStorage.getItem("sk_update_prompted") === "1") return; } catch (_) {}
+      try { sessionStorage.setItem("sk_update_prompted", "1"); } catch (_) {}
+      const ok = await sConfirm(
+        "A newer version of Svaadh Kitchen is ready — with our latest fixes and secure one-tap UPI payment.<br><br>Updating will clear the items in your cart — you can also finish this order first; we'll update automatically afterwards.",
+        "Update available", "⬆️", "",
+        { confirmLabel: "Update to latest", cancelLabel: "Finish my order first" }
+      );
+      if (!ok) return;
       window.location.replace(base + sep + "_v=" + Date.now()); // hard refresh to the new build
     }
 
@@ -11789,24 +11808,41 @@
         settle_all: false
       };
 
-      try {
-        const res  = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) });
-        const data = await res.json();
-        sLoading(false);
-        if (data.success) {
-          S.isPlaced = true;
-          S.paidViaGateway = true; // settled via HDFC — hide the manual Pay-via-UPI card
-          showSuccess(data.submissionId || gatewayOrderId);
-        } else {
-          throw new Error(data.error || "Order submission failed after payment.");
+      // Idempotency key: submitOrder replays the SAME response for a repeated
+      // request_id, so the silent retries below can never double-write the order
+      // (and the reconciler additionally dedups on gateway_order_id).
+      payload.request_id = "gw_" + gatewayOrderId;
+
+      // Busy-burst handling: when 2–3 orders land together, the first attempt can
+      // time out on the server lock. Retry silently twice (3s apart) — the retry
+      // usually succeeds once the burst clears.
+      let placed = null, lastErr = null;
+      for (let attempt = 0; attempt < 3 && !placed; attempt++) {
+        if (attempt > 0) {
+          sLoading(true, "Busy moment — confirming your order…");
+          await new Promise(r => setTimeout(r, 3000));
         }
-      } catch (err) {
-        sLoading(false);
-        await sAlert(
-          "✅ Your payment was received — it's safe, nothing went wrong.\n\nThis happens sometimes when a few orders come in together: yours is in the queue and can take a minute or two to show up. Please wait 1–2 minutes, then open the ☰ menu → Manage Orders — your order will appear there.\n\n🔒 Please DO NOT pay or place the order again.\n\nIf it's still not showing after a few minutes, WhatsApp us at +91 93222 46765 (Phone: " + S.phone + " · Order ID: " + gatewayOrderId + ") and we'll confirm it for you.",
-          "Payment received ✓", "⏳"
-        );
+        try {
+          const res  = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) });
+          const data = await res.json();
+          if (data.success) placed = data;
+          else lastErr = new Error(data.error || "Order submission failed after payment.");
+        } catch (err) { lastErr = err; }
       }
+      sLoading(false);
+      S.isPlaced = true;
+      S.paidViaGateway = true; // settled via HDFC — hide the manual Pay-via-UPI card
+      if (placed) {
+        showSuccess(placed.submissionId || gatewayOrderId);
+        return;
+      }
+      // Still not confirmed (heavy burst / timeout). The payment IS captured and the
+      // reconciler writes the order within minutes — so never dead-end the customer
+      // with "contact us". Show the standard verify modal: it polls getCustomerOrders
+      // for ~3 minutes and flips to the real success screen the moment the row lands
+      // (its own timeout message carries the WhatsApp fallback).
+      console.warn("hdfc_submitVerifiedOrder: not confirmed after retries", lastErr);
+      showOrderVerifyModal(orders);
     }
 
     /* ─── END HDFC FRONTEND INTEGRATION ─────────────────────── */
@@ -12115,9 +12151,26 @@
       applyThemeIcon();
       hdfc_init();   // Check gateway config + handle any HDFC return URL params
 
-      // Catch customers stuck on an old cached build (manual pay / no gateway): after the
-      // page settles, do a LIVE version check and prompt them to update to the latest.
+      // Keep EVERYONE on the latest build (the pattern real-time sites use: poll a
+      // version source + auto-swap when idle):
+      //  • 2.5s after load — catches stale caches on arrival
+      //  • whenever the tab returns to the foreground — catches phones re-opening a
+      //    days-old tab (the biggest source of stuck-on-old-version customers)
+      //  • every 15 minutes while open
+      // _promptUpdateIfStale auto-reloads SILENTLY when the cart is empty; only asks
+      // when a reload would clear a filled cart; never interrupts an active payment.
       setTimeout(function () { try { _promptUpdateIfStale(); } catch (_) {} }, 2500);
+      let _lastVerCheckTs = Date.now();
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState !== "visible") return;
+        if (Date.now() - _lastVerCheckTs < 5 * 60 * 1000) return; // throttle
+        _lastVerCheckTs = Date.now();
+        try { _promptUpdateIfStale(); } catch (_) {}
+      });
+      setInterval(function () {
+        _lastVerCheckTs = Date.now();
+        try { _promptUpdateIfStale(); } catch (_) {}
+      }, 15 * 60 * 1000);
 
       // Refresh nudge is shown when user reaches the calendar (step 2) — see updateNav()
 

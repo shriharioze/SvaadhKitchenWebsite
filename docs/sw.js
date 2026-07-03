@@ -1,4 +1,4 @@
-const CACHE_NAME = 'svaadh-cache-v2';
+const CACHE_NAME = 'svaadh-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -33,16 +33,24 @@ self.addEventListener('activate', event => {
 // NEVER intercept API calls (script.google.com) — causes "null response" failures.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  
+
   const url = event.request.url;
   // Skip all cross-origin / API requests — let browser handle them natively
-  if (url.includes('script.google.com') || url.includes('macros/s/') 
+  if (url.includes('script.google.com') || url.includes('macros/s/')
       || !url.startsWith(self.location.origin)) {
     return; // don't call event.respondWith — browser handles it
   }
-  
+
+  // Page navigations bypass the browser HTTP cache (cache:'no-cache' forces an
+  // ETag revalidation with GitHub Pages — a cheap 304 when unchanged) so a new
+  // deploy reaches every customer on their NEXT page load instead of being pinned
+  // by the ~10-minute Pages cache. Offline still falls back to the SW cache.
+  const isNav = event.request.mode === 'navigate';
+  const netFetch = isNav
+    ? fetch(event.request.url, { cache: 'no-cache' })
+    : fetch(event.request);
   event.respondWith(
-    fetch(event.request)
+    netFetch
       .catch(() => caches.match(event.request))
       .then(response => response || fetch(event.request))
   );
