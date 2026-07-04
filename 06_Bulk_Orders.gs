@@ -368,14 +368,20 @@ function submitBulkOrder(body) {
   const _fmtD = function (v) { return v instanceof Date ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd") : String(v || "").trim().slice(0, 10); };
   const existingKeys = {};
   if (gatewayOrderId) {
-    const _gCol = hIdx["Gateway_Order_ID"], _dCol = hIdx["Order_Date"], _mCol = hIdx["Meal_Type"];
+    const _gCol = hIdx["Gateway_Order_ID"], _dCol = hIdx["Order_Date"], _mCol = hIdx["Meal_Type"], _wcCol = hIdx["Wallet_Credit"];
     if (_gCol && _dCol && _mCol) {
       const _data = ordersWs.getDataRange().getValues();
+      let _alreadyWalletCredited = 0;
       for (let _i = 1; _i < _data.length; _i++) {
         if (String(_data[_i][_gCol - 1] || "").trim() === gatewayOrderId) {
           existingKeys[_fmtD(_data[_i][_dCol - 1]) + "|" + String(_data[_i][_mCol - 1] || "").trim()] = true;
+          if (_wcCol) _alreadyWalletCredited += Number(_data[_i][_wcCol - 1]) || 0;
         }
       }
+      // Split partial-retry safety: earlier rows of THIS batch already consumed part of
+      // the wallet_applied budget. Reduce the remaining budget by what they took so a
+      // completing retry can never re-spend it (would over-debit the wallet).
+      if (_isSplitPay && _alreadyWalletCredited > 0) _splitBudget = Math.max(0, _splitBudget - _alreadyWalletCredited);
     }
   }
 
