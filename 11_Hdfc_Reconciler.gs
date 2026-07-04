@@ -178,6 +178,7 @@ function _reconcileSingleEntry(orderId, entry) {
     // (The Gateway_Order_ID dedup above already short-circuits if rows exist;
     // submitBulkOrder is also idempotent on gateway_order_id as a backstop.)
     if (entry.bulk) {
+      const _bulkIsSplit = String(entry.payment_choice || "") === "Split";
       const bulkResult = submitBulkOrder({
         plan:             entry.bulk.plan,
         phone:            entry.phone,
@@ -186,8 +187,9 @@ function _reconcileSingleEntry(orderId, entry) {
         dinner:           entry.bulk.dinner,
         lunchDates:       entry.bulk.lunchDates,   // frozen at checkout (matches the charge)
         dinnerDates:      entry.bulk.dinnerDates,
-        payment_method:   "Bulk (Gateway)",
+        payment_method:   _bulkIsSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)",
         payment_status:   "Paid",
+        wallet_applied:   _bulkIsSplit ? Number(entry.wallet_applied || 0) : 0,
         gateway_order_id: orderId,   // shared id on every batch row (dedup + refunds)
         batch_id:         orderId    // one gateway charge == one batch
       });

@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.03.02";
+    const APP_VERSION = "v26.07.03.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -12019,16 +12019,101 @@
         + '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;color:#b45309;padding:8px 2px 2px;border-top:2px solid #eee;"><span>Grand Total</span><span>₹' + q.total + '</span></div>'
         + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + ' with bulk</div>'
         + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 If you cancel a day, that meal\'s bulk discount comes off the refund (lunch &amp; dinner are independent). Sabji is the chef\'s choice each day.</div></div>';
-      const foot = '<div style="padding:13px 16px;border-top:1px solid #eee;display:flex;gap:10px;">'
+      // Payment routing — mirrors the regular order flow: On-Account users are billed
+      // later (never forced to pay); a wallet balance is used first (full → wallet only,
+      // partial → split with the gateway); otherwise the gateway. An On-Account customer
+      // with wallet can opt to apply it against the bill.
+      const _wb = Math.max(0, Number(S.walletBalance) || 0);
+      const _isOnAcct = !!(S.profile && S.profile.onAccount === "Yes");
+      const _btn = (onclick, label, grad) => '<button onclick="' + onclick + '" style="flex:1;padding:11px 16px;border:none;border-radius:10px;background:' + (grad || 'linear-gradient(135deg,#f59e0b,#ea580c)') + ';color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;">' + label + '</button>';
+      let _note = "", _primary;
+      if (_isOnAcct) {
+        if (_wb > 0) {
+          _note = '<label style="display:flex;align-items:center;gap:8px;font-size:0.75rem;color:#0d47a1;background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:9px 11px;margin-bottom:10px;cursor:pointer;line-height:1.4;"><input type="checkbox" id="bulkUseWallet" checked style="width:16px;height:16px;flex-shrink:0;">Use my wallet balance (₹' + _wb + ') against this bill — the rest goes on account</label>';
+        }
+        _primary = _btn("bulk_placeDirect('OnAccount')", '🧾 Place on Account', 'linear-gradient(135deg,#1565c0,#0d47a1)');
+      } else if (_wb >= q.total && q.total > 0) {
+        _note = '<div style="font-size:0.72rem;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:8px 11px;margin-bottom:10px;">👛 Wallet balance ₹' + _wb + ' covers this order in full.</div>';
+        _primary = _btn("bulk_placeDirect('Wallet')", '👛 Pay ₹' + q.total + ' from Wallet', 'linear-gradient(135deg,#166534,#16a34a)');
+      } else if (_wb > 0 && q.total > 0) {
+        const _due = q.total - _wb;
+        _note = '<div style="font-size:0.72rem;color:#92400e;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:8px 11px;margin-bottom:10px;">Split: ₹' + _wb + ' from wallet + ₹' + _due + ' online.</div>';
+        _primary = _btn("bulk_pay(" + q.total + ",'Split')", '🔒 Pay ₹' + _due + ' (₹' + _wb + ' wallet)');
+      } else {
+        _primary = _btn("bulk_pay(" + q.total + ",'Gateway')", '🔒 Pay ₹' + q.total);
+      }
+      const foot = '<div style="padding:13px 16px;border-top:1px solid #eee;">' + _note
+        + '<div style="display:flex;gap:10px;">'
         + '<button onclick="_bulkRenderItems()" style="padding:11px 16px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;font-size:0.85rem;cursor:pointer;">← Back</button>'
-        + '<button onclick="bulk_pay(' + q.total + ')" style="flex:1;padding:11px 16px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;">🔒 Pay ₹' + q.total + '</button></div>';
+        + _primary + '</div></div>';
       _bulkRender(head + body + foot);
+    }
+
+    // Direct placement (NO gateway) — On Account and full-Wallet bulk orders. The rows
+    // are written synchronously by submitBulkDirect (server recomputes the total, checks
+    // the wallet, and — for On Account + "use wallet" — applies the balance via the same
+    // routine the regular flow uses). Idempotent on request_id; then the standard success
+    // screen runs (rows already exist, so its verify poll confirms instantly).
+    async function bulk_placeDirect(mode) {
+      if (S.bulkBusy) return; S.bulkBusy = true; _bulkPlacedShown = false;
+      const useWallet = !!(document.getElementById("bulkUseWallet") && document.getElementById("bulkUseWallet").checked);
+      _bulkRender('<div style="padding:34px 24px;text-align:center;"><div style="font-size:2.2rem;">⏳</div>'
+        + '<div style="font-weight:800;font-size:1.05rem;color:#0369a1;margin:10px 0 6px;">Placing your bulk order…</div>'
+        + '<div style="font-size:0.82rem;color:#555;line-height:1.6;">Booking each day of your order. Please keep this window open.</div>'
+        + '<div style="margin-top:14px;color:#0284c7;letter-spacing:3px;">● ● ●</div></div>');
+      const mm = document.getElementById("bulkModal"); if (mm) mm.style.display = "flex";
+      const lunch = _bulkItemsArr("Lunch"), dinner = _bulkItemsArr("Dinner");
+      const payload = { _action: "submitBulkDirect", plan: BK.plan, phone: S.phone, profile: S.profile,
+        mode: mode, use_wallet: useWallet,
+        request_id: "bd_" + S.phone + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8) };
+      if (dinner.length) payload.dinner = { items: dinner };
+      if (lunch.length) payload.lunch = { items: lunch };
+      let placed = null, lastErr = "";
+      for (let i = 0; i < 3 && !placed; i++) {
+        try {
+          const r = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) });
+          const d = await r.json();
+          if (d && d.success) { placed = d; break; }
+          lastErr = (d && d.error) || "";
+          if (/insufficient/i.test(lastErr)) break; // hard reject — don't retry
+        } catch (_) {}
+        if (!placed) await new Promise(res => setTimeout(res, 2500));
+      }
+      S.bulkBusy = false;
+      if (!placed) {
+        closeBulkFlow();
+        await sAlert(/insufficient/i.test(lastErr)
+          ? "Your wallet balance no longer covers the full amount — please pick another payment option."
+          : "We couldn't place your bulk order just now. Nothing was charged — please try again in a moment.",
+          "Couldn't place order", "⚠️");
+        return;
+      }
+      _bulkPlacedShown = true;
+      try {
+        const q = BK.quote || { rows: [] };
+        S.orders = {}; const _dates = [];
+        (q.rows || []).forEach(function (r) {
+          if (!S.orders[r.date]) { S.orders[r.date] = {}; _dates.push(r.date); }
+          S.orders[r.date][r.meal] = { items: Object.assign({}, BK.items[r.meal] || {}), subtotal: r.food };
+        });
+        S.selectedDates = _dates.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort();
+        S.grandTotal = q.total || 0;
+        S.paymentChoice = (mode === "Wallet") ? "Wallet" : "OnAccount";
+        S.isPlaced = true;
+      } catch (_) {}
+      closeBulkFlow();
+      const _oid = placed.batch_id || ("BULK-" + Date.now());
+      if (typeof showSuccess === "function") showSuccess(_oid);
+      else toast("Bulk order placed — check Manage Orders.");
+      if (placed.settle_msg) setTimeout(function () { toast(placed.settle_msg, 6000); }, 900);
     }
 
     // Payment — reuses the HDFC popup + savePendingOrder/createSession. The bulk batch
     // is stashed (windows frozen server-side); S.bulkPayActive diverts hdfc_submitVerifiedOrder
     // to bulk_afterPaid, which finalizes (instant write) + confirms + shows the success screen.
-    async function bulk_pay(total) {
+    async function bulk_pay(total, mode) {
+      const _isSplit = (mode === "Split");
+      const _walletHint = _isSplit ? Math.min(Math.max(0, Number(S.walletBalance) || 0), total) : 0;
       if (S.bulkBusy) return; S.bulkBusy = true; _bulkPlacedShown = false;
       const _w = (screen && screen.availWidth) ? screen.availWidth : 1280, _h = (screen && screen.availHeight) ? screen.availHeight : 800;
       const popup = window.open("about:blank", "hdfc_payment", "width=" + _w + ",height=" + _h + ",top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes");
@@ -12054,7 +12139,7 @@
         let _bkStashed = false;
         for (let _sa = 0; _sa < 2 && !_bkStashed; _sa++) {
           try {
-            const _sr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_savePendingOrder", order_id: tempId, phone: S.phone, amount: total, bulk: bulkPayload, profile: S.profile }) });
+            const _sr = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_savePendingOrder", order_id: tempId, phone: S.phone, amount: total, bulk: bulkPayload, profile: S.profile, payment_choice: (_isSplit ? "Split" : "Gateway"), wallet_hint: _walletHint }) });
             const _sd = await _sr.json();
             _bkStashed = !!(_sd && _sd.success);
           } catch (_) {}
@@ -12066,7 +12151,7 @@
           await sAlert("We couldn't prepare your bulk order for payment (network hiccup). Nothing was charged — please tap Pay again.", "Please try again", "📶");
           return;
         }
-        const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_createSession", phone: S.phone, name: (S.profile && S.profile.name) || "Customer", amount: total, order_id: tempId, description: "Svaadh Bulk " + (BULK_PLAN_LABEL[BK.plan] || "") + " - " + S.phone }) });
+        const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "hdfc_createSession", phone: S.phone, name: (S.profile && S.profile.name) || "Customer", amount: total, order_id: tempId, description: "Svaadh Bulk " + (BULK_PLAN_LABEL[BK.plan] || "") + " - " + S.phone, payment_choice: (_isSplit ? "Split" : "Gateway"), wallet_hint: _walletHint }) });
         const data = await res.json();
         S.bulkBusy = false;
         if (!data.success || !data.payment_url) { try { popup && popup.close(); } catch (_) {} await sAlert(data.error || "Couldn't start the payment session. Please try again.", "Payment Error", "⚠️"); return; }

@@ -329,7 +329,7 @@ function submitBulkOrder(body) {
   // Write rows
   const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const hIdx = headerIndex(ordersWs);
-  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback"].forEach(function (col) {
+  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Wallet_Credit"].forEach(function (col) {
     if (!hIdx[col]) { ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue(col); hIdx[col] = ordersWs.getLastColumn(); }
   });
 
@@ -337,6 +337,20 @@ function submitBulkOrder(body) {
   const paymentMethod = String(body.payment_method || "Bulk (Gateway)");
   const paymentStatus = String(body.payment_status || "Paid");
   const gatewayOrderId = String(body.gateway_order_id || "");
+
+  // ── Wallet / Split per-row deduction (mirrors submitOrder's per-meal logic) ──
+  //   "Wallet"            → deduct each row's net from SK_Wallet (balance re-checked
+  //                         live) → row becomes "Wallet Paid", carries Wallet_Credit.
+  //   "Bulk (Split HDFC)" → spend a SERVER-AUTHORITATIVE budget (wallet_applied,
+  //                         validated in hdfc_createSession) across rows; the gateway
+  //                         captured the remainder → rows stay "Paid" + Wallet_Credit.
+  //   "On Account"        → rows are "On Account" (wallet applied later by
+  //                         _autoSettlePendingOrders). No wallet touched here.
+  // Idempotent: a retry skips already-written (date|meal) rows below, so no re-debit.
+  const _isWalletPay = (paymentMethod === "Wallet");
+  const _isSplitPay  = (paymentMethod === "Bulk (Split HDFC)" || paymentMethod === "Split (HDFC)");
+  const _walletRows  = (_isWalletPay || _isSplitPay) ? getAllRows(getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS)) : null;
+  let   _splitBudget = _isSplitPay ? Math.max(0, Number(body.wallet_applied || 0)) : 0;
   const submittedAt = getISTTimestamp();
   const bulkNote = String(body.notesKitchen || "Bulk order - sabji of the day (chef's choice)");
 
@@ -395,8 +409,35 @@ function submitBulkOrder(body) {
     set("Net_Total", r.net);
     set("Inflation_Surcharge", 0);
     set("Loyalty_Discount", "No");
+
+    // Per-row wallet deduction / status (see the block above submitBulkOrder's loop).
+    let _rowStatus = paymentStatus, _rowWalletCredit = 0;
+    if (_isWalletPay) {
+      const _bal = _calculateWalletBalance(phone, _walletRows);
+      if (_bal >= r.net) {
+        _appendWalletTransaction(phone, name, "Bulk Order Deduction", r.net, true, sid);
+        _walletRows.push({ Phone: _normalizePhone(phone), Txn_Type: "Order Deduction", Amount: r.net, Verified: "TRUE" });
+        _rowStatus = "Wallet Paid"; _rowWalletCredit = r.net;
+      } else {
+        _rowStatus = "Pending"; // insufficient (should never happen — submitBulkDirect pre-checks the full total)
+      }
+    } else if (_isSplitPay) {
+      const _want = Math.min(_splitBudget, r.net);
+      if (_want > 0) {
+        const _bal = _calculateWalletBalance(phone, _walletRows);
+        const _deduct = Math.min(_want, _bal);
+        if (_deduct > 0) {
+          _appendWalletTransaction(phone, name, "Bulk Order Deduction (Wallet Part — Gateway Split)", _deduct, true, sid);
+          _walletRows.push({ Phone: _normalizePhone(phone), Txn_Type: "Order Deduction", Amount: _deduct, Verified: "TRUE" });
+          _rowWalletCredit = _deduct; _splitBudget -= _deduct;
+        }
+      }
+      _rowStatus = "Paid"; // gateway captured the remainder
+    }
+
     set("Payment_Method", paymentMethod);
-    set("Payment_Status", paymentStatus);
+    set("Payment_Status", _rowStatus);
+    if (_rowWalletCredit > 0) set("Wallet_Credit", _rowWalletCredit);
     set("Source", "Bulk");
     set("Gateway_Order_ID", gatewayOrderId);
     set("Batch_ID", batchId);
@@ -540,6 +581,74 @@ function testBulkCancelSequence() {
   return { paid: paid, totalRefund: totalRefund, match: paid === totalRefund };
 }
 
+// Direct (NON-gateway) bulk placement — On Account and full-Wallet payments, which
+// need no HDFC popup (mirrors the regular flow: On-Account users are billed later;
+// a full wallet just debits SK_Wallet). body: { plan, phone, profile, lunch, dinner,
+// mode:"OnAccount"|"Wallet", use_wallet?:bool, request_id }.
+//   • Server recomputes the authoritative total (client amount is never trusted).
+//   • Wallet mode HARD-CHECKS the live balance covers the FULL total before writing a
+//     single row (so we never leave a half-paid batch); rows become "Wallet Paid".
+//   • On Account writes rows "On Account"; if use_wallet, _autoSettlePendingOrders then
+//     applies any existing wallet balance whole-order (the same routine the regular
+//     flow uses on wallet top-up), so an on-account customer's wallet is spent first.
+//   • Idempotent on request_id (CacheService, 5 min) so a retry/double-tap can't
+//     double-write or double-debit. Freezes the date windows like the gateway path.
+function submitBulkDirect(body) {
+  body = body || {};
+  const phone = _normalizePhone(body.phone || (body.profile && body.profile.phone) || "");
+  if (!phone) return { success: false, error: "Missing phone." };
+  const mode = String(body.mode || "").trim();
+  if (mode !== "OnAccount" && mode !== "Wallet") return { success: false, error: "Unknown bulk payment mode." };
+
+  const _cache = CacheService.getScriptCache();
+  const _reqId = String(body.request_id || "");
+  if (_reqId) { const hit = _cache.get("bulkdirect_" + _reqId); if (hit) { try { return JSON.parse(hit); } catch (_) {} } }
+
+  // Serialize wallet reads/writes (submitBulkOrder isn't self-locked; the regular flow
+  // locks all of submitOrder). Prevents a concurrent order double-spending the wallet.
+  const _lock = LockService.getScriptLock();
+  try { _lock.waitLock(20000); } catch (_) { return { success: false, error: "Server busy — please try again." }; }
+  try {
+    // Re-check the idempotency cache now that we hold the lock (a racing twin may have
+    // just written + cached the response).
+    if (_reqId) { const hit2 = _cache.get("bulkdirect_" + _reqId); if (hit2) { try { return JSON.parse(hit2); } catch (_) {} } }
+    return _submitBulkDirectLocked(body, phone, mode, _cache, _reqId);
+  } finally {
+    try { _lock.releaseLock(); } catch (_) {}
+  }
+}
+
+function _submitBulkDirectLocked(body, phone, mode, _cache, _reqId) {
+  // Server-authoritative pricing + FROZEN windows (identical basis to the gateway path).
+  const fc = _bulkFeeCtx(phone, body.profile || {});
+  const q = _bulkComputeBatch(String(body.plan || ""),
+    body.lunch && body.lunch.items, body.dinner && body.dinner.items, fc.ctx, null);
+  if (q.error) return { success: false, error: q.error };
+  const total = q.total;
+  const frozen = { lunchDates: q.lunch ? q.lunch.dates : [], dinnerDates: q.dinner ? q.dinner.dates : [] };
+
+  let out;
+  if (mode === "Wallet") {
+    const bal = _calculateWalletBalance(phone);
+    if (bal < total) return { success: false, error: "Insufficient wallet balance for the full bulk total.", wallet_balance: bal, total: total };
+    out = submitBulkOrder(Object.assign({}, body, {
+      payment_method: "Wallet", payment_status: "Wallet Paid",
+      lunchDates: frozen.lunchDates, dinnerDates: frozen.dinnerDates
+    }));
+  } else { // OnAccount
+    out = submitBulkOrder(Object.assign({}, body, {
+      payment_method: "On Account", payment_status: "On Account",
+      lunchDates: frozen.lunchDates, dinnerDates: frozen.dinnerDates
+    }));
+    if (out && out.success && body.use_wallet) {
+      try { const s = _autoSettlePendingOrders(phone); if (s && s.msg) out.settle_msg = s.msg; } catch (_) {}
+    }
+  }
+  if (out) { out.total = total; out.mode = mode; }
+  if (_reqId && out && out.success) { try { _cache.put("bulkdirect_" + _reqId, JSON.stringify(out), 300); } catch (_) {} }
+  return out;
+}
+
 // Frontend-triggered finalize for a bulk gateway order — mirrors the order page's
 // post-payment submit so the batch is written INSTANTLY (not on the ~2-min reconciler
 // sweep). Reads the FROZEN bulk stash, verifies the charge (Status API, webhook-log
@@ -574,11 +683,15 @@ function hdfc_finalizeBulkOrder(body) {
   if (!sc.confirmed && typeof _checkWebhookLogForCharge === "function" && _checkWebhookLogForCharge(orderId)) sc = { confirmed: true };
   if (!sc.confirmed) return { success: false, pending: true, message: "Payment not yet confirmed — will retry." };
 
+  // Split (Wallet + HDFC): the gateway only charged (total − wallet_applied). Pass the
+  // server-validated wallet_applied so submitBulkOrder debits the wallet portion too.
+  const _isSplit = String(entry.payment_choice || "") === "Split";
   const res = submitBulkOrder({
     plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
     lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
     lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
-    payment_method: "Bulk (Gateway)", payment_status: "Paid",
+    payment_method: _isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)", payment_status: "Paid",
+    wallet_applied: _isSplit ? Number(entry.wallet_applied || 0) : 0,
     gateway_order_id: orderId, batch_id: orderId
   });
   if (res && res.success) {
