@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.03.03";
+    const APP_VERSION = "v26.07.03.04";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4679,6 +4679,9 @@
     const DISC_T1 = { min: 325, rate: 0.05 };
     const DISC_T2 = { min: 485, rate: 0.075 };
     const DISC_T3 = { min: 750, rate: 0.10 };
+    // Site-wide DEFAULT cutoffs (fallback until getConfig responds; then kept in sync
+    // with the server — admin-editable via the "Default Cutoff Times" panel, no
+    // redeploy needed). Per-day overrides (menu.cutoff_overrides) always win over this.
     let CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
     const ICONS = { Breakfast: "🍳", Lunch: "🍱", Dinner: "🍽️" };
     const GRACE_MINUTES = 5; // extra minutes allowed after cutoff to complete & submit
@@ -6650,11 +6653,13 @@
       const MEALS = ["Breakfast", "Lunch", "Dinner"];
       const ICONS = { Breakfast: "🌅", Lunch: "☀️", Dinner: "🌙" };
       const ov = menu.cutoff_overrides || {};
-      const DEFAULTS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+      // CUTOFFS (declared near the top of this script) is the site-wide default —
+      // refreshed from the server on load via getConfig, so an admin-changed default
+      // is reflected here without any redeploy.
       const getCutoffTxt = (meal, def) => {
         const override = parseFloat(ov[meal]);
         if (isNaN(override)) return t('cutoff_default', { time: def });
-        const key = override < DEFAULTS[meal] ? 'cutoff_reduced' : 'cutoff_extended';
+        const key = override < CUTOFFS[meal] ? 'cutoff_reduced' : 'cutoff_extended';
         return t(key, { time: fmtHour(override) });
       };
       // Wallet balance strip (only when balance > 0)
@@ -6743,7 +6748,7 @@
       const isToday = date === todayISO();
       const menu = S.menuCache[date] || {};
       const ov   = menu.cutoff_overrides || {};
-      const DEFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+      // CUTOFFS = the site-wide default (kept in sync with the server — see getConfig).
       const now  = getIST();
       const nowH = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
       ["Breakfast","Lunch","Dinner"].forEach(meal => {
@@ -6755,7 +6760,7 @@
         // For future dates, show the cutoff time as a static label — no countdown needed.
         if (!isToday) {
           const ov2f = parseFloat(ov[meal]);
-          const cutHf = isNaN(ov2f) ? DEFS[meal] : ov2f;
+          const cutHf = isNaN(ov2f) ? CUTOFFS[meal] : ov2f;
           el.textContent = `⏰ Order by ${fmtHour(cutHf)}`;
           el.style.color = '';
           el.style.fontWeight = '';
@@ -6763,7 +6768,7 @@
         }
 
         const ov2 = parseFloat(ov[meal]);
-        const cutH = isNaN(ov2) ? DEFS[meal] : ov2;
+        const cutH = isNaN(ov2) ? CUTOFFS[meal] : ov2;
         const rem  = cutH - nowH;
         if (rem <= 0) { el.textContent = ""; el.style.color = ''; el.style.fontWeight = ''; return; }
 
@@ -10957,7 +10962,13 @@
         S.gatewayEnabled = !!(data && data.gateway_enabled);
         S.gatewayEnv     = (data && data.gateway_env) || "test";
         S.pricingV2      = !!(data && data.pricing_v2);
-        console.log(`HDFC Gateway: ${S.gatewayEnabled ? "ENABLED (" + S.gatewayEnv + ")" : "disabled"} | Pricing V2: ${S.pricingV2 ? "ON" : "off"}`);
+        // Refresh the site-wide default cutoffs (admin-editable — see the vault_admin
+        // "Default Cutoff Times" panel). Falls back to the existing hardcoded CUTOFFS
+        // if the field is missing (older backend) so this can never break the page.
+        if (data && data.default_cutoffs && typeof data.default_cutoffs === "object") {
+          CUTOFFS = Object.assign({}, CUTOFFS, data.default_cutoffs);
+        }
+        console.log(`HDFC Gateway: ${S.gatewayEnabled ? "ENABLED (" + S.gatewayEnv + ")" : "disabled"} | Pricing V2: ${S.pricingV2 ? "ON" : "off"} | Cutoffs: ${JSON.stringify(CUTOFFS)}`);
       } catch (e) {
         S.gatewayEnabled = false;
         console.warn("Could not fetch gateway config:", e.message);

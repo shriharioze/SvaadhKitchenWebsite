@@ -61,7 +61,11 @@ function doGet(e) {
     if (action === "getConfig") return jsonRes({
       gateway_enabled: PAYMENT_GATEWAY_ENABLED,
       gateway_env: HDFC_ENV,
-      pricing_v2: PRICING_V2
+      pricing_v2: PRICING_V2,
+      // Site-wide default cutoffs (admin-editable via SK_Default_Cutoffs) — public,
+      // not sensitive, and the order page needs it to show the right "Order by X"
+      // time / early-extended labels without the customer having any admin PIN.
+      default_cutoffs: _getDefaultCutoffs()
     });
     if (action === "getAreas") return jsonRes(getAreas());
     if (action === "getDefaultCutoffs") {
