@@ -64,6 +64,10 @@ function doGet(e) {
       pricing_v2: PRICING_V2
     });
     if (action === "getAreas") return jsonRes(getAreas());
+    if (action === "getDefaultCutoffs") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(getDefaultCutoffs());
+    }
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
     if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty})
@@ -570,6 +574,11 @@ function doPost(e) {
     if (action === "saveMenu") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(saveMenu(body));
+    }
+
+    if (action === "setDefaultCutoffs") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(setDefaultCutoffs(body));
     }
 
     if (action === "upsertProfile") {

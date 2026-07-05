@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 24.7; // 2026-07-03: BULK payment parity with regular flow — On-Account bulk placed directly (no gateway, billed later; optional wallet via _autoSettlePendingOrders), full-Wallet debits SK_Wallet directly, partial wallet = Split (wallet + gateway) reusing hdfc_createSession's split guard. New submitBulkDirect (locked + reqId-idempotent + authoritative wallet pre-check); submitBulkOrder does per-row wallet/split debit; finalize+reconciler pass wallet_applied for split. Conservation Node-verified. (24.6 below: post-verification write-loss hardening.)
+const CODE_VERSION   = 24.8; // 2026-07-03: site-wide DEFAULT cutoff times, editable without a redeploy — new SK_Default_Cutoffs sheet (one row, Breakfast/Lunch/Dinner decimal hours) read by _getDefaultCutoffs (5-min CacheService) and consumed by _effectiveCutoffsForDate as the base before any per-date SK_Daily_Menu override (override logic UNCHANGED). Admin panel: new "Default Cutoff Times (All Days)" panel (getDefaultCutoffs/setDefaultCutoffs, admin-PIN gated) above the existing per-day "Extend Cutoff Times Today" panel; the "Default: X" labels + Early/Extended badges now read the live default instead of a hardcoded 7/9/16.5. (24.7 below: bulk payment parity.)
                               // 2026-07-03: post-verification write-loss hardening (₹104 Nitin loss) — PENDING_ORDER_ROWS row-backup TTL 10min→60min; entries KEPT for the full window even after confirmed present (a row can vanish AFTER verification) with TTL pruning in the verifier; the 1-min reconciler now re-runs _verifyAndAlertMissedOrders so a dropped row re-appends within ~1 min. Frontend: hdfc_initiatePayment + bulk_pay HARD-FAIL if hdfc_savePendingOrder didn't stick (the stash is the only holder of items — never let payment proceed without it). (24.5: route Pinned_Rank + pickup-first.)
 const LEDGER_FOLDER  = "Svaadh Customer Ledgers";
 
@@ -71,6 +71,7 @@ const HDFC_BASE_URL         = HDFC_ENV === "live"
 const TAB_ORDERS     = "SK_Orders";
 const TAB_CUSTOMERS  = "SK_Customers";
 const TAB_MENU       = "SK_Daily_Menu";
+const TAB_DEFAULT_CUTOFFS = "SK_Default_Cutoffs"; // single row: Breakfast/Lunch/Dinner default cutoff hours (site-wide baseline; per-day SK_Daily_Menu overrides still win)
 const TAB_BF_MASTER  = "SK_Master_Breakfast";
 const TAB_SABJI      = "SK_Master_Sabjis";
 const TAB_AREAS      = "SK_Areas";

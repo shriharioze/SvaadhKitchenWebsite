@@ -996,6 +996,38 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           </div>
         </div>
 
+        <!-- DEFAULT CUTOFF TIMES (site-wide baseline, applies to every day that has
+             no per-date override below). Separate from the per-day panel — saved
+             immediately on its own "Save Defaults" button, not tied to Save Menu. -->
+        <div class="meal-card">
+          <div class="meal-card-head">
+            <span class="meal-icon">🕰️</span>
+            <span class="meal-card-title">Default Cutoff Times (All Days)</span>
+          </div>
+          <div class="meal-card-body">
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Applies to every day that doesn't have its own override below. Change this once instead of overriding each day.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div>
+                <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌅 Breakfast until</label>
+                <input type="time" id="defCutoffBf" step="300"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);">
+              </div>
+              <div>
+                <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">☀️ Lunch until</label>
+                <input type="time" id="defCutoffL" step="300"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);">
+              </div>
+              <div>
+                <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌙 Dinner until</label>
+                <input type="time" id="defCutoffD" step="300"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);">
+              </div>
+            </div>
+            <button onclick="saveDefaultCutoffs()" style="margin-top:12px;padding:9px 18px;border:none;border-radius:8px;background:var(--accent,#2D1A5E);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;">Save Defaults</button>
+            <span id="defCutoffSavedNote" style="margin-left:10px;font-size:.75rem;color:var(--muted);"></span>
+          </div>
+        </div>
+
         <!-- CUTOFF OVERRIDES -->
         <div class="meal-card">
           <div class="meal-card-head">
@@ -1003,31 +1035,31 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
             <span class="meal-card-title">Extend Cutoff Times Today</span>
           </div>
           <div class="meal-card-body">
-            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Leave blank to use defaults (Breakfast 7:00 AM · Lunch 9:00 AM · Dinner 4:30 PM). Pick any time — we'll show ⚡ Early or 🔓 Extended to customers.</p>
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Leave blank to use the defaults above (<span id="cutoffDefaultsSummary">Breakfast 7:00 AM · Lunch 9:00 AM · Dinner 4:30 PM</span>). Pick any time — we'll show ⚡ Early or 🔓 Extended to customers.</p>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
               <div>
                 <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌅 Breakfast until</label>
                 <input type="time" id="cutoffBf" step="300"
                   style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);"
-                  onchange="updateCutoffBadge('cutoffBf','cutoffBfBadge',7)">
+                  onchange="updateCutoffBadge('cutoffBf','cutoffBfBadge',S_DEFAULT_CUTOFFS.Breakfast)">
                 <div id="cutoffBfBadge" style="margin-top:5px;font-size:.68rem;font-weight:700;text-align:center;"></div>
-                <div style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 7:00 AM</div>
+                <div id="cutoffBfDefaultLabel" style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 7:00 AM</div>
               </div>
               <div>
                 <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">☀️ Lunch until</label>
                 <input type="time" id="cutoffL" step="300"
                   style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);"
-                  onchange="updateCutoffBadge('cutoffL','cutoffLBadge',9)">
+                  onchange="updateCutoffBadge('cutoffL','cutoffLBadge',S_DEFAULT_CUTOFFS.Lunch)">
                 <div id="cutoffLBadge" style="margin-top:5px;font-size:.68rem;font-weight:700;text-align:center;"></div>
-                <div style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 9:00 AM</div>
+                <div id="cutoffLDefaultLabel" style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 9:00 AM</div>
               </div>
               <div>
                 <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌙 Dinner until</label>
                 <input type="time" id="cutoffD" step="300"
                   style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);"
-                  onchange="updateCutoffBadge('cutoffD','cutoffDBadge',16.5)">
+                  onchange="updateCutoffBadge('cutoffD','cutoffDBadge',S_DEFAULT_CUTOFFS.Dinner)">
                 <div id="cutoffDBadge" style="margin-top:5px;font-size:.68rem;font-weight:700;text-align:center;"></div>
-                <div style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 4:30 PM</div>
+                <div id="cutoffDDefaultLabel" style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 4:30 PM</div>
               </div>
             </div>
             <p style="font-size:.72rem;color:var(--muted);margin-top:10px;">Saved with the menu when you click <strong>Save Menu</strong>. ⚡ Early = before default · 🔓 Extended = after default.</p>
@@ -2182,6 +2214,11 @@ function colKeyToDisplayName(k) {
            + "आता रिफ्रेश करायचे?";
     }
 
+// Site-wide default cutoff hours (decimal, IST). Fetched once on login via
+// loadDefaultCutoffs(); fallback matches the backend's hardcoded fallback so the
+// UI never shows blank/NaN before the fetch completes.
+let S_DEFAULT_CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+
 let S = {
   pin:            "",
   sessionPin:     "",
@@ -2391,7 +2428,7 @@ function logout() {
 // ════════════════════════════════════════════════════════
 // BOOT
 // ════════════════════════════════════════════════════════
-function bootApp() {
+async function bootApp() {
   document.getElementById("loginWrap").style.display = "none";
   const tpl = document.getElementById("adminTemplate");
   if (tpl) {
@@ -2405,7 +2442,8 @@ function bootApp() {
   S.sidebarMonth = ist.getMonth();
 
   // Initialize UI state
-  switchPage('menu'); 
+  switchPage('menu');
+  await loadDefaultCutoffs(); // populate S_DEFAULT_CUTOFFS before selectDate renders today's badges
   selectDate(toISO(ist));
 
   renderBfMasterTable();
@@ -2829,9 +2867,9 @@ function selectDate(iso) {
     document.getElementById("cutoffBf").value = co.Breakfast ? decimalToTime(co.Breakfast) : "";
     document.getElementById("cutoffL").value  = co.Lunch     ? decimalToTime(co.Lunch)     : "";
     document.getElementById("cutoffD").value  = co.Dinner    ? decimalToTime(co.Dinner)    : "";
-    updateCutoffBadge("cutoffBf","cutoffBfBadge",7);
-    updateCutoffBadge("cutoffL","cutoffLBadge",9);
-    updateCutoffBadge("cutoffD","cutoffDBadge",16.5);
+    updateCutoffBadge("cutoffBf","cutoffBfBadge",S_DEFAULT_CUTOFFS.Breakfast);
+    updateCutoffBadge("cutoffL","cutoffLBadge",S_DEFAULT_CUTOFFS.Lunch);
+    updateCutoffBadge("cutoffD","cutoffDBadge",S_DEFAULT_CUTOFFS.Dinner);
     // Load OOS and orders closed state
     S.oosItems     = existing.oos_items     || { Breakfast: [], Lunch: [], Dinner: [] };
     S.ordersClosed = existing.orders_closed || {};
@@ -3731,6 +3769,66 @@ function updateCutoffBadge(inputId, badgeId, defaultDecimal) {
     badge.innerHTML = '<span style="color:#27ae60;background:#e8f5e9;padding:2px 8px;border-radius:99px;">🔓 Extended</span>';
   } else {
     badge.innerHTML = '<span style="color:#888;background:#f5f5f5;padding:2px 8px;border-radius:99px;">✅ Same as default</span>';
+  }
+}
+// Convert decimal hours → 12-hour display string, e.g. 16.5 → "4:30 PM", 7 → "7:00 AM"
+function decimalTo12hr(dec) {
+  if (dec === null || dec === undefined || dec === "") return "";
+  const h24 = Math.floor(dec);
+  const m = Math.round((dec - h24) * 60);
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  let h12 = h24 % 12; if (h12 === 0) h12 = 12;
+  return h12 + ":" + String(m).padStart(2, "0") + " " + ampm;
+}
+// ── DEFAULT CUTOFF TIMES (site-wide, editable without a redeploy) ──────────
+// Fetches SK_Default_Cutoffs (via getDefaultCutoffs) into S_DEFAULT_CUTOFFS, then
+// refreshes every place that displays or compares against the default: the
+// "Default: X" labels + summary line under Extend Cutoff Times Today, the
+// Default Cutoff Times inputs themselves, and today's already-rendered Early/
+// Extended badges (which compare against the default).
+async function loadDefaultCutoffs() {
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?action=getDefaultCutoffs&pin=${S.sessionPin}&_t=${Date.now()}`);
+    const data = await res.json();
+    if (data && data.success && data.defaults) S_DEFAULT_CUTOFFS = data.defaults;
+  } catch (e) { console.warn("loadDefaultCutoffs failed, using fallback", e); }
+  const d = S_DEFAULT_CUTOFFS;
+  const bfEl = document.getElementById("defCutoffBf");
+  const lEl  = document.getElementById("defCutoffL");
+  const dEl  = document.getElementById("defCutoffD");
+  if (bfEl) bfEl.value = decimalToTime(d.Breakfast);
+  if (lEl)  lEl.value  = decimalToTime(d.Lunch);
+  if (dEl)  dEl.value  = decimalToTime(d.Dinner);
+  const bfLbl = document.getElementById("cutoffBfDefaultLabel");
+  const lLbl  = document.getElementById("cutoffLDefaultLabel");
+  const dLbl  = document.getElementById("cutoffDDefaultLabel");
+  if (bfLbl) bfLbl.textContent = "Default: " + decimalTo12hr(d.Breakfast);
+  if (lLbl)  lLbl.textContent  = "Default: " + decimalTo12hr(d.Lunch);
+  if (dLbl)  dLbl.textContent  = "Default: " + decimalTo12hr(d.Dinner);
+  const summary = document.getElementById("cutoffDefaultsSummary");
+  if (summary) summary.textContent = `Breakfast ${decimalTo12hr(d.Breakfast)} · Lunch ${decimalTo12hr(d.Lunch)} · Dinner ${decimalTo12hr(d.Dinner)}`;
+  // Re-run today's badges against the (possibly just-updated) defaults.
+  if (document.getElementById("cutoffBf")) updateCutoffBadge("cutoffBf", "cutoffBfBadge", d.Breakfast);
+  if (document.getElementById("cutoffL"))  updateCutoffBadge("cutoffL",  "cutoffLBadge",  d.Lunch);
+  if (document.getElementById("cutoffD"))  updateCutoffBadge("cutoffD",  "cutoffDBadge",  d.Dinner);
+}
+async function saveDefaultCutoffs() {
+  const b = timeToDecimal(document.getElementById("defCutoffBf").value);
+  const l = timeToDecimal(document.getElementById("defCutoffL").value);
+  const d = timeToDecimal(document.getElementById("defCutoffD").value);
+  if (b === null || l === null || d === null) { toast("Please set all three default times."); return; }
+  const note = document.getElementById("defCutoffSavedNote");
+  if (note) note.textContent = "Saving…";
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "setDefaultCutoffs", pin: S.sessionPin, breakfast: b, lunch: l, dinner: d }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Save failed");
+    await loadDefaultCutoffs(); // refresh every dependent label/badge
+    if (note) { note.textContent = "✅ Saved"; setTimeout(() => { note.textContent = ""; }, 3000); }
+    toast("Default cutoff times updated for all days.");
+  } catch (e) {
+    if (note) note.textContent = "";
+    toast("Error: " + e.message, 4000);
   }
 }
 // ─────────────────────────────────────────────────────────────

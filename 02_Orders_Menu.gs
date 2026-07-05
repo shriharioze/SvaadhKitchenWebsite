@@ -2861,10 +2861,56 @@ function getCustomerOrders(phone) {
   };
 }
 
+// Site-wide default cutoff hours, editable without a redeploy via the admin panel
+// (or directly in the SK_Default_Cutoffs sheet — one row, columns Breakfast/Lunch/
+// Dinner, decimal hours e.g. 16.5 = 4:30 PM). Falls back to the original hardcoded
+// defaults if the sheet is empty/missing. Cached 5 min since _effectiveCutoffsForDate
+// runs on nearly every menu/order request. ALWAYS returns a fresh object — callers
+// (like _effectiveCutoffsForDate below) mutate it with per-day overrides.
+function _getDefaultCutoffs() {
+  var FALLBACK = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+  try {
+    var hit = CacheService.getScriptCache().get("default_cutoffs_v1");
+    if (hit !== null) return JSON.parse(hit);
+  } catch (e) {}
+  var out = { Breakfast: FALLBACK.Breakfast, Lunch: FALLBACK.Lunch, Dinner: FALLBACK.Dinner };
+  try {
+    var ws = getOrCreateTab(getSpreadsheet(), TAB_DEFAULT_CUTOFFS, ["Breakfast", "Lunch", "Dinner"]);
+    if (ws.getLastRow() >= 2) {
+      var vals = ws.getRange(2, 1, 1, 3).getValues()[0];
+      ["Breakfast", "Lunch", "Dinner"].forEach(function (k, i) {
+        var n = Number(vals[i]);
+        if (vals[i] !== "" && !isNaN(n)) out[k] = n;
+      });
+    }
+  } catch (e) {}
+  try { CacheService.getScriptCache().put("default_cutoffs_v1", JSON.stringify(out), 300); } catch (e) {}
+  return out;
+}
+
+// Admin panel read (current site-wide defaults).
+function getDefaultCutoffs() {
+  return { success: true, defaults: _getDefaultCutoffs() };
+}
+
+// Admin panel write — updates the SK_Default_Cutoffs sheet (one row) and busts the
+// cache so the new defaults apply immediately. Does NOT touch any per-day override in
+// SK_Daily_Menu — those still win for their specific date, exactly as before.
+function setDefaultCutoffs(body) {
+  var b = Number(body && body.breakfast), l = Number(body && body.lunch), d = Number(body && body.dinner);
+  if (isNaN(b) || isNaN(l) || isNaN(d)) return { success: false, error: "Invalid cutoff hour(s)." };
+  var ws = getOrCreateTab(getSpreadsheet(), TAB_DEFAULT_CUTOFFS, ["Breakfast", "Lunch", "Dinner"]);
+  if (ws.getLastRow() < 2) ws.appendRow([b, l, d]);
+  else ws.getRange(2, 1, 1, 3).setValues([[b, l, d]]);
+  try { CacheService.getScriptCache().remove("default_cutoffs_v1"); } catch (e) {}
+  return { success: true, defaults: { Breakfast: b, Lunch: l, Dinner: d } };
+}
+
 // Effective cancel/order cutoff HOURS (IST, since midnight) for a date —
-// the admin's per-date override from SK_Daily_Menu if set, else the defaults.
+// the admin's per-date override from SK_Daily_Menu if set, else the SITE-WIDE
+// defaults (_getDefaultCutoffs — admin-editable, see above).
 function _effectiveCutoffsForDate(date) {
-  var cutoffs = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+  var cutoffs = _getDefaultCutoffs();
   try {
     var ss = getSpreadsheet();
     var ws = getOrCreateTab(ss, TAB_MENU, []);
