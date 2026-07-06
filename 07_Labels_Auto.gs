@@ -89,9 +89,19 @@ function _lblItemSummary(order, meal, lang) {
 // ── PDF builder: one long 50mm-wide strip, one 25mm block per label ─────────
 // Layout mirrors the kitchen page's Devanagari canvas renderer (kitchen.html
 // saveBulkLabelsToDrive): W=50, LH=25, gap=global LABEL_GAP_MM, separator line
-// centred in each gap. Font sizes converted from the canvas mm values to pt
+// in each gap. Font sizes converted from the canvas mm values to pt
 // (mm × 2.8346): name 3.4mm→9.5pt bold, summary 3.0mm→8.5pt, area 3.2mm→9pt
 // bold, notes 2.4mm→7pt orange. Returns base64 PDF.
+//
+// ENGINE: Google Docs (DocumentApp). NOT Slides — the Slides API ignores
+// pageSize on presentations.create (documented Google limitation, issue
+// 119321089), silently producing a 16:9 page that fits only ~5 label blocks
+// (the 2026-07-06 "5 of 32 labels" incident). Docs allows setting an exact
+// custom page size AFTER creation, so the strip is a single page of exactly
+// 50mm × (n × block) like the kitchen page's jsPDF output. Pitch precision
+// comes from a borderless table: one row per label (min height 25mm) and one
+// thin gap row (min height = gap) holding the separator rule. The temp doc is
+// trashed after export.
 function _lblBuildPdfB64(orders, meal, lang, gapMm) {
   var MM = 2.834645669; // mm → pt
   var W = 50, LH = 25, GAP = (typeof gapMm === "number" && !isNaN(gapMm)) ? gapMm : 2.7;
@@ -100,135 +110,85 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
   var totalH = n * BLOCK;
   var FONT = (lang === "Devanagari") ? "Noto Sans Devanagari" : "Arial";
 
-  var pres = Slides.Presentations.create({
-    title: "tmp_labels_" + meal + "_" + Date.now(),
-    pageSize: {
-      width:  { magnitude: W * MM,      unit: "PT" },
-      height: { magnitude: totalH * MM, unit: "PT" }
-    }
-  });
-  var presId = pres.presentationId;
-  var pageId = pres.slides[0].objectId;
+  var doc = DocumentApp.create("tmp_labels_" + meal + "_" + Date.now());
+  var docId = doc.getId();
 
   try {
-    var requests = [];
+    var body = doc.getBody();
+    // Page = exactly the strip (+3mm safety so the last row can never spill
+    // onto an auto-created second page — 3mm of extra feed once per run).
+    body.setPageWidth(W * MM).setPageHeight((totalH + 3) * MM);
+    body.setMarginTop(0).setMarginBottom(0).setMarginLeft(2 * MM).setMarginRight(2 * MM);
 
-    // Clear the default title/subtitle placeholders off the first slide.
-    (pres.slides[0].pageElements || []).forEach(function (el) {
-      requests.push({ deleteObject: { objectId: el.objectId } });
-    });
+    // One borderless table drives the vertical pitch: rows alternate
+    // label (minHeight 25mm) / gap (minHeight GAP, contains the separator).
+    var cellsSeed = [];
+    for (var i = 0; i < n; i++) {
+      cellsSeed.push(["."]);            // label row placeholder
+      if (i < n - 1) cellsSeed.push(["."]); // gap row placeholder
+    }
+    var table = body.appendTable(cellsSeed);
+    table.setBorderWidth(0);
 
+    var TINY = {};
+    TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse placeholder line height
+
+    var rIdx = 0;
     orders.forEach(function (order, idx) {
-      var BY = idx * BLOCK; // block top, mm
       var summary = _lblItemSummary(order, meal, lang);
+      var lines = []; // { text, bold, size, color }
+      lines.push({ text: "Name: " + (order.name || ""), bold: true,  size: 9.5, color: "#000000" });
+      lines.push({ text: summary,                        bold: false, size: 8.5, color: "#222222" });
+      if (order.area)  lines.push({ text: order.area,         bold: true,  size: 9, color: "#000000" });
+      if (order.notes) lines.push({ text: "* " + order.notes, bold: false, size: 7, color: "#B86000" });
 
-      // Build the label's text as one box with per-line styles.
-      var lines = [];   // { text, bold, sizePt, colorHex }
-      lines.push({ text: "Name: " + (order.name || ""), bold: true,  size: 9.5, color: "000000" });
-      lines.push({ text: summary,                        bold: false, size: 8.5, color: "222222" });
-      if (order.area)  lines.push({ text: order.area,          bold: true,  size: 9,   color: "000000" });
-      if (order.notes) lines.push({ text: "* " + order.notes,  bold: false, size: 7,   color: "B86000" });
-
-      var boxId = "lblbox_" + idx;
-      requests.push({
-        createShape: {
-          objectId: boxId,
-          shapeType: "TEXT_BOX",
-          elementProperties: {
-            pageObjectId: pageId,
-            size: {
-              width:  { magnitude: (W - 4) * MM,  unit: "PT" },
-              height: { magnitude: (LH - 2) * MM, unit: "PT" }
-            },
-            transform: { scaleX: 1, scaleY: 1, translateX: 2 * MM, translateY: (BY + 1) * MM, unit: "PT" }
-          }
-        }
-      });
-
-      var fullText = lines.map(function (l) { return l.text; }).join("\n");
-      requests.push({ insertText: { objectId: boxId, insertionIndex: 0, text: fullText } });
-
-      // Per-line character styling (ranges over the inserted text).
-      var cursor = 0;
+      // ── Label row ──
+      var row = table.getRow(rIdx++);
+      row.setMinimumHeight(LH * MM);
+      var cell = row.getCell(0);
+      cell.setPaddingTop(1 * MM).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
+      cell.clear(); // leaves one empty paragraph
       lines.forEach(function (l, li) {
-        var start = cursor, end = cursor + l.text.length;
-        cursor = end + 1; // +1 for the \n
-        if (end > start) {
-          requests.push({
-            updateTextStyle: {
-              objectId: boxId,
-              textRange: { type: "FIXED_RANGE", startIndex: start, endIndex: end },
-              style: {
-                bold: !!l.bold,
-                fontFamily: FONT,
-                fontSize: { magnitude: l.size, unit: "PT" },
-                foregroundColor: { opaqueColor: { rgbColor: _lblHexRgb(l.color) } }
-              },
-              fields: "bold,fontFamily,fontSize,foregroundColor"
-            }
-          });
-        }
-      });
-      // Tight paragraph spacing so 4 lines fit the 25mm block like the canvas did.
-      requests.push({
-        updateParagraphStyle: {
-          objectId: boxId,
-          textRange: { type: "ALL" },
-          style: { lineSpacing: 100, spaceAbove: { magnitude: 0, unit: "PT" }, spaceBelow: { magnitude: 0, unit: "PT" } },
-          fields: "lineSpacing,spaceAbove,spaceBelow"
-        }
+        var p = (li === 0) ? cell.getChild(0).asParagraph() : cell.appendParagraph("");
+        p.setText(l.text);
+        p.setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+        var t = p.editAsText();
+        t.setFontFamily(FONT).setFontSize(l.size).setBold(!!l.bold).setForegroundColor(l.color);
       });
 
-      // Separator line centred in the gap after every block except the last.
+      // ── Gap row with the separator rule (skipped after the last label) ──
       if (idx < n - 1) {
-        var lineId = "lblsep_" + idx;
-        requests.push({
-          createLine: {
-            objectId: lineId,
-            category: "STRAIGHT",
-            elementProperties: {
-              pageObjectId: pageId,
-              size: {
-                width:  { magnitude: (W - 2) * MM, unit: "PT" },
-                height: { magnitude: 0.5,          unit: "PT" }
-              },
-              transform: { scaleX: 1, scaleY: 1, translateX: 1 * MM, translateY: (BY + LH + GAP / 2) * MM, unit: "PT" }
-            }
-          }
-        });
-        requests.push({
-          updateLineProperties: {
-            objectId: lineId,
-            lineProperties: {
-              lineFill: { solidFill: { color: { rgbColor: { red: 0, green: 0, blue: 0 } } } },
-              weight: { magnitude: 1, unit: "PT" }
-            },
-            fields: "lineFill,weight"
-          }
-        });
+        var gRow = table.getRow(rIdx++);
+        gRow.setMinimumHeight(GAP * MM);
+        var gCell = gRow.getCell(0);
+        gCell.setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
+        gCell.clear();
+        var gp = gCell.getChild(0).asParagraph();
+        gp.setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+        gp.setAttributes(TINY);
+        gp.appendHorizontalRule();
       }
     });
 
-    // Slides batchUpdate caps at ~500 requests per call — chunk (a big dinner
-    // run is ~6 requests/label × 60 labels ≈ 360, but stay safe).
-    for (var i = 0; i < requests.length; i += 400) {
-      Slides.Presentations.batchUpdate({ requests: requests.slice(i, i + 400) }, presId);
+    // The doc starts with an empty paragraph before the table and Docs auto-adds
+    // one after it — collapse both so they don't push the strip down/overflow.
+    var first = body.getChild(0);
+    if (first.getType() === DocumentApp.ElementType.PARAGRAPH && first.asParagraph().getText() === "") {
+      // Can't remove the only structural siblings safely everywhere — shrink instead.
+      first.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+    }
+    var last = body.getChild(body.getNumChildren() - 1);
+    if (last.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      last.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
     }
 
-    var pdfBlob = DriveApp.getFileById(presId).getAs("application/pdf");
+    doc.saveAndClose();
+    var pdfBlob = DriveApp.getFileById(docId).getAs("application/pdf");
     return Utilities.base64Encode(pdfBlob.getBytes());
   } finally {
-    // Always clean up the temp presentation, even if the export failed.
-    try { DriveApp.getFileById(presId).setTrashed(true); } catch (e) {}
+    // Always clean up the temp doc, even if the export failed.
+    try { DriveApp.getFileById(docId).setTrashed(true); } catch (e) {}
   }
-}
-
-function _lblHexRgb(hex) {
-  return {
-    red:   parseInt(hex.substring(0, 2), 16) / 255,
-    green: parseInt(hex.substring(2, 4), 16) / 255,
-    blue:  parseInt(hex.substring(4, 6), 16) / 255
-  };
 }
 
 // ── Generation for one date+meal: fetch orders → build PDF → saveLabels() ──
