@@ -6,6 +6,11 @@
         "userSymbol": "AnalyticsData",
         "version": "v1beta",
         "serviceId": "analyticsdata"
+      },
+      {
+        "userSymbol": "Slides",
+        "version": "v1",
+        "serviceId": "slides"
       }
     ]
   },
@@ -20,6 +25,8 @@
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/script.scriptapp",
-    "https://www.googleapis.com/auth/analytics.readonly"
+    "https://www.googleapis.com/auth/analytics.readonly",
+    "https://www.googleapis.com/auth/presentations",
+    "https://www.googleapis.com/auth/script.send_mail"
   ]
 }
