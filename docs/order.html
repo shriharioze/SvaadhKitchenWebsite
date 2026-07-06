@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.03.04";
+    const APP_VERSION = "v26.07.06.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6091,7 +6091,7 @@
           meal_addresses: profileData.meal_addresses || "",
           promoCount: pc,
           feeExempt: (profileData.feeExempt === true || String(profileData.feeExempt) === "true"),
-          onAccount: profileData.onAccount || "No",
+          onAccount: String(profileData.onAccount || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
           billingCycle: profileData.billingCycle || "Daily",
           pending_amount: Number(profileData.pending_amount) || 0
         };
@@ -6427,13 +6427,23 @@
       // Keep S.profile in sync as user types in single-address mode
       const area = $("areaSelect").value;
       S.profile.area = area;
-      S.profile.wing = $("wingInput").value.trim();
-      S.profile.flat = $("flatInput").value.trim();
-      S.profile.floor = $("floorInput").value.trim();
-      S.profile.society = $("societyInput").value.trim();
+      // Self Pickup CLEARS the address inputs for display only (setDeliveryMode's
+      // comment: "DO NOT erase the values in S.profile") — but this sync used to
+      // copy those blanks straight into S.profile, silently wiping the customer's
+      // saved wing/flat/society on the next profile save. For pickup/porter, an
+      // EMPTY input keeps the stored value instead.
+      const _keepStored = /pickup|porter/i.test(area);
+      const _fld = function (id, cur) {
+        const v = $(id).value.trim();
+        return (_keepStored && !v) ? (cur || "") : v;
+      };
+      S.profile.wing = _fld("wingInput", S.profile.wing);
+      S.profile.flat = _fld("flatInput", S.profile.flat);
+      S.profile.floor = _fld("floorInput", S.profile.floor);
+      S.profile.society = _fld("societyInput", S.profile.society);
       S.profile.delivery_point = $("deliveryPointSelection").value;
-      S.profile.maps = $("mapsInput").value.trim();
-      S.profile.landmark = $("landmarkInput").value.trim();
+      S.profile.maps = _fld("mapsInput", S.profile.maps);
+      S.profile.landmark = _fld("landmarkInput", S.profile.landmark);
 
       // IMPORTANT: Also keep S.mealAddrs in sync so that the saved JSON isn't stale/blank
       const def = {
@@ -8168,6 +8178,27 @@
       if (typeof syncSingleAddr === "function") syncSingleAddr();
     }
 
+    // Cap-switch must ALSO update the per-meal address dropdowns: when the customer
+    // uses per-meal addresses (S.sameAddr === false), getMealAddr() reads the LIVE
+    // bf_/l_/d_ selects — the single-address switch above never touched them, so the
+    // second "Pay" attempt re-flagged the meal and looped the customer back to the
+    // bill forever (6-Jul porter incident: cap full → chose Porter → never reached
+    // the gateway). Adds the option to each per-meal select if missing.
+    function _applyCapAreaPerMeal(areaValue) {
+      if (S.sameAddr) return; // single-address mode: profile/mealAddrs already updated
+      const label = areaValue === "Porter" ? "🛵 Porter (you book courier)" : "📦 Self Pickup";
+      ["bf", "l", "d"].forEach(function (pfx) {
+        const sel = $(pfx + "_areaSelect");
+        if (!sel) return;
+        let found = false;
+        for (let i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === areaValue) { sel.selectedIndex = i; found = true; break; }
+        }
+        if (!found) { const o = document.createElement("option"); o.value = areaValue; o.text = label; sel.add(o); sel.value = areaValue; }
+        try { togglePickupUI(pfx, areaValue); } catch (_) {}
+      });
+    }
+
     // "Checking your building…" overlay shown while we look up the delivery route.
     function _capCheckOverlay(show) {
       let el = document.getElementById("_capCheckOv");
@@ -8215,12 +8246,14 @@
       if (choice === "cancel" || !choice) return false;
       if (choice === "pickup") {
         setDeliveryMode('single', 'pickup');
-        await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
+        _applyCapAreaPerMeal("Self Pickup"); // per-meal-address mode reads the bf_/l_/d_ selects live
+        await sAlert(`Your order is now <b>📦 Self Pickup</b> (delivery fee removed). Collect from:<br><br><b>${PICKUP_ADDRESS}</b><br><br>Please review your updated bill and tap <b>Pay / Place Order</b> again to confirm.`, "Switched to Self Pickup", "📦");
       } else {
         _applyPorterAreaSingle();
+        _applyCapAreaPerMeal("Porter"); // per-meal-address mode reads the bf_/l_/d_ selects live
         const meals = [...new Set(_blocked.map(x => x.meal))];
         const times = meals.map(m => `${m}: <b>${PORTER_TIMES[m]}</b>`).join("<br>");
-        await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
+        await sAlert(`Your order is now <b>🛵 Porter</b> (our delivery fee removed).<br><br>After your food is ready, book a courier (Porter/Borzo etc.) from our kitchen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>Pay / Place Order</b> again to confirm.`, "Switched to Porter", "🛵");
       }
       try { if (typeof buildBillScreen === "function") await buildBillScreen(); } catch (_) {}
       return false; // switched — caller aborts; customer re-confirms with the updated bill
