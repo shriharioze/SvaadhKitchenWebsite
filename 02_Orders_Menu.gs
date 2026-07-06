@@ -50,7 +50,7 @@ function getCustomer(phone) {
     })(r.Review_Promo_Count),
     wallet_balance:     _calculateWalletBalance(phone),
     feeExempt:          (r.Fee_Exempt === "Yes" || r.Fee_Exempt === true),
-    onAccount:          r.On_Account || "No",
+    onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
     billingCycle:       r.Billing_Cycle || "Daily"
   };
 }
@@ -117,7 +117,7 @@ function verifyLogin(phone, pin) {
       })(r.Review_Promo_Count),
       wallet_balance:     _calculateWalletBalance(phone),
       feeExempt:          (r.Fee_Exempt === "Yes" || r.Fee_Exempt === true),
-      onAccount:          r.On_Account || "No",
+      onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
       billingCycle:       r.Billing_Cycle || "Daily",
       pending_amount:     pendingAmount
     }
@@ -1114,18 +1114,29 @@ function auditLostGatewayOrders(monthsBack) {
     }
   });
 
-  // (5) Report + log new findings
+  // (5) Report + log new findings — but first TRY TO SELF-HEAL each one: if the
+  // pending stash still holds the order (items!), write it right now via the
+  // reconciler instead of only alerting. Turns the audit from a smoke detector
+  // into a sprinkler for every case where the stash survived.
   const missing = Object.keys(seen).map(function (k) { return seen[k]; });
   const newRows = [];
   missing.forEach(function (m) {
     if (alreadyLogged.has(m.oid)) return;
+    let recovered = false;
+    try {
+      if (typeof hdfc_reconcileOrderFromStash === "function") {
+        const rr = hdfc_reconcileOrderFromStash(m.oid);
+        recovered = !!(rr && (rr.outcome === "reconciled" || rr.outcome === "skippedAlreadyDone"));
+      }
+    } catch (e) { console.warn("audit self-heal failed for " + m.oid + ": " + (e && e.message)); }
     _logMissedOrderRow(ss, {
-      status: "FOUND BY AUDIT — charged but not in SK_Orders",
+      status: recovered ? "AUTO-RECOVERED BY AUDIT (was charged but missing)"
+                        : "FOUND BY AUDIT — charged but not in SK_Orders",
       sid: "", gatewayId: m.oid, name: m.name, phone: m.phone, amount: m.amount,
       date: (m.rcv instanceof Date) ? Utilities.formatDate(m.rcv, "Asia/Kolkata", "yyyy-MM-dd") : "",
       meal: "", attempts: ""
     });
-    newRows.push(m);
+    if (!recovered) newRows.push(m); // only unrecovered ones need the alert email
   });
   const newlyLogged = newRows.length;
 
@@ -1286,8 +1297,15 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
     // Prune expired entries here too — this function now also runs from the 1-min
     // reconciler, which must not depend on the next submitOrder call to prune.
     const _vNow = Date.now();
-    Object.keys(store).forEach(k => { if (_vNow - (store[k].ts || 0) > 60 * 60 * 1000) delete store[k]; });
-    props.setProperty("PENDING_ORDER_ROWS", JSON.stringify(store));
+    let _storeChanged = false;
+    Object.keys(store).forEach(k => {
+      if (_vNow - (store[k].ts || 0) > 60 * 60 * 1000) { delete store[k]; _storeChanged = true; }
+    });
+    // Only rewrite the property when something was actually pruned. This function
+    // runs UNLOCKED every minute from the reconciler; an unconditional rewrite
+    // races read-modify-write against a concurrent submitOrder's
+    // _missedOrderSafetyNet and can WIPE a just-stored backup (last-writer-wins).
+    if (_storeChanged) props.setProperty("PENDING_ORDER_ROWS", JSON.stringify(store));
 
     if (missed.length > 0) {
       // Email admin alert. Use MailApp (scope auth/script.send_mail — usually already
@@ -2079,16 +2097,31 @@ function _submitOrderInternal(body) {
       const _dupKey      = `dup_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`;
       const _cache       = CacheService.getScriptCache();
 
-      // Layer 1: cache lookup
+      // Layer 1: cache lookup — TRUST BUT VERIFY. The key is reserved BEFORE the
+      // row write (below), so an execution that dies between the reservation and
+      // its appendRow leaves a POISONED cache entry claiming a row that never
+      // existed. Every retry (browser + reconciler) then got silently "deduped"
+      // into a success, the reconciler deleted the stash as done, and the paid
+      // order became unrecoverable with no alert (3-Jul ₹104 + 6-Jul ₹301 losses).
+      // Fix: only honour the cache when the claimed sid is actually IN the sheet
+      // (allOrderRows was snapshotted under the script lock, so any committed row
+      // is in it). A poisoned hit falls through to layers 2/3 and gets written.
       const _cachedSid = _cache.get(_dupKey);
       if (_cachedSid) {
-        submissionIds[submissionIds.length - 1] = _cachedSid;
-        // Skipped duplicate — back out this meal's in-memory mutations so the
-        // retry doesn't burn a promo use or double-credit the wallet surplus.
-        if (reviewDiscount > 0) promoCount++;
-        if (mealSurplus > 0) loyaltyExcessCredit -= mealSurplus;
-        console.log("Duplicate caught by cache: " + _dupKey + " → " + _cachedSid);
-        continue;
+        const _sidReal = allOrderRows.some(function (r) {
+          return String(r.Submission_ID || "").trim().toUpperCase() === String(_cachedSid).trim().toUpperCase();
+        });
+        if (_sidReal) {
+          submissionIds[submissionIds.length - 1] = _cachedSid;
+          // Skipped duplicate — back out this meal's in-memory mutations so the
+          // retry doesn't burn a promo use or double-credit the wallet surplus.
+          if (reviewDiscount > 0) promoCount++;
+          if (mealSurplus > 0) loyaltyExcessCredit -= mealSurplus;
+          console.log("Duplicate caught by cache: " + _dupKey + " → " + _cachedSid);
+          continue;
+        }
+        console.warn("POISONED dup-cache entry for " + _dupKey + " (sid " + _cachedSid
+          + " not in sheet — a previous execution died before its write). Proceeding to write.");
       }
 
       // Layer 2 + 3: reuse the upfront snapshot instead of re-reading the whole
