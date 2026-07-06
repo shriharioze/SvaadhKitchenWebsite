@@ -1879,7 +1879,7 @@ function saveLabels(body) {
 
   var pdfBlob = Utilities.newBlob(Utilities.base64Decode(pdfB64), "application/pdf", filename);
   var file = folder.createFile(pdfBlob);
-  return {url: file.getUrl(), name: filename};
+  return {url: file.getUrl(), name: filename, id: file.getId()};
 }
 
 function getOrCreateFolderPath(pathParts) {

@@ -205,6 +205,29 @@ function autoGenerateLabels(date, meal) {
   var b64 = _lblBuildPdfB64(orders, meal, LBL_AUTO_LANG, gap);
   var saved = saveLabels({ date: date, meal: meal, lang: LBL_AUTO_LANG, pdf: b64 });
 
+  // ── Phase 2: push-to-print notification ────────────────────────────────
+  // If MACRODROID_WEBHOOK_URL is set (Script Property — the kitchen phone's
+  // MacroDroid webhook), ping it with THIS file's id so the phone downloads
+  // exactly this PDF and hands it to RawBT. Push, not poll: only the freshly
+  // auto-generated label file ever prints — never other PDFs, never stale
+  // ones. The file gets an anyone-with-link VIEW share so the phone can
+  // download it without a Google login (unguessable id; contents are just
+  // names/items/areas). Manual kitchen-page saves do NOT trigger this —
+  // auto-generated labels only. Non-fatal on any failure.
+  try {
+    var hookUrl = SP.getProperty("MACRODROID_WEBHOOK_URL");
+    if (hookUrl && saved && saved.id) {
+      DriveApp.getFileById(saved.id).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      var sep = hookUrl.indexOf("?") === -1 ? "?" : "&";
+      UrlFetchApp.fetch(hookUrl + sep
+        + "file_id=" + encodeURIComponent(saved.id)
+        + "&file_name=" + encodeURIComponent(saved.name)
+        + "&meal=" + encodeURIComponent(meal)
+        + "&count=" + orders.length,
+        { muteHttpExceptions: true });
+    }
+  } catch (e) { Logger.log("MacroDroid webhook ping failed: " + (e && e.message)); }
+
   // Heads-up email with the Drive link — lets the owner (or staff) jump
   // straight to the file on remote days. Non-fatal if mail fails.
   try {
