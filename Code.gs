@@ -1014,6 +1014,76 @@ function countOrderedUnits(ordersRows, dateStr) {
   return counts;
 }
 
+// ── SABJI "COMBO" STOCK LIMITS (2026-07-08) ──────────────────────────────────
+// A sabji type's Mini + Full sizes share ONE weighted pool instead of two
+// separate limits — e.g. limit 25 means
+//   miniCount*0.6 + fullCount*1.4  <=  25
+// and the MOMENT that's crossed, BOTH sizes close together (a customer can't
+// keep ordering Mini once the combined "batch" is used up, even if Mini's own
+// raw count looks fine). Stored as a virtual entry inside the SAME Stock_JSON
+// blob (no schema change) — admin sets ONE number per sabji type per meal via
+// the special colKeys below, alongside (or instead of) any individual Mini/Full
+// limits. Only Lunch/Dinner carry sabjis.
+const SABJI_COMBO_WEIGHTS = { Mini: 0.6, Full: 1.4 };
+const SABJI_COMBO_GROUPS = {
+  "__COMBO_DRY__":   { Mini: "Dry Sabji Mini (100ml)",   Full: "Dry Sabji Full (250ml)",   label: "Dry Sabji" },
+  "__COMBO_CURRY__": { Mini: "Curry Sabji Mini (100ml)", Full: "Curry Sabji Full (250ml)", label: "Curry Sabji" }
+};
+
+// Computes the current weighted-usage status for one meal's combo groups.
+// Returns { Dry: {...}|null, Curry: {...}|null } — null when no combo limit is
+// set for that group/meal (pure backward compat: individual per-item limits,
+// if any, are untouched). orderedCounts must be countOrderedUnits()'s per-meal
+// map (canonical/suffix-stripped keys).
+function _sabjiComboStatus(stockLimits, orderedCounts, meal) {
+  const mealLimits = (stockLimits && stockLimits[meal]) || {};
+  const mealCounts = (orderedCounts && orderedCounts[meal]) || {};
+  const out = {};
+  Object.keys(SABJI_COMBO_GROUPS).forEach(function (comboKey) {
+    const grp = SABJI_COMBO_GROUPS[comboKey];
+    const outKey = grp.label.split(" ")[0]; // "Dry" | "Curry"
+    const limit = Number(mealLimits[comboKey]);
+    if (!limit || limit <= 0) { out[outKey] = null; return; }
+    const miniUsed = mealCounts[_stripItemSuffix(grp.Mini)] || 0;
+    const fullUsed = mealCounts[_stripItemSuffix(grp.Full)] || 0;
+    const weightedUsed = miniUsed * SABJI_COMBO_WEIGHTS.Mini + fullUsed * SABJI_COMBO_WEIGHTS.Full;
+    const budget = Math.max(0, limit - weightedUsed);
+    out[outKey] = {
+      limit: limit,
+      miniUsed: miniUsed, fullUsed: fullUsed,
+      weightedUsed: Math.round(weightedUsed * 100) / 100,
+      remainingBudget: Math.round(budget * 100) / 100,
+      // How many MORE of just this size could still be added, standalone —
+      // an "OR" cap: up to this many Mini OR up to the Full figure, or a mix.
+      miniRemaining: Math.floor(budget / SABJI_COMBO_WEIGHTS.Mini),
+      fullRemaining: Math.floor(budget / SABJI_COMBO_WEIGHTS.Full)
+    };
+  });
+  return out;
+}
+
+// Layers combo-derived caps onto an already-computed per-item unitsRemaining
+// map for Lunch+Dinner, MUTATING it in place. Takes the MINIMUM with any
+// individual per-item limit already present, so the two systems combine
+// safely — an admin who (unusually) sets both an individual Mini limit AND a
+// combo limit gets whichever is more restrictive, never a regression.
+function _applySabjiComboLimits(stockLimits, orderedCounts, unitsRemaining) {
+  ["Lunch", "Dinner"].forEach(function (meal) {
+    const status = _sabjiComboStatus(stockLimits, orderedCounts, meal);
+    Object.keys(SABJI_COMBO_GROUPS).forEach(function (comboKey) {
+      const grp = SABJI_COMBO_GROUPS[comboKey];
+      const outKey = grp.label.split(" ")[0];
+      const st = status[outKey];
+      if (!st) return; // no combo limit set for this group/meal
+      if (!unitsRemaining[meal]) unitsRemaining[meal] = {};
+      const curMini = unitsRemaining[meal][grp.Mini];
+      const curFull = unitsRemaining[meal][grp.Full];
+      unitsRemaining[meal][grp.Mini] = (curMini !== undefined) ? Math.min(curMini, st.miniRemaining) : st.miniRemaining;
+      unitsRemaining[meal][grp.Full] = (curFull !== undefined) ? Math.min(curFull, st.fullRemaining) : st.fullRemaining;
+    });
+  });
+}
+
 function _normalizePhone(phone) {
   let p = String(phone || "").trim();
   if (!p) return "";

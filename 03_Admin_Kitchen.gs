@@ -102,10 +102,15 @@ function _getAdminDataUncached() {
     const unitsRemaining = {};
     ["Breakfast","Lunch","Dinner"].forEach(meal => {
       Object.entries(stockLimits[meal] || {}).forEach(([colKey, limit]) => {
+        if (SABJI_COMBO_GROUPS[colKey]) return; // virtual combo entry — not a real item, handled below
         if (!unitsRemaining[meal]) unitsRemaining[meal] = {};
         unitsRemaining[meal][colKey] = Math.max(0, limit - (orderedCounts[meal][itemsJsonKey(colKey)] || 0));
       });
     });
+    // Dry/Curry Sabji Mini+Full share a weighted pool when a combo limit is set.
+    _applySabjiComboLimits(stockLimits, orderedCounts, unitsRemaining);
+    const comboStock = { Lunch: _sabjiComboStatus(stockLimits, orderedCounts, "Lunch"),
+                          Dinner: _sabjiComboStatus(stockLimits, orderedCounts, "Dinner") };
     const kitchenClosed = (r.Kitchen_Closed === true ||
       String(r.Kitchen_Closed || "").toLowerCase() === "true");
     return {
@@ -120,6 +125,7 @@ function _getAdminDataUncached() {
       orders_closed:    ordersClosed,
       stock_limits:     stockLimits,
       units_remaining:  unitsRemaining,
+      combo_stock:      comboStock,
       order_caps:       orderCaps,
       cap_alt:          capAlt,
       order_counts:     mealOrderCounts[d] || { Breakfast: 0, Lunch: 0, Dinner: 0 },

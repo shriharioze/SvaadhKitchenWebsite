@@ -1093,6 +1093,29 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           </div>
         </div>
 
+        <!-- PANEL: SABJI COMBO STOCK LIMITS -->
+        <div class="meal-card">
+          <div class="meal-card-head">
+            <span class="meal-icon">🥘</span>
+            <span class="meal-card-title">Sabji Combo Stock Limits</span>
+          </div>
+          <div class="meal-card-body">
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">
+              One shared limit for Mini + Full of the same sabji, instead of two separate ones. Mini counts <b>0.6</b>, Full counts <b>1.4</b> against it — e.g. a limit of <b>25</b> means <code>mini×0.6 + full×1.4 ≤ 25</code>. The moment that's crossed, <b>both sizes</b> close together. Leave blank to keep using individual per-size limits instead. Saved with the menu.
+            </p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div>
+                <div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px;">☀️ LUNCH</div>
+                <div id="comboStockLunch"></div>
+              </div>
+              <div>
+                <div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px;">🌙 DINNER</div>
+                <div id="comboStockDinner"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- PANEL: STOP ACCEPTING ORDERS -->
         <div class="meal-card">
           <div class="meal-card-head">
@@ -2887,6 +2910,8 @@ function selectDate(iso) {
         S.unitsOrdered[meal][k] = (rem !== undefined) ? lim - rem : 0;
       });
     });
+    // Sabji combo stock — live weighted-usage status (Lunch/Dinner only)
+    S.comboStock = existing.combo_stock || {};
   } else {
     // Default-on items checked
     S.bfMaster.filter(m => m.default_on).forEach(m => { S.checkedBf[m.id] = true; });
@@ -2903,6 +2928,7 @@ function selectDate(iso) {
     S.capAlt       = {};
     S.stockLimits  = {};
     S.unitsOrdered = {};
+    S.comboStock   = {};
   }
 
   // Update hero date
@@ -2951,6 +2977,7 @@ function selectDate(iso) {
 
   renderBfGrid();
   renderSabjiLists();
+  renderComboStockPanel();
   renderOOSPanel();
   renderOrdersClosedPanel();
 }
@@ -3182,6 +3209,52 @@ function setStockLimit(meal, colKey, value) {
   if (!value || isNaN(v) || v <= 0) delete S.stockLimits[meal][colKey];
   else S.stockLimits[meal][colKey] = v;
   setMenuDirty(true);
+}
+
+// ════════════════════════════════════════════════════════
+// SABJI COMBO STOCK LIMITS — Mini+Full share ONE weighted pool per sabji
+// type (Dry / Curry) instead of two separate limits. Stored as virtual
+// entries "__COMBO_DRY__" / "__COMBO_CURRY__" inside the SAME S.stockLimits
+// blob setStockLimit() already writes — no new save-path needed. Live usage
+// (S.comboStock) is loaded from the server in selectDate() and only reflects
+// what was true as of the last save+reload, same as the per-item stock tags.
+// ════════════════════════════════════════════════════════
+const SABJI_COMBO_UI = [
+  { key: "__COMBO_DRY__",   label: "🟤 Dry Sabji",   statusKey: "Dry" },
+  { key: "__COMBO_CURRY__", label: "🟠 Curry Sabji", statusKey: "Curry" }
+];
+function renderComboStockPanel() {
+  ["Lunch", "Dinner"].forEach(meal => {
+    const el = document.getElementById(meal === "Lunch" ? "comboStockLunch" : "comboStockDinner");
+    if (!el) return;
+    const status = (S.comboStock && S.comboStock[meal]) || {};
+    el.innerHTML = SABJI_COMBO_UI.map(g => {
+      const limit = (S.stockLimits[meal] || {})[g.key];
+      const safeKey = g.key;
+      const st = status[g.statusKey];
+      const statusHtml = st
+        ? `<div style="font-size:.68rem;color:var(--muted);margin-top:4px;line-height:1.5;">
+             <b style="color:${st.remainingBudget <= 0 ? '#c0392b' : (st.remainingBudget <= 5 ? '#2D1A5E' : 'var(--green,#27ae60)')};">${st.weightedUsed} / ${st.limit} used</b>
+             (Mini ${st.miniUsed} · Full ${st.fullUsed})<br>
+             ~${st.miniRemaining} Mini <i>or</i> ~${st.fullRemaining} Full left
+           </div>`
+        : (limit ? `<div style="font-size:.68rem;color:var(--muted);margin-top:4px;">Saved — reload after Save Menu to see live usage.</div>` : ``);
+      return `<div class="bf-item" style="margin-bottom:6px;">
+        <div class="bf-item-info" style="flex:1;">
+          <div class="name">${g.label}</div>
+          <div class="price" style="color:var(--muted);">Mini ×0.6 + Full ×1.4</div>
+          ${statusHtml}
+        </div>
+        <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px;padding-left:8px;">
+          <input type="number" min="1" placeholder="∞"
+            value="${limit != null ? limit : ''}"
+            style="width:64px;text-align:center;border:1px solid #ddd;border-radius:6px;padding:2px 4px;font-size:.75rem;background:var(--bg);"
+            oninput="setStockLimit('${meal}','${safeKey}',this.value)"
+            title="Combined weighted limit (blank = no combo limit — use individual per-size limits instead)">
+        </div>
+      </div>`;
+    }).join("");
+  });
 }
 
 function toggleOOS(meal, colKey) {

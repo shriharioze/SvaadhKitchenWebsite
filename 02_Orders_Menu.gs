@@ -775,10 +775,14 @@ function _getMenuUncached(dateStr) {
   const unitsRemaining = {};
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     Object.entries(stockLimits[meal] || {}).forEach(([colKey, limit]) => {
+      if (SABJI_COMBO_GROUPS[colKey]) return; // virtual combo entry — not a real item, handled below
       if (!unitsRemaining[meal]) unitsRemaining[meal] = {};
       unitsRemaining[meal][colKey] = Math.max(0, limit - (orderedCounts[meal][itemsJsonKey(colKey)] || 0));
     });
   });
+  // Dry/Curry Sabji Mini+Full share a weighted pool when a combo limit is set —
+  // layer that on top of (or in place of) any individual per-size limit above.
+  _applySabjiComboLimits(stockLimits, orderedCounts, unitsRemaining);
 
   // Cap evaluation — reuse the rows already read above (zero extra cost). The
   // cap is a DELIVERY limit: when reached we flag the meal sold_out so the order
@@ -808,6 +812,8 @@ function _getMenuUncached(dateStr) {
     orders_closed: ordersClosed,
     stock_limits: stockLimits,
     units_remaining: unitsRemaining,
+    combo_stock:  { Lunch: _sabjiComboStatus(stockLimits, orderedCounts, "Lunch"),
+                    Dinner: _sabjiComboStatus(stockLimits, orderedCounts, "Dinner") },
     order_caps:    orderCaps,    // admin display: configured per-meal max
     cap_alt:       capAlt,       // admin display: per-meal "offer pickup/porter" flags
     order_counts:  orderCounts,  // admin display: active orders placed so far
@@ -1728,6 +1734,7 @@ function _submitOrderInternal(body) {
           const colKeyStk = it.colKey;
           const qtyStk = Number(it.qty) || 0;
           if (qtyStk <= 0) continue;
+          if (SABJI_COMBO_GROUPS[colKeyStk]) continue; // virtual combo entry — not a real item
           const limitStk = mealLimits[colKeyStk];
           if (limitStk === undefined) continue;
           const usedStk = countedStk[mealStk.type][itemsJsonKey(colKeyStk)] || 0;
@@ -1740,6 +1747,30 @@ function _submitOrderInternal(body) {
             });
           }
         }
+        // Combo-aware check: Dry/Curry Sabji Mini+Full share a WEIGHTED pool (see
+        // _applySabjiComboLimits) — an item can look fine on its OWN limit yet this
+        // order could still push the group's combined weighted usage over the cap.
+        // Authoritative (under lock, full-sheet counted) — never relies on the
+        // client's units_remaining alone.
+        Object.keys(SABJI_COMBO_GROUPS).forEach(function (comboKey) {
+          const grp = SABJI_COMBO_GROUPS[comboKey];
+          const comboLimit = Number(mealLimits[comboKey]);
+          if (!comboLimit || comboLimit <= 0) return;
+          const miniUsed = countedStk[mealStk.type][_stripItemSuffix(grp.Mini)] || 0;
+          const fullUsed = countedStk[mealStk.type][_stripItemSuffix(grp.Full)] || 0;
+          const reqMini = Number((mealItems.find(function (x) { return x.colKey === grp.Mini; }) || {}).qty) || 0;
+          const reqFull = Number((mealItems.find(function (x) { return x.colKey === grp.Full; }) || {}).qty) || 0;
+          if (reqMini <= 0 && reqFull <= 0) return;
+          const newWeighted = (miniUsed + reqMini) * SABJI_COMBO_WEIGHTS.Mini + (fullUsed + reqFull) * SABJI_COMBO_WEIGHTS.Full;
+          if (newWeighted > comboLimit) {
+            const budget = Math.max(0, comboLimit - (miniUsed * SABJI_COMBO_WEIGHTS.Mini + fullUsed * SABJI_COMBO_WEIGHTS.Full));
+            stockConflicts.push({
+              date: dateStrStk, meal: mealStk.type,
+              colKey: grp.label + " (combined Mini+Full limit)",
+              available: Math.floor(budget / Math.min(SABJI_COMBO_WEIGHTS.Mini, SABJI_COMBO_WEIGHTS.Full)) // informational
+            });
+          }
+        });
       }
     }
     if (stockConflicts.length) {
