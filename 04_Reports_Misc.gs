@@ -1850,10 +1850,22 @@ function triggerManualArchive(body) {
 // ── Time-based trigger: auto-archive previous month on the 10th ──────────
 // Run setupMonthlyArchiveTrigger() once from Apps Script editor to register.
 // Also registered from admin UI via the setupQuarterlyArchiveTrigger action name (kept for compat).
+//
+// RUNS AT HEAD, ALWAYS: ScriptApp.newTrigger(...).create() has no version/deployment
+// parameter at all — Apps Script doesn't expose one, and installable triggers created
+// this way execute the LATEST saved code (Head) by design, not a frozen deployment
+// snapshot. If the Triggers UI ever shows "Which runs at deployment: Version NNN" for
+// this trigger (seen 2026-07: pinned to Version 436, un-editable in the UI), that's a
+// stale/pinned config from however the trigger was originally created — there is no
+// in-UI way to switch it back to Head. The only fix is DELETE + RECREATE, which is
+// exactly what this function does below: every re-run wipes any old (possibly pinned)
+// trigger and installs a fresh one, which is Head-bound by default. Re-run this
+// function any time you suspect the trigger has drifted from Head.
 function setupMonthlyArchiveTrigger() {
-  // Remove any existing trigger for runScheduledArchive
+  // Remove any existing trigger for runScheduledArchive (clears a stale/version-pinned one)
+  var removed = 0;
   ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === "runScheduledArchive") ScriptApp.deleteTrigger(t);
+    if (t.getHandlerFunction() === "runScheduledArchive") { ScriptApp.deleteTrigger(t); removed++; }
   });
   // Fire on the 10th of every month at 21:00 UTC = 02:30 IST (safe off-peak window)
   ScriptApp.newTrigger("runScheduledArchive")
@@ -1861,7 +1873,9 @@ function setupMonthlyArchiveTrigger() {
     .onMonthDay(10)
     .atHour(21)
     .create();
-  return "Monthly archive trigger set — fires on the 10th of every month at ~2 AM IST.";
+  return "Monthly archive trigger set (removed " + removed + " old trigger" + (removed === 1 ? "" : "s")
+    + ") — fires on the 10th of every month at ~2 AM IST, running at HEAD (always your latest saved code). "
+    + "Check Triggers → this trigger should now show 'Head' instead of a pinned version number.";
 }
 
 // Keep old name working (admin UI may still call this action)
