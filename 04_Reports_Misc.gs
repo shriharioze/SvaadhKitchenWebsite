@@ -735,8 +735,8 @@ function markOrderPacked(body) {
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
 // Shared per-row aggregation core — used by BOTH getAnalytics (an admin-picked
 // date-range report) and getForecastedMonthlySales (a trailing lookback window
-// for the forecast model). Keeping this ONE function means the surcharge/
-// small-fee backfill rules, VIP exemption, and day/meal bucketing can never
+// for the forecast model). Keeping this ONE function means the small-fee
+// backfill rules, VIP exemption, and day/meal bucketing can never
 // drift between the two features. Returns the raw aggregates; callers shape
 // their own response from them.
 function _analyticsCore(dateFrom, dateTo) {
@@ -828,29 +828,28 @@ function _analyticsCore(dateFrom, dateTo) {
     "Jowar_Bhakri":"Jowar Bhakri","Bajra_Bhakri":"Bajra Bhakri","Dry_Sabji_Mini":"Dry Sabji Mini",
     "Dry_Sabji_Full":"Dry Sabji Full","Curry_Sabji_Mini":"Curry Sabji Mini","Curry_Sabji_Full":"Curry Sabji Full",
     "Dal":"Dal","Rice":"Rice","Salad":"Salad","Curd":"Curd"};
-  var totalRev=0, totalPaid=0, totalDelivery=0, totalSurcharge=0, totalSmallFee=0;
+  var totalRev=0, totalPaid=0, totalDelivery=0, totalSmallFee=0;
   var custSet={}, dayMap={};
   var mealStats={Breakfast:{count:0,revenue:0},Lunch:{count:0,revenue:0},Dinner:{count:0,revenue:0}};
   var itemCounts={};
   rows.forEach(function(r) {
     var d=fmtDate(r.Order_Date), net=Number(r.Net_Total)||0;
     var delivery=Number(r.Delivery_Charge)||0;
-    var food=Number(r.Food_Subtotal)||0;
-    // Backfill surcharge for old rows where Inflation_Surcharge column was blank
-    var surchargeRaw=Number(r.Inflation_Surcharge);
-    var surcharge = (!isNaN(surchargeRaw) && surchargeRaw > 0) ? surchargeRaw : (food > 0 ? Math.ceil(food*0.06) : 0);
+    // NOTE: market surcharge is obsolete (removed at the PRICING_V2 go-live) — no longer
+    // reported. The Inflation_Surcharge column is now only the loyalty-streak accrual and
+    // is read solely by the loyalty engine, NOT summed here.
     // Small_Order_Fee: exact backfill using Option B (checks VIP, pickup, day threshold)
     var smallFee = calcSmallFee(r);
     var payStatus = String(r.Payment_Status || "").trim();
     totalRev+=net;
-    totalDelivery+=delivery; totalSurcharge+=surcharge; totalSmallFee+=smallFee;
+    totalDelivery+=delivery; totalSmallFee+=smallFee;
     if(payStatus==="Paid"||payStatus==="Wallet Paid"||payStatus==="Collected") totalPaid+=net;
     var ph=String(r.Phone||"").trim(); if(ph) custSet[ph]=true;
     var meal=String(r.Meal_Type||"");
     if(mealStats[meal]){mealStats[meal].count++;mealStats[meal].revenue+=net;}
-    if(!dayMap[d]) dayMap[d]={orders:0,revenue:0,delivery:0,surcharge:0,smallFee:0};
+    if(!dayMap[d]) dayMap[d]={orders:0,revenue:0,delivery:0,smallFee:0};
     dayMap[d].orders++; dayMap[d].revenue+=net;
-    dayMap[d].delivery+=delivery; dayMap[d].surcharge+=surcharge; dayMap[d].smallFee+=smallFee;
+    dayMap[d].delivery+=delivery; dayMap[d].smallFee+=smallFee;
     if(meal==="Breakfast"){
       for(var n=1;n<=4;n++){var bi=String(r["BF_Item_"+n]||"").trim(),bq=Number(r["BF_Qty_"+n])||0;if(bi&&bq>0)itemCounts[bi]=(itemCounts[bi]||0)+bq;}
       var cu=Number(r.Curd)||0; if(cu>0)itemCounts["Curd"]=(itemCounts["Curd"]||0)+cu;
@@ -862,7 +861,7 @@ function _analyticsCore(dateFrom, dateTo) {
   return {
     rows: rows, dayMap: dayMap, custSet: custSet, mealStats: mealStats, itemCounts: itemCounts,
     totalRev: totalRev, totalPaid: totalPaid, totalDelivery: totalDelivery,
-    totalSurcharge: totalSurcharge, totalSmallFee: totalSmallFee, archivedCount: archivedCount
+    totalSmallFee: totalSmallFee, archivedCount: archivedCount
   };
 }
 
@@ -872,12 +871,12 @@ function getAnalytics(p) {
   var core = _analyticsCore(dateFrom, dateTo);
   var dayMap = core.dayMap, itemCounts = core.itemCounts, mealStats = core.mealStats,
       custSet = core.custSet, rows = core.rows, totalRev = core.totalRev, totalPaid = core.totalPaid,
-      totalDelivery = core.totalDelivery, totalSurcharge = core.totalSurcharge, totalSmallFee = core.totalSmallFee,
+      totalDelivery = core.totalDelivery, totalSmallFee = core.totalSmallFee,
       archivedCount = core.archivedCount;
 
   var days=Object.keys(dayMap).sort().map(function(d){
     return{date:d,orders:dayMap[d].orders,revenue:Math.round(dayMap[d].revenue),
-           delivery:Math.round(dayMap[d].delivery),surcharge:Math.round(dayMap[d].surcharge),smallFee:Math.round(dayMap[d].smallFee)};
+           delivery:Math.round(dayMap[d].delivery),smallFee:Math.round(dayMap[d].smallFee)};
   });
   var allItems=Object.keys(itemCounts).map(function(k){return{name:k,count:Math.round(itemCounts[k])};}).sort(function(a,b){return b.count-a.count;});
   var topItems=allItems.slice(0,15);
@@ -885,7 +884,7 @@ function getAnalytics(p) {
     summary:{orders:rows.length,customers:Object.keys(custSet).length,revenue:Math.round(totalRev),
       paid:Math.round(totalPaid),pending:Math.round(totalRev-totalPaid),
       avgPerDay:days.length>0?Math.round(totalRev/days.length):0,
-      delivery:Math.round(totalDelivery),surcharge:Math.round(totalSurcharge),smallFee:Math.round(totalSmallFee)},
+      delivery:Math.round(totalDelivery),smallFee:Math.round(totalSmallFee)},
     meals:mealStats,days:days,topItems:topItems,allItems:allItems,
     // Lets the admin UI show "Including X archived orders" so they know
     // the report pulled across archive files (which is slower than live-only).

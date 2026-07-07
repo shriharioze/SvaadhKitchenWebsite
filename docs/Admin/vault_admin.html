@@ -5085,16 +5085,12 @@ function renderAnalytics(data, from, to) {
       <div class="kv" style="font-size:1rem;">${fmtM(summary.delivery||0)}</div>
       <div class="kl">🚚 Delivery</div>
     </div>
-    <div class="kpi-card" style="border-color:#f87171;background:#fff1f2;">
-      <div class="kv" style="font-size:1rem;">${fmtM(summary.surcharge||0)}</div>
-      <div class="kl">📈 Surcharge</div>
-    </div>
     <div class="kpi-card" style="border-color:#a78bfa;background:#f5f3ff;">
       <div class="kv" style="font-size:1rem;">${fmtM(summary.smallFee||0)}</div>
       <div class="kl">📦 Small Order Fee</div>
     </div>
     <div class="kpi-card" style="border-color:#6ee7b7;background:#f0fdf4;">
-      <div class="kv" style="font-size:1rem;">${fmtM((summary.delivery||0)+(summary.surcharge||0)+(summary.smallFee||0))}</div>
+      <div class="kv" style="font-size:1rem;">${fmtM((summary.delivery||0)+(summary.smallFee||0))}</div>
       <div class="kl">Total Fees</div>
     </div>
   </div>`;
@@ -5152,7 +5148,6 @@ function renderAnalytics(data, from, to) {
       <td style="text-align:center;">${d.orders}</td>
       <td style="text-align:right;font-weight:600;">${fmtM(d.revenue)}</td>
       <td style="text-align:right;color:#d97706;">${d.delivery > 0 ? fmtM(d.delivery) : '—'}</td>
-      <td style="text-align:right;color:#dc2626;">${d.surcharge > 0 ? fmtM(d.surcharge) : '—'}</td>
       <td style="text-align:right;color:#7c3aed;">${d.smallFee > 0 ? fmtM(d.smallFee) : '—'}</td>
     </tr>`).join("");
     html += `<div class="analytics-section">
@@ -5162,7 +5157,6 @@ function renderAnalytics(data, from, to) {
           <th>Date</th><th>Orders</th>
           <th style="text-align:right;">Revenue</th>
           <th style="text-align:right;color:#d97706;">🚚 Del.</th>
-          <th style="text-align:right;color:#dc2626;">📈 Surch.</th>
           <th style="text-align:right;color:#7c3aed;">📦 SmallFee</th>
         </tr></thead>
         <tbody>${dayRows}</tbody>
@@ -5171,7 +5165,6 @@ function renderAnalytics(data, from, to) {
           <td style="text-align:center;">${summary.orders}</td>
           <td style="text-align:right;">${fmtM(summary.revenue)}</td>
           <td style="text-align:right;color:#d97706;">${fmtM(summary.delivery||0)}</td>
-          <td style="text-align:right;color:#dc2626;">${fmtM(summary.surcharge||0)}</td>
           <td style="text-align:right;color:#7c3aed;">${fmtM(summary.smallFee||0)}</td>
         </tr></tfoot>
       </table></div>
