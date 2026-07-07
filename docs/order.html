@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.06.03";
+    const APP_VERSION = "v26.07.07.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4845,32 +4845,42 @@
     function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
     // ── Grace Period Session State ───────────────────────────────
-    // graceDeadlines: { meal → Date } computed once when user enters Step 3 today.
+    // graceDeadlines: { meal → Date } computed when user enters Step 3 today.
     // If a meal's cutoff was still in the future at that moment, we give them
     // GRACE_MINUTES after the cutoff to finish and submit.
-    // Once set, deadlines never extend — leaving and re-entering Step 3 doesn't reset.
+    // Deadlines are frozen against a customer navigating away and back WITHOUT
+    // anything changing (so they can't game their own deadline) — but they DO
+    // re-sync whenever the underlying cutoff hour itself changes (admin edits
+    // the site-wide default or a per-day override mid-session — see
+    // _graceCutoffSnapshot). Without this, a tab left open across an admin
+    // cutoff change kept the OLD deadline forever.
     let _graceTimerHandle = null;
 
     function initGraceDeadlines() {
       if (!S.graceDeadlines) S.graceDeadlines = {};
+      if (!S._graceCutoffSnapshot) S._graceCutoffSnapshot = {};
       const ist = getIST();
       const todayStr = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth()+1).padStart(2,'0')}-${String(ist.getUTCDate()).padStart(2,'0')}`;
-      // Only set deadlines once per session per meal (never re-set)
       ["Breakfast","Lunch","Dinner"].forEach(meal => {
-        if (S.graceDeadlines[meal]) return; // already set this session
         const menu = S.menuCache[todayStr];
         const ov = menu?.cutoff_overrides || {};
         const cutoffH = ov[meal] ?? CUTOFFS[meal];
+        // Already set for THIS cutoff hour this session — nothing changed, leave it.
+        if (S.graceDeadlines[meal] && S._graceCutoffSnapshot[meal] === cutoffH) return;
+        S._graceCutoffSnapshot[meal] = cutoffH;
+
         const cutoffMs = cutoffH * 3600 * 1000; // ms since midnight IST
         const midnightIST = new Date(ist);
         midnightIST.setUTCHours(0,0,0,0);
         const cutoffTime = new Date(midnightIST.getTime() + cutoffMs);
-        // Only set a grace deadline if we arrived before (or at) cutoff
-        // i.e., the user has a legitimate session that started before close
+        // Only set a grace deadline if we're currently before (or at) cutoff —
+        // i.e. the customer has a legitimate window that hasn't yet closed.
         if (ist <= cutoffTime) {
           S.graceDeadlines[meal] = new Date(cutoffTime.getTime() + GRACE_MINUTES * 60 * 1000);
+        } else {
+          // Past the (possibly just-updated) cutoff — no grace, meal is closed.
+          delete S.graceDeadlines[meal];
         }
-        // If already past cutoff when arriving, no grace — meal is simply closed
       });
     }
 
@@ -11048,26 +11058,41 @@
 
       // 2. Fetch gateway config from backend
       try {
-        const res  = await fetch(`${APPS_SCRIPT_URL}?action=getConfig`);
-        const data = await res.json();
-        // Honour the backend flag (PAYMENT_GATEWAY_ENABLED Script Property).
-        // The merged backend has UAT-tested HDFC integration; live UAT passed.
-        S.gatewayEnabled = !!(data && data.gateway_enabled);
-        S.gatewayEnv     = (data && data.gateway_env) || "test";
-        S.pricingV2      = !!(data && data.pricing_v2);
-        // Refresh the site-wide default cutoffs (admin-editable — see the vault_admin
-        // "Default Cutoff Times" panel). Falls back to the existing hardcoded CUTOFFS
-        // if the field is missing (older backend) so this can never break the page.
-        if (data && data.default_cutoffs && typeof data.default_cutoffs === "object") {
-          CUTOFFS = Object.assign({}, CUTOFFS, data.default_cutoffs);
-        }
-        console.log(`HDFC Gateway: ${S.gatewayEnabled ? "ENABLED (" + S.gatewayEnv + ")" : "disabled"} | Pricing V2: ${S.pricingV2 ? "ON" : "off"} | Cutoffs: ${JSON.stringify(CUTOFFS)}`);
+        await _refreshServerConfig();
       } catch (e) {
         S.gatewayEnabled = false;
         console.warn("Could not fetch gateway config:", e.message);
       }
       // One-time surcharge-removal notice — only when the new pricing is live.
       try { _maybeShowSurchargeNotice(); } catch (_) {}
+    }
+
+    // Fetches getConfig and refreshes gateway flags + the site-wide default
+    // cutoffs. Split out of hdfc_init so it can ALSO be re-run periodically
+    // (see the version-freshness poller) — otherwise a tab left open across an
+    // admin cutoff-time change (e.g. Default Cutoff Times panel) never learns
+    // about it: CUTOFFS was only ever fetched ONCE, at page load, so a customer
+    // with an already-open tab kept ordering (and had their grace deadline
+    // frozen) against the OLD time long after the admin changed it — exactly
+    // the "why is Dinner still open at 4:22 when the new cutoff is 4:15" report.
+    async function _refreshServerConfig() {
+      const res  = await fetch(`${APPS_SCRIPT_URL}?action=getConfig&_t=${Date.now()}`);
+      const data = await res.json();
+      // Honour the backend flag (PAYMENT_GATEWAY_ENABLED Script Property).
+      S.gatewayEnabled = !!(data && data.gateway_enabled);
+      S.gatewayEnv     = (data && data.gateway_env) || "test";
+      S.pricingV2      = !!(data && data.pricing_v2);
+      // Refresh the site-wide default cutoffs (admin-editable — see the vault_admin
+      // "Default Cutoff Times" panel). Falls back to the existing hardcoded CUTOFFS
+      // if the field is missing (older backend) so this can never break the page.
+      if (data && data.default_cutoffs && typeof data.default_cutoffs === "object") {
+        CUTOFFS = Object.assign({}, CUTOFFS, data.default_cutoffs);
+        // Re-sync any already-set grace deadline for TODAY that used a now-stale
+        // cutoff hour — see initGraceDeadlines' snapshot check. No-ops silently
+        // if nothing changed or the page hasn't reached step 3 yet.
+        try { if (typeof initGraceDeadlines === "function") initGraceDeadlines(); } catch (_) {}
+      }
+      console.log(`HDFC Gateway: ${S.gatewayEnabled ? "ENABLED (" + S.gatewayEnv + ")" : "disabled"} | Pricing V2: ${S.pricingV2 ? "ON" : "off"} | Cutoffs: ${JSON.stringify(CUTOFFS)}`);
     }
 
     // One-time notice (5s lock, then "Got it"): shown ONCE per browser when the
@@ -12387,11 +12412,19 @@
         if (Date.now() - _lastVerCheckTs < 5 * 60 * 1000) return; // throttle
         _lastVerCheckTs = Date.now();
         try { _promptUpdateIfStale(); } catch (_) {}
+        try { _refreshServerConfig(); } catch (_) {} // catch an admin cutoff-time change on refocus too
       });
       setInterval(function () {
         _lastVerCheckTs = Date.now();
         try { _promptUpdateIfStale(); } catch (_) {}
       }, 15 * 60 * 1000);
+
+      // Cutoff times are more time-sensitive than app-version staleness (an
+      // admin change mid-day should reach an already-open tab within minutes,
+      // not whenever it happens to reload) — a tighter dedicated poll. Cheap:
+      // one small GET every 3 min; initGraceDeadlines (called inside
+      // _refreshServerConfig) only touches state, no extra network calls.
+      setInterval(function () { try { _refreshServerConfig(); } catch (_) {} }, 3 * 60 * 1000);
 
       // Refresh nudge is shown when user reaches the calendar (step 2) — see updateNav()
 
