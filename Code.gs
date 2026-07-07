@@ -136,6 +136,11 @@ function doGet(e) {
       return jsonRes({gap_mm: num});
     }
 
+    if (action === "auditOnAccountDrift") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(auditOnAccountStatusDrift());
+    }
+
     // FULL ADMIN ACCESS (Admin PIN ONLY)
     if (action === "getAdminData") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});

@@ -3010,7 +3010,7 @@ function getOnAccountBill(phone) {
     let earliest = null;
     rows.forEach(function (r) {
       if (_normalizePhone(r.Phone) !== phoneStr) return;
-      if (String(r.Payment_Status || "").trim().toLowerCase() !== "on account") return;
+      if (!_isOnAccountDueStatus(r.Payment_Status)) return;
       const ds = r.Order_Date instanceof Date
         ? Utilities.formatDate(r.Order_Date, 'Asia/Kolkata', 'yyyy-MM-dd')
         : String(r.Order_Date).trim();

@@ -3,6 +3,64 @@
 // Split from Code.gs (verbatim). Global config in 00_Config.gs (loads first).
 // ============================================================
 
+// ── ON-ACCOUNT: canonical status check (single source of truth) ─────────────
+// The On-Account override in submitOrder writes EXACTLY "On Account" (verified
+// against every write site — "onaccount" with no space is never actually
+// written, it was defensive dead code). A 2026-07 audit found the customer-
+// facing due amount (verifyLogin), the manual wallet-settle sweep
+// (_autoSettlePendingOrders), the gateway due calc (_computeOnAccountDue), and
+// the admin billing bucket (03_Admin_Kitchen.gs) each had their OWN ad-hoc
+// filter — some also counted "Pending"/blank legacy rows, inflating what a
+// customer saw as "due" without those rows ever being chargeable or settled.
+// Every read site below now goes through this one function so they can never
+// silently diverge again.
+function _isOnAccountDueStatus(status) {
+  return String(status || "").trim().toLowerCase() === "on account";
+}
+
+// Read-only diagnostic (run from the editor or ?action=auditOnAccountDrift with
+// admin PIN) — lists every order belonging to an On_Account=Yes customer whose
+// Payment_Status is neither "On Account" (correctly due) nor a settled/resolved
+// state (Paid/Wallet Paid/Cancelled/Refunded). These are stray legacy rows the
+// OLD verifyLogin filter used to silently fold into the customer's displayed
+// due amount without them ever being chargeable via the gateway/manual
+// on-account settlement — a real gap, closed 2026-07 by unifying every read
+// site onto _isOnAccountDueStatus. Does NOT change anything; each flagged row
+// needs a human judgment call (may be an unrelated unconfirmed manual-UPI order
+// predating the On-Account flag, not necessarily an on-account bug).
+function auditOnAccountStatusDrift() {
+  const ss = getSpreadsheet();
+  const custRows = getAllRows(getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS));
+  const onAcctPhones = {};
+  custRows.forEach(function (r) {
+    if (String(r.On_Account || "").trim().toLowerCase() === "yes") {
+      onAcctPhones[_normalizePhone(r.Phone)] = r.Customer_Name || "";
+    }
+  });
+  const orderRows = getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
+  const flagged = [];
+  orderRows.forEach(function (r) {
+    const p = _normalizePhone(r.Phone);
+    if (!onAcctPhones[p]) return;
+    const ps = String(r.Payment_Status || "").trim();
+    const psl = ps.toLowerCase();
+    if (psl === "on account") return;                  // correct — currently due
+    if (psl.indexOf("paid") !== -1) return;             // Paid / Wallet Paid
+    if (psl.indexOf("cancel") !== -1) return;
+    if (psl.indexOf("refund") !== -1) return;
+    const net = _cleanNum(r.Net_Total);
+    if (net <= 0) return;
+    flagged.push({
+      phone: p, name: onAcctPhones[p], sid: r.Submission_ID,
+      date: r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Order_Date || ""),
+      meal: r.Meal_Type, status: ps || "(blank)", net: net
+    });
+  });
+  Logger.log("auditOnAccountStatusDrift: " + flagged.length + " stray row(s) found across " + Object.keys(onAcctPhones).length + " on-account customer(s)");
+  Logger.log(JSON.stringify(flagged, null, 2));
+  return { onAccountCustomers: Object.keys(onAcctPhones).length, count: flagged.length, rows: flagged };
+}
+
 // ── GET CUSTOMER ─────────────────────────────────────────────
 function getCustomer(phone) {
   if (!phone) return {found: false};
@@ -89,8 +147,7 @@ function verifyLogin(phone, pin) {
     const orderRows = getAllRows(wsOrders);
     for (const ord of orderRows) {
       if (_normalizePhone(_get(ord, "Phone")) === pStr) {
-        const ps = String(_get(ord, "Payment_Status") || "").trim().toLowerCase();
-        if (ps === "on account" || ps === "onaccount" || ps === "pending" || ps === "") {
+        if (_isOnAccountDueStatus(_get(ord, "Payment_Status"))) {
           pendingAmount += _cleanNum(_get(ord, "Net_Total"));
         }
       }
@@ -145,8 +202,7 @@ function _autoSettlePendingOrders(phone) {
   // Rule 2: Only target "on account" orders (ignore normal Pending/UPI)
   const pendingOrders = rows.filter(r => {
     if (_normalizePhone(_get(r, "Phone")) !== pStr) return false;
-    const ps = String(_get(r, "Payment_Status") || "").trim().toLowerCase();
-    if (ps !== "on account" && ps !== "onaccount") return false;
+    if (!_isOnAccountDueStatus(_get(r, "Payment_Status"))) return false;
     return _cleanNum(_get(r, "Net_Total")) > 0;
   });
 

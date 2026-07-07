@@ -2121,7 +2121,7 @@ function _computeOnAccountDue(phone, scope) {
   let amount = 0, count = 0;
   rows.forEach(function (r) {
     if (_normalizePhone(r.Phone) !== phoneStr) return;
-    if (String(r.Payment_Status || "").trim().toLowerCase() !== "on account") return;
+    if (!_isOnAccountDueStatus(r.Payment_Status)) return;
     const ds = r.Order_Date instanceof Date
       ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(r.Order_Date || "").trim();
@@ -2272,10 +2272,29 @@ function hdfc_finalizeOnAccountPayment(orderId) {
 }
 
 /**
- * Mark a customer's oldest "on account" order rows "Paid", up to `amount`.
- * WHOLE-order settlement only (never partial) — mirrors _autoSettlePendingOrders'
- * selection, but funded by the gateway-confirmed amount and with NO wallet
- * transaction. Returns { settled, count, rows }.
+ * Mark a customer's "on account" order rows "Paid", funded by the gateway-
+ * confirmed `amount`. NO wallet transaction (this is a direct gateway charge).
+ *
+ * 2026-07 incident: a customer paid ₹812 (their full displayed on-account due)
+ * but 3 orders were left stranded, still showing On Account. Root cause: the
+ * old logic walked orders oldest-first and did `remaining -= net` per row,
+ * `break`-ing the ENTIRE loop the moment one row's net exceeded what was left
+ * — so if an earlier-dated order happened to be larger than the remaining
+ * balance at that point (rounding drift or ordering), every order AFTER it
+ * was abandoned even if smaller and easily affordable, with zero indication
+ * to the customer or admin. Fixed via two changes:
+ *   1. FAST PATH — since `amount` is normally computed moments earlier as the
+ *      exact current total of every "on account" row for this phone
+ *      (_computeOnAccountDue), the common case is amount >= totalDue. When
+ *      true, settle EVERY on-account row directly — no partial-fill loop,
+ *      so this entire bug class cannot occur in the expected case.
+ *   2. FALLBACK (amount < totalDue — e.g. a new on-account order landed in
+ *      the gap between session-create and finalize) — walk oldest-first but
+ *      never `break`; skip an order that doesn't fit and keep checking
+ *      smaller ones after it, so a single oversized order can never strand
+ *      the rest. Emails the owner since this path means the charge no longer
+ *      covers the customer's full current balance and deserves a look.
+ * Returns { settled, count, rows }.
  */
 function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
   const phoneStr  = _normalizePhone(phone);
@@ -2286,15 +2305,36 @@ function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
 
   const pending = rows.filter(function (r) {
     if (_normalizePhone(_get(r, "Phone")) !== phoneStr) return false;
-    if (String(_get(r, "Payment_Status") || "").trim().toLowerCase() !== "on account") return false;
+    if (!_isOnAccountDueStatus(_get(r, "Payment_Status"))) return false;
     return _cleanNum(_get(r, "Net_Total")) > 0;
   });
   pending.sort(function (a, b) {
     return String(_get(a, "Order_Date")).localeCompare(String(_get(b, "Order_Date")));
   });
 
-  let remaining = Math.round(Number(amount) || 0);
-  let settled = 0, count = 0;
+  const target   = Math.round(Number(amount) || 0);
+  const totalDue = pending.reduce(function (s, r) { return s + Math.round(_cleanNum(_get(r, "Net_Total"))); }, 0);
+
+  if (target >= totalDue) {
+    // FAST PATH — charge covers the entire current on-account balance. Settle
+    // everything; nothing can be silently skipped.
+    let settled = 0, count = 0;
+    const settledRows = [];
+    pending.forEach(function (r) {
+      const net = Math.round(_cleanNum(_get(r, "Net_Total")));
+      ws.getRange(r._row, statusCol).setValue("Paid");
+      settled += net; count++;
+      settledRows.push(String(_get(r, "Submission_ID") || _get(r, "Order_Date")));
+    });
+    Logger.log("_settleOnAccountDirect: FULL settlement for " + phoneStr + " — " + count
+      + " order(s), ₹" + settled + " (charged ₹" + target + ", due was ₹" + totalDue + ", gateway " + gatewayOrderId + ")");
+    return { settled: settled, count: count, rows: settledRows };
+  }
+
+  // FALLBACK — charge is less than the current full balance. Settle as many
+  // orders as it covers, oldest-first, but SKIP (never break on) one that
+  // doesn't fit so a single large order can't strand smaller ones after it.
+  let remaining = target, settled = 0, count = 0;
   const settledRows = [];
   for (let i = 0; i < pending.length; i++) {
     const net = Math.round(_cleanNum(_get(pending[i], "Net_Total")));
@@ -2302,9 +2342,20 @@ function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
       ws.getRange(pending[i]._row, statusCol).setValue("Paid");
       remaining -= net; settled += net; count++;
       settledRows.push(String(_get(pending[i], "Submission_ID") || _get(pending[i], "Order_Date")));
-    } else {
-      break; // whole-order only — leftover stays on account
     }
   }
+  Logger.log("_settleOnAccountDirect: PARTIAL settlement for " + phoneStr + " — " + count
+    + " order(s), ₹" + settled + " (charged ₹" + target + ", full due was ₹" + totalDue + ", gateway " + gatewayOrderId + ")");
+  try {
+    const adminEmail = SP.getProperty("ADMIN_EMAIL");
+    if (adminEmail) {
+      MailApp.sendEmail(adminEmail, "⚠️ Svaadh: On-Account settlement didn't cover the full balance",
+        "Customer " + phoneStr + " was charged ₹" + target + " for on-account dues, but their current full"
+        + " balance was ₹" + totalDue + " (likely a new on-account order landed between payment start and"
+        + " confirmation). Settled ₹" + settled + " across " + count + " order(s); the remainder is still"
+        + " On Account. Gateway order: " + gatewayOrderId + ". Please review — nothing was silently lost,"
+        + " this is just a heads-up that the balance changed mid-payment.");
+    }
+  } catch (e) {}
   return { settled: settled, count: count, rows: settledRows };
 }
