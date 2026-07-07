@@ -2324,10 +2324,32 @@ function _submitOrderInternal(body) {
 
 
 // ── UPSERT CUSTOMER ──────────────────────────────────────────
+// STRICT Google-Maps-only sanitation (mirror of the frontend _isGoogleMapsLink).
+// A non-Google-Maps value is dropped to "" — Maps_Link then falls back to the
+// auto-derived link, so junk can never reach the driver page. Server-side so a
+// bypassed/stale client can't store garbage either.
+function _sanitizeMapsLink(v) {
+  v = String(v || "").trim();
+  if (!v) return "";
+  return /^(https?:\/\/)?(www\.)?(maps\.app\.goo\.gl\/|goo\.gl\/maps\/|maps\.google\.(com|co\.[a-z]{2}|[a-z]{2})(\/|\?|$)|google\.(com|co\.[a-z]{2}|[a-z]{2})\/maps)/i.test(v) ? v : "";
+}
+
 function _upsertCustomer(ss, profile) {
   // Ensure tab exists and headers are correct before doing anything
   const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   SpreadsheetApp.flush(); // Lock in the headers before indexing
+
+  // Sanitize maps links up front — the profile's own link and each per-meal one.
+  if (profile.maps !== undefined) profile.maps = _sanitizeMapsLink(profile.maps);
+  if (profile.meal_addresses) {
+    try {
+      const _ma = JSON.parse(profile.meal_addresses);
+      ["Breakfast", "Lunch", "Dinner"].forEach(function (m) {
+        if (_ma[m] && _ma[m].maps !== undefined) _ma[m].maps = _sanitizeMapsLink(_ma[m].maps);
+      });
+      profile.meal_addresses = JSON.stringify(_ma);
+    } catch (e) { /* malformed JSON — leave as-is; nothing reads it blindly */ }
+  }
 
   const rows = getAllRows(ws);
   const pStr = _normalizePhone(profile.phone);
@@ -2381,7 +2403,11 @@ function _upsertCustomer(ss, profile) {
         console.warn("⚠️ PIN overwrite BLOCKED for " + pStr + " — existing PIN not replaced (takeover guard).");
       }
     }
-    if (profile.meal_addresses) update("Meal_Addresses", profile.meal_addresses);
+    // Refresh whenever the field is PRESENT (was `if (profile.meal_addresses)`,
+    // which skipped the empty string old single-address clients send — so an
+    // address edit left the stored Meal_Addresses stale with the OLD address
+    // forever). New clients always send the full JSON for both address modes.
+    if (profile.meal_addresses !== undefined) update("Meal_Addresses", profile.meal_addresses);
     if (profile.standardOrder !== undefined) update("Standard_Order", profile.standardOrder);
     if (profile.onAccount !== undefined) update("On_Account", profile.onAccount);
     if (profile.billingCycle !== undefined) update("Billing_Cycle", profile.billingCycle);

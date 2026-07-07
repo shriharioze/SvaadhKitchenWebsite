@@ -3447,7 +3447,7 @@
               <label><span data-i18n="label_maps">📍 Google Maps Pin Link</span> <span
                   style="font-size:0.7rem;color:#aaa;" data-i18n="label_optional">(optional)</span></label>
               <input type="url" id="mapsInput" placeholder="Paste your Google Maps link here…"
-                oninput="syncSingleAddr()">
+                oninput="syncSingleAddr(); _mapsLinkFeedback(this)">
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <label><span data-i18n="label_landmark">🏷️ Landmark / Directions</span> <span
@@ -3524,7 +3524,7 @@
               </div>
               <div class="form-group"><label><span data-i18n="label_maps_simple">📍 Maps Link</span> <span
                     style="font-size:0.7rem;color:#aaa;" data-i18n="label_optional">(optional)</span></label><input
-                  type="url" id="bf_mapsInput" placeholder="Google Maps link"></div>
+                  type="url" id="bf_mapsInput" placeholder="Google Maps link" oninput="_mapsLinkFeedback(this)"></div>
               <div class="form-group" style="margin-bottom:0;"><label><span data-i18n="label_landmark_simple">🏷️
                     Landmark</span> <span style="font-size:0.7rem;color:#aaa;"
                     data-i18n="label_optional">(optional)</span></label><input type="text" id="bf_landmarkInput"
@@ -3594,7 +3594,7 @@
               </div>
               <div class="form-group"><label><span data-i18n="label_maps_simple">📍 Maps Link</span> <span
                     style="font-size:0.7rem;color:#aaa;" data-i18n="label_optional">(optional)</span></label><input
-                  type="url" id="l_mapsInput" placeholder="Google Maps link"></div>
+                  type="url" id="l_mapsInput" placeholder="Google Maps link" oninput="_mapsLinkFeedback(this)"></div>
               <div class="form-group" style="margin-bottom:0;"><label><span data-i18n="label_landmark_simple">🏷️
                     Landmark</span> <span style="font-size:0.7rem;color:#aaa;"
                     data-i18n="label_optional">(optional)</span></label><input type="text" id="l_landmarkInput"
@@ -3664,7 +3664,7 @@
               </div>
               <div class="form-group"><label><span data-i18n="label_maps_simple">📍 Maps Link</span> <span
                     style="font-size:0.7rem;color:#aaa;" data-i18n="label_optional">(optional)</span></label><input
-                  type="url" id="d_mapsInput" placeholder="Google Maps link"></div>
+                  type="url" id="d_mapsInput" placeholder="Google Maps link" oninput="_mapsLinkFeedback(this)"></div>
               <div class="form-group" style="margin-bottom:0;"><label><span data-i18n="label_landmark_simple">🏷️
                     Landmark</span> <span style="font-size:0.7rem;color:#aaa;"
                     data-i18n="label_optional">(optional)</span></label><input type="text" id="d_landmarkInput"
@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.06.01";
+    const APP_VERSION = "v26.07.06.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5740,7 +5740,11 @@
           ...S.profile,
           phone: S.phone,
           pin: pin,
-          meal_addresses: S.sameAddr ? "" : JSON.stringify(S.mealAddrs),
+          // ALWAYS send the full per-meal JSON — validate(1) keeps S.mealAddrs in
+          // lock-step in BOTH address modes. The old `sameAddr ? ""` sent an empty
+          // string on single-address edits, which the server SKIPPED — so the
+          // stored Meal_Addresses kept the OLD address/maps forever after an edit.
+          meal_addresses: JSON.stringify(S.mealAddrs),
           _action: "upsertProfile"
         };
         fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(profile) });
@@ -5835,6 +5839,23 @@
       updateNav();
       window.scrollTo(0, 0);
     }
+    // STRICT Google-Maps-only check for the maps-link fields. Empty is fine (the
+    // field is optional; the server auto-derives a link from the address), but a
+    // non-empty value must be a real Google Maps link: maps.app.goo.gl share links,
+    // legacy goo.gl/maps, google.com/maps (any country TLD), or maps.google.com.
+    // The server re-validates on save, so a bypassed client can't store junk.
+    function _isGoogleMapsLink(v) {
+      v = String(v || "").trim();
+      if (!v) return true;
+      return /^(https?:\/\/)?(www\.)?(maps\.app\.goo\.gl\/|goo\.gl\/maps\/|maps\.google\.(com|co\.[a-z]{2}|[a-z]{2})(\/|\?|$)|google\.(com|co\.[a-z]{2}|[a-z]{2})\/maps)/i.test(v);
+    }
+    // Live red-border feedback while typing (wired via oninput on the maps inputs).
+    function _mapsLinkFeedback(el) {
+      const ok = _isGoogleMapsLink(el.value);
+      el.style.borderColor = ok ? "" : "#e74c3c";
+      el.style.background = ok ? "" : "#fdf0ee";
+    }
+
     async function validate(step) {
       if (step === 0) {
         const p = $("phoneInput").value.trim().replace(/\D/g, "");
@@ -5856,6 +5877,13 @@
           if (!isPickup) {
             if (!society) { toast(t('toast_society')); return false; }
           }
+          // STRICT: maps link must be a Google Maps link (or empty).
+          if (!isPickup && !_isGoogleMapsLink($("mapsInput").value)) {
+            _mapsLinkFeedback($("mapsInput"));
+            toast("⚠️ That doesn't look like a Google Maps link. Please paste a link like maps.app.goo.gl/… or google.com/maps/… (or leave it blank).", 6000);
+            try { $("mapsInput").focus(); } catch (_) {}
+            return false;
+          }
 
           S.profile = {
             // Spread first so server-loaded flags (feeExempt / onAccount /
@@ -5873,6 +5901,16 @@
             landmark: isPickup ? "" : $("landmarkInput").value.trim(),
             payment_preference: $("payFreqSelect").value
           };
+          // Keep the per-meal addresses in lock-step with a single-address edit —
+          // all 3 meals get the updated address HERE (not just via oninput sync),
+          // so the Meal_Addresses JSON saved below can never go stale after an
+          // address change (maps link included).
+          const _mdef = {
+            area: S.profile.area, wing: S.profile.wing, flat: S.profile.flat,
+            floor: S.profile.floor, society: S.profile.society,
+            delivery_point: S.profile.delivery_point, maps: S.profile.maps, landmark: S.profile.landmark
+          };
+          S.mealAddrs = { Breakfast: { ..._mdef }, Lunch: { ..._mdef }, Dinner: { ..._mdef } };
         } else {
           const bf = readPerMealAddr("bf"), l = readPerMealAddr("l"), d = readPerMealAddr("d");
 
@@ -5881,6 +5919,7 @@
 
           const mealsData = [{ name: "Breakfast", addr: bf }, { name: "Lunch", addr: l }, { name: "Dinner", addr: d }];
 
+          const _pfxOf = { Breakfast: "bf", Lunch: "l", Dinner: "d" };
           mealsData.forEach(meal => {
             if (meal.addr.area) {
               if (meal.addr.area === "Self Pickup" || meal.addr.society) {
@@ -5888,11 +5927,17 @@
               } else {
                 errorMsg = `Please provide a Society / Building name for your ${meal.name} address.`;
               }
+              // STRICT: maps link must be a Google Maps link (or empty).
+              if (!errorMsg && meal.addr.area !== "Self Pickup" && !_isGoogleMapsLink(meal.addr.maps)) {
+                errorMsg = `⚠️ The ${meal.name} maps link doesn't look like a Google Maps link. Please paste a link like maps.app.goo.gl/… (or leave it blank).`;
+                const _mEl = $(_pfxOf[meal.name] + "_mapsInput");
+                if (_mEl) { _mapsLinkFeedback(_mEl); try { _mEl.focus(); } catch (_) {} }
+              }
             }
           });
 
           if (errorMsg) {
-            toast(errorMsg);
+            toast(errorMsg, 6000);
             return false;
           }
           if (validCount === 0) {
