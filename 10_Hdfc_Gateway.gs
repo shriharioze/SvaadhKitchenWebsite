@@ -2308,14 +2308,25 @@ function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
     if (!_isOnAccountDueStatus(_get(r, "Payment_Status"))) return false;
     return _cleanNum(_get(r, "Net_Total")) > 0;
   });
-  pending.sort(function (a, b) {
-    return String(_get(a, "Order_Date")).localeCompare(String(_get(b, "Order_Date")));
-  });
+  // TRUE chronological sort. Order_Date is a Date OBJECT from the sheet —
+  // String(Date) starts with the weekday name, so the old localeCompare sorted
+  // "Fri < Mon < Thu…", scrambling "oldest-first" (a contributor to the ₹812
+  // incident: with the old `break`, a scrambled order could settle a NEW
+  // mid-payment order and strand rows that were part of the paid bill).
+  const _dsKey = function (r) {
+    const d = _get(r, "Order_Date");
+    return d instanceof Date ? Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd") : String(d || "").trim();
+  };
+  pending.sort(function (a, b) { return _dsKey(a).localeCompare(_dsKey(b)); });
 
   const target   = Math.round(Number(amount) || 0);
   const totalDue = pending.reduce(function (s, r) { return s + Math.round(_cleanNum(_get(r, "Net_Total"))); }, 0);
 
-  if (target >= totalDue) {
+  // ₹2 tolerance: `target` is round(sum of floats) while totalDue is
+  // sum(round(each net)) — legacy paise values can differ by a rupee or two.
+  // A customer who paid the full computed bill must NEVER have a row stranded
+  // over rounding noise.
+  if (target >= totalDue - 2) {
     // FAST PATH — charge covers the entire current on-account balance. Settle
     // everything; nothing can be silently skipped.
     let settled = 0, count = 0;

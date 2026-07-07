@@ -208,7 +208,13 @@ function _autoSettlePendingOrders(phone) {
 
   if (pendingOrders.length === 0) return { settled: 0, msg: "" };
 
-  pendingOrders.sort((a, b) => String(_get(a, "Order_Date")).localeCompare(String(_get(b, "Order_Date"))));
+  // TRUE chronological sort — Order_Date is a Date object; String(Date) starts
+  // with the weekday name, so the old compare scrambled "oldest-first".
+  const _oaDsKey = (r) => {
+    const d = _get(r, "Order_Date");
+    return d instanceof Date ? Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd") : String(d || "").trim();
+  };
+  pendingOrders.sort((a, b) => _oaDsKey(a).localeCompare(_oaDsKey(b)));
 
   let walletBalance = _calculateWalletBalance(phone);
   if (walletBalance <= 0) return { settled: 0, msg: "" };
@@ -216,7 +222,7 @@ function _autoSettlePendingOrders(phone) {
   let totalSettled = 0;
   let ordersSettledCount = 0;
   let originalPendingAmount = pendingOrders.reduce((sum, o) => sum + _cleanNum(_get(o, "Net_Total")), 0);
-  
+
   let currentWallet = walletBalance;
 
   for (let order of pendingOrders) {
@@ -227,9 +233,10 @@ function _autoSettlePendingOrders(phone) {
       currentWallet -= amount;
       totalSettled += amount;
       ordersSettledCount++;
-    } else {
-      break;
     }
+    // No `break`: an older order larger than the remaining balance must not
+    // strand smaller ones after it (same skip-not-break rule as the gateway
+    // settle) — keep checking; whole-order settlement only, never partial.
   }
 
   if (ordersSettledCount > 0) {
@@ -1642,7 +1649,13 @@ function _submitOrderInternal(body) {
             // delivery to this customer's society for this date+meal (SAME stop, no
             // new delivery burden).
             const _isFreeAreaW = freeAreaNames.indexOf(_m.area || profile.area || "") !== -1;
-            if (!_isFreeAreaW) {
+            // ₹200+ CAPPED MEAL keeps delivery even at the cap (big orders are worth
+            // the slot) — but only while alternatives are ON; a cap_alt=false HARD
+            // close (kitchen out of capacity) is never bypassed. Uses the client-sent
+            // meal subtotal: worst-case tamper wins a delivery SLOT, never money —
+            // the bill itself is priced authoritatively later/by the gateway.
+            const _bigMealW = _altOnW && (Number(_m.subtotal) || 0) >= CAP_DELIVERY_BYPASS_MIN;
+            if (!_isFreeAreaW && !_bigMealW) {
               const _idxMtW = _delIdxW && _delIdxW[_mt];
               const _socW = _normSocietyKey(_m.society || profile.society || "");
               const _socAlreadyW  = !!(_socW && _idxMtW && _idxMtW.soc[_socW]);
@@ -1652,12 +1665,12 @@ function _submitOrderInternal(body) {
               const _selfAlreadyW = !!(_phW && _idxMtW && _idxMtW.ph[_phW]);
               if (!_socAlreadyW && !_selfAlreadyW) {
                 _wViolations.push(_altOnW
-                  ? (_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter, or order for another day.")
+                  ? (_mt + " delivery is full for " + _d + " — orders of ₹" + CAP_DELIVERY_BYPASS_MIN + "+ still get delivery; else please choose Self Pickup or Porter, or order for another day.")
                   : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
                 continue;
               }
             }
-            // free area OR same-building OR own existing delivery → allowed (falls through)
+            // free area OR ₹200+ meal OR same-building OR own existing delivery → allowed (falls through)
           } else if (!_altOnW) {
             _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
           }
@@ -2942,7 +2955,7 @@ function getCustomerOrders(phone) {
     });
 
   const onAccountBalance = allFiltered
-    .filter(r => String(r.Payment_Status || "").toLowerCase() === "on account")
+    .filter(r => _isOnAccountDueStatus(r.Payment_Status))
     .reduce((sum, r) => sum + (Number(r.Net_Total) || 0), 0);
 
   // ── Monthly spending summary ──────────────────────────────────
