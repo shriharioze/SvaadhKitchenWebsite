@@ -1649,12 +1649,13 @@ function _submitOrderInternal(body) {
             // delivery to this customer's society for this date+meal (SAME stop, no
             // new delivery burden).
             const _isFreeAreaW = freeAreaNames.indexOf(_m.area || profile.area || "") !== -1;
-            // ₹200+ CAPPED MEAL keeps delivery even at the cap (big orders are worth
-            // the slot) — but only while alternatives are ON; a cap_alt=false HARD
-            // close (kitchen out of capacity) is never bypassed. Uses the client-sent
-            // meal subtotal: worst-case tamper wins a delivery SLOT, never money —
-            // the bill itself is priced authoritatively later/by the gateway.
-            const _bigMealW = _altOnW && (Number(_m.subtotal) || 0) >= CAP_DELIVERY_BYPASS_MIN;
+            // Per-meal bypass CAPPED MEAL keeps delivery even at the cap (big orders
+            // are worth the slot) — but only while alternatives are ON; a cap_alt=false
+            // HARD close (kitchen out of capacity) is never bypassed. Uses the
+            // client-sent meal subtotal: worst-case tamper wins a delivery SLOT, never
+            // money — the bill itself is priced authoritatively later/by the gateway.
+            const _bypassMinW = CAP_DELIVERY_BYPASS_MIN[_mt] || 200;
+            const _bigMealW = _altOnW && (Number(_m.subtotal) || 0) >= _bypassMinW;
             if (!_isFreeAreaW && !_bigMealW) {
               const _idxMtW = _delIdxW && _delIdxW[_mt];
               const _socW = _normSocietyKey(_m.society || profile.society || "");
@@ -1665,7 +1666,7 @@ function _submitOrderInternal(body) {
               const _selfAlreadyW = !!(_phW && _idxMtW && _idxMtW.ph[_phW]);
               if (!_socAlreadyW && !_selfAlreadyW) {
                 _wViolations.push(_altOnW
-                  ? (_mt + " delivery is full for " + _d + " — orders of ₹" + CAP_DELIVERY_BYPASS_MIN + "+ still get delivery; else please choose Self Pickup or Porter, or order for another day.")
+                  ? (_mt + " delivery is full for " + _d + " — orders of ₹" + _bypassMinW + "+ still get delivery; else please choose Self Pickup or Porter, or order for another day.")
                   : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
                 continue;
               }

@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.07.01";
+    const APP_VERSION = "v26.07.07.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4683,10 +4683,11 @@
     // with the server — admin-editable via the "Default Cutoff Times" panel, no
     // redeploy needed). Per-day overrides (menu.cutoff_overrides) always win over this.
     let CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
-    // Delivery-cap bypass: a capped MEAL whose food subtotal is ≥ this still gets
-    // delivery (big orders are worth the slot). MUST match the backend's
-    // CAP_DELIVERY_BYPASS_MIN (00_Config.gs).
-    const CAP_BYPASS_MIN = 200;
+    // Delivery-cap bypass: a capped MEAL whose food subtotal is ≥ its threshold
+    // still gets delivery (big orders are worth the slot). Per-meal since
+    // 2026-07-07 (Breakfast is typically a smaller ticket). MUST match the
+    // backend's CAP_DELIVERY_BYPASS_MIN (00_Config.gs).
+    const CAP_BYPASS_MIN = { Breakfast: 100, Lunch: 200, Dinner: 200 };
     const ICONS = { Breakfast: "🍳", Lunch: "🍱", Dinner: "🍽️" };
     const GRACE_MINUTES = 5; // extra minutes allowed after cutoff to complete & submit
 
@@ -8187,7 +8188,7 @@
           const a = String(addr.area || "").toLowerCase();
           if (a.indexOf("pickup") !== -1 || a === "porter") return; // already non-delivery
           if (FREE_AREAS.includes(addr.area)) return; // free areas (Bhosale Nagar…) are always delivered — never capped
-          if ((mObj.subtotal || 0) >= CAP_BYPASS_MIN) return; // ₹200+ meal keeps delivery even at the cap (server guard matches)
+          if ((mObj.subtotal || 0) >= (CAP_BYPASS_MIN[meal] || 200)) return; // big-enough meal keeps delivery even at the cap (server guard matches)
           out.push({ date, meal, society: addr.society || S.profile.society || "" });
         });
       });
@@ -8198,12 +8199,13 @@
       return new Promise(resolve => {
         const meals = [...new Set(mealsList.map(x => x.meal))];
         const times = meals.map(m => `${m} ${PORTER_TIMES[m]}`).join(" · ");
-        // ₹200+ bypass tip — every meal reaching this dialog is under the threshold
-        // (>= CAP_BYPASS_MIN meals are skipped by _soldOutDeliveryMealsInCart), so
+        // Per-meal bypass tip — every meal reaching this dialog is under ITS threshold
+        // (>= CAP_BYPASS_MIN[meal] meals are skipped by _soldOutDeliveryMealsInCart), so
         // show exactly how much more each needs to qualify for delivery anyway.
         const _bypassTips = mealsList.map(x => {
           const _sub = (S.orders[x.date] && S.orders[x.date][x.meal] && S.orders[x.date][x.meal].subtotal) || 0;
-          return `<b>${x.meal}</b>: add ₹${Math.max(1, CAP_BYPASS_MIN - _sub)} more`;
+          const _min = CAP_BYPASS_MIN[x.meal] || 200;
+          return `<b>${x.meal}</b>: add ₹${Math.max(1, _min - _sub)} more (₹${_min}+ qualifies)`;
         }).join(" · ");
         const ov = document.createElement("div");
         ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;";
@@ -8214,7 +8216,7 @@
             <div style="font-size:.86rem;color:#333;line-height:1.55;margin-bottom:14px;">
               We've reached our delivery limit for <b>${meals.join(" & ")}</b> today, so we can't deliver this order.
               <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:8px 10px;font-size:.78rem;color:#065f46;margin:10px 0;">
-                💡 Orders of <b>₹${CAP_BYPASS_MIN}+</b> get <b>delivery even when the limit is full</b> — ${_bypassTips} to qualify!
+                💡 <b>Big enough orders still get delivery</b> even when the limit is full — ${_bypassTips} to qualify!
               </div>
               Or get your food one of these ways — please pick one:
               <ul style="margin:10px 0 0;padding-left:18px;">
