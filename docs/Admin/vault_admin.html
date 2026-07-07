@@ -1538,6 +1538,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
         <div class="page-header">
           <div class="page-title">Analytics <small>Revenue, items, and customer trends</small></div>
         </div>
+        <!-- Always about the CURRENT calendar month, independent of the date-range
+             picker below (which is for the historical report). Loaded once when this
+             page opens — see switchPage(). -->
+        <div id="forecastContent"></div>
         <div class="filter-bar">
           <input type="date" id="analyticsFrom">
           <span style="color:var(--muted);font-size:.82rem;">to</span>
@@ -3748,6 +3752,7 @@ async function switchPage(page) {
   }
 
   if (page === "analytics") {
+    loadForecast(); // always the CURRENT month — independent of the range picker below
     const af = document.getElementById("analyticsFrom");
     const at = document.getElementById("analyticsTo");
     if (!af.value) { analyticsSetCal('month'); return; }
@@ -4980,6 +4985,64 @@ function analyticsSetPeriod(period) {
   document.getElementById("analyticsTo").value   = toISO(to);
   loadAnalytics();
 }
+
+// ── FORECASTED MONTHLY SALES ──────────────────────────────────────────────
+// Always about the CURRENT calendar month — independent of the date-range
+// picker above (that one drives the historical report below it). Loaded once
+// per Analytics page-open (see switchPage()).
+async function loadForecast() {
+  const el = document.getElementById("forecastContent");
+  if (!el) return;
+  el.innerHTML = `<div class="analytics-section" style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+  try {
+    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getForecastedMonthlySales&pin=${S.sessionPin}&_t=${Date.now()}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Forecast unavailable");
+    el.innerHTML = renderForecast(data);
+  } catch (e) {
+    el.innerHTML = `<div class="analytics-section" style="color:var(--red);text-align:center;padding:16px;font-size:.85rem;">Forecast error: ${e.message}</div>`;
+  }
+}
+function renderForecast(d) {
+  const fmtM = v => `₹${Number(v).toLocaleString("en-IN")}`;
+  const pct = Math.round((d.trendFactor - 1) * 100);
+  let trendBadge;
+  if (pct > 5)       trendBadge = `<span style="color:#16a34a;">📈 Trending ${pct}% above your recent average</span>`;
+  else if (pct < -5) trendBadge = `<span style="color:#dc2626;">📉 Trending ${Math.abs(pct)}% below your recent average</span>`;
+  else               trendBadge = `<span style="color:var(--muted);">➖ Steady — in line with your recent average</span>`;
+
+  const lowConfNote = d.lowConfidence
+    ? `<div style="margin-top:10px;font-size:.72rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;">
+         ⚠️ Still building history (only ${d.sampleDays} day${d.sampleDays===1?'':'s'} of real data) — this forecast will sharpen as more days pass.
+       </div>`
+    : ``;
+
+  return `<div class="analytics-section" style="border-left:4px solid #6366f1;">
+    <div class="analytics-section-title">📈 Forecasted ${d.monthLabel} Sales</div>
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:6px 0 4px;">
+      <div style="font-size:1.9rem;font-weight:800;color:#4338ca;">${fmtM(d.forecastedTotal)}</div>
+      <div style="font-size:.78rem;color:var(--muted);">range ${fmtM(d.lowEstimate)} – ${fmtM(d.highEstimate)}</div>
+    </div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:8px;">${trendBadge}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+      <div style="background:var(--bg);border-radius:10px;padding:10px 12px;">
+        <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Collected so far</div>
+        <div style="font-size:1.15rem;font-weight:700;">${fmtM(d.revenueSoFar)}</div>
+        <div style="font-size:.7rem;color:var(--muted);">day ${d.daysElapsed} of ${d.daysInMonth}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:10px;padding:10px 12px;">
+        <div style="font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Projected remaining</div>
+        <div style="font-size:1.15rem;font-weight:700;">${fmtM(d.projectedRemaining)}</div>
+        <div style="font-size:.7rem;color:var(--muted);">${d.daysRemaining} day${d.daysRemaining===1?'':'s'} left</div>
+      </div>
+    </div>
+    ${lowConfNote}
+    <div style="margin-top:10px;font-size:.68rem;color:var(--muted);">
+      Model: weekday-pattern average from your last ${d.sampleDays} trading days (of a ${d.lookbackDays}-day lookback), adjusted for recent trend. Not a guarantee — a real forecast from real order history.
+    </div>
+  </div>`;
+}
+
 async function loadAnalytics() {
   const from = document.getElementById("analyticsFrom").value;
   const to   = document.getElementById("analyticsTo").value;

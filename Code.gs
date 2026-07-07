@@ -183,6 +183,10 @@ function doGet(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getAnalytics(p));
     }
+    if (action === "getForecastedMonthlySales") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(getForecastedMonthlySales());
+    }
     if (action === "getExpenses") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getExpenses(p));

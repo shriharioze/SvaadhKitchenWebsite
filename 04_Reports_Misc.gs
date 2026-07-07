@@ -733,9 +733,13 @@ function markOrderPacked(body) {
 }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
-function getAnalytics(p) {
-  var dateFrom = p.dateFrom, dateTo = p.dateTo;
-  if (!dateFrom || !dateTo) return {success:false, error:"dateFrom and dateTo required"};
+// Shared per-row aggregation core — used by BOTH getAnalytics (an admin-picked
+// date-range report) and getForecastedMonthlySales (a trailing lookback window
+// for the forecast model). Keeping this ONE function means the surcharge/
+// small-fee backfill rules, VIP exemption, and day/meal bucketing can never
+// drift between the two features. Returns the raw aggregates; callers shape
+// their own response from them.
+function _analyticsCore(dateFrom, dateTo) {
   var ss  = getSpreadsheet();
   var fmtDate = function(v) {
     return v instanceof Date ? Utilities.formatDate(v,"Asia/Kolkata","yyyy-MM-dd") : String(v).trim();
@@ -854,13 +858,29 @@ function getAnalytics(p) {
       LUNCH_COLS.forEach(function(col){var q=Number(r[col])||0;if(q>0){var dn=COL_DISP[col]||col;itemCounts[dn]=(itemCounts[dn]||0)+q;}});
     }
   });
+  Object.keys(mealStats).forEach(function(m){mealStats[m].revenue=Math.round(mealStats[m].revenue);});
+  return {
+    rows: rows, dayMap: dayMap, custSet: custSet, mealStats: mealStats, itemCounts: itemCounts,
+    totalRev: totalRev, totalPaid: totalPaid, totalDelivery: totalDelivery,
+    totalSurcharge: totalSurcharge, totalSmallFee: totalSmallFee, archivedCount: archivedCount
+  };
+}
+
+function getAnalytics(p) {
+  var dateFrom = p.dateFrom, dateTo = p.dateTo;
+  if (!dateFrom || !dateTo) return {success:false, error:"dateFrom and dateTo required"};
+  var core = _analyticsCore(dateFrom, dateTo);
+  var dayMap = core.dayMap, itemCounts = core.itemCounts, mealStats = core.mealStats,
+      custSet = core.custSet, rows = core.rows, totalRev = core.totalRev, totalPaid = core.totalPaid,
+      totalDelivery = core.totalDelivery, totalSurcharge = core.totalSurcharge, totalSmallFee = core.totalSmallFee,
+      archivedCount = core.archivedCount;
+
   var days=Object.keys(dayMap).sort().map(function(d){
     return{date:d,orders:dayMap[d].orders,revenue:Math.round(dayMap[d].revenue),
            delivery:Math.round(dayMap[d].delivery),surcharge:Math.round(dayMap[d].surcharge),smallFee:Math.round(dayMap[d].smallFee)};
   });
   var allItems=Object.keys(itemCounts).map(function(k){return{name:k,count:Math.round(itemCounts[k])};}).sort(function(a,b){return b.count-a.count;});
   var topItems=allItems.slice(0,15);
-  Object.keys(mealStats).forEach(function(m){mealStats[m].revenue=Math.round(mealStats[m].revenue);});
   return {success:true,
     summary:{orders:rows.length,customers:Object.keys(custSet).length,revenue:Math.round(totalRev),
       paid:Math.round(totalPaid),pending:Math.round(totalRev-totalPaid),
@@ -870,6 +890,113 @@ function getAnalytics(p) {
     // Lets the admin UI show "Including X archived orders" so they know
     // the report pulled across archive files (which is slower than live-only).
     archived:{count: archivedCount, included: archivedCount > 0}};
+}
+
+// ── FORECASTED MONTHLY SALES ──────────────────────────────────────────────────
+// Projects the CURRENT calendar month's total revenue using a weekday-
+// seasonality model built from real order history — NOT a naive
+// avgPerDay × daysInMonth extrapolation. Cloud-kitchen demand varies a lot by
+// day of week (and Sundays are closed entirely), so:
+//   1. Pull the trailing LOOKBACK_DAYS of daily revenue (spans live + archives,
+//      shares the exact aggregation core getAnalytics uses — same backfill
+//      rules, so the two features can never quietly disagree).
+//   2. Trim any LEADING run of zero-revenue days — that's "before the kitchen
+//      existed", not "a real closed day" (a young business shouldn't have its
+//      weekday averages dragged down by pre-launch dates); a closed day
+//      scattered mid-window still counts (correctly pulls that weekday's
+//      average down — e.g. an occasional off-day).
+//   3. Average revenue PER WEEKDAY (Mon..Sun) across what's left — this is
+//      where "Sunday closed" naturally falls out to ~₹0 with zero special-
+//      casing, since every historical Sunday really was ₹0.
+//   4. A bounded recent-trend factor (last 14 days vs the full lookback
+//      average, clamped to 0.6×–1.6×) nudges the weekday averages up/down if
+//      the business has been meaningfully busier/quieter lately.
+//   5. Forecast = actual revenue so far this month + Σ(weekday avg × trend
+//      factor) for every remaining day. A rough ± band comes from the
+//      lookback's day-to-day standard deviation.
+function getForecastedMonthlySales() {
+  var TZ = "Asia/Kolkata";
+  var DAY_MS = 24 * 3600 * 1000;
+  var now = getISTDate();
+  var todayStr = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
+  var y = now.getFullYear(), m = now.getMonth();
+  var monthStart = new Date(y, m, 1);
+  var monthEnd   = new Date(y, m + 1, 0); // last calendar day of this month
+  var daysInMonth = monthEnd.getDate();
+
+  var LOOKBACK_DAYS = 70; // ~10 weeks — enough for a stable per-weekday average
+  var lookbackEnd   = new Date(now.getTime() - DAY_MS); // yesterday (today is still in progress)
+  var lookbackStart = new Date(lookbackEnd.getTime() - (LOOKBACK_DAYS - 1) * DAY_MS);
+  var lookbackStartStr = Utilities.formatDate(lookbackStart, TZ, "yyyy-MM-dd");
+  var lookbackEndStr   = Utilities.formatDate(lookbackEnd, TZ, "yyyy-MM-dd");
+
+  var histCore = (lookbackEnd.getTime() >= lookbackStart.getTime())
+    ? _analyticsCore(lookbackStartStr, lookbackEndStr) : { dayMap: {} };
+  var dayMap = histCore.dayMap;
+
+  // Build the complete daily series (fills gaps with 0 — a real closed/quiet day).
+  var series = [];
+  for (var t = lookbackStart.getTime(); t <= lookbackEnd.getTime(); t += DAY_MS) {
+    var dt = new Date(t);
+    var ds = Utilities.formatDate(dt, TZ, "yyyy-MM-dd");
+    series.push({ date: ds, dow: dt.getDay(), revenue: (dayMap[ds] && dayMap[ds].revenue) || 0 });
+  }
+  // Trim a LEADING run of zero-revenue days (pre-launch), so a business younger
+  // than LOOKBACK_DAYS doesn't have its weekday averages diluted by dates before
+  // it existed. A closed day found once real data has started stays counted.
+  var firstRealIdx = series.findIndex(function (s) { return s.revenue > 0; });
+  var trimmed = firstRealIdx > 0 ? series.slice(firstRealIdx) : series;
+
+  var byDow = [[], [], [], [], [], [], []]; // 0=Sun..6=Sat
+  trimmed.forEach(function (s) { byDow[s.dow].push(s.revenue); });
+  var weekdayAvg = byDow.map(function (arr) {
+    if (!arr.length) return 0;
+    return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length;
+  });
+
+  var fullAvg = trimmed.length ? trimmed.reduce(function (a, b) { return a + b.revenue; }, 0) / trimmed.length : 0;
+  var last14  = trimmed.slice(-14);
+  var last14Avg = last14.length ? last14.reduce(function (a, b) { return a + b.revenue; }, 0) / last14.length : 0;
+  // Clamp so one unusually good/bad fortnight can't wildly distort the longer-run seasonality.
+  var trendFactor = (fullAvg > 0) ? Math.max(0.6, Math.min(1.6, last14Avg / fullAvg)) : 1;
+
+  // Actual revenue already earned THIS month (day 1 .. today) — never projected.
+  var mtdCore = _analyticsCore(Utilities.formatDate(monthStart, TZ, "yyyy-MM-dd"), todayStr);
+  var revenueSoFar = mtdCore.totalRev;
+  var daysElapsed = Math.floor((now.getTime() - monthStart.getTime()) / DAY_MS) + 1;
+
+  // Project every REMAINING day (tomorrow .. month end) via its weekday average.
+  var projectedRemaining = 0;
+  for (var t2 = now.getTime() + DAY_MS; t2 <= monthEnd.getTime(); t2 += DAY_MS) {
+    projectedRemaining += weekdayAvg[new Date(t2).getDay()] * trendFactor;
+  }
+  var daysRemaining = daysInMonth - daysElapsed;
+  var forecastedTotal = revenueSoFar + projectedRemaining;
+
+  // Rough ± band from the lookback's day-to-day spread, scaled by days remaining
+  // (0.6 keeps it a conservative ~50%-ish interval, not a wide, alarming range).
+  var variance = trimmed.length
+    ? trimmed.reduce(function (s, x) { return s + Math.pow(x.revenue - fullAvg, 2); }, 0) / trimmed.length
+    : 0;
+  var band = Math.sqrt(variance) * Math.sqrt(Math.max(1, daysRemaining)) * 0.6;
+
+  var sampleDays = trimmed.length;
+  return {
+    success: true,
+    monthLabel: Utilities.formatDate(monthStart, TZ, "MMMM yyyy"),
+    today: todayStr,
+    daysInMonth: daysInMonth, daysElapsed: Math.min(daysElapsed, daysInMonth), daysRemaining: Math.max(0, daysRemaining),
+    revenueSoFar: Math.round(revenueSoFar),
+    projectedRemaining: Math.round(projectedRemaining),
+    forecastedTotal: Math.round(forecastedTotal),
+    lowEstimate: Math.round(Math.max(revenueSoFar, forecastedTotal - band)),
+    highEstimate: Math.round(forecastedTotal + band),
+    trendFactor: Math.round(trendFactor * 100) / 100,
+    weekdayAvg: weekdayAvg.map(function (v) { return Math.round(v); }), // [Sun..Sat]
+    lookbackDays: LOOKBACK_DAYS,
+    sampleDays: sampleDays, // how many days of real history the model actually used (after trimming)
+    lowConfidence: sampleDays < 14 // fewer than 2 full weeks of real data — flag it, don't hide it
+  };
 }
 
 // ── ADMIN RESET CUSTOMER PIN ──────────────────────────────────────────────────
