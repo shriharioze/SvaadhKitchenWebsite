@@ -917,7 +917,14 @@ function getKitchenSummary(date) {
     date: date,
     meals: meals,
     orders: orders,
-    cutoffs: menu.cutoff_overrides || {}
+    // EFFECTIVE cutoffs (site-wide default merged with any per-day override) —
+    // was `menu.cutoff_overrides || {}`, i.e. ONLY the per-day override. Once an
+    // admin uses the site-wide "Default Cutoff Times" panel instead of setting a
+    // per-day override, cutoff_overrides is legitimately empty for most dates,
+    // so kitchen.html's prep countdown fell through to ITS OWN hardcoded
+    // fallback (Dinner 16.5 = 4:30 PM) — completely blind to the live default
+    // (2026-07-07: admin set 4:15 PM, kitchen countdown still showed 4:30 PM).
+    cutoffs: _effectiveCutoffsForDate(date)
   };
 }
 
