@@ -3682,40 +3682,45 @@ async function switchPage(page) {
   }
 
   document.querySelectorAll(".page").forEach(el=>el.classList.remove("on"));
-  document.getElementById("pageMenu").classList.toggle("on", page==="menu");
-  document.getElementById("pageManage").classList.toggle("on", page==="manage");
-  document.getElementById("pageOrders").classList.toggle("on", page==="orders");
-  document.getElementById("pagePackaging").classList.toggle("on", page==="packaging");
-  document.getElementById("pageAnalytics").classList.toggle("on", page==="analytics");
-  document.getElementById("pageExpenses").classList.toggle("on", page==="expenses");
-  document.getElementById("pageInventory").classList.toggle("on", page==="inventory");
-  document.getElementById("pageArchive").classList.toggle("on", page==="archive");
-  document.getElementById("pageTenday").classList.toggle("on", page==="tenday");
-  document.getElementById("pageHistory").classList.toggle("on", page==="history");
-  document.getElementById("pageCustomers").classList.toggle("on", page==="customers");
-  document.getElementById("pageApprovals").classList.toggle("on", page==="approvals");
-  document.getElementById("pageReviews").classList.toggle("on", page==="reviews");
-  document.getElementById("pageBilling").classList.toggle("on", page==="billing");
-  document.getElementById("pageManual").classList.toggle("on", page==="manual");
-  document.getElementById("pageReconcile").classList.toggle("on", page==="reconcile");
-  document.getElementById("pageAttendance").classList.toggle("on", page==="attendance");
-  document.getElementById("navMenu").classList.toggle("active", page==="menu");
-  document.getElementById("navManage").classList.toggle("active", page==="manage");
-  document.getElementById("navOrders").classList.toggle("active", page==="orders");
-  document.getElementById("navPackaging").classList.toggle("active", page==="packaging");
-  document.getElementById("navAnalytics").classList.toggle("active", page==="analytics");
-  document.getElementById("navExpenses").classList.toggle("active", page==="expenses");
-  document.getElementById("navInventory").classList.toggle("active", page==="inventory");
-  document.getElementById("navArchive").classList.toggle("active", page==="archive");
-  document.getElementById("nav10Day").classList.toggle("active", page==="tenday");
-  document.getElementById("navHistory").classList.toggle("active", page==="history");
-  document.getElementById("navCustomers").classList.toggle("active", page==="customers");
-  document.getElementById("navApprovals").classList.toggle("active", page==="approvals");
-  document.getElementById("navReviews").classList.toggle("active", page==="reviews");
-  document.getElementById("navManual").classList.toggle("active", page==="manual");
-  document.getElementById("navBilling").classList.toggle("active", page==="billing");
-  document.getElementById("navReconcile").classList.toggle("active", page==="reconcile");
-  document.getElementById("navAttendance").classList.toggle("active", page==="attendance");
+  // NOTE: use ?. on every getElementById — a removed nav/page (e.g. the retired
+  // "nav10Day" 10-day-billing button) must NOT throw here. switchPage is async, so a
+  // throw becomes a swallowed rejected promise that silently aborts everything below
+  // (auto-loads for analytics/orders/packaging incl. loadForecast()). Guarding keeps
+  // the rest of switchPage running even if a referenced element no longer exists.
+  document.getElementById("pageMenu")?.classList.toggle("on", page==="menu");
+  document.getElementById("pageManage")?.classList.toggle("on", page==="manage");
+  document.getElementById("pageOrders")?.classList.toggle("on", page==="orders");
+  document.getElementById("pagePackaging")?.classList.toggle("on", page==="packaging");
+  document.getElementById("pageAnalytics")?.classList.toggle("on", page==="analytics");
+  document.getElementById("pageExpenses")?.classList.toggle("on", page==="expenses");
+  document.getElementById("pageInventory")?.classList.toggle("on", page==="inventory");
+  document.getElementById("pageArchive")?.classList.toggle("on", page==="archive");
+  document.getElementById("pageTenday")?.classList.toggle("on", page==="tenday");
+  document.getElementById("pageHistory")?.classList.toggle("on", page==="history");
+  document.getElementById("pageCustomers")?.classList.toggle("on", page==="customers");
+  document.getElementById("pageApprovals")?.classList.toggle("on", page==="approvals");
+  document.getElementById("pageReviews")?.classList.toggle("on", page==="reviews");
+  document.getElementById("pageBilling")?.classList.toggle("on", page==="billing");
+  document.getElementById("pageManual")?.classList.toggle("on", page==="manual");
+  document.getElementById("pageReconcile")?.classList.toggle("on", page==="reconcile");
+  document.getElementById("pageAttendance")?.classList.toggle("on", page==="attendance");
+  document.getElementById("navMenu")?.classList.toggle("active", page==="menu");
+  document.getElementById("navManage")?.classList.toggle("active", page==="manage");
+  document.getElementById("navOrders")?.classList.toggle("active", page==="orders");
+  document.getElementById("navPackaging")?.classList.toggle("active", page==="packaging");
+  document.getElementById("navAnalytics")?.classList.toggle("active", page==="analytics");
+  document.getElementById("navExpenses")?.classList.toggle("active", page==="expenses");
+  document.getElementById("navInventory")?.classList.toggle("active", page==="inventory");
+  document.getElementById("navArchive")?.classList.toggle("active", page==="archive");
+  document.getElementById("nav10Day")?.classList.toggle("active", page==="tenday");
+  document.getElementById("navHistory")?.classList.toggle("active", page==="history");
+  document.getElementById("navCustomers")?.classList.toggle("active", page==="customers");
+  document.getElementById("navApprovals")?.classList.toggle("active", page==="approvals");
+  document.getElementById("navReviews")?.classList.toggle("active", page==="reviews");
+  document.getElementById("navManual")?.classList.toggle("active", page==="manual");
+  document.getElementById("navBilling")?.classList.toggle("active", page==="billing");
+  document.getElementById("navReconcile")?.classList.toggle("active", page==="reconcile");
+  document.getElementById("navAttendance")?.classList.toggle("active", page==="attendance");
 
   if (page==="attendance") loadAttendance();
   if (page==="billing") switchBillingTab('Daily');
