@@ -2249,15 +2249,17 @@ function hdfc_finalizeOnAccountPayment(orderId) {
     if (chargedAmount <= 0) return { error: "Gateway reports zero charged amount." };
 
     // Identify the customer from the pending entry.
-    let phone = "", name = "Customer";
+    let phone = "", name = "Customer", scope = "all";
     try {
       const pending = JSON.parse(props.getProperty("HDFC_PENDING_ONACCOUNT") || "{}");
       const entry = pending[oid];
-      if (entry) { phone = entry.phone || ""; name = entry.name || "Customer"; }
+      if (entry) { phone = entry.phone || ""; name = entry.name || "Customer"; scope = entry.scope || "all"; }
     } catch(_) {}
     if (!phone) return { error: "Could not identify customer for settlement " + oid };
 
-    const result = _settleOnAccountDirect(phone, chargedAmount, oid);
+    // scope ("monthly" vs "all") decides whether a below-full-balance charge is an
+    // expected monthly remainder or a genuine mid-payment shortfall worth emailing.
+    const result = _settleOnAccountDirect(phone, chargedAmount, oid, scope);
     SpreadsheetApp.flush(); // commit row writes before releasing the lock
 
     settledLog[oid] = { phone: phone, amount: result.settled, count: result.count, rows: result.rows, ts: Date.now() };
@@ -2296,7 +2298,7 @@ function hdfc_finalizeOnAccountPayment(orderId) {
  *      covers the customer's full current balance and deserves a look.
  * Returns { settled, count, rows }.
  */
-function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
+function _settleOnAccountDirect(phone, amount, gatewayOrderId, scope) {
   const phoneStr  = _normalizePhone(phone);
   const ws        = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
   const rows      = getAllRows(ws);
@@ -2355,18 +2357,44 @@ function _settleOnAccountDirect(phone, amount, gatewayOrderId) {
       settledRows.push(String(_get(pending[i], "Submission_ID") || _get(pending[i], "Order_Date")));
     }
   }
+
+  // "Billed due" = what the customer was actually QUOTED to pay for THIS session,
+  // which is NOT always the full balance. A MONTHLY bill (scope "monthly") covers
+  // only orders before the 1st of the current IST month — the current month's
+  // orders are meant to stay On Account and be billed next cycle (mirrors
+  // _computeOnAccountDue's monthly cutoff). So for a monthly payment a charge
+  // below the full balance is the NORMAL, expected state, NOT a mid-payment race,
+  // and must not alarm the owner. Only alert when the charge fell short of the
+  // BILLED due: an "all"-scope shortfall, or a monthly charge that didn't even
+  // cover the prior-month bill (a genuine in-scope order landing mid-payment).
+  let billDue = totalDue;
+  if (String(scope || "all").toLowerCase() === "monthly") {
+    const nowIST  = getISTDate();
+    const cutoffM = Utilities.formatDate(new Date(nowIST.getFullYear(), nowIST.getMonth(), 1), "Asia/Kolkata", "yyyy-MM-dd");
+    billDue = pending.reduce(function (s, r) {
+      return (_dsKey(r) < cutoffM) ? s + Math.round(_cleanNum(_get(r, "Net_Total"))) : s;
+    }, 0);
+  }
+  const coveredBill = target >= billDue - 2; // same ₹2 rounding tolerance as the fast path
+
   Logger.log("_settleOnAccountDirect: PARTIAL settlement for " + phoneStr + " — " + count
-    + " order(s), ₹" + settled + " (charged ₹" + target + ", full due was ₹" + totalDue + ", gateway " + gatewayOrderId + ")");
-  try {
-    const adminEmail = SP.getProperty("ADMIN_EMAIL");
-    if (adminEmail) {
-      MailApp.sendEmail(adminEmail, "⚠️ Svaadh: On-Account settlement didn't cover the full balance",
-        "Customer " + phoneStr + " was charged ₹" + target + " for on-account dues, but their current full"
-        + " balance was ₹" + totalDue + " (likely a new on-account order landed between payment start and"
-        + " confirmation). Settled ₹" + settled + " across " + count + " order(s); the remainder is still"
-        + " On Account. Gateway order: " + gatewayOrderId + ". Please review — nothing was silently lost,"
-        + " this is just a heads-up that the balance changed mid-payment.");
-    }
-  } catch (e) {}
+    + " order(s), ₹" + settled + " (charged ₹" + target + ", full due ₹" + totalDue
+    + ", billed due ₹" + billDue + ", scope " + (scope || "all") + ", coveredBill " + coveredBill
+    + ", gateway " + gatewayOrderId + ")");
+
+  // Expected monthly remainders (coveredBill === true) settle silently — no email.
+  if (!coveredBill) {
+    try {
+      const adminEmail = SP.getProperty("ADMIN_EMAIL");
+      if (adminEmail) {
+        MailApp.sendEmail(adminEmail, "⚠️ Svaadh: On-Account settlement didn't cover the billed dues",
+          "Customer " + phoneStr + " was charged ₹" + target + " for on-account dues, but the amount billed"
+          + " for this payment was ₹" + billDue + " (likely a new in-scope on-account order landed between"
+          + " payment start and confirmation). Settled ₹" + settled + " across " + count + " order(s); the"
+          + " remainder is still On Account. Gateway order: " + gatewayOrderId + ". Please review — nothing was"
+          + " silently lost, this is just a heads-up that the billed balance changed mid-payment.");
+      }
+    } catch (e) {}
+  }
   return { settled: settled, count: count, rows: settledRows };
 }
