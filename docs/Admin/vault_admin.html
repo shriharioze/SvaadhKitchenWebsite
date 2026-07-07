@@ -1539,9 +1539,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           <div class="page-title">Analytics <small>Revenue, items, and customer trends</small></div>
         </div>
         <!-- Always about the CURRENT calendar month, independent of the date-range
-             picker below (which is for the historical report). Loaded once when this
-             page opens — see switchPage(). -->
-        <div id="forecastContent"></div>
+             picker below (which is for the historical report). NOT auto-loaded (the
+             70-day-lookback model is slow) — the owner clicks the button to run it. -->
+        <div id="forecastContent">
+          <button class="btn-primary" onclick="loadForecast()"
+                  style="width:100%;padding:12px;border-radius:12px;font-size:.9rem;">
+            📈 Forecast this month's sales
+          </button>
+        </div>
         <div class="filter-bar">
           <input type="date" id="analyticsFrom">
           <span style="color:var(--muted);font-size:.82rem;">to</span>
@@ -3757,7 +3762,8 @@ async function switchPage(page) {
   }
 
   if (page === "analytics") {
-    loadForecast(); // always the CURRENT month — independent of the range picker below
+    // Forecast is NOT auto-loaded (slow 70-day model) — owner clicks the button in
+    // #forecastContent to run it. The range picker below is the separate historical report.
     const af = document.getElementById("analyticsFrom");
     const at = document.getElementById("analyticsTo");
     if (!af.value) { analyticsSetCal('month'); return; }
