@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.07.02";
+    const APP_VERSION = "v26.07.08.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10158,9 +10158,14 @@
             // orders are always cancellable; today's lock once the cutoff passes.
             const cutoffH = (todayCutoffs[o.meal] ?? CUTOFFS[o.meal] ?? 23);
             const cutoffCrossed = (o.date === today) && (hNow >= cutoffH);
+            // Bulk 15-day/month rows route through bulkCancelClick (offers Postpone-or-Cancel
+            // when quota remains); week-bulk & non-bulk fall straight to the cancel flow.
+            const _cancelCall = o.is_bulk
+              ? `bulkCancelClick('${o.rowId}','${o.date}','${o.meal}')`
+              : `deleteOrder('${o.rowId}','${o.date}','${o.meal}')`;
             const delBtnHtml = cutoffCrossed
               ? `<button class="omr-del-btn" style="opacity:0.55;border-style:dashed;cursor:not-allowed;" onclick="cancelBlockedMsg()" title="Cutoff crossed — no cancellation allowed">🔒 Cancellation closed</button>`
-              : `<button class="omr-del-btn" onclick="deleteOrder('${o.rowId}','${o.date}','${o.meal}')">🗑 Delete</button>`;
+              : `<button class="omr-del-btn" onclick="${_cancelCall}">🗑 Delete</button>`;
 
             const checkboxHtml = cutoffCrossed
               ? `<input type="checkbox" disabled style="opacity:0.5; cursor:not-allowed; width:18px; height:18px; flex-shrink:0; accent-color:#e65100;" title="Cutoff crossed">`
@@ -12018,17 +12023,148 @@
     function _bulkRender(html) { _bulkModalEl(); document.getElementById("bulkCard").innerHTML = html; const m = document.getElementById("bulkModal"); m.style.display = "flex"; m.scrollTop = 0; }
     function _bulkErr(msg) { _bulkRender('<div style="padding:34px 24px;text-align:center;"><div style="font-size:0.9rem;color:#444;line-height:1.6;">' + msg + '</div><button onclick="closeBulkFlow()" style="margin-top:16px;padding:11px 22px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;cursor:pointer;">Close</button></div>'); }
 
-    async function openBulkFlow(plan) {
+    // "How it works" copy per plan — shown once when the customer taps a plan, before
+    // item selection, so they understand working-days / discount / cancel + postpone.
+    const BULK_PLAN_INFO = {
+      week:    { days: 6,  rate: "5%",   postpone: 0 },
+      "15day": { days: 13, rate: "7.5%", postpone: 2 },
+      month:   { days: 26, rate: "10%",  postpone: 4 }
+    };
+    function _bulkInfoHtml(plan) {
+      const i = BULK_PLAN_INFO[plan] || BULK_PLAN_INFO.week;
+      const flexLine = i.postpone > 0
+        ? '<li><b>Change of plans?</b> Postpone up to <b>' + i.postpone + ' lunch</b> + <b>' + i.postpone + ' dinner</b> days to another date — no charge, discount kept.</li>'
+          + '<li>Or cancel any day before its cutoff (cancelling forfeits that meal\'s bulk discount).</li>'
+        : '<li>Cancel any day before its cutoff — cancelling forfeits that meal\'s bulk discount.</li>';
+      return '<div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<div style="font-weight:800;font-size:1.05rem;">⚡ ' + (BULK_PLAN_LABEL[plan] || plan) + ' Plan — how it works</div>'
+        + '<button onclick="closeBulkFlow()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:1rem;cursor:pointer;">✕</button></div></div>'
+        + '<div style="padding:18px 20px;">'
+        + '<ul style="margin:0;padding-left:20px;font-size:0.86rem;line-height:1.7;color:#333;">'
+        + '<li><b>' + i.days + ' working days</b> of Lunch and/or Dinner (Sundays &amp; holidays skipped).</li>'
+        + '<li><b>' + i.rate + ' off</b> every day\'s food · sabji is the chef\'s special of the day.</li>'
+        + '<li>Same items every working day.</li>'
+        + flexLine
+        + '</ul>'
+        + '<button onclick="_bulkProceedToItems()" style="width:100%;margin-top:18px;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.95rem;cursor:pointer;">Got it — choose my meals →</button>'
+        + '</div>';
+    }
+
+    function openBulkFlow(plan) {
       if (!S.phone || !(S.profile && S.profile.name)) { toast("Please log in and set your address first."); return; }
       BK.plan = plan; BK.items = { Lunch: {}, Dinner: {} }; BK.win = null; _bulkPlacedShown = false;
+      _bulkRender(_bulkInfoHtml(plan)); // info first; OK → _bulkProceedToItems()
+    }
+
+    async function _bulkProceedToItems() {
       _bulkRender('<div style="padding:44px;text-align:center;color:#888;">Loading bulk dates…</div>');
       try {
-        const res = await apiFetch(APPS_SCRIPT_URL + "?action=getBulkWindow&plan=" + encodeURIComponent(plan));
+        const res = await apiFetch(APPS_SCRIPT_URL + "?action=getBulkWindow&plan=" + encodeURIComponent(BK.plan));
         const data = await res.json();
         if (data.error) { _bulkErr(data.error); return; }
         BK.win = data;
         _bulkRenderItems();
       } catch (e) { _bulkErr("Couldn't load the bulk dates. Please check your connection and try again."); }
+    }
+
+    // ── BULK CANCEL vs POSTPONE (Manage Orders) ─────────────────────────────
+    // Tapped from a bulk order's Delete button. 15-day/month rows with postpone
+    // quota left offer a choice; everything else falls straight through to the
+    // existing deleteOrder() cancel flow (unchanged).
+    async function bulkCancelClick(rowId, date, meal) {
+      sLoading(true, "Checking options…");
+      let info = null;
+      try {
+        const res = await apiFetch(APPS_SCRIPT_URL + "?action=getBulkPostponeInfo&phone="
+          + encodeURIComponent(S.phone) + "&rowId=" + encodeURIComponent(rowId));
+        info = await res.json();
+      } catch (e) { /* network hiccup → fall through to plain cancel */ }
+      sLoading(false);
+      if (!info || !info.eligible || !(info.validDates && info.validDates.length)) {
+        return deleteOrder(rowId, date, meal); // week plan / quota used / no free dates → cancel
+      }
+      _bulkChoiceModal(info, rowId, date, meal);
+    }
+
+    function _bulkChoiceModal(info, rowId, date, meal) {
+      const html =
+        '<div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<div style="font-weight:800;font-size:1.02rem;">' + meal + ' · ' + formatDate(date) + '</div>'
+        + '<button onclick="closeBulkFlow()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:1rem;cursor:pointer;">✕</button></div></div>'
+        + '<div style="padding:18px 20px;">'
+        + '<div style="font-size:0.85rem;color:#555;margin-bottom:14px;">Can\'t make it this day? Move it to another date instead of cancelling — your discount stays.</div>'
+        + '<button onclick="_bulkPostponePicker(' + JSON.stringify(info.validDates).replace(/"/g,"&quot;") + ',\'' + rowId + '\',\'' + meal + '\')" '
+        + 'style="width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;margin-bottom:10px;">'
+        + '📅 Postpone to another date <span style="font-weight:600;opacity:0.9;">(' + info.remaining + ' left)</span></button>'
+        + '<button onclick="closeBulkFlow();deleteOrder(\'' + rowId + '\',\'' + date + '\',\'' + meal + '\')" '
+        + 'style="width:100%;padding:12px;border:1px solid #e5e5e5;border-radius:12px;background:#fff;color:#c0392b;font-weight:700;font-size:0.9rem;cursor:pointer;">🗑 Cancel this day instead</button>'
+        + '</div>';
+      _bulkRender(html);
+    }
+
+    function _bulkPostponePicker(validDates, rowId, meal) {
+      const set = {}; (validDates || []).forEach(function (d) { set[d] = true; });
+      const pad = function (n) { return String(n).padStart(2, "0"); };
+      const MON = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const DOW = ["S","M","T","W","T","F","S"];
+      const first = validDates[0], last = validDates[validDates.length - 1];
+      const startY = +first.slice(0,4), startM = +first.slice(5,7) - 1;
+      const endY = +last.slice(0,4), endM = +last.slice(5,7) - 1;
+
+      let months = "";
+      let y = startY, m = startM;
+      while (y < endY || (y === endY && m <= endM)) {
+        let cells = "";
+        const firstDow = new Date(y, m, 1).getDay();
+        const dim = new Date(y, m + 1, 0).getDate();
+        for (let i = 0; i < firstDow; i++) cells += '<div></div>';
+        for (let d = 1; d <= dim; d++) {
+          const iso = y + "-" + pad(m + 1) + "-" + pad(d);
+          if (set[iso]) {
+            cells += '<button onclick="_bulkDoPostpone(\'' + rowId + '\',\'' + iso + '\',\'' + meal + '\')" '
+              + 'style="aspect-ratio:1;border:none;border-radius:8px;background:#fff7ed;color:#9a3412;font-weight:700;font-size:0.82rem;cursor:pointer;border:1.5px solid #fdba74;">' + d + '</button>';
+          } else {
+            cells += '<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:#d0d0d0;font-size:0.82rem;">' + d + '</div>';
+          }
+        }
+        months += '<div style="margin-bottom:14px;">'
+          + '<div style="font-weight:800;font-size:0.85rem;color:#333;margin-bottom:6px;">' + MON[m] + ' ' + y + '</div>'
+          + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center;font-size:0.66rem;color:#aaa;font-weight:700;margin-bottom:2px;">'
+          + DOW.map(function (x) { return '<div>' + x + '</div>'; }).join("")
+          + '</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + cells + '</div></div>';
+        m++; if (m > 11) { m = 0; y++; }
+      }
+
+      const html =
+        '<div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<div style="font-weight:800;font-size:1.02rem;">📅 Pick a new ' + meal + ' date</div>'
+        + '<button onclick="closeBulkFlow()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:1rem;cursor:pointer;">✕</button></div>'
+        + '<div style="font-size:0.72rem;opacity:0.95;margin-top:3px;">Available working days are highlighted · Sundays &amp; holidays skipped</div></div>'
+        + '<div style="padding:16px 18px;max-height:60vh;overflow-y:auto;">' + months + '</div>';
+      _bulkRender(html);
+    }
+
+    async function _bulkDoPostpone(rowId, newDate, meal) {
+      const go = await sConfirm('Move your <b>' + meal + '</b> to <b>' + formatDate(newDate) + '</b>?<br><span style="font-size:0.8rem;color:#777;">Same items, same price — your bulk discount stays.</span>',
+        "Postpone", "📅");
+      if (!go) return;
+      sLoading(true, "Rescheduling…");
+      try {
+        const res = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({ _action: "postponeBulkOrder", phone: S.phone, rowId: rowId, newDate: newDate })
+        }).then(function (r) { return r.json(); });
+        sLoading(false);
+        if (!res.success) { await sAlert(res.error || "Couldn't postpone. Please try again.", "Postpone failed", "⚠️"); return; }
+        closeBulkFlow();
+        await sAlert('Your ' + meal + ' has been moved to <b>' + formatDate(newDate) + '</b>.'
+          + (res.remaining !== undefined ? '<br><span style="font-size:0.8rem;color:#777;">' + res.remaining + ' ' + meal.toLowerCase() + ' postpone' + (res.remaining === 1 ? '' : 's') + ' left for this order.</span>' : ''),
+          "Postponed", "✅");
+        await loadExistingOrders(S.phone);
+      } catch (e) { sLoading(false); await sAlert("Error: " + e.message, "Failure", "❌"); }
     }
 
     function _bulkFmtDates(arr) { if (!arr || !arr.length) return "—"; const f = function (d) { const p = String(d).split("-"); return p[2] + "/" + p[1]; }; return arr.length === 1 ? f(arr[0]) : (f(arr[0]) + " to " + f(arr[arr.length - 1])); }

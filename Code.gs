@@ -74,6 +74,7 @@ function doGet(e) {
     }
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
+    if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
     if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty})
       const _pj = function (s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
       const _wrap = function (arr) { return (Array.isArray(arr) && arr.length) ? { items: arr } : null; }; // submitBulkOrder expects {items:[…]}
@@ -322,6 +323,7 @@ function doPost(e) {
 
     // Customer self-service (phone-verified inside each function)
     if (action === "deleteOrder") return jsonRes(deleteOrder(body.phone, body.rowId, body.refundType, { isAdmin: isAdmin }));
+    if (action === "postponeBulkOrder") return jsonRes(postponeBulkOrder(body)); // reschedule a bulk day (15-day/month); phone-verified + capped inside
     if (action === "previewCancellation") return jsonRes(_deleteOrderInternal(body.phone, body.rowId, body.refundType || "wallet", { dryRun: true }));
     if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(body.phone));

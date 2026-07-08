@@ -15,6 +15,11 @@ const BULK_DISCOUNT_RATE = 0.05;       // default bulk discount (used if a plan 
 const BULK_PLAN_RATES = { week: 0.05, "15day": 0.075, month: 0.10 };
 // Working (non-Sunday, non-closed) days per plan.
 const BULK_PLANS = { week: 6, "15day": 13, month: 26 };
+// How many days a customer may POSTPONE to a new date, PER MEAL TYPE, per batch.
+// Week has none (cancel-only, unchanged); 15-day = 2 lunch + 2 dinner; month = 4 + 4.
+const BULK_POSTPONE_CAP = { week: 0, "15day": 2, month: 4 };
+// How far ahead (calendar days from today) a postponed day may be rescheduled.
+const BULK_POSTPONE_HORIZON_DAYS = 30;
 
 // Next `count` working days for a meal: skips Sundays + admin-closed days, and
 // includes TODAY only if that meal's cutoff hasn't passed yet. All date math is in
@@ -58,6 +63,194 @@ function getBulkWindow(plan) {
     lunch:  _nextWorkingDays("Lunch", count),
     dinner: _nextWorkingDays("Dinner", count)
   };
+}
+
+// ============================================================
+// BULK POSTPONE — reschedule a bulk day to another date (15-day / month only)
+// ============================================================
+// A postpone is a PURE reschedule: the row keeps its items, price, Batch_ID and
+// Bulk_Clawback (already paid) and only its Order_Date changes. No refund, no
+// re-charge, discount preserved — that's the whole difference from a cancel, whose
+// existing clawback logic is left untouched. Capped PER MEAL TYPE per batch
+// (BULK_POSTPONE_CAP); once used up, that meal's remaining days are cancel-only.
+
+// yyyy-MM-dd for a sheet cell that may be a Date object or a string.
+function _bulkDateStr(v) {
+  return v instanceof Date
+    ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd")
+    : String(v || "").trim().slice(0, 10);
+}
+
+// The plan stored on a bulk row. Older rows predate the Bulk_Plan column → "week"
+// (no postpone), a safe default that never enables postpone on legacy data.
+function _bulkRowPlan(r) {
+  const p = String((r && r.Bulk_Plan) || "").trim();
+  return BULK_PLANS[p] ? p : "week";
+}
+
+// { cap, used, remaining } of postpones for ONE (batch, meal). `used` counts rows
+// already marked Bulk_Postponed (INCLUDING later-cancelled ones — a postpone, once
+// spent, is not refunded by cancelling the moved day). Re-postponing an already-
+// marked row doesn't consume more quota (it stays a single marked row).
+function _bulkPostponeState(allRows, batchId, meal, plan) {
+  const cap = BULK_POSTPONE_CAP[plan] || 0;
+  const b = String(batchId || "").trim(), m = String(meal || "").trim();
+  let used = 0;
+  if (b) {
+    allRows.forEach(function (r) {
+      if (String(r.Batch_ID || "").trim() !== b) return;
+      if (String(r.Meal_Type || "").trim() !== m) return;
+      if (String(r.Bulk_Postponed || "").trim()) used++;
+    });
+  }
+  return { cap: cap, used: used, remaining: Math.max(0, cap - used) };
+}
+
+// Working days (for a meal) from today up to the horizon that a day may be moved to:
+// skips Sundays + admin-closed days + today-past-cutoff, minus `takenDates` (dates
+// that already carry this meal in the batch — one meal per day). Returns ISO strings.
+function _bulkPostponeValidDates(meal, takenDates, horizonDays) {
+  const TZ = "Asia/Kolkata";
+  const closed = (typeof _kitchenClosedSet === "function") ? _kitchenClosedSet() : {};
+  const taken = {}; (takenDates || []).forEach(function (d) { taken[d] = true; });
+  const now = new Date();
+  const todayISO = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
+  const nowHour = Number(Utilities.formatDate(now, TZ, "HH")) + Number(Utilities.formatDate(now, TZ, "mm")) / 60;
+
+  const out = [];
+  let cur = new Date(todayISO + "T12:00:00+05:30");
+  for (let i = 0; i <= (horizonDays || BULK_POSTPONE_HORIZON_DAYS); i++) {
+    const iso = Utilities.formatDate(cur, TZ, "yyyy-MM-dd");
+    const dayName = Utilities.formatDate(cur, TZ, "EEEE");
+    let eligible = (dayName !== "Sunday") && !closed[iso] && !taken[iso];
+    if (eligible && iso === todayISO) {
+      const cutoff = (_effectiveCutoffsForDate(iso) || {})[meal];
+      if (cutoff !== undefined && nowHour >= cutoff) eligible = false;
+    }
+    if (eligible) out.push(iso);
+    cur = new Date(cur.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return out;
+}
+
+// Locate a customer's bulk row and assess postpone eligibility. Shared by the
+// read-only info endpoint and the mutating postpone (single source of validation).
+// Returns { ok, row, allRows, ws, hIdx, plan, meal, batchId, state, curDate,
+//           takenDates, error } — `ok:false` carries a customer-safe `error`.
+function _bulkPostponeContext(phone, rowId) {
+  const phoneStr = _normalizePhone(phone || "");
+  const targetId = String(rowId || "").trim();
+  if (!phoneStr || !targetId) return { ok: false, error: "Missing phone or order id." };
+
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const allRows = getAllRows(ws);
+  const hIdx = headerIndex(ws);
+
+  const row = allRows.filter(function (r) {
+    return String(r.Submission_ID || "").trim() === targetId
+        && _normalizePhone(r.Phone) === phoneStr;
+  })[0];
+  if (!row) return { ok: false, error: "Order not found." };
+
+  const isBulk = String(row.Source || "").trim() === "Bulk" || String(row.Batch_ID || "").trim();
+  if (!isBulk) return { ok: false, error: "Only bulk orders can be postponed." };
+  if (_isOrderCancelled(row.Payment_Status)) return { ok: false, error: "This order is already cancelled." };
+
+  const meal    = String(row.Meal_Type || "").trim();
+  const batchId = String(row.Batch_ID || "").trim();
+  const plan    = _bulkRowPlan(row);
+  const curDate = _bulkDateStr(row.Order_Date);
+
+  // Source day must still be editable — before its own cutoff (same rule as cancel).
+  const TZ = "Asia/Kolkata";
+  const now = new Date();
+  const todayISO = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
+  if (curDate < todayISO) return { ok: false, error: "This day has already passed." };
+  if (curDate === todayISO) {
+    const nowHour = Number(Utilities.formatDate(now, TZ, "HH")) + Number(Utilities.formatDate(now, TZ, "mm")) / 60;
+    const cutoff = (_effectiveCutoffsForDate(curDate) || {})[meal];
+    if (cutoff !== undefined && nowHour >= cutoff) return { ok: false, error: "The cutoff for this day has passed." };
+  }
+
+  const cap = BULK_POSTPONE_CAP[plan] || 0;
+  if (cap <= 0) return { ok: false, error: "Postponing isn't available on this plan." };
+
+  const state = _bulkPostponeState(allRows, batchId, meal, plan);
+  const alreadyMarked = !!String(row.Bulk_Postponed || "").trim();
+  // A fresh row needs remaining quota; an already-postponed row can always move again.
+  if (!alreadyMarked && state.remaining <= 0) {
+    return { ok: false, error: "You've used all " + cap + " " + meal.toLowerCase() + " postpones for this order." };
+  }
+
+  // Dates already carrying this meal in the batch (block clashes; also excludes self).
+  const takenDates = [];
+  allRows.forEach(function (r) {
+    if (String(r.Batch_ID || "").trim() !== batchId) return;
+    if (String(r.Meal_Type || "").trim() !== meal) return;
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    takenDates.push(_bulkDateStr(r.Order_Date));
+  });
+
+  return { ok: true, row: row, allRows: allRows, ws: ws, hIdx: hIdx, plan: plan, meal: meal,
+           batchId: batchId, state: state, curDate: curDate, alreadyMarked: alreadyMarked, takenDates: takenDates };
+}
+
+// READ-ONLY: what the frontend needs to render the postpone calendar for one row.
+function getBulkPostponeInfo(phone, rowId) {
+  const ctx = _bulkPostponeContext(phone, rowId);
+  if (!ctx.ok) return { eligible: false, error: ctx.error };
+  return {
+    eligible:   true,
+    plan:       ctx.plan,
+    meal:       ctx.meal,
+    currentDate: ctx.curDate,
+    cap:        ctx.state.cap,
+    used:       ctx.state.used,
+    remaining:  ctx.alreadyMarked ? Math.max(ctx.state.remaining, 1) : ctx.state.remaining,
+    validDates: _bulkPostponeValidDates(ctx.meal, ctx.takenDates, BULK_POSTPONE_HORIZON_DAYS),
+    horizonDays: BULK_POSTPONE_HORIZON_DAYS
+  };
+}
+
+// MUTATING: move a bulk row to `newDate`. Locked; re-validates everything server-side
+// (never trusts the client's date). Body: { phone, rowId, newDate:"yyyy-MM-dd" }.
+function postponeBulkOrder(body) {
+  const newDate = String((body && body.newDate) || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return { success: false, error: "Pick a valid date." };
+
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, error: "Busy, please retry." }; }
+  try {
+    const ctx = _bulkPostponeContext(body.phone, body.rowId);
+    if (!ctx.ok) return { success: false, error: ctx.error };
+
+    if (newDate === ctx.curDate) return { success: false, error: "Pick a different date." };
+    const valid = _bulkPostponeValidDates(ctx.meal, ctx.takenDates, BULK_POSTPONE_HORIZON_DAYS);
+    if (valid.indexOf(newDate) === -1) {
+      return { success: false, error: "That date isn't available (closed day, past its cutoff, beyond "
+        + BULK_POSTPONE_HORIZON_DAYS + " days, or you already have that meal that day)." };
+    }
+
+    const dCol = ctx.hIdx["Order_Date"];
+    const pCol = ctx.hIdx["Bulk_Postponed"] ||
+      (function () { ctx.ws.getRange(1, ctx.ws.getLastColumn() + 1).setValue("Bulk_Postponed"); return ctx.ws.getLastColumn(); })();
+    ctx.ws.getRange(ctx.row._row, dCol).setValue(newDate);
+    // Mark on first move only, so quota counts DISTINCT postponed days (re-moving a
+    // day that was already postponed doesn't spend another slot).
+    if (!ctx.alreadyMarked) {
+      ctx.ws.getRange(ctx.row._row, pCol).setValue(ctx.curDate + " → moved " + getISTTimestamp());
+    }
+    SpreadsheetApp.flush();
+
+    const after = _bulkPostponeState(getAllRows(ctx.ws), ctx.batchId, ctx.meal, ctx.plan);
+    Logger.log("postponeBulkOrder: " + ctx.row._row + " (" + body.rowId + ") " + ctx.meal
+      + " " + ctx.curDate + " → " + newDate + " (used " + after.used + "/" + after.cap + ")");
+    return { success: true, from: ctx.curDate, to: newDate, meal: ctx.meal,
+             remaining: after.remaining, cap: after.cap };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
 }
 
 // ============================================================
@@ -329,7 +522,7 @@ function submitBulkOrder(body) {
   // Write rows
   const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const hIdx = headerIndex(ordersWs);
-  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Wallet_Credit"].forEach(function (col) {
+  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Wallet_Credit", "Bulk_Plan", "Bulk_Postponed"].forEach(function (col) {
     if (!hIdx[col]) { ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue(col); hIdx[col] = ordersWs.getLastColumn(); }
   });
 
@@ -448,6 +641,7 @@ function submitBulkOrder(body) {
     set("Gateway_Order_ID", gatewayOrderId);
     set("Batch_ID", batchId);
     set("Bulk_Clawback", r.bulkDisc); // per-row bulk discount = the clawback-able amount
+    set("Bulk_Plan", plan);           // week/15day/month — drives postpone cap + info modal
     ordersWs.appendRow(row);
     toVerify.push({ sid: sid, row: row });
     written.push({ sid: sid, date: r.date, meal: r.meal, net: r.net });

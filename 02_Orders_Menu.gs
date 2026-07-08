@@ -2943,6 +2943,7 @@ function getCustomerOrders(phone) {
       const delTracker = deliveryMap[String(r.Submission_ID)] || {};
       let itemsRaw = {};
       try { itemsRaw = JSON.parse(r.Items_JSON || "{}"); } catch(e) {}
+      const _isBulkRow = String(r.Source || "").trim() === "Bulk" || !!String(r.Batch_ID || "").trim();
       return {
         rowId:              r.Submission_ID,
         date:               fmtD(r),
@@ -2955,6 +2956,12 @@ function getCustomerOrders(phone) {
         payment_status:     r.Payment_Status,
         payment_method:     r.Payment_Method,
         wallet_credit:      Number(r.Wallet_Credit) || 0,
+        // Bulk postpone support (Manage Orders): the frontend derives remaining quota
+        // per (batch, meal) from these across the returned rows.
+        is_bulk:            _isBulkRow,
+        batch_id:           String(r.Batch_ID || "").trim(),
+        bulk_plan:          _isBulkRow ? String(r.Bulk_Plan || "").trim() : "",
+        bulk_postponed:     _isBulkRow ? !!String(r.Bulk_Postponed || "").trim() : false,
         deliveredAt:        delTracker.deliveredAt,
         enRouteAt:          delTracker.enRouteAt
       };
