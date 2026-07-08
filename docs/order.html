@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.08.01";
+    const APP_VERSION = "v26.07.08.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -12148,9 +12148,16 @@
     }
 
     async function _bulkDoPostpone(rowId, newDate, meal) {
+      // The calendar modal sits at z-index 55000, ABOVE the shared sConfirm/sAlert
+      // dialogs (z 40000). Hide it while confirming so the dialog isn't trapped behind
+      // the calendar (symptom was: taps stacked confirm overlays behind it → bg kept
+      // darkening, Confirm/Cancel unclickable). Restore it if they back out.
+      const modalEl = document.getElementById("bulkModal");
+      const _showCal = function () { if (modalEl) modalEl.style.display = "flex"; };
+      if (modalEl) modalEl.style.display = "none";
       const go = await sConfirm('Move your <b>' + meal + '</b> to <b>' + formatDate(newDate) + '</b>?<br><span style="font-size:0.8rem;color:#777;">Same items, same price — your bulk discount stays.</span>',
         "Postpone", "📅");
-      if (!go) return;
+      if (!go) { _showCal(); return; }
       sLoading(true, "Rescheduling…");
       try {
         const res = await fetch(APPS_SCRIPT_URL, {
@@ -12158,13 +12165,13 @@
           body: JSON.stringify({ _action: "postponeBulkOrder", phone: S.phone, rowId: rowId, newDate: newDate })
         }).then(function (r) { return r.json(); });
         sLoading(false);
-        if (!res.success) { await sAlert(res.error || "Couldn't postpone. Please try again.", "Postpone failed", "⚠️"); return; }
+        if (!res.success) { await sAlert(res.error || "Couldn't postpone. Please try again.", "Postpone failed", "⚠️"); _showCal(); return; }
         closeBulkFlow();
         await sAlert('Your ' + meal + ' has been moved to <b>' + formatDate(newDate) + '</b>.'
           + (res.remaining !== undefined ? '<br><span style="font-size:0.8rem;color:#777;">' + res.remaining + ' ' + meal.toLowerCase() + ' postpone' + (res.remaining === 1 ? '' : 's') + ' left for this order.</span>' : ''),
           "Postponed", "✅");
         await loadExistingOrders(S.phone);
-      } catch (e) { sLoading(false); await sAlert("Error: " + e.message, "Failure", "❌"); }
+      } catch (e) { sLoading(false); await sAlert("Error: " + e.message, "Failure", "❌"); _showCal(); }
     }
 
     function _bulkFmtDates(arr) { if (!arr || !arr.length) return "—"; const f = function (d) { const p = String(d).split("-"); return p[2] + "/" + p[1]; }; return arr.length === 1 ? f(arr[0]) : (f(arr[0]) + " to " + f(arr[arr.length - 1])); }
