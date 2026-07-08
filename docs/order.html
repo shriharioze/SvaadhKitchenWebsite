@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.08.03";
+    const APP_VERSION = "v26.07.08.04";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4688,6 +4688,21 @@
     // 2026-07-07 (Breakfast is typically a smaller ticket). MUST match the
     // backend's CAP_DELIVERY_BYPASS_MIN (00_Config.gs).
     const CAP_BYPASS_MIN = { Breakfast: 100, Lunch: 200, Dinner: 200 };
+    // Does this meal STILL get delivered even when its delivery cap is full? Mirrors the
+    // server's cap allow-list (submitOrder guard) + the checkout gate, so the menu banner
+    // and the checkout dialog never disagree. Exempt = Enkin / Self Pickup / Porter / a
+    // free area (Bhosale Nagar, Triveni Nagar…) / a big-enough order (≥ CAP_BYPASS_MIN).
+    // NOT covered: society "piggyback" (another delivery already going to this society
+    // today) — that's decided server-side and unknown to the client, so such a customer
+    // may still see the warning yet be delivered. IA orders use a different page entirely.
+    function _mealKeepsDeliveryAtCap(meal, addr, sub) {
+      if (String((S.profile && S.profile.name) || "").toLowerCase().indexOf("enkin") !== -1) return true;
+      const a = String((addr && addr.area) || "").toLowerCase();
+      if (a.indexOf("pickup") !== -1 || a === "porter") return true;
+      if (addr && FREE_AREAS.includes(addr.area)) return true;
+      if ((Number(sub) || 0) >= (CAP_BYPASS_MIN[meal] || 200)) return true;
+      return false;
+    }
     const ICONS = { Breakfast: "🍳", Lunch: "🍱", Dinner: "🍽️" };
     const GRACE_MINUTES = 5; // extra minutes allowed after cutoff to complete & submit
 
@@ -6750,7 +6765,11 @@
         // Delivery cap hit but the meal is still orderable (alternatives ON) → tell
         // the customer UPFRONT that delivery is full and pickup/porter is the way,
         // instead of leaving them to discover it only at checkout.
-        const _capFull = isAvail && !!(S.menuCache[date]?.sold_out || {})[meal] && !!(S.menuCache[date]?.order_caps || {})[meal];
+        // Only warn customers whose order would ACTUALLY be blocked — hide it for anyone
+        // who still gets delivery despite the cap (Enkin / pickup / porter / free area /
+        // ≥ threshold), so the message isn't confusing. Mirrors the checkout gate exactly.
+        const _capFull = isAvail && !!(S.menuCache[date]?.sold_out || {})[meal] && !!(S.menuCache[date]?.order_caps || {})[meal]
+          && !_mealKeepsDeliveryAtCap(meal, getMealAddr(meal), sub);
         const _capMin = CAP_BYPASS_MIN[meal] || 200; // breakfast ₹100, lunch/dinner ₹200
         const _capNeedMore = (sub > 0 && sub < _capMin) ? ` <b>Add ₹${_capMin - sub} more to qualify.</b>` : "";
         const _capBanner = _capFull
@@ -8187,10 +8206,9 @@
           if (!mObj || mObj.subtotal <= 0) return;
           if (!so[meal]) return;
           const addr = getMealAddr(meal) || {};
-          const a = String(addr.area || "").toLowerCase();
-          if (a.indexOf("pickup") !== -1 || a === "porter") return; // already non-delivery
-          if (FREE_AREAS.includes(addr.area)) return; // free areas (Bhosale Nagar…) are always delivered — never capped
-          if ((mObj.subtotal || 0) >= (CAP_BYPASS_MIN[meal] || 200)) return; // big-enough meal keeps delivery even at the cap (server guard matches)
+          // Enkin / pickup / porter / free area / ≥ threshold still get delivery → not flagged.
+          // Same predicate the menu cap-full banner uses, so the two never disagree.
+          if (_mealKeepsDeliveryAtCap(meal, addr, mObj.subtotal)) return;
           out.push({ date, meal, society: addr.society || S.profile.society || "" });
         });
       });
