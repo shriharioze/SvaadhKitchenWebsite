@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.08.02";
+    const APP_VERSION = "v26.07.08.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6751,8 +6751,10 @@
         // the customer UPFRONT that delivery is full and pickup/porter is the way,
         // instead of leaving them to discover it only at checkout.
         const _capFull = isAvail && !!(S.menuCache[date]?.sold_out || {})[meal] && !!(S.menuCache[date]?.order_caps || {})[meal];
+        const _capMin = CAP_BYPASS_MIN[meal] || 200; // breakfast ₹100, lunch/dinner ₹200
+        const _capNeedMore = (sub > 0 && sub < _capMin) ? ` <b>Add ₹${_capMin - sub} more to qualify.</b>` : "";
         const _capBanner = _capFull
-          ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:0.76rem;color:#9a3412;line-height:1.5;">🚚 <b>Delivery is full for ${meal} today.</b> You can still order — choose <b>📦 Self Pickup</b> or <b>🛵 Porter</b> at checkout (no delivery fee).</div>`
+          ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:0.76rem;color:#9a3412;line-height:1.5;">🚚 <b>Delivery is full for ${meal} today.</b> Orders of <b>₹${_capMin}+</b> still get home delivery.${_capNeedMore} Or choose <b>📦 Self Pickup</b> / <b>🛵 Porter</b> at checkout (no delivery fee).</div>`
           : "";
         const mAddr = getMealAddr(meal);
         const isAddrMissing = (mAddr.area !== "Self Pickup") && !mAddr.area;
