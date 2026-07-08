@@ -113,6 +113,7 @@ function _getAdminDataUncached() {
                           Dinner: _sabjiComboStatus(stockLimits, orderedCounts, "Dinner") };
     const kitchenClosed = (r.Kitchen_Closed === true ||
       String(r.Kitchen_Closed || "").toLowerCase() === "true");
+    const closedMeals = _closedMealsObj(r); // per-meal closure {Breakfast,Lunch,Dinner}
     return {
       date:             d,
       breakfast:        breakfast,
@@ -130,6 +131,7 @@ function _getAdminDataUncached() {
       cap_alt:          capAlt,
       order_counts:     mealOrderCounts[d] || { Breakfast: 0, Lunch: 0, Dinner: 0 },
       kitchen_closed:   kitchenClosed,
+      closed_meals:     closedMeals,
     };
   });
 
@@ -237,6 +239,25 @@ function saveMenu(body) {
 //      order for that date (wallet payments refund instantly to wallet,
 //      UPI payments go to manual_upi refund queue) and set Kitchen_Closed.
 //   3. If isClosed === false → simply clear the flag (no order action).
+const KITCHEN_MEALS = ["Breakfast", "Lunch", "Dinner"];
+
+// Canonical: which meals are kitchen-closed for a SK_Daily_Menu row? Legacy full-day
+// Kitchen_Closed=TRUE ⇒ all three closed; partial closures live in Closed_Meals_JSON
+// ({"Breakfast":true,…}). Returns { Breakfast, Lunch, Dinner } booleans.
+function _closedMealsObj(menuRow) {
+  const full = !!(menuRow && (menuRow.Kitchen_Closed === true ||
+    String(menuRow.Kitchen_Closed || "").toLowerCase() === "true"));
+  const obj = { Breakfast: full, Lunch: full, Dinner: full };
+  if (!full && menuRow && menuRow.Closed_Meals_JSON) {
+    try {
+      const cm = JSON.parse(menuRow.Closed_Meals_JSON);
+      KITCHEN_MEALS.forEach(function (m) { if (cm && cm[m]) obj[m] = true; });
+    } catch (e) {}
+  }
+  return obj;
+}
+function _isMealKitchenClosed(menuRow, meal) { return !!_closedMealsObj(menuRow)[meal]; }
+
 function setKitchenClosed(body) {
   const pin = String(body && body.pin || "").trim();
   if (pin !== ADMIN_PIN) return { success: false, error: "STRICT ADMIN PIN REQUIRED" };
@@ -249,20 +270,34 @@ function setKitchenClosed(body) {
   const confirmCancelOrders = (body.confirmCancelOrders === true ||
                                String(body.confirmCancelOrders) === "true");
 
+  // Which meals to act on? Absent/empty ⇒ FULL DAY (all three) — backward compatible
+  // with the old whole-day toggle and the "Full Day" selection.
+  let meals = Array.isArray(body.meals)
+    ? body.meals.map(String).filter(function (m) { return KITCHEN_MEALS.indexOf(m) !== -1; })
+    : [];
+  if (!meals.length) meals = KITCHEN_MEALS.slice();
+  const mealSel = {}; meals.forEach(function (m) { mealSel[m] = true; });
+
   const ss = getSpreadsheet();
   const menuWs = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON","Closed_Meals_JSON"
   ]);
   let mIdx = headerIndex(menuWs);
-  if (!mIdx["Kitchen_Closed"]) {
-    menuWs.getRange(1, menuWs.getLastColumn() + 1).setValue("Kitchen_Closed");
-    SpreadsheetApp.flush();
-    mIdx = headerIndex(menuWs);
-  }
+  ["Kitchen_Closed", "Closed_Meals_JSON"].forEach(function (col) {
+    if (!mIdx[col]) menuWs.getRange(1, menuWs.getLastColumn() + 1).setValue(col);
+  });
+  SpreadsheetApp.flush(); mIdx = headerIndex(menuWs);
 
-  // If closing AND not yet confirmed: count affected orders + amount.
+  // Current per-meal closed state for this date.
+  const _menuRowNow = getAllRows(menuWs).find(function (x) {
+    const d = x.Date instanceof Date ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd") : String(x.Date || "").trim();
+    return d === dateStr;
+  });
+  const curClosed = _closedMealsObj(_menuRowNow);
+
+  // If closing AND not yet confirmed: count affected orders (of the SELECTED meals) + amount.
   if (isClosed) {
     const ordersWs = ss.getSheetByName(TAB_ORDERS);
     const oRows = ordersWs ? getAllRows(ordersWs) : [];
@@ -271,6 +306,7 @@ function setKitchenClosed(body) {
         ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
         : String(r.Order_Date || "").trim();
       if (od !== dateStr) return false;
+      if (!mealSel[String(r.Meal_Type || "").trim()]) return false; // only the selected meals
       return !_isOrderCancelled(r.Payment_Status);
     });
 
@@ -287,10 +323,11 @@ function setKitchenClosed(body) {
         customerCount: Object.keys(customers).length,
         totalAmount: total,
         date: dateStr,
-        message: "There are " + activeMatches.length + " active order(s) totaling ₹"
+        meals: meals,
+        message: "There are " + activeMatches.length + " active " + meals.join("/") + " order(s) totaling ₹"
                + total + " across " + Object.keys(customers).length
                + " customer(s) for " + dateStr
-               + ". Closing this day will cancel and refund all of them. Confirm?"
+               + ". Closing will cancel and refund all of them. Confirm?"
       };
     }
 
@@ -327,9 +364,14 @@ function setKitchenClosed(body) {
       }
     });
 
-    // Write Kitchen_Closed = TRUE on the menu row (create row if needed).
-    _writeKitchenClosedFlag(menuWs, mIdx, dateStr, true);
-    _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "adminData_v1");
+    // Merge the selected meals into the closed set + persist.
+    const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
+    meals.forEach(function (m) { newClosed[m] = true; });
+    _writeClosedMeals(menuWs, mIdx, dateStr, newClosed);
+    _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "kitchen_closed_set_v1", "kitchen_closed_mealset_v1", "adminData_v1");
+
+    const closedList = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
+    const isFullDay = closedList.length === 3;
 
     // Build a human-readable breakdown including On Account (was missing).
     var parts = [];
@@ -341,37 +383,54 @@ function setKitchenClosed(body) {
     return {
       success: true,
       isClosed: true,
+      closedMeals: closedList,
+      fullDay: isFullDay,
       cancelled: cancelled,
       refundedWallet: refundedWallet,
       refundedUpi: refundedUpi,
       onAccountAdjusted: onAccountAdjusted,
-      message: "Kitchen closed for " + dateStr + ". " + cancelled
-             + " order(s) cancelled" + breakdown
+      message: (isFullDay ? "Kitchen closed (full day)" : "Closed " + meals.join(", ")) + " for " + dateStr + ". "
+             + cancelled + " order(s) cancelled" + breakdown
     };
   }
 
-  // Re-opening: just clear the flag, no order action.
-  _writeKitchenClosedFlag(menuWs, mIdx, dateStr, false);
-  _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "adminData_v1");
-  return { success: true, isClosed: false, message: "Kitchen re-opened for " + dateStr + "." };
+  // Re-opening the selected meals: remove them from the closed set. No order action
+  // (already-cancelled orders stay cancelled — matches the previous whole-day behaviour).
+  const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
+  meals.forEach(function (m) { newClosed[m] = false; });
+  _writeClosedMeals(menuWs, mIdx, dateStr, newClosed);
+  _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "kitchen_closed_set_v1", "kitchen_closed_mealset_v1", "adminData_v1");
+  const stillClosed = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
+  return {
+    success: true, isClosed: false, closedMeals: stillClosed, fullDay: false,
+    message: (stillClosed.length ? ("Re-opened " + meals.join(", ") + " — still closed: " + stillClosed.join(", "))
+                                 : "Kitchen re-opened") + " for " + dateStr + "."
+  };
 }
 
-function _writeKitchenClosedFlag(menuWs, mIdx, dateStr, isClosed) {
-  const rows = getAllRows(menuWs);
-  const existing = rows.find(function(x) {
+// Persist per-meal closure. Closed_Meals_JSON holds the {meal:true} set; the legacy
+// Kitchen_Closed boolean is set TRUE only when ALL three meals are closed, so every
+// existing full-day reader keeps working. Creates the menu row if none exists.
+function _writeClosedMeals(menuWs, mIdx, dateStr, closedObj) {
+  const closedList = KITCHEN_MEALS.filter(function (m) { return closedObj[m]; });
+  const jsonVal = closedList.length
+    ? JSON.stringify(closedList.reduce(function (o, m) { o[m] = true; return o; }, {})) : "";
+  const fullDay = closedList.length === 3;
+  const kcCol = mIdx["Kitchen_Closed"], cmCol = mIdx["Closed_Meals_JSON"];
+  const existing = getAllRows(menuWs).find(function(x) {
     const d = x.Date instanceof Date
       ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(x.Date || "").trim();
     return d === dateStr;
   });
-  const colIdx = mIdx["Kitchen_Closed"];
   if (existing) {
-    menuWs.getRange(existing._row, colIdx).setValue(isClosed ? "TRUE" : "");
+    menuWs.getRange(existing._row, kcCol).setValue(fullDay ? "TRUE" : "");
+    menuWs.getRange(existing._row, cmCol).setValue(jsonVal);
   } else {
-    // Create a minimal menu row just to hold the flag.
     const newRow = new Array(menuWs.getLastColumn()).fill("");
     newRow[mIdx["Date"] - 1] = dateStr;
-    newRow[colIdx - 1] = isClosed ? "TRUE" : "";
+    newRow[kcCol - 1] = fullDay ? "TRUE" : "";
+    newRow[cmCol - 1] = jsonVal;
     menuWs.appendRow(newRow);
   }
   SpreadsheetApp.flush();

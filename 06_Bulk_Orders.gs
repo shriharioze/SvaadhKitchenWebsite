@@ -26,7 +26,9 @@ const BULK_POSTPONE_HORIZON_DAYS = 30;
 // Asia/Kolkata so it's correct regardless of the runtime timezone.
 function _nextWorkingDays(meal, count) {
   const TZ = "Asia/Kolkata";
-  const closed = (typeof _kitchenClosedSet === "function") ? _kitchenClosedSet() : {};
+  // Meal-aware closure: skip a day only if THIS meal is closed on it (a dinner-only
+  // closure doesn't remove the day from a lunch window, and vice-versa).
+  const closedMeals = (typeof _kitchenClosedMealSet === "function") ? _kitchenClosedMealSet() : {};
   const now = new Date();
   const todayISO = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
   const nowHour = Number(Utilities.formatDate(now, TZ, "HH")) + Number(Utilities.formatDate(now, TZ, "mm")) / 60;
@@ -38,7 +40,7 @@ function _nextWorkingDays(meal, count) {
     safety++;
     const iso = Utilities.formatDate(cur, TZ, "yyyy-MM-dd");
     const dayName = Utilities.formatDate(cur, TZ, "EEEE");
-    let eligible = (dayName !== "Sunday") && !closed[iso];
+    let eligible = (dayName !== "Sunday") && !(closedMeals[iso] && closedMeals[iso][meal]);
     if (eligible && iso === todayISO) {
       const cutoff = (_effectiveCutoffsForDate(iso) || {})[meal];
       if (cutoff !== undefined && nowHour >= cutoff) eligible = false; // cutoff passed today
@@ -111,7 +113,7 @@ function _bulkPostponeState(allRows, batchId, meal, plan) {
 // that already carry this meal in the batch — one meal per day). Returns ISO strings.
 function _bulkPostponeValidDates(meal, takenDates, horizonDays) {
   const TZ = "Asia/Kolkata";
-  const closed = (typeof _kitchenClosedSet === "function") ? _kitchenClosedSet() : {};
+  const closedMeals = (typeof _kitchenClosedMealSet === "function") ? _kitchenClosedMealSet() : {};
   const taken = {}; (takenDates || []).forEach(function (d) { taken[d] = true; });
   const now = new Date();
   const todayISO = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
@@ -122,7 +124,7 @@ function _bulkPostponeValidDates(meal, takenDates, horizonDays) {
   for (let i = 0; i <= (horizonDays || BULK_POSTPONE_HORIZON_DAYS); i++) {
     const iso = Utilities.formatDate(cur, TZ, "yyyy-MM-dd");
     const dayName = Utilities.formatDate(cur, TZ, "EEEE");
-    let eligible = (dayName !== "Sunday") && !closed[iso] && !taken[iso];
+    let eligible = (dayName !== "Sunday") && !(closedMeals[iso] && closedMeals[iso][meal]) && !taken[iso];
     if (eligible && iso === todayISO) {
       const cutoff = (_effectiveCutoffsForDate(iso) || {})[meal];
       if (cutoff !== undefined && nowHour >= cutoff) eligible = false;

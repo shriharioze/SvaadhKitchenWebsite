@@ -818,7 +818,8 @@ function _getMenuUncached(dateStr) {
     cap_alt:       capAlt,       // admin display: per-meal "offer pickup/porter" flags
     order_counts:  orderCounts,  // admin display: active orders placed so far
     sold_out:      soldOut,      // customer display: meal hit its cap today
-    kitchen_closed: _kitchenClosed
+    kitchen_closed: _kitchenClosed,               // full-day close (all meals)
+    closed_meals:   _closedMealsObj(r)            // per-meal close {Breakfast,Lunch,Dinner}
   };
 }
 
@@ -1549,44 +1550,45 @@ function _submitOrderInternal(body) {
   // here the customer has already paid on the HDFC-hosted page. Rejecting
   // would leave the money taken without an order in our sheet. Accept
   // the order and log a warning so admin can cancel + refund manually.
+  // Per-MEAL kitchen-closure guard. A day can be closed for a single meal
+  // (Closed_Meals_JSON) or fully (legacy Kitchen_Closed); block only the closed meal(s).
+  const _findMenuRow = function (dateISO) {
+    return menuRowsAll.find(function(mr) {
+      const d = mr.Date instanceof Date
+        ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(mr.Date).trim();
+      return d === dateISO;
+    });
+  };
   if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
-    const closedHits = [];
+    const closedHits = []; // [{date, meal}]
     for (const _o of orders) {
-      const _menuForDate = menuRowsAll.find(function(mr) {
-        const d = mr.Date instanceof Date
-          ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
-          : String(mr.Date).trim();
-        return d === _o.date;
-      });
-      const _closed = !!(_menuForDate && (_menuForDate.Kitchen_Closed === true ||
-        String(_menuForDate.Kitchen_Closed || "").toLowerCase() === "true"));
-      if (_closed) closedHits.push(_o.date);
+      const _menuForDate = _findMenuRow(_o.date);
+      for (const _m of (_o.meals || [])) {
+        const _mt = String(_m.type || "");
+        if (_isMealKitchenClosed(_menuForDate, _mt)) closedHits.push({ date: _o.date, meal: _mt });
+      }
     }
     if (closedHits.length) {
       return {
         success: false,
         kitchen_closed: true,
-        closed_dates: closedHits,
-        error: "Kitchen is closed on " + closedHits.join(", ")
-             + ". Please remove that date from your cart and try again."
+        closed_meals: closedHits,
+        error: "The kitchen is closed for " + closedHits.map(function (h) { return h.meal + " on " + h.date; }).join(", ")
+             + ". Please remove those from your cart and try again."
       };
     }
   } else {
-    // Gateway path — log if a closed date sneaks through, so admin can
+    // Gateway path — log if a closed meal sneaks through, so admin can
     // catch it manually. Order still gets written.
     for (const _o of orders) {
-      const _menuForDate = menuRowsAll.find(function(mr) {
-        const d = mr.Date instanceof Date
-          ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
-          : String(mr.Date).trim();
-        return d === _o.date;
-      });
-      const _closed = !!(_menuForDate && (_menuForDate.Kitchen_Closed === true ||
-        String(_menuForDate.Kitchen_Closed || "").toLowerCase() === "true"));
-      if (_closed) {
-        console.warn("⚠️ Gateway-paid order accepted for KITCHEN-CLOSED date "
-          + _o.date + " (phone " + profile.phone + ", gateway_order_id "
-          + (body.gateway_order_id || "?") + "). Admin must manually cancel + refund this order.");
+      const _menuForDate = _findMenuRow(_o.date);
+      for (const _m of (_o.meals || [])) {
+        if (_isMealKitchenClosed(_menuForDate, String(_m.type || ""))) {
+          console.warn("⚠️ Gateway-paid order accepted for KITCHEN-CLOSED " + _m.type + " on "
+            + _o.date + " (phone " + profile.phone + ", gateway_order_id "
+            + (body.gateway_order_id || "?") + "). Admin must manually cancel + refund this order.");
+        }
       }
     }
   }
@@ -2743,6 +2745,25 @@ function _kitchenClosedSet() {
   const set = {};
   (data.dates || []).forEach(function(d) { set[d] = true; });
   return set;
+}
+
+// Meal-aware version: { "yyyy-MM-dd": {Breakfast,Lunch,Dinner bools} } for every date
+// with ANY meal closed (full-day ⇒ all three). Used by bulk windows so a lunch-closed
+// day is skipped from a bulk LUNCH order but a dinner-only order still runs that day.
+function _kitchenClosedMealSet() {
+  const data = _cachedData("kitchen_closed_mealset_v1", 60, function() {
+    const ss = getSpreadsheet();
+    const ws = getOrCreateTab(ss, TAB_MENU, []);
+    const map = {};
+    getAllRows(ws).forEach(function(r) {
+      const cm = _closedMealsObj(r);
+      if (!cm.Breakfast && !cm.Lunch && !cm.Dinner) return;
+      const d = r.Date instanceof Date ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Date).trim();
+      if (d) map[d] = cm;
+    });
+    return { map: map };
+  });
+  return data.map || {};
 }
 
 function _calculateLoyaltyStreak(phone, preloadedRows) {
