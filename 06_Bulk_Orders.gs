@@ -253,6 +253,78 @@ function postponeBulkOrder(body) {
   }
 }
 
+// One-time, IDEMPOTENT backfill: stamp Bulk_Plan on bulk rows that predate the column
+// (orders placed before the v26.0 postpone update), so those customers can postpone
+// their remaining days too. The plan is INFERRED from each batch's size — the largest
+// per-meal row count across the batch (counting ALL statuses, so past cancellations
+// don't shrink it) is ~6 / ~13 / ~26 working days → week / 15day / month. Only touches
+// rows whose Bulk_Plan is blank (new orders already carry it, so they're skipped).
+// Bulk_Plan drives ONLY postpone eligibility — no pricing/cancel/clawback path reads it,
+// so a mis-inference at worst gives a slightly wrong postpone cap, never a money error.
+// Dry-run by default; pass commit=true to write. Returns a summary.
+function backfillBulkPlan(commit) {
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const rows = getAllRows(ws);
+  const hIdx = headerIndex(ws);
+  if (!hIdx["Bulk_Plan"]) { ws.getRange(1, ws.getLastColumn() + 1).setValue("Bulk_Plan"); hIdx["Bulk_Plan"] = ws.getLastColumn(); }
+  const planCol = hIdx["Bulk_Plan"];
+
+  // Group bulk rows by Batch_ID → per-meal counts + the rows themselves.
+  const batches = {};
+  rows.forEach(function (r) {
+    const isBulk = String(r.Source || "").trim() === "Bulk" || String(r.Batch_ID || "").trim();
+    if (!isBulk) return;
+    const b = String(r.Batch_ID || "").trim();
+    if (!b) return;
+    if (!batches[b]) batches[b] = { counts: {}, rows: [] };
+    const meal = String(r.Meal_Type || "").trim();
+    batches[b].counts[meal] = (batches[b].counts[meal] || 0) + 1;
+    batches[b].rows.push(r);
+  });
+
+  // Nearest of {6,13,26} with tolerant thresholds (midpoints ~9.5 / ~19.5) so a batch
+  // missing a day or two to a passed cutoff still maps to the right plan.
+  const inferPlan = function (maxCount) {
+    if (maxCount >= 20) return "month";
+    if (maxCount >= 10) return "15day";
+    return "week";
+  };
+
+  let batchCount = 0, rowsUpdated = 0, batchesTouched = 0;
+  const byPlan = { week: 0, "15day": 0, month: 0 };
+  const sample = [], batchDetail = [];
+  Object.keys(batches).forEach(function (b) {
+    const info = batches[b];
+    batchCount++;
+    const counts = Object.keys(info.counts).map(function (m) { return info.counts[m]; });
+    const maxCount = counts.length ? Math.max.apply(null, counts) : 0;
+    const plan = inferPlan(maxCount);
+    const sources = {}, statuses = {}, phones = {};
+    let blanks = 0;
+    info.rows.forEach(function (r) {
+      sources[String(r.Source || "").trim() || "(blank)"] = 1;
+      statuses[String(r.Payment_Status || "").trim() || "(blank)"] = 1;
+      phones[String(r.Phone || "").trim()] = 1;
+      if (!String(r.Bulk_Plan || "").trim()) blanks++;
+    });
+    batchDetail.push({ batch: b, counts: info.counts, maxCount: maxCount, plan: plan, blanks: blanks,
+      sources: Object.keys(sources), statuses: Object.keys(statuses), phones: Object.keys(phones) });
+    let touched = false;
+    info.rows.forEach(function (r) {
+      if (String(r.Bulk_Plan || "").trim()) return; // already stamped (new order) — skip
+      byPlan[plan] = (byPlan[plan] || 0) + 1;
+      rowsUpdated++; touched = true;
+      if (sample.length < 10) sample.push({ batch: b, maxCount: maxCount, plan: plan, date: _bulkDateStr(r.Order_Date), meal: String(r.Meal_Type || "").trim() });
+      if (commit) ws.getRange(r._row, planCol).setValue(plan);
+    });
+    if (touched) batchesTouched++;
+  });
+  if (commit) SpreadsheetApp.flush();
+  return { success: true, committed: !!commit, batchesSeen: batchCount, batchesBackfilled: batchesTouched,
+           rowsUpdated: rowsUpdated, byPlan: byPlan, sample: sample, batchDetail: batchDetail };
+}
+
 // ============================================================
 // BULK PRICING CORE (bulk-orders branch — NOT on LIVE)
 // ============================================================

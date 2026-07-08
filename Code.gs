@@ -75,6 +75,7 @@ function doGet(e) {
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
     if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
+    if (action === "backfillBulkPlan") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillBulkPlan(p.commit === "1")); } // one-time: stamp Bulk_Plan on pre-v26 bulk rows (dry-run unless commit=1)
     if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty})
       const _pj = function (s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
       const _wrap = function (arr) { return (Array.isArray(arr) && arr.length) ? { items: arr } : null; }; // submitBulkOrder expects {items:[…]}
