@@ -4670,7 +4670,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.08.04";
+    const APP_VERSION = "v26.07.08.05";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6762,19 +6762,11 @@
 
       $("mealSelectionContent").innerHTML = walletStrip + MEALS.map(meal => {
         const isAvail = avail[meal], sub = S.orders[date]?.[meal]?.subtotal || 0;
-        // Delivery cap hit but the meal is still orderable (alternatives ON) → tell
-        // the customer UPFRONT that delivery is full and pickup/porter is the way,
-        // instead of leaving them to discover it only at checkout.
-        // Only warn customers whose order would ACTUALLY be blocked — hide it for anyone
-        // who still gets delivery despite the cap (Enkin / pickup / porter / free area /
-        // ≥ threshold), so the message isn't confusing. Mirrors the checkout gate exactly.
-        const _capFull = isAvail && !!(S.menuCache[date]?.sold_out || {})[meal] && !!(S.menuCache[date]?.order_caps || {})[meal]
-          && !_mealKeepsDeliveryAtCap(meal, getMealAddr(meal), sub);
-        const _capMin = CAP_BYPASS_MIN[meal] || 200; // breakfast ₹100, lunch/dinner ₹200
-        const _capNeedMore = (sub > 0 && sub < _capMin) ? ` <b>Add ₹${_capMin - sub} more to qualify.</b>` : "";
-        const _capBanner = _capFull
-          ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:0.76rem;color:#9a3412;line-height:1.5;">🚚 <b>Delivery is full for ${meal} today.</b> Orders of <b>₹${_capMin}+</b> still get home delivery.${_capNeedMore} Or choose <b>📦 Self Pickup</b> / <b>🛵 Porter</b> at checkout (no delivery fee).</div>`
-          : "";
+        // NOTE: no delivery-cap "full" banner here on purpose. Whether the customer is
+        // actually blocked depends on the server-only society piggyback roster, which the
+        // menu page can't know — a wrong banner would confuse. The delivery-full case is
+        // handled authoritatively at CHECKOUT (_ensureDeliveryCapResolved → the Self Pickup
+        // / Porter dialog), which does know the full picture.
         const mAddr = getMealAddr(meal);
         const isAddrMissing = (mAddr.area !== "Self Pickup") && !mAddr.area;
         const lockedClass = isAddrMissing ? "locked" : "";
@@ -6803,7 +6795,7 @@
         </div>
       </div>
       ${isAvail
-            ? `${_capBanner}<div class="meal-body ${(sub > 0 && !isAddrMissing) ? "open" : ""}" id="mb_${date}_${meal}">${buildMealBody(date, meal, menu)}</div>`
+            ? `<div class="meal-body ${(sub > 0 && !isAddrMissing) ? "open" : ""}" id="mb_${date}_${meal}">${buildMealBody(date, meal, menu)}</div>`
             : (() => {
                 const isSoldOut = !!(S.menuCache[date]?.sold_out || {})[meal];
                 const isClosed  = !!(S.menuCache[date]?.orders_closed || {})[meal];
