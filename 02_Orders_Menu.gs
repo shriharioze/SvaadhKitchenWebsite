@@ -409,6 +409,90 @@ function setupSocietyAliasTab() {
   return "SK_Society_Aliases ready. Exact rows: 'Alias → Canonical'. Contains rows: start the alias with * (e.g. '*gold tower' matches 'T43 2502 Gold Tower Amanora'). Changes go live within ~5 min.";
 }
 
+// AMANORA TOWER → SOCIETY aliases (owner-confirmed 2026-07-11, derived from
+// auditAmanoraTowers + owner's knowledge of the township). Writes SK_Society_Aliases
+// rows so a society string carrying only a tower number groups under its real
+// society (piggyback + route learning). Per tower: an EXACT "T<n>" row (bare
+// "T53"-style entries) + a CONTAINS "*tower <n>" row ("Tower 53, 401, Amanora…").
+// Deliberately NO "*t<n>" contains rules — flat numbers bleed ("Flat 5301" base-
+// normalizes to "flat5301", which CONTAINS "t53"). Society-word contains rows
+// ("*desire tower" …) catch every spelling that names the society. Idempotent:
+// same-alias rows are updated in place, never duplicated. Dry-run unless commit.
+const AMANORA_TOWER_SOCIETIES = {
+  "Amanora Desire Towers":  [18, 19, 20, 21, 22],
+  "Amanora Metro Towers":   [24, 25],
+  "Amanora Adreno Towers":  [37, 38, 39, 40, 41],
+  "Amanora Gold Towers":    [42, 43, 44, 45, 46],
+  "Amanora Elevate Towers": [47],
+  "Amanora Future Towers":  [52, 53],
+  "Amanora Neo Towers":     [94, 95, 96, 97],
+  "Amanora Gateway Towers": [98, 99, 100]
+};
+const AMANORA_SOCIETY_WORD_RULES = {
+  "*desire tower":  "Amanora Desire Towers",
+  "*metro tower":   "Amanora Metro Towers",
+  "*adreno":        "Amanora Adreno Towers",
+  "*gold tower":    "Amanora Gold Towers",
+  "*elevate tower": "Amanora Elevate Towers",
+  "*future tower":  "Amanora Future Towers",
+  "*neo tower":     "Amanora Neo Towers",
+  "*gateway tower": "Amanora Gateway Towers"
+};
+function seedAmanoraTowerAliases(commit) {
+  const ss = getSpreadsheet();
+  let ws = ss.getSheetByName("SK_Society_Aliases");
+  if (!ws) {
+    ws = ss.insertSheet("SK_Society_Aliases");
+    ws.getRange(1, 1, 1, 2).setValues([["Alias", "Canonical"]]);
+  }
+
+  // Desired rows, in a deliberate order (specific tower needles before word rules).
+  const rows = [];
+  Object.keys(AMANORA_TOWER_SOCIETIES).forEach(function (canon) {
+    AMANORA_TOWER_SOCIETIES[canon].forEach(function (n) {
+      rows.push(["T" + n, canon]);            // exact: bare "T53" / "T-53" / "t 53"
+      rows.push(["*tower " + n, canon]);      // contains: "Tower 53 …" anywhere
+    });
+  });
+  Object.keys(AMANORA_SOCIETY_WORD_RULES).forEach(function (alias) {
+    rows.push([alias, AMANORA_SOCIETY_WORD_RULES[alias]]);
+  });
+
+  // Existing rows keyed by (isContains + normalized alias) for idempotent upsert.
+  const existing = {}; // key → { row: sheetRow, canonical }
+  const last = ws.getLastRow();
+  if (last > 1) {
+    ws.getRange(2, 1, last - 1, 2).getValues().forEach(function (r, i) {
+      const raw = String(r[0] == null ? "" : r[0]).trim();
+      if (!raw) return;
+      const isC = raw.charAt(0) === "*";
+      const key = (isC ? "*" : "") + _normSocietyBase(isC ? raw.slice(1) : raw);
+      existing[key] = { row: i + 2, canonical: String(r[1] == null ? "" : r[1]).trim() };
+    });
+  }
+
+  let added = 0, updated = 0, unchanged = 0;
+  const plan = [];
+  rows.forEach(function (r) {
+    const raw = r[0], canon = r[1];
+    const isC = raw.charAt(0) === "*";
+    const key = (isC ? "*" : "") + _normSocietyBase(isC ? raw.slice(1) : raw);
+    const ex = existing[key];
+    if (ex && ex.canonical === canon) { unchanged++; return; }
+    if (ex) {
+      updated++; plan.push("UPDATE '" + raw + "' → '" + canon + "' (was '" + ex.canonical + "')");
+      if (commit) ws.getRange(ex.row, 2).setValue(canon);
+    } else {
+      added++; plan.push("ADD '" + raw + "' → '" + canon + "'");
+      if (commit) { ws.appendRow([raw, canon]); existing[key] = { row: ws.getLastRow(), canonical: canon }; }
+    }
+  });
+  if (commit) { SpreadsheetApp.flush(); try { CacheService.getScriptCache().remove("society_aliases_v2"); } catch (_) {} }
+  return { success: true, committed: !!commit, added: added, updated: updated, unchanged: unchanged,
+           note: "After committing, rebuild delivery routes (driver page refresh button) so tower spellings merge into their society stops.",
+           plan: plan.slice(0, 80) };
+}
+
 // Canonical matching key: base-normalize, then exact-alias, then contains-rules.
 // "T43 2502 Gold Tower" → "t432502goldtower" → (contains '*gold tower') → "goldtower".
 function _normSocietyKey(s) {
@@ -448,13 +532,16 @@ function listDistinctSocieties() {
     bump(r.Society, "customers");
   }); } catch (_) {}
 
-  const aliasMap = _societyAliasMap();
   const groups = Object.keys(variants).map(function (key) {
     const names = Object.keys(variants[key]).map(function (nm) {
       return { name: nm, orders: variants[key][nm].orders, customers: variants[key][nm].customers };
     }).sort(function (a, b) { return (b.orders + b.customers) - (a.orders + a.customers); });
     const tot = names.reduce(function (s, x) { return s + x.orders + x.customers; }, 0);
-    return { key: key, aliasedTo: aliasMap[key] || "", totalUses: tot, spellings: names };
+    // Resolve through the REAL matcher (exact + contains rules). The old code did
+    // `aliasMap[key]` on _societyAliasMap()'s {exact,contains} WRAPPER — always
+    // undefined, so aliasedTo showed "" even for rows the alias sheet was mapping.
+    const canon = _normSocietyKey(names.length ? names[0].name : key);
+    return { key: key, aliasedTo: (canon && canon !== key) ? canon : "", totalUses: tot, spellings: names };
   }).sort(function (a, b) { return b.totalUses - a.totalUses; });
   return { groups: groups, count: groups.length };
 }
@@ -1144,6 +1231,12 @@ function auditLostGatewayOrders(monthsBack) {
   }
 
   // (4) Scan every source for CHARGED gateway orders missing from SK_Orders.
+  // WINDOW: only webhooks from the last 7 days. The existence check above reads the
+  // LIVE SK_Orders only — once a month's ORDER rows are archived out (monthly archive
+  // run), every older webhook would look "missing" and spam the admin (the 11-Jul
+  // June flood). A genuinely lost order is caught within minutes by the 10-min live
+  // audit, so a week of lookback is ample; anything older is history, not an alert.
+  const AUDIT_WINDOW_MS = 7 * 24 * 3600 * 1000;
   const now  = Date.now();
   const seen = {}; // order_id -> details (dedupe multiple webhooks / sources per order)
   let totalRows = 0;
@@ -1163,7 +1256,9 @@ function auditLostGatewayOrders(monthsBack) {
       if (inOrders.has(oid)) continue;        // it landed — fine
       if (seen[oid]) continue;                // already captured from another row/source
       const rcv = data[r][rcvCol];
-      if (rcv instanceof Date && (now - rcv.getTime()) < 5 * 60 * 1000) continue; // too fresh
+      if (!(rcv instanceof Date)) continue;                          // undated — can't age it, skip
+      if ((now - rcv.getTime()) < 5 * 60 * 1000) continue;           // too fresh (still writing)
+      if ((now - rcv.getTime()) > AUDIT_WINDOW_MS) continue;         // outside the 7-day window
 
       let amount = 0, name = "", phone = "", status = "";
       try {
@@ -1192,6 +1287,19 @@ function auditLostGatewayOrders(monthsBack) {
   const newRows = [];
   missing.forEach(function (m) {
     if (alreadyLogged.has(m.oid)) return;
+    // ARCHIVE double-check: the order may have already been moved to a monthly
+    // archive file (live-sheet check above can't see it). Only runs for the rare
+    // flagged candidate, scanning ±3 days around the webhook date — cheap.
+    try {
+      if (m.rcv instanceof Date && typeof getOrdersInRangeWithArchive === "function") {
+        const _dFrom = Utilities.formatDate(new Date(m.rcv.getTime() - 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
+        const _dTo   = Utilities.formatDate(new Date(m.rcv.getTime() + 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
+        const _archHit = getOrdersInRangeWithArchive(_dFrom, _dTo).some(function (r) {
+          return String(r.Gateway_Order_ID || "").trim() === m.oid;
+        });
+        if (_archHit) return; // it landed — just lives in an archive now, not lost
+      }
+    } catch (e) { console.warn("audit archive-check failed for " + m.oid + ": " + (e && e.message)); }
     let recovered = false;
     try {
       if (typeof hdfc_reconcileOrderFromStash === "function") {
@@ -1258,11 +1366,13 @@ function setupLostOrderAuditTrigger() {
   return "Lost-order audit scheduled every 10 minutes.";
 }
 
-// OPTIONAL deeper daily sweep — also scans the last 2 months' archive files, to catch
-// anything that aged out of the live log before a 10-min run saw it. Run
-// setupDailyDeepAuditTrigger() once if you want the extra safety net.
+// OPTIONAL deeper daily sweep — also scans last month's archive file, to catch
+// anything that aged out of the live log before a 10-min run saw it. (The audit
+// only alerts on webhooks from the last 7 days, so one month back always covers
+// the window even right after a month flip.) Run setupDailyDeepAuditTrigger()
+// once if you want the extra safety net.
 function dailyDeepLostOrderAudit() {
-  return auditLostGatewayOrders(2);
+  return auditLostGatewayOrders(1);
 }
 function setupDailyDeepAuditTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
