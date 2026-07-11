@@ -165,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       console.error("Chat error:", error);
       loadingDiv.remove();
-      appendMessage("Sorry, I'm having trouble connecting right now. Please try again in a moment or WhatsApp us at +91 99307 48908.", "bot");
+      appendMessage("Sorry, I'm having trouble connecting right now. Please try again in a moment or WhatsApp us at +91 93222 46765.", "bot");
     }
   }
 

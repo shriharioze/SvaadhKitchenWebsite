@@ -110,7 +110,7 @@ function buildSystemPrompt(extraMenu) {
 function callGemini(systemPrompt, history, userMessage) {
   const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
   if (!apiKey) {
-    return "I'm having trouble connecting right now. Please WhatsApp us at +91 99307 48908 for help!";
+    return "I'm having trouble connecting right now. Please WhatsApp us at +91 93222 46765 for help!";
   }
 
   // Build contents array: last 6 history messages + current message (caps token usage)
@@ -144,13 +144,13 @@ function callGemini(systemPrompt, history, userMessage) {
       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
       }
-      return "I'm not sure how to answer that. Please WhatsApp us at +91 99307 48908!";
+      return "I'm not sure how to answer that. Please WhatsApp us at +91 93222 46765!";
     } catch(e) {
       if (attempt === 0) { Utilities.sleep(1000); continue; }
-      return "I'm having trouble right now. Please call or WhatsApp us at +91 99307 48908.";
+      return "I'm having trouble right now. Please call or WhatsApp us at +91 93222 46765.";
     }
   }
-  return "I'm having trouble right now. Please call or WhatsApp us at +91 99307 48908.";
+  return "I'm having trouble right now. Please call or WhatsApp us at +91 93222 46765.";
 }
 
 // ── GET UNPAID CUSTOMERS (reconciliation) ────────────────────────────────────
