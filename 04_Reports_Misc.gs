@@ -1965,6 +1965,69 @@ function getOrdersInRangeWithArchive(dateFrom, dateTo) {
   return combined;
 }
 
+/**
+ * READ-ONLY audit: map Amanora tower NUMBERS to their society names from our own
+ * data (SK_Customers + SK_Orders + monthly archives). Amanora only — Magarpatta's
+ * Cybercity also uses tower numbers, so rows whose Area isn't Amanora are skipped.
+ *
+ * For every row with an Amanora-ish Area, extracts a tower number (T22 / T-22 /
+ * Tower 25 …) from Wing+Flat+Society+Full_Address text, plus any known society
+ * keyword, and returns the co-occurrence: tower → {society spellings seen, keyword
+ * hits, sample addresses}. The owner reviews this to finalize tower→society tags.
+ */
+function auditAmanoraTowers() {
+  var ss = getSpreadsheet();
+  var today = Utilities.formatDate(getISTDate(), "Asia/Kolkata", "yyyy-MM-dd");
+
+  // Orders: live + archives (wide range covers the business's whole history).
+  var orderRows = getOrdersInRangeWithArchive("2025-01-01", today);
+  // Customers master.
+  var custRows = getAllRows(getOrCreateTab(ss, TAB_CUSTOMERS, []));
+
+  var towerRe = /\b(?:T|tower)[-.\s]*(\d{1,3})\b/i; // T22, T-22, Tower 25, t 43
+  var SOCIETY_WORDS = ["gold","desire","future","aspire","gateway","metro","neo",
+    "adreno","trendy","elevate","arbano","sterling","crest","skywards","nirvana","apex"];
+
+  var towers = {};   // num → { societies:{}, keywords:{}, samples:[], customers:{}, uses:0 }
+  var scanned = 0, amanora = 0;
+
+  function scanRow(area, wing, flat, society, fullAddr, phone, weight) {
+    scanned++;
+    var a = String(area || "").toLowerCase();
+    if (a.indexOf("amanora") === -1) return; // Amanora ONLY (skip Magarpatta/Cybercity)
+    amanora++;
+    var text = [wing, flat, society, fullAddr].map(function (x) { return String(x || ""); }).join(" | ");
+    var m = text.match(towerRe);
+    if (!m) return;
+    var num = String(parseInt(m[1], 10));
+    if (!towers[num]) towers[num] = { societies: {}, keywords: {}, samples: [], customers: {}, uses: 0 };
+    var t = towers[num];
+    t.uses += (weight || 1);
+    var socStr = String(society || "").trim() || "(blank)";
+    t.societies[socStr] = (t.societies[socStr] || 0) + 1;
+    var lower = text.toLowerCase();
+    SOCIETY_WORDS.forEach(function (w) { if (lower.indexOf(w) !== -1) t.keywords[w] = (t.keywords[w] || 0) + 1; });
+    if (phone) t.customers[String(phone)] = true;
+    if (t.samples.length < 4) t.samples.push(text.slice(0, 120));
+  }
+
+  orderRows.forEach(function (r) {
+    scanRow(r.Area, r.Wing, r.Flat, r.Society, r.Full_Address, r.Phone, 1);
+  });
+  custRows.forEach(function (r) {
+    scanRow(r.Area, r.Wing, r.Flat, r.Society, r.Full_Address || r.Maps_Link, r.Phone, 1);
+  });
+
+  // Shape: sorted by tower number, customers as a count.
+  var out = Object.keys(towers).sort(function (a, b) { return Number(a) - Number(b); })
+    .map(function (num) {
+      var t = towers[num];
+      return { tower: "T" + num, uses: t.uses, customerCount: Object.keys(t.customers).length,
+               societies: t.societies, keywords: t.keywords, samples: t.samples };
+    });
+  return { success: true, rowsScanned: scanned, amanoraRows: amanora, towers: out };
+}
+
 // Called by admin UI — wraps archiveMonth with PIN check (handled by router)
 function triggerManualArchive(body) {
   var year  = parseInt(body.year);
