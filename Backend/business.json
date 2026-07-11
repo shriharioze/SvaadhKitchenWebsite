@@ -3,70 +3,89 @@
   "type": "Cloud Kitchen",
   "tagline": "Wholesome homemade vegetarian meals, straight from our kitchen to your plate.",
   "about": {
-    "summary": "Svaadh Kitchen is a home-based vegetarian cloud kitchen in Hadapsar, Pune, serving fresh and wholesome homemade meals for over 2.5 years.",
-    "description": "We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu. Our delivery network covers 15 major areas in Hadapsar, with Free Delivery for Bhosale Nagar, Triveni Nagar, and all Self Pickup orders. We serve Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Vaiduwadi, Pune-Solapur Road, Vihar Chowk, Mandai, and Gadital. Our meals are cooked fresh daily using quality ingredients and traditional recipes."
+    "summary": "Svaadh Kitchen is a home-based vegetarian cloud kitchen in Hadapsar, Pune, serving fresh and wholesome homemade meals since August 2023.",
+    "description": "We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu — fully Make-Your-Own-Meal, no fixed thali. Our delivery network covers 15 major areas in Hadapsar, with Free Delivery for Bhosale Nagar, Triveni Nagar, and all Self Pickup orders. We serve Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Vaiduwadi, Pune-Solapur Road, Vihar Chowk, Mandai, and Gadital. Meals are cooked fresh daily in small batches using quality ingredients and traditional recipes."
   },
   "locations_served": ["Amanora Town", "BG Shirke Road", "Bhosale Nagar (Free)", "DP Road", "Gadital", "Hadapsar Mandai", "Kirtane Baug", "Magarpatta", "Malwadi", "Pune-Solapur Road", "SadeSatraNali", "Triveni Nagar (Free)", "Tupe Patil Road", "Vaiduwadi", "Vihar Chowk", "Self Pickup (Free)"],
   "order_cutoffs": {
     "breakfast": "before 7:00 AM",
-    "lunch": "before 9:30 AM",
-    "dinner": "before 5:00 PM",
-    "closed_on": "Sunday"
+    "lunch": "before 9:00 AM",
+    "dinner": "before 4:30 PM",
+    "closed_on": "Sunday",
+    "note": "Cutoffs are for same-day delivery. Future dates can be ordered any time. Occasionally the kitchen closes a specific day or a specific meal — closed days/meals are greyed out on the order calendar, and any already-placed orders for them are auto-cancelled with a full refund."
   },
   "delivery": {
-    "free_area": "Bhosale Nagar, Triveni Nagar, Self Pickup",
-    "delivery_charge": "₹10 per meal for non-free areas only if that meal's subtotal is below ₹100. Free for Bhosale Nagar, Triveni Nagar, and Self Pickup always.",
+    "free_area": "Bhosale Nagar, Triveni Nagar, Self Pickup — always free",
+    "delivery_charge": "₹11 per meal. Delivery becomes FREE when the day's food total reaches ₹106 (ordering 1 meal that day), ₹159 (2 meals) or ₹190 (3 meals). Always free for Bhosale Nagar, Triveni Nagar, and Self Pickup.",
+    "small_order_fee": "A small ₹11 cart fee applies to a Lunch or Dinner meal whose food subtotal is below ₹53.",
     "outside_service": "We only deliver in listed Hadapsar areas.",
-    "per_meal_address": "Each meal can go to a different address — breakfast at home, lunch at office, dinner back home."
+    "per_meal_address": "Each meal can go to a different address — breakfast at home, lunch at office, dinner back home.",
+    "delivery_full": "On high-demand days, delivery slots for a meal can fill up. Orders of ₹200+ for that meal (₹100+ for breakfast) still get home delivery even when slots are full. Otherwise you can still order with free Self Pickup, or Porter (you book a courier from our kitchen and pay the courier directly — we add no fee)."
   },
   "menu": {
     "note": "Today's sabji (dry and curry) changes daily and is shown in the order form. Breakfast items also rotate daily.",
     "breads": [
-      { "name": "Chapati",              "price": 9,  "unit": "per piece" },
-      { "name": "Without Oil Chapati",  "price": 8,  "unit": "per piece" },
-      { "name": "Phulka",               "price": 7,  "unit": "per piece" },
-      { "name": "Ghee Phulka",          "price": 10, "unit": "per piece" },
-      { "name": "Jowar Bhakri",         "price": 20, "unit": "per piece" },
-      { "name": "Bajra Bhakri",         "price": 20, "unit": "per piece" }
+      { "name": "Chapati",              "price": 10, "unit": "per piece" },
+      { "name": "Without Oil Chapati",  "price": 9,  "unit": "per piece" },
+      { "name": "Phulka",               "price": 8,  "unit": "per piece" },
+      { "name": "Ghee Phulka",          "price": 11, "unit": "per piece" },
+      { "name": "Jowar Bhakri",         "price": 22, "unit": "per piece" },
+      { "name": "Bajra Bhakri",         "price": 22, "unit": "per piece" }
     ],
     "sabji": [
-      { "name": "Dry Sabji Mini (100ml)",   "price": 22 },
-      { "name": "Dry Sabji Full (250ml)",   "price": 45 },
-      { "name": "Curry Sabji Mini (100ml)", "price": 22 },
-      { "name": "Curry Sabji Full (250ml)", "price": 45 }
+      { "name": "Dry Sabji Mini (100ml)",   "price": 24 },
+      { "name": "Dry Sabji Full (250ml)",   "price": 48 },
+      { "name": "Curry Sabji Mini (100ml)", "price": 24 },
+      { "name": "Curry Sabji Full (250ml)", "price": 48 }
     ],
     "basics": [
-      { "name": "Dal (200ml)",  "price": 22 },
-      { "name": "Rice (100g)", "price": 12 },
-      { "name": "Salad (40g)", "price": 6  },
-      { "name": "Curd (50g)",  "price": 12 }
+      { "name": "Dal (200ml)",  "price": 24 },
+      { "name": "Rice (100g)", "price": 13 },
+      { "name": "Salad (40g)", "price": 8  },
+      { "name": "Curd (50g)",  "price": 13 }
     ],
-    "breakfast": "Rotating daily menu — items like Kanda Poha, Aloo Paratha, Paneer Paratha with Curd. Prices vary per item. Check the order form for today's breakfast options."
+    "breakfast": "Rotating daily menu — items like Kanda Poha, Upma, Sabudana Khichdi, Paratha, Sheera (₹35–₹70 range). Check the order form for today's breakfast options.",
+    "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹105 before discounts. Build lighter or bigger — you only pay for what you pick."
+  },
+  "bulk_plans": {
+    "summary": "Bulk meal plans — order many days in one go and save on every day's food. Lunch and/or Dinner; the sabji each day is the chef's special of the day.",
+    "plans": [
+      { "name": "Week Plan",   "working_days": 6,  "discount": "5% off every day's food" },
+      { "name": "15-Day Plan", "working_days": 13, "discount": "7.5% off every day's food" },
+      { "name": "Month Plan",  "working_days": 26, "discount": "10% off every day's food" }
+    ],
+    "how_it_works": "Pick a plan on the order page (⚡ Bulk card), choose your Lunch and/or Dinner items once, and the same meal is delivered every working day — Sundays and kitchen holidays are skipped automatically. The daily-total discount tiers stack on top of the plan discount.",
+    "postpone": "Change of plans? On the 15-Day plan you can postpone up to 2 lunch days + 2 dinner days to another date (within 30 days); on the Month plan up to 4 + 4. Postponing keeps the same items, price, and discount — no extra charge.",
+    "cancellation": "You can also cancel any individual day before its cutoff. Cancelling a day forfeits that meal's bulk discount (it's a commitment discount), and the rest is refunded."
   },
   "discounts": {
-    "tier1": "5% off when the day's total is ₹300 or more",
-    "tier2": "7.5% off when the day's total is ₹450 or more",
-    "note": "Discounts are applied automatically per day's total when you place an order online."
+    "tier1": "5% off when the day's food total is ₹325 or more",
+    "tier2": "7.5% off when the day's food total is ₹485 or more",
+    "tier3": "10% off when the day's food total is ₹750 or more",
+    "bulk": "Bulk plans add their own discount on every day's food: Week 5%, 15-Day 7.5%, Month 10% — and the daily tiers above stack on top.",
+    "loyalty_streak": "Order 6 days in a row (Sundays and kitchen-closed days don't break the streak) and get a loyalty reward on day 6 — 5% of each streak day's food is given back.",
+    "review_promo": "Leave a 5-star Google review and get an extra 10% off your next order.",
+    "note": "All discounts are applied automatically when you place an order online."
   },
   "payment": {
-    "options": ["Svaadh Wallet (Prepaid Credits)", "UPI", "Prepaid Wallet Billing"],
-    "upi_id": "shriharioze07-1@okhdfcbank",
+    "options": ["UPI / Cards via secure HDFC payment gateway (instant)", "Svaadh Wallet (prepaid credits)", "Wallet + Gateway split payment", "On Account (for approved regular customers)"],
+    "gateway": "Payments are processed instantly through the HDFC SmartGateway — pay by UPI or card and your order confirms automatically, no screenshots or manual verification needed.",
     "wallet": {
       "name": "Svaadh Wallet",
-      "recharge": "Min ₹100 via UPI. Pay to the provided VPA/QR, then click 'I have completed the payment' to alert Admin for verification (usually takes 1-2 hours).",
-      "benefit": "Enables 1-tap ordering without paying every time. Balance is visible at the top-right of the order page from Step 2 onwards.",
-      "refunds": "Order cancellations instantly refund the amount back into your Svaadh Wallet."
+      "recharge": "Recharge instantly (min ₹100) through the secure HDFC payment gateway on the order page — the balance credits immediately.",
+      "benefit": "Enables 1-tap ordering without paying every time. Balance is visible at the top of the order page. If your balance covers part of an order, you can split — wallet pays what it can and the gateway collects the rest.",
+      "refunds": "Order cancellations refund instantly to your Svaadh Wallet, or to your original payment method on request."
     },
-    "prepaid_wallet_billing": "Prepaid Wallet Billing operates as a prepaid wallet. You must load money into your Svaadh Wallet beforehand. Each order is then immediately deducted from your wallet balance. If your balance is low, you can pay via UPI instantly or recharge your wallet."
+    "on_account": "Approved regular customers can order on account and settle their bill monthly (or per their agreed cycle) via the gateway — the order page shows a Pay Bill option when dues are ready."
   },
   "ordering": {
     "platform": "Website order form / PWA Mobile App",
     "order_url": "https://www.svaadhkitchen.in/order.html",
     "mobile_app": "You can install our website as a mobile app (PWA) on your phone. Click 'Install App' on the home page or order page for a home-screen icon and fast access.",
-    "process": "Open the order form → enter phone number → fill delivery address → pick dates on calendar → choose meals → review bill → pay via Wallet or UPI.",
+    "process": "Open the order form → enter phone number → fill delivery address → pick dates on calendar → choose meals → review bill → pay via gateway (UPI/card), Wallet, or On Account.",
     "live_tracking": "Once an order is marked 'Out for Delivery' by our driver, you'll see a '🚗 Out for Delivery' badge in your 'View/Edit upcoming orders' dashboard.",
-    "advance_ordering": "You can select multiple dates on the calendar to order for the whole week in one go.",
-    "edit_cancel": "You can edit or cancel any order before the cutoff time using 'View/Edit existing orders' on the order form home screen.",
+    "advance_ordering": "You can select multiple dates on the calendar to order for the whole week in one go — or use a Bulk plan (Week / 15-Day / Month) for automatic daily meals with a discount.",
+    "edit_cancel": "You can cancel any order before its cutoff time using 'View/Edit existing orders' on the order form. Editing isn't available — cancel and re-place instead. Bulk 15-Day/Month days can also be POSTPONED to another date instead of cancelling.",
     "no_login": "No login needed — your phone number is your identity. Your address and details are saved for the next order."
   },
   "contact": {
