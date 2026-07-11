@@ -199,7 +199,7 @@
       "name": "What meals and items are available?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "We offer a Make-Your-Own-Meal system — no fixed thali. Lunch and Dinner: Chapati ₹9, Ghee Phulka ₹10, Jowar Bhakri ₹20, Bajra Bhakri ₹20, Dry Sabji Mini (100ml) ₹22, Dry Sabji Full (250ml) ₹45, Curry Sabji Mini (100ml) ₹22, Curry Sabji Full (250ml) ₹45, Dal (200ml) ₹22, Rice (100g) ₹12, Salad (40g) ₹7, Curd (50g) ₹12. Breakfast rotates daily — Kanda Poha [175g], Upma [200g], Sabudana Khichdi [200g], Sheera [200g] and more."
+        "text": "We offer a Make-Your-Own-Meal system — no fixed thali. Lunch and Dinner: Chapati ₹10, Without Oil Chapati ₹9, Phulka ₹8, Ghee Phulka ₹11, Jowar Bhakri ₹22, Bajra Bhakri ₹22, Dry Sabji Mini (100ml) ₹24, Dry Sabji Full (250ml) ₹48, Curry Sabji Mini (100ml) ₹24, Curry Sabji Full (250ml) ₹48, Dal (200ml) ₹24, Rice (100g) ₹13, Salad (40g) ₹8, Curd (50g) ₹13. Breakfast rotates daily — Kanda Poha [175g], Upma [200g], Sabudana Khichdi [200g], Sheera [200g] and more."
       }
     },
     {
@@ -4418,10 +4418,10 @@
           <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:14px 16px;margin-bottom:18px;">
             <div style="font-size:0.82rem;font-weight:700;color:#7d5a00;margin-bottom:8px;">🧾 Full Example (Magarpatta, single Lunch order)</div>
             <div style="font-size:0.75rem;color:#5d4037;line-height:1.8;">
-              Chapati ×4 (₹36) + Dry Sabji Mini (₹22) + Dal (₹22) = <b>₹80 food</b><br>
+              Chapati ×4 (₹40) + Dry Sabji Mini (₹24) + Dal (₹24) = <b>₹88 food</b><br>
               + Delivery: ₹11 (Magarpatta, below ₹106 threshold)<br>
-              <b>= ₹91 total</b><br><br>
-              Now add Dinner (₹90) same day → day total = ₹170 ≥ ₹159<br>
+              <b>= ₹99 total</b><br><br>
+              Now add Dinner (₹90) same day → day total = ₹178 ≥ ₹159<br>
               → Delivery waived on Dinner + ₹11 credited back → <b>you save ₹22</b>
             </div>
           </div>
@@ -4480,6 +4480,11 @@
               <span style="font-size:1.4rem;">📅</span>
               <div><div style="font-size:0.85rem;font-weight:700;color:#1a252f;">Ordering for Multiple Days</div><div style="font-size:0.72rem;color:#888;margin-top:2px;">Weekly planning, copy meals, advance orders</div></div>
               <span style="margin-left:auto;color:#bbb;font-size:1rem;">›</span>
+            </button>
+            <button onclick="hideGuideHub();showGuide('bulk')" style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:12px;cursor:pointer;text-align:left;width:100%;">
+              <span style="font-size:1.4rem;">⚡</span>
+              <div><div style="font-size:0.85rem;font-weight:700;color:#9a3412;">Bulk Meal Plans</div><div style="font-size:0.72rem;color:#b45309;margin-top:2px;">Week / 15-Day / Month — up to 10% off, postpone days</div></div>
+              <span style="margin-left:auto;color:#fdba74;font-size:1rem;">›</span>
             </button>
           </div>
           <button onclick="hideGuideHub()" style="width:100%;margin-top:18px;padding:12px;background:#f5f5f5;border:1.5px solid #ddd;border-radius:10px;font-size:0.85rem;font-weight:600;color:#555;cursor:pointer;">Close</button>
@@ -4670,7 +4675,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.08.06";
+    const APP_VERSION = "v26.07.12.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5346,13 +5351,15 @@
     // ═══════════════════════════════════════════════════════════
     const FAQ_ITEMS = [
       { q: "Where do I find Manage Orders, Wallet, Guide etc.?", a: "After login, tap the <strong>profile avatar (your initials)</strong> at the top-right of the order page. A side drawer opens with: 📍 Addresses · 📖 Guide · 🛒 Manage Orders · 💳 Wallet · 📞 Contact us · 🛵 Call delivery partner · ⭐ Rate &amp; Review · 🚪 Log out." },
-      { q: "What's the correct UPI payment flow?", a: "Please follow this order to avoid order-not-placed issues on low-RAM phones:<br>1️⃣ Copy the UPI ID shown on the bill page<br>2️⃣ Note down the amount<br>3️⃣ Tick <strong>“Will pay”</strong> and tap <strong>Place Order</strong> first<br>4️⃣ Once the Success screen loads, open GPay/PhonePe/Paytm and pay using the copied UPI ID<br><br>Submitting before switching apps guarantees the order is saved — your phone may otherwise pause our app in the background." },
-      { q: "What is Svaadh Wallet (Prepaid Credits)?", a: "Svaadh Wallet is a prepaid system for <strong>1-tap instant ordering</strong>. Load ₹100+ via UPI to skip per-order payments. Your balance is always visible at the top-left wallet chip from Step 2 onwards. To add funds, tap the wallet chip or open the avatar drawer → <strong>Wallet</strong>." },
+      { q: "How do payments work?", a: "Payments go through the secure <strong>HDFC payment gateway</strong> — pay by <strong>UPI or card</strong> and your order confirms <strong>automatically</strong> (no screenshots, no waiting for verification). If you have Svaadh Wallet balance, it's used first and the gateway collects only the remainder (<strong>split payment</strong>). Approved regular customers can also order <strong>On Account</strong> and settle monthly." },
+      { q: "What is Svaadh Wallet (Prepaid Credits)?", a: "Svaadh Wallet is a prepaid system for <strong>1-tap instant ordering</strong>. Recharge ₹100+ through the secure payment gateway — the balance credits <strong>instantly</strong>. Your balance is always visible at the top-left wallet chip from Step 2 onwards. To add funds, tap the wallet chip or open the avatar drawer → <strong>Wallet</strong>. Cancellation refunds land here instantly." },
       { q: "How do I track my delivery in real-time?", a: "Open avatar drawer → <strong>Manage Orders</strong>. Once our driver marks your order as 'Out for Delivery', a <strong>🚗 Out for Delivery</strong> badge appears next to that order's timing. To call the delivery partner directly, use <strong>🛵 Call delivery partner (Abhijeet · 86055 12646)</strong> from the drawer." },
       { q: "Can I install this as an App on my phone?", a: "Yes! Look for the <strong>📲 Install App</strong> button on the home screen. This adds Svaadh Kitchen to your home screen for fast, one-tap access just like a regular app." },
-      { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹9 · Without Oil Chapati ₹8 · Phulka ₹7 · Ghee Phulka ₹10 · Jowar/Bajra Bhakri ₹20<br>🥘 <strong>Sabji</strong>: Mini 100ml ₹22 · Full 250ml ₹45 (changes daily)<br>🍲 <strong>Dal</strong> 200ml ₹22 · <strong>Rice</strong> 100g ₹12 · <strong>Salad</strong> 40g ₹7 · <strong>Curd</strong> 50g ₹12<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha &amp; more." },
+      { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹10 · Without Oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar/Bajra Bhakri ₹22<br>🥘 <strong>Sabji</strong>: Mini 100ml ₹24 · Full 250ml ₹48 (changes daily)<br>🍲 <strong>Dal</strong> 200ml ₹24 · <strong>Rice</strong> 100g ₹13 · <strong>Salad</strong> 40g ₹8 · <strong>Curd</strong> 50g ₹13<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha &amp; more." },
       { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
       { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually. Use the <strong>Copy</strong> button to clone a meal you built to other selected dates." },
+      { q: "What are the ⚡ Bulk meal plans?", a: "Order many days in one go and save on every day's food: <strong>Week</strong> = 6 working days with <strong>5% off</strong> · <strong>15-Day</strong> = 13 days with <strong>7.5% off</strong> · <strong>Month</strong> = 26 days with <strong>10% off</strong>. Pick your Lunch and/or Dinner items once — the sabji each day is the chef's special. Sundays &amp; kitchen holidays are skipped automatically, and the daily discount tiers stack on top." },
+      { q: "Can I change a day in my Bulk plan?", a: "Yes — flexible two ways. <strong>Postpone:</strong> on the 15-Day plan move up to <strong>2 lunch + 2 dinner</strong> days to another date (within 30 days) free of charge; on the Month plan up to <strong>4 + 4</strong>. Same items, same price, discount kept. <strong>Cancel:</strong> any day before its cutoff — that day's bulk discount is forfeited (it's a commitment discount) and the rest is refunded." },
       { q: "How do discounts work?", a: "If your total for a single day is ₹325+, you get <strong>5% off</strong>. ₹485+, you get <strong>7.5% off</strong>. ₹750+, you get <strong>10% off</strong>. Applied automatically on the bill screen. Discounts are per-day, not per-order." },
       { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, you get <strong>5% of your 6 days' food total</strong> back as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
       { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. To make corrections, <strong>delete</strong> the existing order from Manage Orders and place a <strong>new</strong> one before the cutoff. Wallet payments are refunded instantly to the wallet; UPI refunds are processed within 1–2 working days." },
@@ -9480,10 +9487,10 @@
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               1. On the order page, tap the <b>wallet balance chip</b> on the top-left bar (Step 2 onwards) — or open the avatar drawer → <b>Wallet</b><br>
               2. Enter the amount (minimum <b>₹100</b>)<br>
-              3. Pay via UPI to our ID: <b>9819969682@hdfc</b><br>
-              4. Submit the recharge request — our team verifies and credits within a few hours<br><br>
+              3. Pay by <b>UPI or card</b> through the secure HDFC payment gateway<br>
+              4. Done — the balance credits <b>instantly</b>, no verification wait<br><br>
               <span style="background:#e8f8f0;border-radius:6px;padding:6px 10px;display:block;font-size:0.75rem;color:#1e8449;">
-                ✅ You'll see the balance update once it's verified. You can still place orders while waiting — just pay via UPI for that order.
+                ✅ Your new balance shows immediately and is ready to use on your very next order.
               </span>
             </div>
           </div>
@@ -9524,7 +9531,7 @@
               ["3","Pick Your Dates","Tap on one or more dates on the calendar. You can order for today, tomorrow, or the whole week in one go. Dates with orders already placed are highlighted."],
               ["4","Build Your Meal","For each date, choose your meals — Breakfast, Lunch, and/or Dinner. Pick exactly what you want à la carte: Chapati, Sabji, Dal, Rice, etc. Today's sabji is shown live."],
               ["5","Review Your Bill","See your full itemised bill with all charges and discounts applied automatically. Check the total before paying."],
-              ["6","Pay &amp; Confirm","If paying via UPI: copy the UPI ID, note the amount, tick <b>“Will pay”</b>, and tap <b>Place Order</b> first — then switch to GPay/PhonePe and complete the payment once the Success screen loads. If using Svaadh Wallet, just tick the confirm box and place the order — 1-tap, no UPI app needed."]
+              ["6","Pay &amp; Confirm","Tap <b>Pay</b> and complete the payment by <b>UPI or card</b> through the secure HDFC gateway — your order confirms <b>automatically</b>, no screenshots needed. If you have Svaadh Wallet balance it's used first (any remainder goes to the gateway). Wallet-only orders are 1-tap — just tick the confirm box and place."]
             ].map(([n,title,desc]) => `
               <div style="display:flex;gap:12px;align-items:flex-start;background:#f8f9fa;border-radius:12px;padding:12px 14px;">
                 <div style="min-width:28px;height:28px;border-radius:50%;background:#1E1240;color:#fff;font-size:0.8rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${n}</div>
@@ -9568,6 +9575,9 @@
               4. Confirm the cancellation<br><br>
               <span style="background:#fdecea;border-radius:6px;padding:6px 10px;display:block;font-size:0.75rem;color:#c0392b;">
                 ⚠️ Direct editing is not possible. To change items — delete the order and place a new one before the cutoff.
+              </span>
+              <span style="background:#fff7ed;border-radius:6px;padding:6px 10px;display:block;font-size:0.75rem;color:#9a3412;margin-top:6px;">
+                ⚡ <b>Bulk plan days</b> (15-Day / Month): instead of cancelling you can <b>postpone</b> the day to another date free of charge — tap Delete on the day and choose 📅 Postpone.
               </span>
             </div>
           </div>
@@ -9644,9 +9654,9 @@
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🎯 Make Your Own Meal</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               Pick exactly what you want, in the quantities you want. No bundle, no thali, no wastage.<br><br>
-              <b>Breads:</b> Chapati ₹9 · Without Oil Chapati ₹8 · Phulka ₹7 · Ghee Phulka ₹10 · Jowar Bhakri ₹20 · Bajra Bhakri ₹20<br>
-              <b>Sabji:</b> Dry Mini ₹22 · Dry Full ₹45 · Curry Mini ₹22 · Curry Full ₹45<br>
-              <b>Basics:</b> Dal ₹22 · Rice ₹12 · Salad ₹7 · Curd ₹12
+              <b>Breads:</b> Chapati ₹10 · Without Oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar Bhakri ₹22 · Bajra Bhakri ₹22<br>
+              <b>Sabji:</b> Dry Mini ₹24 · Dry Full ₹48 · Curry Mini ₹24 · Curry Full ₹48<br>
+              <b>Basics:</b> Dal ₹24 · Rice ₹13 · Salad ₹8 · Curd ₹13
             </div>
           </div>
 
@@ -9765,6 +9775,60 @@
           <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;">
             <div style="font-size:0.78rem;color:#5d4037;line-height:1.7;">
               💡 <b>Tip:</b> Order for the full week on Sunday night / Monday morning — you won't have to think about it again, and you'll likely hit the ₹325+ discount threshold on most days!
+            </div>
+          </div>`
+      },
+
+      bulk: {
+        title: "⚡ Bulk Meal Plans (Week / 15-Day / Month)",
+        html: `
+          <p style="font-size:0.72rem;color:#888;margin-bottom:18px;">One order, weeks of meals — with a discount on every single day.</p>
+
+          <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+            <div style="font-size:0.82rem;font-weight:700;color:#9a3412;margin-bottom:8px;">📦 The Three Plans</div>
+            <div style="font-size:0.78rem;color:#5d4037;line-height:1.8;">
+              <b>Week</b> — 6 working days · <b>5% off</b> every day's food<br>
+              <b>15-Day</b> — 13 working days · <b>7.5% off</b><br>
+              <b>Month</b> — 26 working days · <b>10% off</b><br><br>
+              Lunch and/or Dinner. Sundays &amp; kitchen holidays are skipped automatically. The daily
+              discount tiers (5/7.5/10% at ₹325/485/750) <b>stack on top</b> of the plan discount.
+            </div>
+          </div>
+
+          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #f39c12;">
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🥘 How It Works</div>
+            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
+              1. Tap the <b>⚡ Bulk card</b> on the order page and pick a plan<br>
+              2. Choose your Lunch and/or Dinner items <b>once</b><br>
+              3. The same meal arrives every working day — the sabji each day is the <b>chef's special of the day</b><br>
+              4. Pay once via gateway, wallet, or On Account
+            </div>
+          </div>
+
+          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #27ae60;">
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📅 Postpone a Day (Free)</div>
+            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
+              Change of plans? Move a day to another date instead of cancelling — same items, same price,
+              <b>discount kept</b>, no charge.<br><br>
+              <b>15-Day plan:</b> up to <b>2 lunch + 2 dinner</b> days<br>
+              <b>Month plan:</b> up to <b>4 lunch + 4 dinner</b> days<br><br>
+              In <b>Manage Orders</b>, tap Delete on a bulk day → choose <b>📅 Postpone</b> → pick any working
+              day within 30 days from the calendar.
+            </div>
+          </div>
+
+          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #e74c3c;">
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">❌ Cancelling a Day</div>
+            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
+              Any individual day can still be cancelled before its cutoff. Since the plan discount is a
+              commitment discount, cancelling a day forfeits that meal's bulk discount — the rest is refunded
+              to your wallet instantly.
+            </div>
+          </div>
+
+          <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:12px 14px;">
+            <div style="font-size:0.78rem;color:#5d4037;line-height:1.7;">
+              💡 <b>Tip:</b> The Month plan's 10% off + a ₹325+ day tier means up to <b>15% off</b> your daily food — the best value on the menu.
             </div>
           </div>`
       }

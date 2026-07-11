@@ -55,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function showQuickReplies() {
     const buttons = [
       { text: "🍛 Today's Menu",    message: "What's today's menu?" },
+      { text: "⚡ Bulk Meal Plans", message: "Tell me about your weekly, 15-day and monthly bulk meal plans" },
       { text: "⏰ Order Timings",   message: "What are your order timings?" },
       { text: "📍 Delivery Areas",  message: "Which areas do you deliver to?" },
       { text: "📞 Place Order",     isOrder: true }
@@ -77,47 +78,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function showFullMenu() {
-    const menuHTML = `
-      <div class="menu-display">
-        <h4>🍛 Make Your Own Meal — Menu & Prices</h4>
-        <div class="menu-category">
-          <strong>Breads (per piece):</strong>
-          <div class="menu-item">• Chapati — ₹9</div>
-          <div class="menu-item">• Without Oil Chapati — ₹8</div>
-          <div class="menu-item">• Phulka — ₹7</div>
-          <div class="menu-item">• Ghee Phulka — ₹10</div>
-          <div class="menu-item">• Jowar / Bajra Bhakri — ₹20</div>
-        </div>
-        <div class="menu-category">
-          <strong>Sabji (today's changes daily):</strong>
-          <div class="menu-item">• Dry Sabji Mini (100ml) — ₹22</div>
-          <div class="menu-item">• Dry Sabji Full (250ml) — ₹45</div>
-          <div class="menu-item">• Curry Sabji Mini (100ml) — ₹22</div>
-          <div class="menu-item">• Curry Sabji Full (250ml) — ₹45</div>
-        </div>
-        <div class="menu-category">
-          <strong>Basics:</strong>
-          <div class="menu-item">• Dal (200ml) — ₹22</div>
-          <div class="menu-item">• Rice (100g) — ₹12</div>
-          <div class="menu-item">• Salad (40g) — ₹6</div>
-          <div class="menu-item">• Curd (50g) — ₹12</div>
-        </div>
-        <div class="menu-category">
-          <strong>Breakfast (rotating daily):</strong>
-          <div class="menu-item">• Kanda Poha, Aloo Paratha, Paneer Paratha + Curd</div>
-          <div class="menu-item">• Prices vary — check the order form!</div>
-        </div>
-        <div class="menu-note">
-          💡 <em>Mix and match to build your perfect meal!</em><br>
-          🎉 5% off ≥ ₹325/day &nbsp;|&nbsp; 7.5% off ≥ ₹485/day &nbsp;|&nbsp; 10% off ≥ ₹750/day
-        </div>
-      </div>
-    `;
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = menuHTML;
-    appendMessage(tempDiv.innerHTML, "bot");
-  }
+  // (Old static showFullMenu removed — it was never called and carried stale V1
+  // prices. Menu questions go to the bot, which knows today's live menu.)
 
   // ── HISTORY HELPERS ────────────────────────────────────────
   function saveMessage(text, sender) {
