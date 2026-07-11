@@ -1901,6 +1901,19 @@ function testHdfcRefund(gatewayOrderId, amount) {
   console.log("testHdfcRefund result:", JSON.stringify(result, null, 2));
 }
 
+// ZERO-RISK transport diagnostic: fire a refund at a NONEXISTENT order id and return
+// the gateway's raw response. No such order exists, so no money can ever move — but
+// the error class tells us whether our request FORMAT is accepted:
+//   - an "order not found / invalid order" error  → auth+headers+body format are FINE
+//     (the gateway parsed our request and looked up the order);
+//   - a content-type / missing-header / auth error → the request format is the problem.
+function hdfc_refundTransportTest() {
+  const fakeOid = "SKDIAG" + Date.now().toString(36).toUpperCase().slice(-8);
+  const reqId   = ("RFDIAG" + Date.now()).slice(0, 20);
+  const res = hdfc_initiateRefund(fakeOid, 1, reqId);
+  return { success: true, sent_order_id: fakeOid, result: res };
+}
+
 
 // ============================================================
 // Wallet recharge via HDFC SmartGateway

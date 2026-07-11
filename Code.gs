@@ -215,6 +215,14 @@ function doGet(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getChurnReport(p.sinceDate));
     }
+    if (action === "listRecentRefunds") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(listRecentRefunds(p.n)); // read-only diagnostic: last n refund rows, ALL statuses
+    }
+    if (action === "hdfcRefundTransportTest") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(hdfc_refundTransportTest()); // zero-risk: refund a nonexistent order id, return raw error
+    }
     if (action === "getPendingRefunds") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getPendingRefunds());

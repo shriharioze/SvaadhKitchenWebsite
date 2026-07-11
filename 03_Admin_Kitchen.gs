@@ -682,6 +682,17 @@ function getPendingRefunds() {
   return rows.filter(r => ["Pending", "Verification Required"].includes(String(r.Status)));
 }
 
+// READ-ONLY diagnostic: the last `n` SK_Refunds rows regardless of status — lets us
+// read the Adjustment_Note (e.g. "auto-refund FAILED (<api error>)") of rows the
+// owner already processed, which getPendingRefunds filters out.
+function listRecentRefunds(n) {
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_REFUNDS, ["Submission_ID","Phone","Name","Amount","Meal","Date","Status","Timestamp","Adjustment_Note","Refund_Mode"]);
+  const rows = getAllRows(ws);
+  const take = Math.max(1, Math.min(Number(n) || 30, 100));
+  return { success: true, total: rows.length, rows: rows.slice(-take) };
+}
+
 function markRefunded(submissionId) {
   // Serialize so a double-click / concurrent batch can't process the same
   // refund row twice (which would credit the wallet again).

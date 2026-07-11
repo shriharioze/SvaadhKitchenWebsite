@@ -228,18 +228,9 @@ function autoGenerateLabels(date, meal) {
     }
   } catch (e) { Logger.log("MacroDroid webhook ping failed: " + (e && e.message)); }
 
-  // Heads-up email with the Drive link — lets the owner (or staff) jump
-  // straight to the file on remote days. Non-fatal if mail fails.
-  try {
-    var adminEmail = SP.getProperty("ADMIN_EMAIL");
-    if (adminEmail && saved && saved.url) {
-      MailApp.sendEmail(adminEmail,
-        "🏷️ Svaadh: " + meal + " labels ready (" + orders.length + " labels, " + date + ")",
-        "Auto-generated and saved to Drive:\n\n" + saved.name + "\n" + saved.url
-        + "\n\nOpen on the kitchen phone → print. (Generated server-side at cutoff+"
-        + LBL_AUTO_DELAY_MIN + " min — no browser was needed.)");
-    }
-  } catch (e) {}
+  // (No "labels ready" email — owner asked to stop it 2026-07-11; the Drive save +
+  // MacroDroid webhook above are the delivery channels. The FAILURE alert in
+  // labelAutoTick stays — that one matters.)
 
   return { success: true, count: orders.length, name: saved && saved.name, url: saved && saved.url };
 }
