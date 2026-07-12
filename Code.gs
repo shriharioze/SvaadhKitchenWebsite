@@ -77,6 +77,7 @@ function doGet(e) {
     if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
     if (action === "backfillBulkPlan") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillBulkPlan(p.commit === "1")); } // one-time: stamp Bulk_Plan on pre-v26 bulk rows (dry-run unless commit=1)
     if (action === "compactWalletLedger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(compactWalletLedger(p.commit === "1", p.keepDays)); } // wallet ledger compaction: dry-run unless commit=1; keepDays default 90 (min 30)
+    if (action === "reconcileMissedOrders") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(reconcileMissedOrdersLog()); } // verify/restore STILL-MISSING log entries + "recovered & written" mail
     if (action === "auditAmanoraTowers") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(auditAmanoraTowers()); } // read-only: Amanora tower# → society co-occurrence from customers+orders+archives
     if (action === "seedAmanoraTowerAliases") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedAmanoraTowerAliases(p.commit === "1")); } // owner-confirmed tower→society alias rows (dry-run unless commit=1)
     if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty})

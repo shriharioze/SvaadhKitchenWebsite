@@ -1113,21 +1113,125 @@ function _reappendUntilPresent(ws, sidCol, sid, row, maxAttempts) {
 const TAB_MISSED_ORDERS    = "SK_Missed_Orders";
 const MISSED_ORDERS_HEADERS = [
   "Detected_At", "Status", "Submission_ID", "Gateway_Order_ID",
-  "Customer_Name", "Phone", "Amount", "Order_Date", "Meal", "Re_append_Attempts"
+  "Customer_Name", "Phone", "Amount", "Order_Date", "Meal", "Re_append_Attempts",
+  "Row_JSON"  // FULL row array — so a lost order is restorable from the LOG forever,
+              // not only from the 60-min PENDING_ORDER_ROWS stash or the alert email.
 ];
 
 function _logMissedOrderRow(ss, rec) {
   try {
     const ws = getOrCreateTab(ss, TAB_MISSED_ORDERS, MISSED_ORDERS_HEADERS);
+    // Self-heal: legacy tabs predate the Row_JSON column.
+    const hdr = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0].map(String);
+    if (hdr.indexOf("Row_JSON") === -1) ws.getRange(1, ws.getLastColumn() + 1).setValue("Row_JSON");
     ws.appendRow([
       new Date(), rec.status || "", rec.sid || "", rec.gatewayId || "",
       rec.name || "", rec.phone || "", rec.amount || "", rec.date || "", rec.meal || "",
-      (rec.attempts == null ? "" : rec.attempts)
+      (rec.attempts == null ? "" : rec.attempts),
+      rec.rowJson || ""
     ]);
     SpreadsheetApp.flush();
   } catch (e) {
     console.error("_logMissedOrderRow failed for " + (rec && rec.sid) + ": " + e.message);
   }
+}
+
+// ── MISSED-ORDER LOG RECONCILER — "lost but recovered & written ✓" ─────────────
+// The 1-min safety net emails "STILL MISSING — enter manually" the moment 5
+// re-appends fail, but it KEEPS retrying for the 60-min stash TTL — so an order
+// often lands a few minutes later and the owner is never told (10-Jul incident:
+// SK-20260710-8950 recovered on a later pass while the mail still demanded manual
+// entry). This pass closes the loop: for every log row still claiming a lost order,
+// it (a) verifies the order is now in SK_Orders / the archives → flips the status
+// and emails "recovered & written ✓"; (b) if genuinely absent but Row_JSON was
+// captured → re-appends it right here (verified) and emails the same. Runs from the
+// 10-min lost-order audit trigger + on demand via ?action=reconcileMissedOrders.
+function reconcileMissedOrdersLog() {
+  const ss = getSpreadsheet();
+  const mWs = ss.getSheetByName(TAB_MISSED_ORDERS);
+  if (!mWs || mWs.getLastRow() < 2) return { checked: 0, recovered: 0 };
+
+  const data = mWs.getDataRange().getValues();
+  const H = data[0].map(String);
+  const cSt = H.indexOf("Status"), cSid = H.indexOf("Submission_ID"), cGw = H.indexOf("Gateway_Order_ID"),
+        cDate = H.indexOf("Order_Date"), cJson = H.indexOf("Row_JSON"),
+        cName = H.indexOf("Customer_Name"), cPh = H.indexOf("Phone"), cAmt = H.indexOf("Amount");
+  if (cSt === -1) return { checked: 0, recovered: 0 };
+
+  // Candidate rows: still claiming a lost/missing order (any variant), not yet ✅.
+  const PENDING_RE = /STILL MISSING|BULK ROW DROPPED|FOUND BY AUDIT/i;
+  const cand = [];
+  for (let i = 1; i < data.length; i++) {
+    const st = String(data[i][cSt] || "");
+    if (PENDING_RE.test(st) && st.indexOf("✅") === -1) cand.push(i);
+  }
+  if (!cand.length) return { checked: 0, recovered: 0 };
+
+  // Ids already present in LIVE SK_Orders (read just the 2 id columns — cheap).
+  const oWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const oH = oWs.getRange(1, 1, 1, oWs.getLastColumn()).getValues()[0].map(String);
+  const oSidCol = oH.indexOf("Submission_ID") + 1, oGwCol = oH.indexOf("Gateway_Order_ID") + 1;
+  const liveSids = new Set(), liveGws = new Set();
+  if (oWs.getLastRow() > 1) {
+    if (oSidCol) oWs.getRange(2, oSidCol, oWs.getLastRow() - 1, 1).getValues().forEach(v => { const s = String(v[0] || "").trim(); if (s) liveSids.add(s); });
+    if (oGwCol)  oWs.getRange(2, oGwCol,  oWs.getLastRow() - 1, 1).getValues().forEach(v => { const s = String(v[0] || "").trim(); if (s) liveGws.add(s); });
+  }
+  const _fmtD = v => v instanceof Date ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd") : String(v || "").trim().slice(0, 10);
+  const nowStamp = getISTTimestamp();
+
+  const recoveredLines = [];
+  let checked = 0, recovered = 0;
+  cand.forEach(i => {
+    checked++;
+    const sid = String(data[i][cSid] || "").trim();
+    const gw  = String(data[i][cGw]  || "").trim();
+    const who = (data[i][cName] || "") + " / " + (data[i][cPh] || "") + " / ₹" + (data[i][cAmt] || "?");
+    let how = "";
+
+    // (a) Already in the live sheet?
+    if ((sid && liveSids.has(sid)) || (gw && liveGws.has(gw))) how = "verified present in SK_Orders";
+    // (b) Or in a monthly archive?
+    if (!how) {
+      const d = _fmtD(data[i][cDate]);
+      if (d && typeof getOrdersInRangeWithArchive === "function") {
+        try {
+          const from = Utilities.formatDate(new Date(new Date(d + "T12:00:00").getTime() - 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
+          const to   = Utilities.formatDate(new Date(new Date(d + "T12:00:00").getTime() + 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
+          const hit = getOrdersInRangeWithArchive(from, to).some(r =>
+            (sid && String(r.Submission_ID || "").trim() === sid) || (gw && String(r.Gateway_Order_ID || "").trim() === gw));
+          if (hit) how = "verified present in archive";
+        } catch (e) {}
+      }
+    }
+    // (c) Genuinely absent — restore from the captured Row_JSON, verified.
+    if (!how && cJson !== -1 && data[i][cJson] && sid && oSidCol) {
+      try {
+        const row = JSON.parse(String(data[i][cJson]));
+        if (Array.isArray(row) && row.length && typeof _reappendUntilPresent === "function") {
+          const okAttempt = _reappendUntilPresent(oWs, oSidCol, sid, row, 3);
+          if (okAttempt) { how = "RESTORED from Row_JSON (append verified)"; liveSids.add(sid); }
+        }
+      } catch (e) {}
+    }
+
+    if (how) {
+      recovered++;
+      mWs.getRange(i + 1, cSt + 1).setValue("✅ Recovered & written — " + how + " @ " + nowStamp);
+      recoveredLines.push("✅ " + (sid || gw) + " — " + who + " (" + how + ")");
+    }
+  });
+  if (recovered) {
+    SpreadsheetApp.flush();
+    try {
+      const adminEmail = PropertiesService.getScriptProperties().getProperty("ADMIN_EMAIL");
+      if (adminEmail) MailApp.sendEmail(adminEmail,
+        "✅ Svaadh: " + recovered + " lost order(s) recovered & written",
+        "Good news — these previously-alerted orders are safely in the sheet. No manual entry needed:\n\n"
+        + recoveredLines.join("\n")
+        + "\n\n(SK_Missed_Orders statuses updated. Only act manually if an order stays non-✅ across mails.)");
+    } catch (e) {}
+  }
+  return { checked: checked, recovered: recovered };
 }
 
 // ONE-TIME: run this once from the Apps Script editor to seed the SK_Missed_Orders tab
@@ -1352,7 +1456,11 @@ function auditLostGatewayOrders(monthsBack) {
 // SK_Orders column it needs, so it's fast and cheap to run frequently. Logs any new
 // charged-but-missing order to SK_Missed_Orders + emails the admin.
 function liveLostOrderAudit() {
-  return auditLostGatewayOrders(0);
+  const res = auditLostGatewayOrders(0);
+  // Close the loop on earlier "STILL MISSING" alerts: verify/restore + "✅ recovered
+  // & written" mail (see reconcileMissedOrdersLog). Piggybacks this 10-min trigger.
+  try { reconcileMissedOrdersLog(); } catch (e) { Logger.log("reconcileMissedOrdersLog: " + (e && e.message)); }
+  return res;
 }
 
 // Run ONCE from the editor to schedule the audit EVERY 10 MINUTES for near-live alerts.
@@ -1450,7 +1558,10 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
         const _rec = {
           sid: sid, gatewayId: _hf("Gateway_Order_ID"), name: _hf("Customer_Name"),
           phone: entry.phone || _hf("Phone"), amount: _hf("Net_Total"),
-          date: _hf("Order_Date"), meal: _hf("Meal_Type")
+          date: _hf("Order_Date"), meal: _hf("Meal_Type"),
+          // Full row into the log — restorable forever (reconcileMissedOrdersLog),
+          // not just for the 60-min stash TTL or from the alert email.
+          rowJson: (function () { try { return JSON.stringify(entry.row); } catch (e) { return ""; } })()
         };
 
         const okAttempt = _reappendUntilPresent(ws, sidCol, sid, entry.row, 5);
@@ -1496,12 +1607,17 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
         if (adminEmail) {
           const anyLost = missed.some(m => m.recovered === false);
           const subject = anyLost
-            ? "🚨 Svaadh: ORDER ROW LOST — manual entry needed"
-            : "⚠️ Svaadh: missed order row auto-recovered";
+            ? "🚨 Svaadh: order row dropped — auto-recovery in progress"
+            : "✅ Svaadh: missed order row auto-recovered & written";
           const body = missed.map(m =>
-            (m.recovered === false ? "[STILL MISSING — enter manually] " : "[auto-recovered] ") +
+            (m.recovered === false ? "[NOT YET WRITTEN — auto-retry continues] " : "[✅ recovered & written] ") +
             `SK Order ID: ${m.sid}\nPhone: ${m.phone}\nRow data: ${JSON.stringify(m.row)}`
-          ).join("\n\n---\n\n");
+          ).join("\n\n---\n\n")
+          + (anyLost
+              ? "\n\nNo action needed yet: retries continue every minute (60 min) and the 10-min log reconciler "
+                + "restores from the saved Row_JSON after that. You'll get a '✅ recovered & written' mail on success. "
+                + "Enter manually ONLY if no ✅ mail arrives and the SK_Missed_Orders row stays non-✅."
+              : "");
           MailApp.sendEmail(adminEmail, subject, body);
         }
       } catch(e) { console.error("Alert email failed:", e.message); }
