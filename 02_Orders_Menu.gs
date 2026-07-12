@@ -1146,7 +1146,7 @@ function _logMissedOrderRow(ss, rec) {
 // and emails "recovered & written ✓"; (b) if genuinely absent but Row_JSON was
 // captured → re-appends it right here (verified) and emails the same. Runs from the
 // 10-min lost-order audit trigger + on demand via ?action=reconcileMissedOrders.
-function reconcileMissedOrdersLog() {
+function reconcileMissedOrdersLog(debug) {
   const ss = getSpreadsheet();
   const mWs = ss.getSheetByName(TAB_MISSED_ORDERS);
   if (!mWs || mWs.getLastRow() < 2) return { checked: 0, recovered: 0 };
@@ -1159,13 +1159,19 @@ function reconcileMissedOrdersLog() {
   if (cSt === -1) return { checked: 0, recovered: 0 };
 
   // Candidate rows: still claiming a lost/missing order (any variant), not yet ✅.
+  // Capped per run — each run must finish WELL inside the ~6-min execution limit
+  // (the first uncapped run timed out on the June backlog); the 10-min trigger
+  // drains any remainder across subsequent runs.
   const PENDING_RE = /STILL MISSING|BULK ROW DROPPED|FOUND BY AUDIT/i;
-  const cand = [];
+  const MAX_PER_RUN = 30;
+  let cand = [];
   for (let i = 1; i < data.length; i++) {
     const st = String(data[i][cSt] || "");
-    if (PENDING_RE.test(st) && st.indexOf("✅") === -1) cand.push(i);
+    if (PENDING_RE.test(st) && st.indexOf("✅") === -1 && st.indexOf("⚠️") === -1) cand.push(i);
   }
   if (!cand.length) return { checked: 0, recovered: 0 };
+  const candTotal = cand.length;
+  cand = cand.slice(0, MAX_PER_RUN);
 
   // Ids already present in LIVE SK_Orders (read just the 2 id columns — cheap).
   const oWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
@@ -1179,6 +1185,48 @@ function reconcileMissedOrdersLog() {
   const _fmtD = v => v instanceof Date ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd") : String(v || "").trim().slice(0, 10);
   const nowStamp = getISTTimestamp();
 
+  // ONE archive read spanning every candidate's date (±3d) — the per-candidate
+  // lookup re-read the whole live sheet + archive files each time and blew the
+  // 6-min execution limit on a ~16-row backlog. Sets make each check O(1).
+  const archSids = new Set(), archGws = new Set();
+  {
+    let minD = "", maxD = "";
+    cand.forEach(i => {
+      const d = _fmtD(data[i][cDate]);
+      if (!d) return;
+      if (!minD || d < minD) minD = d;
+      if (!maxD || d > maxD) maxD = d;
+    });
+    if (minD && typeof getOrdersInRangeWithArchive === "function") {
+      try {
+        const from = Utilities.formatDate(new Date(new Date(minD + "T12:00:00").getTime() - 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
+        const to   = Utilities.formatDate(new Date(new Date(maxD + "T12:00:00").getTime() + 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
+        getOrdersInRangeWithArchive(from, to).forEach(r => {
+          const s = String(r.Submission_ID || "").trim();     if (s) archSids.add(s);
+          const g = String(r.Gateway_Order_ID || "").trim();  if (g) archGws.add(g);
+        });
+      } catch (e) {}
+    }
+  }
+
+  // DEBUG mode: no writes, no mail — just show what the matcher sees.
+  if (debug) {
+    return {
+      debug: true, pendingTotal: candTotal,
+      liveSids: liveSids.size, liveGws: liveGws.size, archSids: archSids.size, archGws: archGws.size,
+      sample: cand.slice(0, 10).map(i => ({
+        row: i + 1, status: String(data[i][cSt] || "").slice(0, 50),
+        sid: String(data[i][cSid] || ""), gw: String(data[i][cGw] || ""),
+        date: _fmtD(data[i][cDate]),
+        liveSidHit: liveSids.has(String(data[i][cSid] || "").trim()),
+        liveGwHit: liveGws.has(String(data[i][cGw] || "").trim()),
+        archSidHit: archSids.has(String(data[i][cSid] || "").trim()),
+        archGwHit: archGws.has(String(data[i][cGw] || "").trim()),
+        hasJson: cJson !== -1 && !!data[i][cJson]
+      }))
+    };
+  }
+
   const recoveredLines = [];
   let checked = 0, recovered = 0;
   cand.forEach(i => {
@@ -1190,19 +1238,8 @@ function reconcileMissedOrdersLog() {
 
     // (a) Already in the live sheet?
     if ((sid && liveSids.has(sid)) || (gw && liveGws.has(gw))) how = "verified present in SK_Orders";
-    // (b) Or in a monthly archive?
-    if (!how) {
-      const d = _fmtD(data[i][cDate]);
-      if (d && typeof getOrdersInRangeWithArchive === "function") {
-        try {
-          const from = Utilities.formatDate(new Date(new Date(d + "T12:00:00").getTime() - 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
-          const to   = Utilities.formatDate(new Date(new Date(d + "T12:00:00").getTime() + 3 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
-          const hit = getOrdersInRangeWithArchive(from, to).some(r =>
-            (sid && String(r.Submission_ID || "").trim() === sid) || (gw && String(r.Gateway_Order_ID || "").trim() === gw));
-          if (hit) how = "verified present in archive";
-        } catch (e) {}
-      }
-    }
+    // (b) Or in a monthly archive (pre-scanned sets)?
+    if (!how && ((sid && archSids.has(sid)) || (gw && archGws.has(gw)))) how = "verified present in archive";
     // (c) Genuinely absent — restore from the captured Row_JSON, verified.
     if (!how && cJson !== -1 && data[i][cJson] && sid && oSidCol) {
       try {
@@ -1218,6 +1255,20 @@ function reconcileMissedOrdersLog() {
       recovered++;
       mWs.getRange(i + 1, cSt + 1).setValue("✅ Recovered & written — " + how + " @ " + nowStamp);
       recoveredLines.push("✅ " + (sid || gw) + " — " + who + " (" + how + ")");
+    } else {
+      // TERMINAL: not in the sheet, not in the archives, and no Row_JSON to restore
+      // from (or restore failed) — and the entry is old enough that every automatic
+      // avenue (60-min stash retries, this reconciler) has long been exhausted.
+      // Mark it so the log is honest and this row stops being rechecked forever.
+      // (June-era rows: the known 29-Jun losses + gateway go-live test charges.)
+      const det = data[i][0];
+      const ageMs = (det instanceof Date) ? (Date.now() - det.getTime()) : NaN;
+      const hasJson = cJson !== -1 && !!data[i][cJson];
+      if (!hasJson && !isNaN(ageMs) && ageMs > 3 * 86400000) {
+        mWs.getRange(i + 1, cSt + 1).setValue(
+          "⚠️ Unrecoverable — not in sheet/archives, no Row_JSON captured (pre-v26.9 log). Manual judgment. [was: "
+          + String(data[i][cSt] || "").slice(0, 60) + "] @ " + nowStamp);
+      }
     }
   });
   if (recovered) {
@@ -1231,7 +1282,8 @@ function reconcileMissedOrdersLog() {
         + "\n\n(SK_Missed_Orders statuses updated. Only act manually if an order stays non-✅ across mails.)");
     } catch (e) {}
   }
-  return { checked: checked, recovered: recovered };
+  return { checked: checked, recovered: recovered, pendingTotal: candTotal,
+           remaining: Math.max(0, candTotal - checked) };
 }
 
 // ONE-TIME: run this once from the Apps Script editor to seed the SK_Missed_Orders tab
