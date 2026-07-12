@@ -4675,7 +4675,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.12.01";
+    const APP_VERSION = "v26.07.12.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7366,8 +7366,12 @@
       let virtualStreakCount = S.loyaltyInfo?.count || 0;
       let virtualPastSurcharge = S.loyaltyInfo?.surcharge || 0;
       
-      // If the latest past order was already a reward day (count 6), reset for the first cart date
-      if (virtualStreakCount >= 6) {
+      // If the latest past order was already a reward day, the next streak starts
+      // FRESH — its accruals were already given back. Check the reward MARK too, not
+      // just count >= 6: a truncated history window can understate the count (a
+      // 3-meal/day customer's 10-row window = ~3 days), and carrying the redeemed
+      // surcharge forward over-promises the next reward (12-Jul ₹16 incident).
+      if (virtualStreakCount >= 6 || S.loyaltyInfo?.endIsReward) {
         virtualStreakCount = 0;
         virtualPastSurcharge = 0;
       }
@@ -7388,7 +7392,8 @@
       const carryBack = {}; // date → ₹ credit applied from streak surplus
       {
         let _psc = S.loyaltyInfo?.count || 0, _pps = S.loyaltyInfo?.surcharge || 0, _ppt = promoTracker;
-        if (_psc >= 6) { _psc = 0; _pps = 0; }
+        // Same reset rule as the main loop above — reward-day mark counts too.
+        if (_psc >= 6 || S.loyaltyInfo?.endIsReward) { _psc = 0; _pps = 0; }
         let _prevDate = S.loyaltyInfo?.end || null; // for streak gap detection (mirrors main loop)
         const _dayNets = {}; // date → net day total (before carry-back)
         const _dateOrder = [];
@@ -9904,7 +9909,11 @@
     function calculateLoyaltyStreak(pastOrders, cartDates = []) {
       const dailyTotals = {};
       const isPastReward = new Set();
-      const allOrders = [...(S.existingOrders || []), ...(pastOrders || [])];
+      // Prefer the compact full-depth streak history (S.streakRows, ~15 days) over
+      // the 10-row past_orders — the short window understates streak counts for
+      // multi-meal customers (12-Jul ₹16 over-promise incident).
+      const pastSrc = (S.streakRows && S.streakRows.length) ? S.streakRows : (pastOrders || []);
+      const allOrders = [...(S.existingOrders || []), ...pastSrc];
       const allDates = new Set();
 
       // 1. Collect past/existing orders and their surcharges
@@ -10009,7 +10018,14 @@
         count: final.count,
         surcharge: final.surcharge,
         start: final.start,
-        end: winnerDate
+        end: winnerDate,
+        // The winner day ITSELF was a reward day (its 5% was already given back).
+        // The bill builder must then start the next streak FRESH — its `count >= 6`
+        // reset alone misses this when a truncated history window understates the
+        // count (12-Jul incident: a 3-meal/day customer's 10-row window showed
+        // count 4 at a marked reward day; the bill carried the already-redeemed
+        // ₹33 into the cart and over-promised the next reward by ₹16).
+        endIsReward: allRewardDays.has(winnerDate)
       };
     }
 
@@ -10054,6 +10070,9 @@
         
         S.existingOrders = data.orders || [];
         S.pastOrders = data.past_orders || [];
+        // Compact full-depth history (45 rows ≈ 15 days) for the streak engine —
+        // past_orders' 10-row UI cap is too short for 3-meal/day customers.
+        S.streakRows = data.streak_rows || [];
         S.loyaltyInfo = calculateLoyaltyStreak(S.pastOrders);
         refreshStreakUI(); // Live refresh once data arrives
 

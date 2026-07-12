@@ -3124,6 +3124,25 @@ function getCustomerOrders(phone) {
       };
     });
 
+  // ── Compact streak history for the loyalty engine ─────────────
+  // past_orders is capped at 10 ROWS for the UI, but a 3-meal/day customer's
+  // 10 rows span barely 3 days — far too short for the 6-day streak math. The
+  // 12-Jul incident: the frontend couldn't see that the last past day was day 6
+  // of a full streak, carried its already-redeemed accruals into the next cart,
+  // and over-promised the reward by ₹16 (display 587 vs authoritative 603).
+  // These rows carry ONLY the four fields the streak engine reads, so 45 rows
+  // (~15 days for a 3-meal customer) stay tiny on the wire.
+  const streakRows = allFiltered
+    .filter(r => fmtD(r) < today)
+    .sort((a,b) => fmtD(b).localeCompare(fmtD(a))) // newest first
+    .slice(0, 45)
+    .map(r => ({
+      date:                fmtD(r),
+      inflation_surcharge: Number(r.Inflation_Surcharge) || 0,
+      loyalty_discount:    String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes",
+      payment_status:      r.Payment_Status
+    }));
+
   const onAccountBalance = allFiltered
     .filter(r => _isOnAccountDueStatus(r.Payment_Status))
     .reduce((sum, r) => sum + (Number(r.Net_Total) || 0), 0);
@@ -3146,6 +3165,7 @@ function getCustomerOrders(phone) {
   return {
     orders: upcoming,
     past_orders: past,
+    streak_rows: streakRows,
     wallet_balance: _calculateWalletBalance(phone),
     on_account_balance: onAccountBalance,
     // Today's effective (override-aware) cutoff hours so Manage Orders can
