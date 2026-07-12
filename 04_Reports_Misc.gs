@@ -2045,6 +2045,238 @@ function auditAmanoraTowers() {
   return { success: true, rowsScanned: scanned, amanoraRows: amanora, towers: out };
 }
 
+// ============================================================
+// WALLET LEDGER COMPACTION — keep SK_Wallet fast forever
+// ============================================================
+// SK_Wallet is a cumulative ledger: every balance check replays ALL rows, so reads
+// slow as it grows (fine at hundreds of rows, sluggish past ~5k). This tool compacts
+// it WITHOUT changing any customer's balance:
+//
+//   For each customer, every VERIFIED row older than `keepDays` is replaced by ONE
+//   carry-forward row whose amount is exactly the net effect of the removed rows —
+//   balance is conserved PER CUSTOMER BY CONSTRUCTION (the net is computed with the
+//   REAL _calculateWalletBalance on the removed subset, so the semantics can never
+//   drift from the live balance engine).
+//
+// SAFETY DESIGN (a naive date-scoped wallet archive corrupted balances once — see
+// the archiveMonth comment "WALLET IS INTENTIONALLY NOT ARCHIVED"; this tool is the
+// safe replacement for that idea):
+//   • UNVERIFIED rows are NEVER touched (a pending recharge may still be approved).
+//   • Rows with an unparseable Timestamp are kept (conservative).
+//   • PRE-VERIFY IN MEMORY: the entire new sheet is built and every customer's
+//     balance recomputed from it BEFORE anything is written — any mismatch aborts
+//     with the live sheet untouched.
+//   • Audit trail FIRST: removed rows are appended to a yearly archive spreadsheet
+//     ("Svaadh Kitchen Wallet Archive — <year>") and a full pre-compaction backup
+//     tab is written there, both VERIFIED as landed, before the live rewrite.
+//   • The live rewrite is a single clear+setValues (no incremental delete drift),
+//     followed by a POST-VERIFY re-read of every balance; a mismatch emails the
+//     admin with the backup tab name for a copy-back restore.
+//   • Runs under the script lock, so no wallet write can interleave.
+//   • Dry-run by default — pass commit=true to execute.
+//
+// Carry rows use types the balance engine already classifies:
+//   net ≥ 0 → "Balance Carry-Forward (ledger compacted through <cutoff>)"  (credit)
+//   net < 0 → "Dues Deduction (ledger compacted through <cutoff>)"         (debit)
+// (The debit type deliberately avoids every credit keyword — recharge/refund/credit/
+// carry — so the classifier can never read it as a credit.)
+//
+// Run cadence: manual, owner-supervised — worth running when SK_Wallet approaches
+// ~2-3k rows (≈1 year of growth). Idempotent: fresh carry rows are recent, so an
+// immediate re-run archives nothing; when carry rows themselves age past keepDays
+// they compact again correctly (carry-of-carry).
+function compactWalletLedger(commit, keepDays) {
+  keepDays = Math.max(30, Number(keepDays) || 90); // never compact anything newer than 30 days
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch (e) { return { success: false, error: "Could not acquire lock — busy, retry in a minute." }; }
+  try {
+    const ss = getSpreadsheet();
+    const ws = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+    if (ws.getLastRow() < 2) return { success: true, committed: false, message: "Wallet is empty — nothing to do." };
+
+    const data   = ws.getDataRange().getValues();
+    const header = data[0].map(String);
+    const hIdx   = {};
+    header.forEach(function (h, i) { hIdx[h] = i; });
+    ["Phone", "Amount", "Verified", "Timestamp"].forEach(function (c) {
+      if (hIdx[c] === undefined) throw new Error("SK_Wallet is missing the '" + c + "' column — aborting untouched.");
+    });
+
+    const _rowToObj = function (row) {
+      const o = {};
+      header.forEach(function (h, i) { o[h] = row[i]; });
+      return o;
+    };
+    const _tsMs = function (v) {
+      if (v instanceof Date) return v.getTime();
+      const s = String(v || "").trim();
+      if (!s) return NaN;
+      let t = new Date(s).getTime();
+      if (isNaN(t)) t = new Date(s.replace(" ", "T")).getTime();
+      return t;
+    };
+    const _isVerified = function (v) {
+      const s = String(v || "").trim().toUpperCase();
+      return s === "TRUE" || s === "YES" || s === "VERIFIED";
+    };
+
+    const nowMs    = Date.now();
+    const cutoffMs = nowMs - keepDays * 86400000;
+    const cutoffStr = Utilities.formatDate(new Date(cutoffMs), "Asia/Kolkata", "yyyy-MM-dd");
+
+    // ── Partition: archive candidates vs keepers ─────────────────────────────
+    const toArchive = [];  // raw row arrays
+    const keepRows  = [];
+    for (let i = 1; i < data.length; i++) {
+      const row   = data[i];
+      const phone = _normalizePhone(row[hIdx["Phone"]]);
+      const ts    = _tsMs(row[hIdx["Timestamp"]]);
+      const old   = !isNaN(ts) && ts < cutoffMs;
+      if (phone && old && _isVerified(row[hIdx["Verified"]])) toArchive.push(row);
+      else keepRows.push(row);
+    }
+    if (!toArchive.length) {
+      return { success: true, committed: false, rowsNow: data.length - 1, keepDays: keepDays,
+               message: "Nothing older than " + keepDays + " days (verified) to compact — sheet unchanged." };
+    }
+
+    // ── Balances BEFORE, for every customer in the sheet (the invariant) ─────
+    const allObjs = data.slice(1).map(_rowToObj);
+    const phones  = {};
+    allObjs.forEach(function (o) { const p = _normalizePhone(o.Phone); if (p) phones[p] = true; });
+    const preBal = {};
+    Object.keys(phones).forEach(function (p) { preBal[p] = _calculateWalletBalance(p, allObjs); });
+
+    // ── Per-customer carry = REAL balance function over the removed subset ───
+    const archObjs = toArchive.map(_rowToObj);
+    const byPhone  = {};
+    archObjs.forEach(function (o) {
+      const p = _normalizePhone(o.Phone);
+      if (!byPhone[p]) byPhone[p] = { name: "", rows: 0 };
+      byPhone[p].rows++;
+      if (o.Customer_Name) byPhone[p].name = String(o.Customer_Name);
+    });
+    const nowStamp = getISTTimestamp();
+    const refTag   = "COMPACT" + Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyyMMdd");
+    const carryRows = [];
+    let credits = 0, debits = 0;
+    Object.keys(byPhone).forEach(function (p) {
+      const net = _calculateWalletBalance(p, archObjs); // exact engine semantics
+      if (Math.abs(net) < 0.005) return; // removed rows cancel out — no carry needed
+      const row = new Array(header.length).fill("");
+      row[hIdx["Phone"]] = p;
+      if (hIdx["Customer_Name"] !== undefined) row[hIdx["Customer_Name"]] = byPhone[p].name;
+      if (net > 0) {
+        row[hIdx["Txn_Type"] !== undefined ? hIdx["Txn_Type"] : 2] = "Balance Carry-Forward (ledger compacted through " + cutoffStr + ")";
+        row[hIdx["Amount"]] = Math.round(net * 100) / 100;
+        credits++;
+      } else {
+        row[hIdx["Txn_Type"] !== undefined ? hIdx["Txn_Type"] : 2] = "Dues Deduction (ledger compacted through " + cutoffStr + ")";
+        row[hIdx["Amount"]] = Math.round(Math.abs(net) * 100) / 100;
+        debits++;
+      }
+      row[hIdx["Verified"]] = "TRUE";
+      if (hIdx["Reference_ID"] !== undefined) row[hIdx["Reference_ID"]] = refTag;
+      row[hIdx["Timestamp"]] = nowStamp;
+      carryRows.push(row);
+    });
+
+    // ── PRE-VERIFY in memory: every customer's balance must be conserved ─────
+    const newRows = keepRows.concat(carryRows);
+    const newObjs = newRows.map(_rowToObj);
+    const mismatches = [];
+    Object.keys(phones).forEach(function (p) {
+      const post = _calculateWalletBalance(p, newObjs);
+      if (Math.abs(post - preBal[p]) > 0.01) mismatches.push(p + ": " + preBal[p] + " → " + post);
+    });
+    if (mismatches.length) {
+      return { success: false, committed: false,
+               error: "PRE-VERIFY FAILED — balances would change for " + mismatches.length + " customer(s). NOTHING was written.",
+               mismatches: mismatches.slice(0, 20) };
+    }
+
+    const summary = {
+      success: true, committed: false, keepDays: keepDays, cutoff: cutoffStr,
+      rowsBefore: data.length - 1, rowsAfter: newRows.length,
+      archivedRows: toArchive.length, carryRows: { credits: credits, debits: debits },
+      customersCompacted: Object.keys(byPhone).length,
+      customersVerified: Object.keys(phones).length,
+      verify: "PRE-VERIFY PASSED — all " + Object.keys(phones).length + " customers' balances conserved to the paisa."
+    };
+    if (!commit) { summary.message = "DRY RUN — nothing written. Re-run with commit=1 to execute."; return summary; }
+
+    // ── COMMIT step 1: audit trail into the yearly archive spreadsheet ───────
+    const year = new Date().getFullYear();
+    const archName = "Svaadh Kitchen Wallet Archive — " + year;
+    let archSS = null;
+    const folder = (typeof _getArchiveYearFolder === "function") ? _getArchiveYearFolder(year) : null;
+    if (folder) {
+      const it = folder.getFilesByName(archName);
+      if (it.hasNext()) archSS = SpreadsheetApp.openById(it.next().getId());
+      else { archSS = SpreadsheetApp.create(archName); DriveApp.getFileById(archSS.getId()).moveTo(folder); }
+    } else {
+      const it2 = DriveApp.getFilesByName(archName);
+      archSS = it2.hasNext() ? SpreadsheetApp.openById(it2.next().getId()) : SpreadsheetApp.create(archName);
+    }
+    // 1a. Full pre-compaction backup tab (copy-back restore point).
+    const backupTab = "Backup_" + Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyyMMdd_HHmm");
+    const bSheet = archSS.insertSheet(backupTab);
+    bSheet.getRange(1, 1, data.length, header.length).setValues(data);
+    // 1b. Append the removed rows (+Archived_At) to the running archive tab.
+    let aSheet = archSS.getSheetByName("SK_Wallet_Archive");
+    if (!aSheet) {
+      aSheet = archSS.insertSheet("SK_Wallet_Archive");
+      aSheet.getRange(1, 1, 1, header.length + 1).setValues([header.concat(["Archived_At"])]);
+    }
+    const startRow = aSheet.getLastRow() + 1;
+    const archOut  = toArchive.map(function (r) { return r.concat([nowStamp]); });
+    aSheet.getRange(startRow, 1, archOut.length, header.length + 1).setValues(archOut);
+    SpreadsheetApp.flush();
+    // 1c. Verify BOTH the backup and the appended rows actually landed.
+    if (bSheet.getLastRow() !== data.length ||
+        aSheet.getLastRow() !== startRow + archOut.length - 1) {
+      return { success: false, committed: false,
+               error: "Archive write could not be verified — live sheet left UNTOUCHED. Check '" + archName + "' and retry." };
+    }
+
+    // ── COMMIT step 2: atomic live rewrite ───────────────────────────────────
+    ws.clearContents();
+    ws.getRange(1, 1, 1, header.length).setValues([header]);
+    if (newRows.length) ws.getRange(2, 1, newRows.length, header.length).setValues(newRows);
+    SpreadsheetApp.flush();
+
+    // ── COMMIT step 3: POST-VERIFY from the sheet itself ─────────────────────
+    const liveObjs = getAllRows(ws);
+    const postMis = [];
+    Object.keys(phones).forEach(function (p) {
+      const post = _calculateWalletBalance(p, liveObjs);
+      if (Math.abs(post - preBal[p]) > 0.01) postMis.push(p + ": " + preBal[p] + " → " + post);
+    });
+    if (postMis.length) {
+      try {
+        const adminEmail = SP.getProperty("ADMIN_EMAIL");
+        if (adminEmail) MailApp.sendEmail(adminEmail, "🚨 Svaadh: wallet compaction POST-VERIFY mismatch",
+          "Balances differ for " + postMis.length + " customer(s) after the rewrite:\n\n" + postMis.join("\n")
+          + "\n\nRESTORE: open '" + archName + "' → tab '" + backupTab + "' → copy its full contents back over SK_Wallet.");
+      } catch (_) {}
+      return { success: false, committed: true, error: "POST-VERIFY FAILED — restore from '" + archName + "' tab '" + backupTab + "'.",
+               mismatches: postMis.slice(0, 20) };
+    }
+
+    summary.committed = true;
+    summary.archiveFile = archName;
+    summary.backupTab = backupTab;
+    summary.verify += " POST-VERIFY PASSED — re-read from the sheet matches for every customer.";
+    Logger.log("compactWalletLedger: " + JSON.stringify(summary));
+    return summary;
+  } catch (e) {
+    return { success: false, error: "compactWalletLedger error: " + (e && e.message) };
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
 // Called by admin UI — wraps archiveMonth with PIN check (handled by router)
 function triggerManualArchive(body) {
   var year  = parseInt(body.year);
