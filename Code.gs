@@ -891,6 +891,19 @@ function _invalidateCache() {
   try { CacheService.getScriptCache().removeAll(keys); } catch(e) {}
 }
 
+// Effective per-meal delivery caps for one date: the site-wide DEFAULT_ORDER_CAPS,
+// overridden per meal by any positive per-date Order_Cap_JSON value the admin set.
+// (Blank/0/invalid per-date values fall back to the default — matching the admin
+// panel, which deletes the key when the input is blank or 0.)
+function _effectiveOrderCaps(perDateCaps) {
+  const out = {};
+  ["Breakfast", "Lunch", "Dinner"].forEach(function (m) {
+    const v = Number(perDateCaps && perDateCaps[m]);
+    out[m] = (!isNaN(v) && v > 0) ? v : (DEFAULT_ORDER_CAPS[m] || 0);
+  });
+  return out;
+}
+
 function getISTDate() {
   const now = new Date();
   // Cross-environment IST Date object

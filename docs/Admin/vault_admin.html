@@ -2336,6 +2336,7 @@ async function verifyPin() {
     S.bfMaster    = menuData.breakfastMaster || [];
     S.sabjiMaster = menuData.sabjiMaster     || [];
     S.menuEntries = menuData.menuEntries     || [];
+    S.defaultCaps = menuData.default_caps    || {};
     
     // 2. BOOT UI IMMEDIATELY
     bootApp();
@@ -2368,7 +2369,8 @@ async function loadFullAdminData() {
     S.bfMaster    = data.breakfastMaster || [];
     S.sabjiMaster = data.sabjiMaster     || [];
     S.menuEntries = data.menuEntries     || [];
-    
+    S.defaultCaps = data.default_caps    || {};
+
     // Re-render components once data is fetched
     renderBfMasterTable();
     renderSabjiMasterTable();
@@ -3307,9 +3309,11 @@ function renderOrdersClosedPanel() {
   ];
   panel.innerHTML = meals.map(m => {
     const isClosed = !!S.ordersClosed[m.key];
-    const cap   = (S.orderCaps && S.orderCaps[m.key]) ? S.orderCaps[m.key] : "";
+    const cap    = (S.orderCaps && S.orderCaps[m.key]) ? S.orderCaps[m.key] : "";          // per-date override (what the admin typed)
+    const defCap = (S.defaultCaps && S.defaultCaps[m.key]) ? Number(S.defaultCaps[m.key]) : 0; // site-wide default (B 11 / L 25 / D 25)
+    const effCap = cap ? Number(cap) : defCap;                                              // what's actually enforced today
     const count = (S.orderCounts && S.orderCounts[m.key] != null) ? Number(S.orderCounts[m.key]) : null;
-    const capHit = cap && count != null && count >= Number(cap);
+    const capHit = effCap > 0 && count != null && count >= effCap;
     const altOn = !(S.capAlt && S.capAlt[m.key] === false);   // default ON
     return `<div style="text-align:center;">
       <div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px;">${m.icon} ${m.key}</div>
@@ -3319,12 +3323,12 @@ function renderOrdersClosedPanel() {
         ${isClosed ? 'Closed' : 'Open'}
       </div>
       <div style="margin-top:10px;border-top:1px dashed var(--border,#ddd);padding-top:8px;">
-        <label style="font-size:.6rem;color:var(--muted);display:block;margin-bottom:3px;" title="Self Pickup & Porter orders do NOT count — they're offered as overflow once delivery is full.">Max <u>delivery</u> orders</label>
-        <input type="number" min="0" inputmode="numeric" placeholder="∞"
+        <label style="font-size:.6rem;color:var(--muted);display:block;margin-bottom:3px;" title="Self Pickup & Porter orders do NOT count — they're offered as overflow once delivery is full. Blank = the permanent default; type a number to override JUST this date.">Max <u>delivery</u> orders</label>
+        <input type="number" min="0" inputmode="numeric" placeholder="${defCap > 0 ? defCap + ' (default)' : '∞'}"
                value="${cap}" onchange="setOrderCap('${m.key}', this.value)"
                style="width:62px;text-align:center;padding:4px;border-radius:6px;border:1px solid var(--border,#ccc);font-size:.82rem;" />
-        ${count != null ? `<div style="font-size:.6rem;margin-top:4px;color:${capHit ? '#c0392b' : 'var(--muted)'};font-weight:700;">${count}${cap ? ' / ' + cap : ''} delivery${capHit ? ' · FULL' : ''}</div>` : ''}
-        ${cap ? `<div style="margin-top:8px;font-size:.56rem;color:var(--muted);line-height:1.3;">When full, offer<br>Pickup / Porter:
+        ${count != null ? `<div style="font-size:.6rem;margin-top:4px;color:${capHit ? '#c0392b' : 'var(--muted)'};font-weight:700;">${count}${effCap > 0 ? ' / ' + effCap : ''} delivery${capHit ? ' · FULL' : ''}${(!cap && effCap > 0) ? ' <span style="font-weight:600;">(default)</span>' : ''}</div>` : ''}
+        ${effCap > 0 ? `<div style="margin-top:8px;font-size:.56rem;color:var(--muted);line-height:1.3;">When full, offer<br>Pickup / Porter:
           <button onclick="toggleCapAlt('${m.key}')" title="ON = customers can still order via Self Pickup or Porter when delivery is full. OFF = hard sold-out."
             style="margin-top:4px;display:inline-block;padding:3px 10px;border-radius:8px;border:0;cursor:pointer;font-weight:800;font-size:.6rem;background:${altOn ? '#0e7a5f' : '#b0b0b0'};color:#fff;">${altOn ? 'ON' : 'OFF'}</button>
         </div>` : ''}

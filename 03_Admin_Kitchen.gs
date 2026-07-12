@@ -135,7 +135,10 @@ function _getAdminDataUncached() {
     };
   });
 
-  return {breakfastMaster, sabjiMaster, menuEntries};
+  // default_caps: the site-wide per-meal delivery caps (00_Config DEFAULT_ORDER_CAPS).
+  // menuEntries' order_caps stay PER-DATE-ONLY (what the admin typed) so saving a menu
+  // never bakes the defaults into the date — the panel shows defaults as placeholders.
+  return {breakfastMaster, sabjiMaster, menuEntries, default_caps: DEFAULT_ORDER_CAPS};
 }
 
 // ── ADMIN: SAVE MENU ─────────────────────────────────────────

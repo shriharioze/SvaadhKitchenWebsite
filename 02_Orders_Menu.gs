@@ -845,10 +845,12 @@ function _getMenuUncached(dateStr) {
   let stockLimits = {};
   try { if (r && r.Stock_JSON) stockLimits = JSON.parse(r.Stock_JSON); } catch(e) {}
 
-  // Per-meal max-order caps (e.g. {"Breakfast":50}). When a meal's active
-  // (non-cancelled) order count reaches its cap it is SOLD OUT for the day.
+  // Per-meal max-order caps. Site-wide defaults (DEFAULT_ORDER_CAPS: B 11 / L 25 /
+  // D 25) apply to EVERY date; a positive per-date Order_Cap_JSON value overrides.
+  // When a meal's active delivery count reaches its cap it is SOLD OUT for delivery.
   let orderCaps = {};
   try { if (r && r.Order_Cap_JSON) orderCaps = JSON.parse(r.Order_Cap_JSON); } catch(e) {}
+  orderCaps = _effectiveOrderCaps(orderCaps);
   // Per-meal flag: offer Self Pickup / Porter when delivery is full? Default ON
   // (missing/true). false = hard sold-out (no alternatives offered).
   let capAlt = {};
@@ -1906,10 +1908,13 @@ function _submitOrderInternal(body) {
       // under LockService (concurrent orders can't both slip past the cap).
       let _orderCapW = {};
       try { if (_menuRowW && _menuRowW.Order_Cap_JSON) _orderCapW = JSON.parse(_menuRowW.Order_Cap_JSON); } catch(e) {}
+      // Site-wide default caps (B 11 / L 25 / D 25) apply to every date; positive
+      // per-date values override. Counts are now always computed (caps always exist).
+      _orderCapW = _effectiveOrderCaps(_orderCapW);
       let _capAltW = {};   // per-meal: offer Self Pickup / Porter when full? default ON
       try { if (_menuRowW && _menuRowW.Cap_Alt_JSON) _capAltW = JSON.parse(_menuRowW.Cap_Alt_JSON); } catch(e) {}
-      const _capCountsW   = Object.keys(_orderCapW).length ? _countActiveMealOrders(allOrderRows, _d) : null;
-      const _delIdxW = Object.keys(_orderCapW).length ? _activeDeliveryIndex(allOrderRows, _d) : null;
+      const _capCountsW   = _countActiveMealOrders(allOrderRows, _d);
+      const _delIdxW = _activeDeliveryIndex(allOrderRows, _d);
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
