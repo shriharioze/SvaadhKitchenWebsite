@@ -77,6 +77,18 @@ function doGet(e) {
     if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
     if (action === "backfillBulkPlan") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillBulkPlan(p.commit === "1")); } // one-time: stamp Bulk_Plan on pre-v26 bulk rows (dry-run unless commit=1)
     if (action === "compactWalletLedger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(compactWalletLedger(p.commit === "1", p.keepDays)); } // wallet ledger compaction: dry-run unless commit=1; keepDays default 90 (min 30)
+    if (action === "genLabels") { // regenerate a date+meal's label PDF on demand (same engine as the cutoff+5 auto-run)
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      if (p.debug === "1") { // build-only: return the PDF base64 for inspection — no Drive save, no print webhook
+        const _lo = getLabelOrders(String(p.date || ""), String(p.meal || ""));
+        const _ord = (_lo && _lo.orders) || [];
+        if (!_ord.length) return jsonRes({ success: true, count: 0, note: "no orders" });
+        const _gapRaw = SP.getProperty("LABEL_GAP_MM");
+        const _gap = (_gapRaw !== null && !isNaN(Number(_gapRaw))) ? Number(_gapRaw) : 2.7;
+        return jsonRes({ success: true, count: _ord.length, gap: _gap, b64: _lblBuildPdfB64(_ord, String(p.meal || ""), LBL_AUTO_LANG, _gap) });
+      }
+      return jsonRes(autoGenerateLabels(String(p.date || ""), String(p.meal || "")));
+    }
     if (action === "reconcileMissedOrders") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(reconcileMissedOrdersLog(p.debug === "1")); } // verify/restore STILL-MISSING log entries + "recovered & written" mail (debug=1: read-only diagnosis)
     if (action === "auditAmanoraTowers") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(auditAmanoraTowers()); } // read-only: Amanora tower# → society co-occurrence from customers+orders+archives
     if (action === "seedAmanoraTowerAliases") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedAmanoraTowerAliases(p.commit === "1")); } // owner-confirmed tower→society alias rows (dry-run unless commit=1)

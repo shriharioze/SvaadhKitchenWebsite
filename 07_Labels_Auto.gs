@@ -99,9 +99,72 @@ function _lblItemSummary(order, meal, lang) {
 // (the 2026-07-06 "5 of 32 labels" incident). Docs allows setting an exact
 // custom page size AFTER creation, so the strip is a single page of exactly
 // 50mm × (n × block) like the kitchen page's jsPDF output. Pitch precision
-// comes from a borderless table: one row per label (min height 25mm) and one
-// thin gap row (min height = gap) holding the separator rule. The temp doc is
-// trashed after export.
+// comes from a borderless table with ONE row per label at min-height = BLOCK
+// (25mm label + 2.7mm die-cut gap): fitted text sits in the top 25mm, the empty
+// bottom 2.7mm is the physical gap. No separate gap row / horizontal rule (a Docs
+// HR renders ~4.3mm not 2.7mm and drifted the strip). The temp doc is trashed
+// after export.
+// ── Single-line text fitting ─────────────────────────────────────────────────
+// THE PITCH GUARANTEE: Docs table rows only support a MINIMUM height — when a long
+// Marathi summary WRAPPED to an extra line, the row GREW past 25mm, shifting every
+// label below it (the "half on one label, half on the next after 2-3 labels" drift)
+// and eventually overflowing the page → Docs inserted a mid-strip page break. The
+// kitchen page never drifts because it draws at absolute canvas positions. So here
+// every paragraph must be PROVABLY one line: conservative width estimate (Devanagari
+// code points counted wide, incl. matras — overestimates, never underestimates),
+// shrink the font before it can wrap (floor given), hard-truncate with … as the
+// last resort. Summaries may split into TWO paragraphs (at item commas) first.
+var LBL_LINE_PT = 127;            // printable width: 50mm − 2+2 margins − 1mm slack ≈ 45mm ≈ 127pt
+function _lblTextUnits(s) {       // width estimate in font-size units (pt per pt of font)
+  var u = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    u += (c >= 0x0900 && c <= 0x097F) ? 1.0 : 0.62; // Devanagari wide, ASCII/other conservative
+  }
+  return u;
+}
+// Fit one string on one line: try `size`, shrink to `minSize`, then truncate.
+function _lblFitLine(text, size, minSize) {
+  var t = String(text || "");
+  var u = _lblTextUnits(t);
+  var s = size;
+  while (s > minSize && u * s > LBL_LINE_PT) s -= 0.5;
+  if (u * s > LBL_LINE_PT) { // still too wide at the floor — truncate
+    var maxChars = Math.max(4, Math.floor(t.length * (LBL_LINE_PT / (u * s))) - 1);
+    t = t.slice(0, maxChars) + "…";
+  }
+  return { text: t, size: s };
+}
+// VERTICAL fit — the die-cut requirement: every label's stacked lines must fit inside
+// the 25mm row, or Docs (min-height rows) grows the row and every label below drifts
+// (and the strip paginates). Docs renders a Devanagari line ≈ 1.7× its point size even
+// at lineSpacing 0.9 (tall matras above+below), so we estimate each line at LH_FACTOR
+// and scale ALL line sizes down uniformly until the stack fits the budget (with a
+// readable floor). Returns the lines with adjusted sizes.
+var LBL_LH_FACTOR = 1.72;                 // conservative rendered-line-height multiple
+var LBL_V_BUDGET_PT = (25 - 0.5) * 2.834645669 - 3; // row 25mm − top pad − 3pt safety ≈ 66pt
+function _lblVerticalFit(lines) {
+  var sum = 0;
+  for (var i = 0; i < lines.length; i++) sum += lines[i].size * LBL_LH_FACTOR;
+  if (sum <= LBL_V_BUDGET_PT) return lines;
+  var scale = LBL_V_BUDGET_PT / sum;
+  for (var j = 0; j < lines.length; j++) {
+    lines[j].size = Math.max(5.5, Math.round(lines[j].size * scale * 2) / 2); // 0.5pt steps, floor 5.5
+  }
+  return lines;
+}
+
+// Summary: split into ≤2 balanced lines at item commas, then fit each line.
+function _lblFitSummary(summary, size, minSize) {
+  var s = String(summary || "");
+  if (_lblTextUnits(s) * size <= LBL_LINE_PT) return [{ text: s, size: size }];
+  var items = s.split(", ");
+  var half = Math.ceil(items.length / 2);
+  var l1 = items.slice(0, half).join(", ") + (half < items.length ? "," : "");
+  var l2 = items.slice(half).join(", ");
+  return [_lblFitLine(l1, size, minSize), _lblFitLine(l2, size, minSize)];
+}
+
 function _lblBuildPdfB64(orders, meal, lang, gapMm) {
   var MM = 2.834645669; // mm → pt
   var W = 50, LH = 25, GAP = (typeof gapMm === "number" && !isNaN(gapMm)) ? gapMm : 2.7;
@@ -115,71 +178,95 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
 
   try {
     var body = doc.getBody();
-    // Page = exactly the strip (+3mm safety so the last row can never spill
-    // onto an auto-created second page — 3mm of extra feed once per run).
-    body.setPageWidth(W * MM).setPageHeight((totalH + 3) * MM);
+    // Page height = the strip (n × BLOCK) + a safety pad. The pad covers: the ONE
+    // mandatory trailing paragraph Docs keeps after a table (shrunk to font-size 1
+    // ≈ 0.4mm) AND the per-row pixel rounding — Docs rounds a row's min-height UP to a
+    // whole 96-dpi pixel, so each 27.7mm row actually renders ~27.78mm (~+0.08mm), and
+    // over n labels that adds n×0.08mm. Without the pad the last label spills to an
+    // auto-created 2nd page (the "page break in the middle" symptom). Extra blank at the
+    // very bottom of the single page is harmless on a continuous roll. 12mm covers the
+    // Docs-enforced ~5.7mm leading structural paragraph PLUS per-row rounding for ~60+
+    // labels — enough that the last label never spills to a 2nd page.
+    var PAD = 12;
+    body.setPageWidth(W * MM).setPageHeight((totalH + PAD) * MM);
     body.setMarginTop(0).setMarginBottom(0).setMarginLeft(2 * MM).setMarginRight(2 * MM);
 
-    // One borderless table drives the vertical pitch: rows alternate
-    // label (minHeight 25mm) / gap (minHeight GAP, contains the separator).
+    // ONE borderless row PER LABEL, min height = BLOCK (25mm label + 2.7mm gap). The
+    // label text sits in the top 25mm; the empty bottom 2.7mm IS the die-cut gap.
+    // NO separate "gap row" and NO horizontal rule: a Docs appendHorizontalRule()
+    // renders ~4.3mm tall (not the 2.7mm we asked), adding ~1.6mm to every label —
+    // the cumulative overshoot that drifted the strip (~29.3mm actual vs 27.7mm die
+    // pitch, "half on one label / half on the next after 2-3 labels") and eventually
+    // overflowed to a 2nd page. Min-height is exact when content is smaller (verified:
+    // 25mm rows rendered exactly 25mm), and every label's fitted content is < 25mm, so
+    // each row is EXACTLY one 27.7mm pitch → zero drift, single continuous page.
+    // The physical die-cut gap separates the labels; no printed rule is needed.
     var cellsSeed = [];
-    for (var i = 0; i < n; i++) {
-      cellsSeed.push(["."]);            // label row placeholder
-      if (i < n - 1) cellsSeed.push(["."]); // gap row placeholder
-    }
-    var table = body.appendTable(cellsSeed);
+    for (var i = 0; i < n; i++) cellsSeed.push(["."]);
+    // insertTable(0, …) — NOT appendTable — so the table is the body's FIRST element.
+    // appendTable leaves the doc's default empty paragraph ABOVE the table, and Docs
+    // refuses to remove that leading paragraph (it renders ~5.7mm at 11pt), shoving the
+    // whole strip down and stealing page budget. Inserting at index 0 means only the
+    // mandatory trailing paragraph remains (shrunk below), so label 1 starts at the top.
+    var table = body.insertTable(0, cellsSeed);
     table.setBorderWidth(0);
 
     var TINY = {};
-    TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse placeholder line height
+    TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse the trailing structural paragraph
 
-    var rIdx = 0;
     orders.forEach(function (order, idx) {
       var summary = _lblItemSummary(order, meal, lang);
+      // EVERY line is fitted to a guaranteed single line (see _lblFitLine above) —
+      // max 5 paragraphs × ≤9.5pt ≈ 19mm < the 25mm text zone, so a row can NEVER
+      // grow past the BLOCK minimum, the pitch can never drift, and the strip can
+      // never paginate.
       var lines = []; // { text, bold, size, color }
-      lines.push({ text: "Name: " + (order.name || ""), bold: true,  size: 9.5, color: "#000000" });
-      lines.push({ text: summary,                        bold: false, size: 8.5, color: "#222222" });
-      if (order.area)  lines.push({ text: order.area,         bold: true,  size: 9, color: "#000000" });
-      if (order.notes) lines.push({ text: "* " + order.notes, bold: false, size: 7, color: "#B86000" });
+      var nameF = _lblFitLine("Name: " + (order.name || ""), 9.5, 7.5);
+      lines.push({ text: nameF.text, bold: true, size: nameF.size, color: "#000000" });
+      _lblFitSummary(summary, 8.5, 6.5).forEach(function (sf) {
+        lines.push({ text: sf.text, bold: false, size: sf.size, color: "#222222" });
+      });
+      if (order.area) {
+        var areaF = _lblFitLine(order.area, 9, 7);
+        lines.push({ text: areaF.text, bold: true, size: areaF.size, color: "#000000" });
+      }
+      if (order.notes) {
+        var noteF = _lblFitLine("* " + order.notes, 7, 6);
+        lines.push({ text: noteF.text, bold: false, size: noteF.size, color: "#B86000" });
+      }
+      // Guarantee the stacked lines fit the 25mm text zone (no row growth → exact
+      // die-cut pitch, single continuous page). Width was already fixed above.
+      _lblVerticalFit(lines);
 
-      // ── Label row ──
-      var row = table.getRow(rIdx++);
-      row.setMinimumHeight(LH * MM);
+      // ── One row = one full 27.7mm label pitch ──
+      var row = table.getRow(idx);
+      row.setMinimumHeight(BLOCK * MM);
       var cell = row.getCell(0);
-      cell.setPaddingTop(1 * MM).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
+      cell.setPaddingTop(0.5 * MM).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
       cell.clear(); // leaves one empty paragraph
       lines.forEach(function (l, li) {
         var p = (li === 0) ? cell.getChild(0).asParagraph() : cell.appendParagraph("");
         p.setText(l.text);
-        p.setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+        p.setLineSpacing(0.9).setSpacingBefore(0).setSpacingAfter(0);
         var t = p.editAsText();
         t.setFontFamily(FONT).setFontSize(l.size).setBold(!!l.bold).setForegroundColor(l.color);
       });
-
-      // ── Gap row with the separator rule (skipped after the last label) ──
-      if (idx < n - 1) {
-        var gRow = table.getRow(rIdx++);
-        gRow.setMinimumHeight(GAP * MM);
-        var gCell = gRow.getCell(0);
-        gCell.setPaddingTop(0).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
-        gCell.clear();
-        var gp = gCell.getChild(0).asParagraph();
-        gp.setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
-        gp.setAttributes(TINY);
-        gp.appendHorizontalRule();
-      }
     });
 
-    // The doc starts with an empty paragraph before the table and Docs auto-adds
-    // one after it — collapse both so they don't push the strip down/overflow.
-    var first = body.getChild(0);
-    if (first.getType() === DocumentApp.ElementType.PARAGRAPH && first.asParagraph().getText() === "") {
-      // Can't remove the only structural siblings safely everywhere — shrink instead.
-      first.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
-    }
-    var last = body.getChild(body.getNumChildren() - 1);
-    if (last.getType() === DocumentApp.ElementType.PARAGRAPH) {
-      last.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+    // Google Docs FORCES an empty paragraph both before and after a table (a table may
+    // not be the body's first or last element). Each renders ~5.7mm at the 11pt normal
+    // style. Crush EVERY empty body-level paragraph to font-size 1 (the label text lives
+    // inside table cells, so no real content is ever an empty body child). The trailing
+    // one shrinks reliably (~2.25pt); the leading one is Docs-enforced and can resist
+    // shrinking, so PAD above is sized to absorb a full ~5.7mm leading offset too — the
+    // strip then always fits ONE page (the offset is a constant top margin, not the
+    // cumulative drift that was the actual bug).
+    var nc = body.getNumChildren();
+    for (var ci = 0; ci < nc; ci++) {
+      var ch = body.getChild(ci);
+      if (ch.getType() === DocumentApp.ElementType.PARAGRAPH && ch.asParagraph().getText() === "") {
+        ch.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+      }
     }
 
     doc.saveAndClose();
