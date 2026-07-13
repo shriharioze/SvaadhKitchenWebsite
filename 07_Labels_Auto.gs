@@ -104,65 +104,55 @@ function _lblItemSummary(order, meal, lang) {
 // bottom 2.7mm is the physical gap. No separate gap row / horizontal rule (a Docs
 // HR renders ~4.3mm not 2.7mm and drifted the strip). The temp doc is trashed
 // after export.
-// ── Single-line text fitting ─────────────────────────────────────────────────
-// THE PITCH GUARANTEE: Docs table rows only support a MINIMUM height — when a long
-// Marathi summary WRAPPED to an extra line, the row GREW past 25mm, shifting every
-// label below it (the "half on one label, half on the next after 2-3 labels" drift)
-// and eventually overflowing the page → Docs inserted a mid-strip page break. The
-// kitchen page never drifts because it draws at absolute canvas positions. So here
-// every paragraph must be PROVABLY one line: conservative width estimate (Devanagari
-// code points counted wide, incl. matras — overestimates, never underestimates),
-// shrink the font before it can wrap (floor given), hard-truncate with … as the
-// last resort. Summaries may split into TWO paragraphs (at item commas) first.
-var LBL_LINE_PT = 127;            // printable width: 50mm − 2+2 margins − 1mm slack ≈ 45mm ≈ 127pt
-function _lblTextUnits(s) {       // width estimate in font-size units (pt per pt of font)
+// ── Auto-fit text sizing (NEVER truncates) ───────────────────────────────────
+// Mirrors the kitchen page: long text WRAPS (Docs wraps at spaces inside the cell)
+// and the whole label's font is scaled DOWN uniformly until every wrapped line fits
+// inside the 25mm row — so nothing is ever cut with "…", yet the row can't grow past
+// its 25mm minimum (which would drift the strip / paginate — the pitch bug we fixed).
+// The old approach forced each field onto ONE line and hard-truncated with … at a
+// font floor; the owner's manual generator never does that (it wraps + auto-sizes),
+// so we match it.
+var LBL_LINE_PT = 127;            // printable line width: 50mm − 2+2mm margins ≈ 46mm ≈ 130pt, minus slack
+function _lblTextUnits(s) {       // width estimate in font-size units (pt of width per pt of font)
   var u = 0;
+  s = String(s || "");
   for (var i = 0; i < s.length; i++) {
     var c = s.charCodeAt(i);
     u += (c >= 0x0900 && c <= 0x097F) ? 1.0 : 0.62; // Devanagari wide, ASCII/other conservative
   }
   return u;
 }
-// Fit one string on one line: try `size`, shrink to `minSize`, then truncate.
-function _lblFitLine(text, size, minSize) {
+// Estimate how many wrapped lines `text` needs at `size` pt inside the cell width.
+// Conservative (over-counts → we may size slightly small, never overflow the row).
+function _lblWrapLines(text, size) {
   var t = String(text || "");
-  var u = _lblTextUnits(t);
-  var s = size;
-  while (s > minSize && u * s > LBL_LINE_PT) s -= 0.5;
-  if (u * s > LBL_LINE_PT) { // still too wide at the floor — truncate
-    var maxChars = Math.max(4, Math.floor(t.length * (LBL_LINE_PT / (u * s))) - 1);
-    t = t.slice(0, maxChars) + "…";
-  }
-  return { text: t, size: s };
+  if (!t) return 1;
+  return Math.max(1, Math.ceil(_lblTextUnits(t) * size / LBL_LINE_PT));
 }
-// VERTICAL fit — the die-cut requirement: every label's stacked lines must fit inside
-// the 25mm row, or Docs (min-height rows) grows the row and every label below drifts
-// (and the strip paginates). Docs renders a Devanagari line ≈ 1.7× its point size even
-// at lineSpacing 0.9 (tall matras above+below), so we estimate each line at LH_FACTOR
-// and scale ALL line sizes down uniformly until the stack fits the budget (with a
-// readable floor). Returns the lines with adjusted sizes.
-var LBL_LH_FACTOR = 1.72;                 // conservative rendered-line-height multiple
-var LBL_V_BUDGET_PT = (25 - 0.5) * 2.834645669 - 3; // row 25mm − top pad − 3pt safety ≈ 66pt
-function _lblVerticalFit(lines) {
-  var sum = 0;
-  for (var i = 0; i < lines.length; i++) sum += lines[i].size * LBL_LH_FACTOR;
-  if (sum <= LBL_V_BUDGET_PT) return lines;
-  var scale = LBL_V_BUDGET_PT / sum;
-  for (var j = 0; j < lines.length; j++) {
-    lines[j].size = Math.max(5.5, Math.round(lines[j].size * scale * 2) / 2); // 0.5pt steps, floor 5.5
+// Docs renders a Devanagari line a bit taller than its point size (matras above &
+// below) even at lineSpacing 0.9. LH_FACTOR over-estimates that so the fit stays on
+// the safe side of the 25mm row. Budget = 25mm row − 0.5mm top pad − a little slack.
+var LBL_LH_FACTOR   = 1.6;
+var LBL_V_BUDGET_PT = (25 - 0.5) * 2.834645669 - 3; // ≈ 66pt
+var LBL_MIN_SCALE   = 0.42;       // ~4pt floor for a 9.5pt base — readable, still whole text
+// Uniformly scale ALL of a label's fields down until the total WRAPPED height fits the
+// 25mm budget. Returns lines with final sizes (Docs then wraps each field's full text).
+// Never truncates: if even the floor can't fit truly extreme content, it stops at the
+// floor (tiny but complete text) rather than cutting it — matching the manual's intent.
+function _lblFitLabel(fields) {   // fields: [{ text, bold, color, base }]
+  var scale = 1.0;
+  for (var iter = 0; iter < 60; iter++) {
+    var total = 0;
+    for (var i = 0; i < fields.length; i++) {
+      var sz = fields[i].base * scale;
+      total += _lblWrapLines(fields[i].text, sz) * sz * LBL_LH_FACTOR;
+    }
+    if (total <= LBL_V_BUDGET_PT || scale <= LBL_MIN_SCALE) break;
+    scale = Math.max(LBL_MIN_SCALE, scale - 0.04);
   }
-  return lines;
-}
-
-// Summary: split into ≤2 balanced lines at item commas, then fit each line.
-function _lblFitSummary(summary, size, minSize) {
-  var s = String(summary || "");
-  if (_lblTextUnits(s) * size <= LBL_LINE_PT) return [{ text: s, size: size }];
-  var items = s.split(", ");
-  var half = Math.ceil(items.length / 2);
-  var l1 = items.slice(0, half).join(", ") + (half < items.length ? "," : "");
-  var l2 = items.slice(half).join(", ");
-  return [_lblFitLine(l1, size, minSize), _lblFitLine(l2, size, minSize)];
+  return fields.map(function (f) {
+    return { text: f.text, bold: f.bold, color: f.color, size: Math.round(f.base * scale * 2) / 2 };
+  });
 }
 
 function _lblBuildPdfB64(orders, meal, lang, gapMm) {
@@ -216,27 +206,15 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
 
     orders.forEach(function (order, idx) {
       var summary = _lblItemSummary(order, meal, lang);
-      // EVERY line is fitted to a guaranteed single line (see _lblFitLine above) —
-      // max 5 paragraphs × ≤9.5pt ≈ 19mm < the 25mm text zone, so a row can NEVER
-      // grow past the BLOCK minimum, the pitch can never drift, and the strip can
-      // never paginate.
-      var lines = []; // { text, bold, size, color }
-      var nameF = _lblFitLine("Name: " + (order.name || ""), 9.5, 7.5);
-      lines.push({ text: nameF.text, bold: true, size: nameF.size, color: "#000000" });
-      _lblFitSummary(summary, 8.5, 6.5).forEach(function (sf) {
-        lines.push({ text: sf.text, bold: false, size: sf.size, color: "#222222" });
-      });
-      if (order.area) {
-        var areaF = _lblFitLine(order.area, 9, 7);
-        lines.push({ text: areaF.text, bold: true, size: areaF.size, color: "#000000" });
-      }
-      if (order.notes) {
-        var noteF = _lblFitLine("* " + order.notes, 7, 6);
-        lines.push({ text: noteF.text, bold: false, size: noteF.size, color: "#B86000" });
-      }
-      // Guarantee the stacked lines fit the 25mm text zone (no row growth → exact
-      // die-cut pitch, single continuous page). Width was already fixed above.
-      _lblVerticalFit(lines);
+      // Build the label's fields at their BASE sizes, then auto-fit: _lblFitLabel scales
+      // the whole label down uniformly so every field's WRAPPED text fits the 25mm row.
+      // Full text is kept — Docs wraps long fields at spaces; NOTHING is truncated with …
+      // (the kitchen page auto-sizes/wraps the same way). Row can't grow → no drift.
+      var fields = [{ text: "Name: " + (order.name || ""), bold: true, color: "#000000", base: 9.5 }];
+      if (summary) fields.push({ text: summary, bold: false, color: "#222222", base: 8.5 });
+      if (order.area) fields.push({ text: String(order.area), bold: true, color: "#000000", base: 9 });
+      if (order.notes) fields.push({ text: "* " + order.notes, bold: false, color: "#B86000", base: 7 });
+      var lines = _lblFitLabel(fields);
 
       // ── One row = one full 27.7mm label pitch ──
       var row = table.getRow(idx);
@@ -246,7 +224,7 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
       cell.clear(); // leaves one empty paragraph
       lines.forEach(function (l, li) {
         var p = (li === 0) ? cell.getChild(0).asParagraph() : cell.appendParagraph("");
-        p.setText(l.text);
+        p.setText(l.text);                         // full text — Docs wraps it, no truncation
         p.setLineSpacing(0.9).setSpacingBefore(0).setSpacingAfter(0);
         var t = p.editAsText();
         t.setFontFamily(FONT).setFontSize(l.size).setBold(!!l.bold).setForegroundColor(l.color);
