@@ -891,6 +891,25 @@ function _invalidateCache() {
   try { CacheService.getScriptCache().removeAll(keys); } catch(e) {}
 }
 
+// Locations that may keep ordering DELIVERY even when the per-meal cap is full
+// (owner-approved 2026-07-13). They still COUNT toward the cap (like free areas) —
+// they're just never BLOCKED by it:
+//   • WeWork (any spelling — "WeWork", "We Work", "Wework Magarpatta"…)
+//   • Cybercity Magarpatta Towers 1–12 — customers come down to collect at the
+//     gate, so a full delivery roster isn't slowed. AMANORA towers are EXCLUDED
+//     (their numbering is T18–T100, and Pentagon "T4" never uses the word "tower",
+//     so `tower 1..12 AND not amanora` is unambiguous in our data).
+// Mirrored in order.html `_capExemptLocation` — keep the two in sync.
+function _isCapExemptLocation(society, area) {
+  const s = _normSocietyBase(String(society || "") + " " + String(area || ""));
+  if (!s) return false;
+  if (s.indexOf("amanora") !== -1) return false;           // never Amanora towers
+  if (s.indexOf("wework") !== -1) return true;             // "we work" normalizes to "wework"
+  if (s.indexOf("cybercity") !== -1) return true;          // Cybercity = towers 1–12 only
+  const m = s.match(/tower0*([0-9]{1,3})/);                // "Magarpatta tower 11", "Tower 12"
+  return !!(m && Number(m[1]) >= 1 && Number(m[1]) <= 12);
+}
+
 // Effective per-meal delivery caps for one date: the site-wide DEFAULT_ORDER_CAPS,
 // overridden per meal by any positive per-date Order_Cap_JSON value the admin set.
 // (Blank/0/invalid per-date values fall back to the default — matching the admin

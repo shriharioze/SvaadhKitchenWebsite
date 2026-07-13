@@ -1940,6 +1940,9 @@ function _submitOrderInternal(body) {
             // delivery to this customer's society for this date+meal (SAME stop, no
             // new delivery burden).
             const _isFreeAreaW = freeAreaNames.indexOf(_m.area || profile.area || "") !== -1;
+            // Owner-approved exempt LOCATIONS (WeWork; Cybercity Magarpatta towers
+            // 1–12 — customers collect at the gate) keep delivery even at the cap.
+            const _locExemptW = _isCapExemptLocation(_m.society || profile.society, _m.area || profile.area);
             // Per-meal bypass CAPPED MEAL keeps delivery even at the cap (big orders
             // are worth the slot) — but only while alternatives are ON; a cap_alt=false
             // HARD close (kitchen out of capacity) is never bypassed. Uses the
@@ -1947,7 +1950,7 @@ function _submitOrderInternal(body) {
             // money — the bill itself is priced authoritatively later/by the gateway.
             const _bypassMinW = CAP_DELIVERY_BYPASS_MIN[_mt] || 200;
             const _bigMealW = _altOnW && (Number(_m.subtotal) || 0) >= _bypassMinW;
-            if (!_isFreeAreaW && !_bigMealW) {
+            if (!_isFreeAreaW && !_bigMealW && !_locExemptW) {
               const _idxMtW = _delIdxW && _delIdxW[_mt];
               const _socW = _normSocietyKey(_m.society || profile.society || "");
               const _socAlreadyW  = !!(_socW && _idxMtW && _idxMtW.soc[_socW]);
@@ -1962,7 +1965,7 @@ function _submitOrderInternal(body) {
                 continue;
               }
             }
-            // free area OR ₹200+ meal OR same-building OR own existing delivery → allowed (falls through)
+            // free area OR ₹200+ meal OR WeWork/Cybercity-tower OR same-building OR own existing delivery → allowed (falls through)
           } else if (!_altOnW) {
             _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
           }
