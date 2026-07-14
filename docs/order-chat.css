@@ -247,14 +247,21 @@ html.sk-chat-hint #tipBanner { display: none !important; }
 [data-theme="dark"] .sk-chat-foot textarea::placeholder { color: #888; }
 
 @media (max-width: 480px) {
-  #sk-chat-widget { bottom: 14px; right: 14px; }
+  #sk-chat-widget { bottom: 10px; right: 10px; }
   .sk-chat-panel {
     position: fixed;
-    right: 12px;
-    bottom: 78px;
-    width: calc(100vw - 24px);
-    height: calc(100vh - 140px);
+    right: 10px;
+    bottom: 70px;
+    width: calc(100vw - 20px);
     max-width: 360px;
+    /* Match the index-page chatbot: a HARD 500px cap so the panel can never grow
+       taller than the visible viewport. Mobile browsers report 100vh as the FULL
+       height (behind the URL bar), so without this cap the bottom-anchored panel
+       pushed its header ~20% above the visible top and it couldn't be scrolled back.
+       dvh (where supported) tracks the URL bar; the 500px cap and vh are the fallback. */
+    height: calc(100vh - 120px);
+    height: calc(100dvh - 120px);
+    max-height: 500px;
   }
   .sk-chat-fab { width: 52px; height: 52px; font-size: 22px; }
 }
