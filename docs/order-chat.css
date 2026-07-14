@@ -1,0 +1,188 @@
+/* ============================================================
+   order-chat.css — isolated help-chat widget for order.html
+   ------------------------------------------------------------
+   FULLY NAMESPACED (every class is sk-chat-*) and scoped under
+   #sk-chat-widget so it can NEVER collide with the order app's
+   own styles (the index page's chat.css is NOT reused — it also
+   carries index-only selectors like .menu-item / nav / .faq-*).
+   z-index 9000 sits below every order-page modal (10003–99999)
+   and the toast (9999), so any bill/payment dialog cleanly
+   covers the chat instead of fighting it.
+   ============================================================ */
+#sk-chat-widget {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9000;
+  font-family: "Hind", "Poppins", system-ui, sans-serif;
+}
+#sk-chat-widget, #sk-chat-widget * , #sk-chat-widget *::before, #sk-chat-widget *::after {
+  box-sizing: border-box;
+}
+
+.sk-chat-fab {
+  background: #f47c3c;
+  color: #fff;
+  border-radius: 50%;
+  width: 58px;
+  height: 58px;
+  border: none;
+  cursor: pointer;
+  font-size: 26px;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  transition: transform 0.15s ease;
+}
+.sk-chat-fab:hover { transform: scale(1.06); }
+
+.sk-chat-panel {
+  display: none;
+  flex-direction: column;
+  width: 350px;
+  height: 470px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 110px);
+  background: #fff9f3;
+  border-radius: 16px;
+  box-shadow: 0 10px 34px rgba(0,0,0,0.28);
+  overflow: hidden;
+}
+.sk-chat-panel.sk-open { display: flex; }
+
+.sk-chat-head {
+  background: #f47c3c;
+  color: #fff;
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.sk-chat-title { font-weight: 700; font-size: 0.98rem; }
+.sk-chat-actions { display: flex; gap: 6px; align-items: center; }
+.sk-chat-iconbtn {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+.sk-chat-iconbtn:hover { background: rgba(255,255,255,0.35); }
+
+.sk-chat-body {
+  flex: 1 1 auto;
+  padding: 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sk-chat-msg {
+  margin: 5px 0;
+  max-width: 82%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.sk-chat-msg.sk-user { background: #ffe2cc; color: #2d2d2d; align-self: flex-end; }
+.sk-chat-msg.sk-bot  { background: #fff; border: 1px solid #f47c3c; color: #2d2d2d; align-self: flex-start; }
+.sk-chat-msg a { color: #d84315; text-decoration: none; font-weight: 600; }
+
+.sk-chat-quick {
+  padding: 8px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: #fff9f3;
+  flex: 0 0 auto;
+}
+.sk-chat-chip {
+  background: #f47c3c;
+  color: #fff;
+  border: none;
+  border-radius: 18px;
+  padding: 7px 13px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+.sk-chat-chip:hover { background: #e56b2f; transform: translateY(-1px); }
+
+.sk-chat-foot {
+  display: flex;
+  padding: 10px;
+  gap: 8px;
+  background: #fff9f3;
+  flex: 0 0 auto;
+}
+.sk-chat-foot textarea {
+  flex: 1;
+  resize: none;
+  height: 40px;
+  max-height: 90px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 9px;
+  font-family: inherit;
+  font-size: 0.86rem;
+}
+.sk-chat-send {
+  background: #f47c3c;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.sk-chat-send:hover { background: #e56b2f; }
+
+/* typing indicator */
+.sk-chat-typing { display: flex; gap: 4px; padding: 6px 2px; }
+.sk-chat-typing span {
+  width: 7px; height: 7px; background: #f47c3c; border-radius: 50%;
+  animation: skChatTyping 1.4s infinite;
+}
+.sk-chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+.sk-chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes skChatTyping {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* dark theme (order.html toggles data-theme="dark" on <html>) */
+[data-theme="dark"] .sk-chat-panel { background: #1e1e1e; }
+[data-theme="dark"] .sk-chat-body  { background: #1e1e1e; }
+[data-theme="dark"] .sk-chat-msg.sk-bot  { background: #2a2a2a; border-color: #555; color: #e6e6e6; }
+[data-theme="dark"] .sk-chat-msg.sk-user { background: #3d2010; color: #f0e6df; }
+[data-theme="dark"] .sk-chat-quick { background: #161616; }
+[data-theme="dark"] .sk-chat-foot  { background: #161616; }
+[data-theme="dark"] .sk-chat-foot textarea { background: #2a2a2a; border-color: #555; color: #e6e6e6; }
+[data-theme="dark"] .sk-chat-foot textarea::placeholder { color: #888; }
+
+@media (max-width: 480px) {
+  #sk-chat-widget { bottom: 14px; right: 14px; }
+  .sk-chat-panel {
+    position: fixed;
+    right: 12px;
+    bottom: 78px;
+    width: calc(100vw - 24px);
+    height: calc(100vh - 140px);
+    max-width: 360px;
+  }
+  .sk-chat-fab { width: 52px; height: 52px; font-size: 22px; }
+}
