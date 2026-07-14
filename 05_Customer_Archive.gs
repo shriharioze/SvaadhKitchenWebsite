@@ -112,7 +112,16 @@ function archiveIdleCustomers(dryRun) {
       arWs.getRange(1, arWs.getLastColumn() + 1).setValue("Archived_At");
     }
     const stamp = getISTTimestamp();
-    const archiveRows = toArchive.map(function (r) { return fix(r).concat([stamp]); });
+    const archiveRows = toArchive.map(function (r) {
+      const ar = fix(r).concat([stamp]);
+      // Clear the PIN on archive so a returning customer sets a FRESH PIN themselves
+      // (getCustomer → hasPin:false → "Welcome back, set a new PIN") instead of being
+      // stuck on a forgotten PIN and messaging the owner for a reset. Their saved
+      // address is pulled back on the address page via the "Fetch my saved address"
+      // button (fetchArchivedAddress), which also removes the archive row.
+      if (pinCol !== undefined) ar[pinCol] = "";
+      return ar;
+    });
     const before = arWs.getLastRow();
     arWs.getRange(before + 1, 1, archiveRows.length, archiveRows[0].length).setValues(archiveRows);
     SpreadsheetApp.flush();

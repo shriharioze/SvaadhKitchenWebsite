@@ -76,7 +76,15 @@ function getCustomer(phone) {
     // the PIN is confirmed. Name is intentionally withheld (matches the hasPin path).
     if (typeof _findArchivedCustomer === "function") {
       const arc = _findArchivedCustomer(pStr);
-      if (arc && arc.pin !== "") return { found: true, hasPin: true, archived: true };
+      // Recognize an archived returning customer either way:
+      //  • has a PIN  → hasPin:true → "enter your PIN" (verifyLogin restores on match).
+      //  • PIN cleared (idle-archive now blanks it, or admin-cleared) → hasPin:false →
+      //    "Welcome back, set a new PIN" (self-service — no "reset my PIN" message).
+      //    Their saved address returns on the address page via the existing "Fetch my
+      //    saved address" button, which also deletes the archive row. Address/name are
+      //    intentionally NOT returned here — same as the hasPin:true path, so a bare
+      //    phone lookup never exposes anything sensitive.
+      if (arc) return { found: true, hasPin: arc.pin !== "", archived: true };
     }
     return {found: false, hasPin: false, wallet_balance: 0};
   }
