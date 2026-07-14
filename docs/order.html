@@ -4676,7 +4676,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.14.01";
+    const APP_VERSION = "v26.07.14.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11195,8 +11195,6 @@
         S.gatewayEnabled = false;
         console.warn("Could not fetch gateway config:", e.message);
       }
-      // One-time surcharge-removal notice — only when the new pricing is live.
-      try { _maybeShowSurchargeNotice(); } catch (_) {}
     }
 
     // Fetches getConfig and refreshes gateway flags + the site-wide default
@@ -11227,53 +11225,9 @@
       console.log(`HDFC Gateway: ${S.gatewayEnabled ? "ENABLED (" + S.gatewayEnv + ")" : "disabled"} | Pricing V2: ${S.pricingV2 ? "ON" : "off"} | Cutoffs: ${JSON.stringify(CUTOFFS)}`);
     }
 
-    // One-time notice (5s lock, then "Got it"): shown ONCE per browser when the
-    // PRICING_V2 model is active — i.e. only after the surcharge is actually
-    // removed + prices bumped. Dormant while S.pricingV2 is false. Ported from merged.
-    function _maybeShowSurchargeNotice() {
-      if (!S.pricingV2) return;
-      try { if (localStorage.getItem("svaadh_surcharge_notice_v2") === "seen") return; } catch (_) { return; }
-      const ov = document.createElement("div");
-      ov.style.cssText = "position:fixed;inset:0;z-index:50000;background:rgba(15,18,40,0.55);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,Arial,sans-serif;";
-      ov.innerHTML =
-        '<div style="background:#fff;max-width:380px;width:100%;border-radius:18px;padding:24px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.25);text-align:center;position:relative;">' +
-          '<button id="_sndX" aria-label="Close" disabled style="position:absolute;top:8px;right:14px;border:none;background:none;font-size:1.6rem;line-height:1;color:#cbd5e1;cursor:not-allowed;pointer-events:none;opacity:0.5;">&times;</button>' +
-          '<div style="font-size:2rem;margin-bottom:8px;">💰</div>' +
-          '<div style="font-size:1.05rem;font-weight:800;color:#1E1240;margin-bottom:10px;">A quick update</div>' +
-          '<div style="font-size:0.9rem;color:#475569;line-height:1.6;">We are <b>removing the market surcharge</b> and have <b>updated our prices accordingly</b> — so your bill stays around the <b>same or almost the same</b>, just simpler.<br><br>Also, <b>free delivery</b> now applies when your day\'s food total reaches <b>₹106</b> (single meal) or <b>₹159</b> (2 or more meals).<br><br>' +
-          (S.gatewayEnabled ? 'All payments now move to our <b>secure HDFC Payment Gateway</b> — pay by UPI in a tap and your order is confirmed instantly, no screenshots needed.<br><br>' : '') +
-          'Same great food, simpler bill. 💛<br><br><span style="font-size:0.76rem;color:#94a3b8;font-style:italic;">Ps. This message is shown only once.</span></div>' +
-          '<button id="_sndOk" disabled style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:#cbd5e1;color:#fff;font-size:0.92rem;font-weight:700;cursor:not-allowed;">Got it (5)</button>' +
-        '</div>';
-      const close = function () {
-        try { localStorage.setItem("svaadh_surcharge_notice_v2", "seen"); } catch (_) {}
-        if (ov.parentNode) ov.parentNode.removeChild(ov);
-      };
-      document.body.appendChild(ov);
-      // "Got it" (and ×) stay disabled for 5s so the note is actually read.
-      const _ok = ov.querySelector("#_sndOk");
-      const _x  = ov.querySelector("#_sndX");
-      let _left = 5;
-      const _tick = setInterval(function () {
-        _left--;
-        if (_left > 0) {
-          _ok.textContent = "Got it (" + _left + ")";
-        } else {
-          clearInterval(_tick);
-          _ok.textContent = "Got it";
-          _ok.disabled = false;
-          _ok.style.background = "linear-gradient(135deg,#0f766e,#0891b2)";
-          _ok.style.cursor = "pointer";
-          _x.disabled = false;
-          _x.style.pointerEvents = "auto";
-          _x.style.cursor = "pointer";
-          _x.style.color = "#94a3b8";
-          _x.style.opacity = "1";
-          _ok.onclick = close;
-          _x.onclick = close;
-        }
-      }, 1000);
-    }
+    // (Removed 2026-07-14: the one-time "A quick update" surcharge-removal notice.
+    // The V2 pricing has been live ~45 days — the announcement is no longer relevant,
+    // and its overlay overlapped other bottom-anchored UI. Deleted per owner request.)
 
     /**
      * Called when step 5 (payment) is rendered.

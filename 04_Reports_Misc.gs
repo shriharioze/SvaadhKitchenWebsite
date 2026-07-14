@@ -118,9 +118,10 @@ function buildSystemPrompt(extraMenu, page) {
 }
 
 function callGemini(systemPrompt, history, userMessage) {
+  const WA = "+91 93222 46765";
   const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
   if (!apiKey) {
-    return "I'm having trouble connecting right now. Please WhatsApp us at +91 93222 46765 for help!";
+    return "I'm having trouble connecting right now. Please WhatsApp us at " + WA + " for help!";
   }
 
   // Build contents array: last 6 history messages + current message (caps token usage)
@@ -143,24 +144,35 @@ function callGemini(systemPrompt, history, userMessage) {
 
   const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
   const opts = { method: "post", contentType: "application/json", payload: JSON.stringify(payload), muteHttpExceptions: true };
-  // One retry on transient failures (429 rate-limit / 5xx) — a single blip shouldn't
-  // show the customer an error when a 1s-later retry would have answered fine.
+  // Retry once on a transient 5xx blip. A 429 is Gemini's quota/rate limit — the free
+  // tier caps requests per minute AND per day, so on a busy day the daily quota can run
+  // out. We DON'T silently swallow that: the customer gets a CLEAR message telling them
+  // the assistant hit its limit and to use WhatsApp, distinguishing the per-day cap (back
+  // tomorrow) from a short per-minute burst (try again shortly).
   for (var attempt = 0; attempt < 2; attempt++) {
     try {
       const response = UrlFetchApp.fetch(url, opts);
       const code = response.getResponseCode();
-      if ((code === 429 || code >= 500) && attempt === 0) { Utilities.sleep(1000); continue; }
+      if (code === 429) {
+        var bodyTxt = "";
+        try { bodyTxt = response.getContentText() || ""; } catch (_) {}
+        var isDaily = /per[\s_-]*day|perday|requests per day|"day"/i.test(bodyTxt);
+        return isDaily
+          ? "😔 Our AI assistant has reached today's question limit, so I can't reply here right now. It resets tomorrow — but please WhatsApp us at " + WA + " and we'll answer all your questions right away!"
+          : "😔 I'm getting a LOT of questions at the moment and hit a short usage limit. Please try again in a minute — or WhatsApp us at " + WA + " for an instant reply.";
+      }
+      if (code >= 500 && attempt === 0) { Utilities.sleep(1000); continue; }
       const data = JSON.parse(response.getContentText());
       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
       }
-      return "I'm not sure how to answer that. Please WhatsApp us at +91 93222 46765!";
+      return "I'm not sure how to answer that. Please WhatsApp us at " + WA + "!";
     } catch(e) {
       if (attempt === 0) { Utilities.sleep(1000); continue; }
-      return "I'm having trouble right now. Please call or WhatsApp us at +91 93222 46765.";
+      return "I'm having trouble right now. Please call or WhatsApp us at " + WA + ".";
     }
   }
-  return "I'm having trouble right now. Please call or WhatsApp us at +91 93222 46765.";
+  return "I'm having trouble right now. Please call or WhatsApp us at " + WA + ".";
 }
 
 // ── GET UNPAID CUSTOMERS (reconciliation) ────────────────────────────────────

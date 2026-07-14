@@ -30,6 +30,10 @@
     widget.dataset.mounted = "1";
 
     widget.innerHTML =
+      '<div class="sk-chat-invite" id="skChatInvite" role="button" tabindex="0">' +
+        '<span class="sk-chat-invite-txt">Have a doubt? 💬 Chat with us — get instant answers!</span>' +
+        '<button class="sk-chat-invite-x" id="skChatInviteX" aria-label="Dismiss">✕</button>' +
+      '</div>' +
       '<button class="sk-chat-fab" id="skChatFab" aria-label="Open help chat">💬</button>' +
       '<div class="sk-chat-panel" id="skChatPanel" role="dialog" aria-label="Svaadh Kitchen help chat">' +
         '<div class="sk-chat-head">' +
@@ -171,11 +175,57 @@
     else greet();
     renderChips();
 
+    // ── Invite bubble ("Have a doubt? Chat with us") ──────────────────────────
+    // The widget ALWAYS starts closed (only the FAB shows). To make sure customers
+    // realise they can ask questions, a small bubble nudges them until they've opened
+    // the chat at least once (then it never shows again). While the bubble OR the panel
+    // is visible we hide the order page's centered "Tip" pill (#tipPill/#tipBanner,
+    // z-index 9800) via a class on <html> so the two never overlap on narrow screens.
+    var invite = document.getElementById("skChatInvite");
+    var OPENED_KEY = "svaadhOrderChatOpened";
+    var root = document.documentElement;
+
+    function hideInvite() {
+      invite.classList.remove("sk-show");
+      root.classList.remove("sk-chat-hint");
+    }
+    function showInvite() {
+      var opened = false;
+      try { opened = localStorage.getItem(OPENED_KEY) === "1"; } catch (e) {}
+      if (opened || panel.classList.contains("sk-open")) return;
+      invite.classList.add("sk-show");
+      root.classList.add("sk-chat-hint");
+      // Auto-tidy after a while; it re-appears next visit until the chat is opened once.
+      setTimeout(hideInvite, 14000);
+    }
+    function openPanel() {
+      panel.classList.add("sk-open");
+      root.classList.add("sk-chat-open"); // hides the order-page Tip pill (CSS)
+      hideInvite();
+      try { localStorage.setItem(OPENED_KEY, "1"); } catch (e) {}
+      setTimeout(function () { input.focus(); }, 50);
+    }
+    function closePanel() {
+      panel.classList.remove("sk-open");
+      root.classList.remove("sk-chat-open");
+    }
+
     fab.addEventListener("click", function () {
-      panel.classList.toggle("sk-open");
-      if (panel.classList.contains("sk-open")) setTimeout(function () { input.focus(); }, 50);
+      if (panel.classList.contains("sk-open")) closePanel(); else openPanel();
     });
-    document.getElementById("skChatClose").addEventListener("click", function () { panel.classList.remove("sk-open"); });
+    invite.addEventListener("click", function (e) {
+      if (e.target && e.target.id === "skChatInviteX") return; // handled below
+      openPanel();
+    });
+    invite.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPanel(); }
+    });
+    document.getElementById("skChatInviteX").addEventListener("click", function (e) {
+      e.stopPropagation();
+      hideInvite();
+      try { localStorage.setItem(OPENED_KEY, "1"); } catch (er) {} // dismiss = don't nag again
+    });
+    document.getElementById("skChatClose").addEventListener("click", closePanel);
     document.getElementById("skChatNew").addEventListener("click", function () {
       try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
       body.innerHTML = "";
@@ -185,6 +235,9 @@
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
+
+    // Nudge shortly after load (not instantly — let the page settle first).
+    setTimeout(showInvite, 2500);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
