@@ -156,6 +156,7 @@ function verifyLogin(phone, pin) {
 
   return {
     success: true,
+    notice: _getLoginNotice(phone, r.Customer_Name), // "" unless this phone has an active, un-acked login notice
     profile: {
       name:               r.Customer_Name || "",
       area:               r.Area || "",

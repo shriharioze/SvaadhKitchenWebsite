@@ -175,6 +175,215 @@ function callGemini(systemPrompt, history, userMessage) {
   return "I'm having trouble right now. Please call or WhatsApp us at " + WA + ".";
 }
 
+// ── TARGETED LOGIN NOTICES ───────────────────────────────────────────────────
+// A one-per-phone message shown on login until the customer taps "I understand"
+// (Ack_At recorded). Editable in the SK_Login_Notices tab so the owner can reword
+// or deactivate without a redeploy. First use: the 2026-07-14 delivery-area stop for
+// Vaiduwadi + the Yash-Honda→Magarpatta-Bridge stretch of Pune-Solapur Road.
+
+// The affected customers (owner-verified list — ONLY these; nobody else is touched).
+var DELIVERY_STOP_PHONES = [
+  "9359529883", "8605587921", "9145384024", "8888820828", "9665898952", "9272182546",
+  "7038327962", "7982241443", "8805176628", "8624942710", "9075783537", "9657701687"
+];
+// {name} is resolved to the customer's first name at read time.
+var DELIVERY_STOP_MESSAGE =
+  "🧡 A heartfelt note from Svaadh Kitchen\n\n" +
+  "Dear {name}, we're truly sorry to share some hard news. Because of the growing traffic on the " +
+  "Pune–Solapur Road stretch and the high order volumes we're now handling, we can no longer deliver " +
+  "to your area reliably — meals were reaching you and others later than they should, and that's not " +
+  "the Svaadh experience we promised.\n\n" +
+  "This was one of the toughest calls we've made. You've been part of our family and stepping back " +
+  "from your door genuinely hurts. 💛\n\n" +
+  "You can still enjoy Svaadh: Self Pickup from our kitchen (Bhosale Nagar, Hadapsar) is always free, " +
+  "or order to another address in our delivery zone (e.g. your workplace).\n\n" +
+  "If our routes ever open up again, you'll be the first we return to. Thank you for understanding and " +
+  "for all your support.\n\n" +
+  "— Team Svaadh Kitchen • WhatsApp +91 93222 46765";
+
+// Returns the (name-resolved) notice text for a phone, or "" if none active/unacked.
+function _getLoginNotice(phone, name) {
+  try {
+    var ss = getSpreadsheet();
+    var ws = ss.getSheetByName(TAB_LOGIN_NOTICES);
+    if (!ws) return "";
+    var rows = getAllRows(ws);
+    var pStr = _normalizePhone(phone);
+    var row = rows.find(function (r) { return _normalizePhone(_get(r, "Phone")) === pStr; });
+    if (!row) return "";
+    var active = _get(row, "Active");
+    if (!(active === true || String(active).toUpperCase() === "TRUE")) return "";
+    if (String(_get(row, "Ack_At") || "").trim() !== "") return ""; // already acknowledged
+    var msg = String(_get(row, "Message") || "");
+    var first = String(name || "").trim().split(/\s+/)[0] || "there";
+    return msg.replace(/\{name\}/g, first);
+  } catch (e) { return ""; }
+}
+
+// Records the customer's acknowledgement so the notice stops showing. Phone-scoped
+// (acknowledging is not sensitive — worst case it only hides one's own reminder).
+function acknowledgeLoginNotice(phone) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(8000); } catch (e) { return { success: false, error: "busy" }; }
+  try {
+    var ss = getSpreadsheet();
+    var ws = ss.getSheetByName(TAB_LOGIN_NOTICES);
+    if (!ws) return { success: true, note: "no notices tab" };
+    var data = ws.getDataRange().getValues();
+    var headers = data[0];
+    var pIdx = headers.indexOf("Phone");
+    var aIdx = headers.indexOf("Ack_At");
+    if (pIdx < 0 || aIdx < 0) return { success: false, error: "bad headers" };
+    var pStr = _normalizePhone(phone);
+    for (var i = 1; i < data.length; i++) {
+      if (_normalizePhone(data[i][pIdx]) === pStr) {
+        if (!String(data[i][aIdx] || "").trim()) {
+          ws.getRange(i + 1, aIdx + 1).setValue(new Date());
+        }
+        return { success: true, acknowledged: true };
+      }
+    }
+    return { success: true, note: "no notice for phone" };
+  } finally { lock.releaseLock(); }
+}
+
+// Seeds/updates the SK_Login_Notices tab with the delivery-stop notice for the 12
+// affected phones. Idempotent upsert (keeps any existing Ack_At). Dry-run unless commit.
+function seedDeliveryStopNotices(commit) {
+  var ss = getSpreadsheet();
+  var ws = getOrCreateTab(ss, TAB_LOGIN_NOTICES, LOGIN_NOTICES_HEADERS);
+  var data = ws.getDataRange().getValues();
+  var headers = data[0];
+  var pIdx = headers.indexOf("Phone");
+  var mIdx = headers.indexOf("Message");
+  var actIdx = headers.indexOf("Active");
+  var cIdx = headers.indexOf("Created_At");
+  var existing = {};
+  for (var i = 1; i < data.length; i++) existing[_normalizePhone(data[i][pIdx])] = i;
+
+  var plan = [];
+  DELIVERY_STOP_PHONES.forEach(function (ph) {
+    var pStr = _normalizePhone(ph);
+    plan.push({ phone: pStr, action: existing[pStr] ? "update" : "add" });
+    if (commit) {
+      if (existing[pStr]) {
+        var rowNum = existing[pStr] + 1;
+        ws.getRange(rowNum, mIdx + 1).setValue(DELIVERY_STOP_MESSAGE);
+        ws.getRange(rowNum, actIdx + 1).setValue("TRUE");
+      } else {
+        ws.appendRow([pStr, DELIVERY_STOP_MESSAGE, "TRUE", new Date(), ""]);
+      }
+    }
+  });
+  return { success: true, committed: !!commit, count: plan.length, plan: plan,
+           note: commit ? "seeded/updated" : "DRY-RUN — add &commit=1 to write" };
+}
+
+// Clears the now-undeliverable saved address for the 12 affected customers ONLY.
+// Backs up the old values to SK_Customers_AddrBackup first (reversible). Keeps
+// name/PIN/wallet/order history. In Meal_Addresses, clears ONLY entries whose area is
+// a removed one; a deliverable 2nd address (e.g. office) is preserved. Dry-run default.
+var DELIVERY_STOP_REMOVED_AREAS = ["vaiduwadi", "pune-solapur road"]; // normalized-contains match
+function cleanDeliveryStopAddresses(commit) {
+  var ADDR_FIELDS = ["Area", "Wing", "Flat", "Floor", "Society", "Full_Address", "Maps_Link", "Landmark", "Delivery_Point"];
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, error: "busy" }; }
+  try {
+    var ss = getSpreadsheet();
+    var bws = null; // backup sheet, created lazily on first commit write
+    var report = [], stillMissing = [];
+
+    var _areaRemoved = function (a) {
+      var s = String(a || "").toLowerCase();
+      return DELIVERY_STOP_REMOVED_AREAS.some(function (r) { return s.indexOf(r) !== -1; });
+    };
+
+    // Clean the 12 phones within ONE sheet (live SK_Customers OR the archive — same
+    // address columns). Returns the set of phones actually found+handled here.
+    var _cleanSheet = function (ws, source) {
+      var handled = {};
+      if (!ws) return handled;
+      var data = ws.getDataRange().getValues();
+      if (data.length < 2) return handled;
+      var idx = {}; data[0].forEach(function (h, i) { idx[h] = i; });
+      if (idx["Phone"] == null) return handled;
+      var dirty = false;
+
+      DELIVERY_STOP_PHONES.forEach(function (ph) {
+        var pStr = _normalizePhone(ph);
+        var rowNum = -1;
+        for (var i = 1; i < data.length; i++) {
+          if (_normalizePhone(data[i][idx["Phone"]]) === pStr) { rowNum = i; break; }
+        }
+        if (rowNum < 0) return;
+        handled[pStr] = true;
+
+        var before = {};
+        ADDR_FIELDS.forEach(function (f) { if (idx[f] != null) before[f] = data[rowNum][idx[f]]; });
+
+        // Meal_Addresses: keep genuinely deliverable entries, clear removed-area ones.
+        // Match against ALL fields of the entry (area, society, floor, landmark, wing,
+        // full text) — NOT just `area`, which is often blank while the society/landmark
+        // still say "Vaiduwadi" (e.g. Shreyash Mogre's "The Palazzo, Vaiduwadi Hadapsar").
+        var mealRaw = idx["Meal_Addresses"] != null ? String(data[rowNum][idx["Meal_Addresses"]] || "") : "";
+        var mealCleared = [], mealKept = [], mealNew = mealRaw;
+        if (mealRaw) {
+          try {
+            var mObj = JSON.parse(mealRaw);
+            Object.keys(mObj).forEach(function (meal) {
+              var e = mObj[meal] || {};
+              var blob = [e.area, e.Area, e.society, e.floor, e.wing, e.flat, e.landmark, e.full_address, e.Full_Address]
+                .filter(Boolean).join(" ");
+              if (_areaRemoved(blob)) { mealCleared.push(meal); delete mObj[meal]; }
+              else if (mObj[meal]) mealKept.push(meal);
+            });
+            mealNew = Object.keys(mObj).length ? JSON.stringify(mObj) : "";
+          } catch (e2) { mealNew = mealRaw; }
+        }
+
+        report.push({
+          phone: pStr, source: source, found: true, name: data[rowNum][idx["Customer_Name"]],
+          clearing: before, meal_cleared: mealCleared, meal_kept: mealKept,
+          meal_raw: mealRaw   // dry-run visibility so the owner can eyeball "kept" per-meal addresses
+        });
+
+        if (commit) {
+          if (!bws) bws = getOrCreateTab(ss, "SK_Customers_AddrBackup", ["Phone", "Source", "Backed_Up_At", "Old_Fields_JSON", "Old_Meal_Addresses"]);
+          bws.appendRow([pStr, source, new Date(), JSON.stringify(before), mealRaw]); // backup FIRST
+          ADDR_FIELDS.forEach(function (f) { if (idx[f] != null) data[rowNum][idx[f]] = ""; });
+          if (idx["Meal_Addresses"] != null) data[rowNum][idx["Meal_Addresses"]] = mealNew;
+          dirty = true;
+        }
+      });
+
+      if (commit && dirty) ws.getDataRange().setValues(data);
+      return handled;
+    };
+
+    var found = {};
+    var liveHandled = _cleanSheet(getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS), "live");
+    Object.keys(liveHandled).forEach(function (k) { found[k] = true; });
+    var arcWs = ss.getSheetByName(TAB_CUSTOMERS_ARCHIVE);
+    if (arcWs) {
+      var arcHandled = _cleanSheet(arcWs, "archive");
+      Object.keys(arcHandled).forEach(function (k) { found[k] = true; });
+    }
+
+    DELIVERY_STOP_PHONES.forEach(function (ph) {
+      var pStr = _normalizePhone(ph);
+      if (!found[pStr]) { report.push({ phone: pStr, found: false }); stillMissing.push(pStr); }
+    });
+
+    return {
+      success: true, committed: !!commit,
+      affected: report.filter(function (r) { return r.found; }).length,
+      not_found: stillMissing, report: report,
+      note: commit ? "cleared + backed up to SK_Customers_AddrBackup (live + archive)"
+                    : "DRY-RUN — add &commit=1 to write"
+    };
+  } finally { lock.releaseLock(); }
+}
+
 // ── GET UNPAID CUSTOMERS (reconciliation) ────────────────────────────────────
 function getUnpaidCustomers(p) {
   const dateFrom = p.dateFrom;

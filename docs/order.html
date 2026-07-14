@@ -4676,7 +4676,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.14.02";
+    const APP_VERSION = "v26.07.14.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5751,6 +5751,7 @@
               localStorage.setItem('sk_logged_in_phone', S.phone);
               localStorage.setItem('sk_logged_in_pin', enteredPin);
               handleLoginSuccess(verData.profile, false);
+              if (verData.notice) _showLoginNotice(verData.notice, S.phone);
             } else {
               toast(verData.error || "Incorrect PIN");
               $("pinInput").value = ""; $("pinInput").focus();
@@ -11228,6 +11229,34 @@
     // (Removed 2026-07-14: the one-time "A quick update" surcharge-removal notice.
     // The V2 pricing has been live ~45 days — the announcement is no longer relevant,
     // and its overlay overlapped other bottom-anchored UI. Deleted per owner request.)
+
+    // Targeted login notice (e.g. the 2026-07-14 delivery-area stop). Shown on login
+    // for the specific customers the backend flags (verifyLogin → notice). On "I
+    // understand" it records the acknowledgement server-side so it won't show again.
+    // Plain text only (backend-authored), rendered with line breaks preserved.
+    function _showLoginNotice(text, phone) {
+      if (!text) return;
+      const ov = document.createElement("div");
+      ov.className = "bill-modal-overlay";
+      ov.style.cssText = "display:flex;align-items:center;justify-content:center;padding:20px;z-index:60050;";
+      const box = document.createElement("div");
+      box.style.cssText = "background:var(--card-bg,#fff);max-width:400px;width:100%;border-radius:18px;padding:22px 20px;box-shadow:0 16px 48px rgba(0,0,0,0.3);max-height:88vh;overflow-y:auto;";
+      const body = document.createElement("div");
+      body.style.cssText = "font-size:0.9rem;line-height:1.6;color:var(--text-color,#334155);white-space:pre-wrap;word-wrap:break-word;";
+      body.textContent = text; // textContent = no HTML injection; white-space:pre-wrap keeps \n
+      const btn = document.createElement("button");
+      btn.textContent = "I understand 🙏";
+      btn.style.cssText = "margin-top:18px;width:100%;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,#f47c3c,#e2632b);color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;";
+      btn.onclick = function () {
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+        // Fire-and-forget acknowledgement so the notice stops showing next login.
+        try { fetch(`${APPS_SCRIPT_URL}?action=ackLoginNotice&phone=${encodeURIComponent(phone || S.phone || "")}`); } catch (_) {}
+      };
+      box.appendChild(body);
+      box.appendChild(btn);
+      ov.appendChild(box);
+      document.body.appendChild(ov);
+    }
 
     /**
      * Called when step 5 (payment) is rendered.
