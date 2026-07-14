@@ -613,11 +613,10 @@ const DEFAULT_AREAS = [
   ["Kirtane Baug",    "Kirtane Baug",                              "FALSE"],
   ["Magarpatta",      "Magarpatta",                                "FALSE"],
   ["Malwadi",         "Malwadi",                                   "FALSE"],
-  ["Pune-Solapur Road", "Pune-Solapur Road (Till Gadital Only)",   "FALSE"],
+  ["Pune-Solapur Road", "Pune-Solapur Road (Magarpatta Bridge to Gadital Only)", "FALSE"],
   ["SadeSatraNali",   "SadeSatraNali",                             "FALSE"],
   ["Triveni Nagar",   "Triveni Nagar (Free Delivery)",             "TRUE"],
   ["Tupe Patil Road", "Tupe Patil Road",                           "FALSE"],
-  ["Vaiduwadi",       "Vaiduwadi (Till Yash Honda Only)",          "FALSE"],
   ["Vihar Chowk",     "Vihar Chowk",                               "FALSE"],
   ["Pickup",          "📦 Self Pickup (Waives all fees)",             "TRUE"]
 ];

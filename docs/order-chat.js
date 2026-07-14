@@ -59,13 +59,23 @@
     var send  = document.getElementById("skChatSend");
 
     // Guide-oriented starter questions (mirror the "Guide to Order" hub topics).
+    // The 6 quick questions answer from CANNED text (below) — a chip click serves it
+    // instantly with NO Gemini call, saving API tokens/quota on the most common taps.
+    // Typing a question still goes to Gemini. NOTE: these mirror the same facts as
+    // BUSINESS_CONTEXT / the FAQ — keep them in sync when prices or policies change.
     var CHIPS = [
-      { label: "💰 How pricing works",      msg: "How does your pricing work — how do I build a meal and what does it cost?" },
-      { label: "🚚 Delivery & charges",     msg: "What are your delivery charges and when is delivery free?" },
-      { label: "🎁 Discounts & loyalty",    msg: "How do the discounts and the loyalty programme work?" },
-      { label: "⚡ Bulk meal plans",        msg: "Tell me about your weekly, 15-day and monthly bulk meal plans." },
-      { label: "⏰ Order timings",          msg: "What are your order cut-off timings?" },
-      { label: "👛 Svaadh Wallet",          msg: "What is the Svaadh Wallet and how do refunds work?" }
+      { label: "💰 How pricing works", msg: "How does your pricing work — how do I build a meal and what does it cost?",
+        answer: "You build your own meal — no fixed thali, pick exactly what you want:\n\n**Breads:** Chapati ₹10 · Without-oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar/Bajra Bhakri ₹22\n**Sabji:** Mini 100ml ₹24 · Full 250ml ₹48 (dry or curry)\n**Basics:** Dal ₹24 · Rice ₹13 · Salad ₹8 · Curd ₹13\n**Breakfast:** rotates daily, ₹35–₹70.\n\nA typical meal — 2 Chapati + Full Sabji + Dal + Rice — is about ₹105 before discounts. 💛" },
+      { label: "🚚 Delivery & charges", msg: "What are your delivery charges and when is delivery free?",
+        answer: "**Delivery:** ₹11 per meal.\n\n**It's FREE when:**\n• Your day's food total reaches ₹106 (1 meal), ₹159 (2 meals) or ₹190 (3 meals)\n• You're in Bhosale Nagar or Triveni Nagar\n• You choose Self Pickup (always free)\n\nA small ₹11 cart fee applies to a Lunch/Dinner meal under ₹53. On very busy days, orders of ₹200+ (₹100+ for breakfast) still get home delivery; otherwise you can pick Self Pickup or arrange a Porter." },
+      { label: "🎁 Discounts & loyalty", msg: "How do the discounts and the loyalty programme work?",
+        answer: "**Automatic day discounts** (on your whole day's food total):\n• 5% off at ₹325+\n• 7.5% off at ₹485+\n• 10% off at ₹750+\n\n**Loyalty:** order 6 days in a row and on day 6 you get 5% of your 6-day food total back. Sundays (closed) don't break the streak.\n\n**Review reward:** leave a 5-star Google review and get 10% off your next order. 🌟" },
+      { label: "⚡ Bulk meal plans", msg: "Tell me about your weekly, 15-day and monthly bulk meal plans.",
+        answer: "Order in advance and save more:\n• **Weekly** — 6 days, 5% off\n• **15-Day** — 13 days, 7.5% off\n• **Monthly** — 26 days, 10% off\n\nYou can **postpone** days if plans change (15-Day: 2 lunch + 2 dinner; Monthly: 4 + 4) instead of cancelling. Cancelling a day forfeits that meal's bulk discount. Sundays are off." },
+      { label: "⏰ Order timings", msg: "What are your order cut-off timings?",
+        answer: "Same-day order cut-offs:\n• 🌅 **Breakfast** — by 7:00 AM\n• ☀️ **Lunch** — by 9:00 AM\n• 🌙 **Dinner** — by 4:30 PM\n\nYou can order for **future dates anytime**. We're closed on **Sundays**. (Cut-offs can shift slightly on special days — the order page always shows the live time.)" },
+      { label: "👛 Svaadh Wallet", msg: "What is the Svaadh Wallet and how do refunds work?",
+        answer: "Your **Svaadh Wallet** is your prepaid balance with us.\n• Recharge any time and pay in a tap at checkout.\n• Any **refund** (e.g. a cancelled meal) goes back to your wallet **instantly** — no waiting.\n• Cancel before that meal's cut-off from '📋 Manage Orders'.\n\nSee every wallet transaction under '👛 Wallet' on the order page." }
     ];
 
     function renderChips() {
@@ -74,9 +84,20 @@
         var b = document.createElement("button");
         b.className = "sk-chat-chip";
         b.textContent = c.label;
-        b.onclick = function () { input.value = c.msg; sendMessage(); };
+        b.onclick = function () { c.answer ? answerCanned(c.msg, c.answer) : (input.value = c.msg, sendMessage()); };
         quick.appendChild(b);
       });
+    }
+
+    // Serve a pre-written answer with NO backend/Gemini call (saves tokens). A brief
+    // typing indicator keeps it feeling like a real reply; both turns are saved to
+    // history so a typed follow-up still has context.
+    function answerCanned(question, answer) {
+      if (sending) return;
+      append(question, "user");
+      if (typeof gtag === "function") { try { gtag("event", "order_chat_canned", { event_category: "OrderChatbot", event_label: question }); } catch (e) {} }
+      var typing = showTyping();
+      setTimeout(function () { typing.remove(); append(answer, "bot"); }, 320);
     }
 
     function esc(s) {

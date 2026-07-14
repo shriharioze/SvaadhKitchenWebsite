@@ -4,9 +4,9 @@
   "tagline": "Wholesome homemade vegetarian meals, straight from our kitchen to your plate.",
   "about": {
     "summary": "Svaadh Kitchen is a home-based vegetarian cloud kitchen in Hadapsar, Pune, serving fresh and wholesome homemade meals since August 2023.",
-    "description": "We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu — fully Make-Your-Own-Meal, no fixed thali. Our delivery network covers 15 major areas in Hadapsar, with Free Delivery for Bhosale Nagar, Triveni Nagar, and all Self Pickup orders. We serve Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Vaiduwadi, Pune-Solapur Road, Vihar Chowk, Mandai, and Gadital. Meals are cooked fresh daily in small batches using quality ingredients and traditional recipes."
+    "description": "We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu — fully Make-Your-Own-Meal, no fixed thali. Our delivery network covers 14 major areas in Hadapsar, with Free Delivery for Bhosale Nagar, Triveni Nagar, and all Self Pickup orders. We serve Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Mandai, and Gadital. Meals are cooked fresh daily in small batches using quality ingredients and traditional recipes."
   },
-  "locations_served": ["Amanora Town", "BG Shirke Road", "Bhosale Nagar (Free)", "DP Road", "Gadital", "Hadapsar Mandai", "Kirtane Baug", "Magarpatta", "Malwadi", "Pune-Solapur Road", "SadeSatraNali", "Triveni Nagar (Free)", "Tupe Patil Road", "Vaiduwadi", "Vihar Chowk", "Self Pickup (Free)"],
+  "locations_served": ["Amanora Town", "BG Shirke Road", "Bhosale Nagar (Free)", "DP Road", "Gadital", "Hadapsar Mandai", "Kirtane Baug", "Magarpatta", "Malwadi", "Pune-Solapur Road (Magarpatta Bridge to Gadital only)", "SadeSatraNali", "Triveni Nagar (Free)", "Tupe Patil Road", "Vihar Chowk", "Self Pickup (Free)"],
   "order_cutoffs": {
     "breakfast": "before 7:00 AM",
     "lunch": "before 9:00 AM",
