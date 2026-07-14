@@ -4676,7 +4676,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.14.03";
+    const APP_VERSION = "v26.07.14.04";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6059,7 +6059,7 @@
           try {
             const rv = await fetch(`${APPS_SCRIPT_URL}?action=verifyLogin&phone=${S.phone}&pin=${_sp}`);
             const vd = await rv.json();
-            if (vd.success) { handleLoginSuccess(vd.profile, false); return; }
+            if (vd.success) { handleLoginSuccess(vd.profile, false); if (vd.notice) _showLoginNotice(vd.notice, S.phone); return; }
             localStorage.removeItem('sk_logged_in_pin'); // stale PIN → fall through to normal flow
           } catch (e) { /* network blip → fall through to normal getCustomer path */ }
         }
@@ -6078,6 +6078,7 @@
           const verData = await resVer.json();
           if (verData.success) {
             handleLoginSuccess(verData.profile, false);
+            if (verData.notice) _showLoginNotice(verData.notice, S.phone);
             return;
           } else {
             // Bad saved PIN, clear it
