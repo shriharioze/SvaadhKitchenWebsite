@@ -157,110 +157,88 @@ function _lblFitLabel(fields) {   // fields: [{ text, bold, color, base }]
 }
 
 function _lblBuildPdfB64(orders, meal, lang, gapMm) {
-  var MM = 2.834645669; // mm → pt
-  var W = 50, LH = 25, GAP = (typeof gapMm === "number" && !isNaN(gapMm)) ? gapMm : 2.7;
-  var BLOCK = LH + GAP;
+  if (!orders || !orders.length) return "";
+  var mealStr = String(meal || "");
   var n = orders.length;
-  var totalH = n * BLOCK;
-  var FONT = (lang === "Devanagari") ? "Noto Sans Devanagari" : "Arial";
+  var LH = 25.0; // 25mm label height
+  var GAP = (typeof gapMm === "number" && !isNaN(gapMm)) ? gapMm : 2.7;
+  var BLOCK = LH + GAP; // 27.7mm pitch
+  var MM = 2.834645669; // pt per mm
+  var totalHPt = Math.round(n * BLOCK * MM * 100) / 100;
+  var widthPt = Math.round(50 * MM * 100) / 100;
+  var FONT = (lang === "Devanagari") ? "Noto Sans Devanagari" : "Hind";
 
-  var doc = DocumentApp.create("tmp_labels_" + meal + "_" + Date.now());
-  var docId = doc.getId();
+  var title = "tmp_labels_" + mealStr + "_" + Date.now();
+  var presentation = Slides.Presentations.create({ title: title });
+  var deckId = presentation.presentationId;
 
   try {
-    var body = doc.getBody();
-    // Page height = the strip (n × BLOCK) + a safety pad. The pad covers: the ONE
-    // mandatory trailing paragraph Docs keeps after a table (shrunk to font-size 1
-    // ≈ 0.4mm) AND the per-row pixel rounding — Docs rounds a row's min-height UP to a
-    // whole 96-dpi pixel, so each 27.7mm row actually renders ~27.78mm (~+0.08mm), and
-    // over n labels that adds n×0.08mm. Without the pad the last label spills to an
-    // auto-created 2nd page (the "page break in the middle" symptom). Extra blank at the
-    // very bottom of the single page is harmless on a continuous roll. 12mm covers the
-    // Docs-enforced ~5.7mm leading structural paragraph PLUS per-row rounding for ~60+
-    // labels — enough that the last label never spills to a 2nd page.
-    var PAD = 12;
-    body.setPageWidth(W * MM).setPageHeight((totalH + PAD) * MM);
-    body.setMarginTop(0).setMarginBottom(0).setMarginLeft(2 * MM).setMarginRight(2 * MM);
+    // 1. Resize presentation page to exact label strip dimensions [50mm × n*27.7mm]
+    Slides.Presentations.batchUpdate({
+      requests: [{
+        updatePageSize: {
+          pageSize: {
+            width: { magnitude: widthPt, unit: "PT" },
+            height: { magnitude: totalHPt, unit: "PT" }
+          }
+        }
+      }]
+    }, deckId);
 
-    // ONE borderless row PER LABEL, min height = BLOCK (25mm label + 2.7mm gap). The
-    // label text sits in the top 25mm; the empty bottom 2.7mm IS the die-cut gap.
-    // NO separate "gap row" and NO horizontal rule: a Docs appendHorizontalRule()
-    // renders ~4.3mm tall (not the 2.7mm we asked), adding ~1.6mm to every label —
-    // the cumulative overshoot that drifted the strip (~29.3mm actual vs 27.7mm die
-    // pitch, "half on one label / half on the next after 2-3 labels") and eventually
-    // overflowed to a 2nd page. Min-height is exact when content is smaller (verified:
-    // 25mm rows rendered exactly 25mm), and every label's fitted content is < 25mm, so
-    // each row is EXACTLY one 27.7mm pitch → zero drift, single continuous page.
-    // The physical die-cut gap separates the labels; no printed rule is needed.
-    var cellsSeed = [];
-    for (var i = 0; i < n; i++) cellsSeed.push(["."]);
-    // insertTable(0, …) — NOT appendTable — so the table is the body's FIRST element.
-    // appendTable leaves the doc's default empty paragraph ABOVE the table, and Docs
-    // refuses to remove that leading paragraph (it renders ~5.7mm at 11pt), shoving the
-    // whole strip down and stealing page budget. Inserting at index 0 means only the
-    // mandatory trailing paragraph remains (shrunk below), so label 1 starts at the top.
-    var table = body.insertTable(0, cellsSeed);
-    table.setBorderWidth(0);
-
-    var TINY = {};
-    TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse the trailing structural paragraph
+    // 2. Open via SlidesApp for absolute coordinate positioning of text boxes & dividing lines
+    var deck = SlidesApp.openById(deckId);
+    var slide = deck.getSlides()[0];
 
     orders.forEach(function (order, idx) {
+      var BY = idx * BLOCK; // top of label idx in mm
       var summary = _lblItemSummary(order, meal, lang);
-      // Build the label's fields at their BASE sizes, then auto-fit: _lblFitLabel scales
-      // the whole label down uniformly so every field's WRAPPED text fits the 25mm row.
-      // Full text is kept — Docs wraps long fields at spaces; NOTHING is truncated with …
-      // (the kitchen page auto-sizes/wraps the same way). Row can't grow → no drift.
       var fields = [{ text: "Name: " + (order.name || ""), bold: true, color: "#000000", base: 9.5 }];
       if (summary) fields.push({ text: summary, bold: false, color: "#222222", base: 8.5 });
       if (order.area) fields.push({ text: String(order.area), bold: true, color: "#000000", base: 9 });
       if (order.notes) fields.push({ text: "* " + order.notes, bold: false, color: "#B86000", base: 7 });
       var lines = _lblFitLabel(fields);
 
-      // ── One row = one full 27.7mm label pitch ──
-      var row = table.getRow(idx);
-      // Cumulative sub-point tracking: Docs rounds row min-heights to integer 96-dpi
-      // pixels (0.75 pt multiples). Passing raw BLOCK*MM (78.52 pt) causes Docs to round
-      // EVERY row up to 78.75 pt (105 px), adding +0.08mm/label (+2.44mm over 30 labels).
-      // Tracking cumulative 0.75 pt units ensures exact compensation (e.g. 105px, 104px, 105px)
-      // so total pitch after n labels stays within 0.05mm of exact n × BLOCK.
-      var cumPtNext = Math.round((idx + 1) * BLOCK * MM / 0.75) * 0.75;
-      var cumPtCurr = Math.round(idx * BLOCK * MM / 0.75) * 0.75;
-      row.setMinimumHeight(cumPtNext - cumPtCurr);
-      var cell = row.getCell(0);
-      cell.setPaddingTop(0.5 * MM).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
-      cell.clear(); // leaves one empty paragraph
+      // Add absolute-positioned text box for the 25mm label block
+      var tbLeft = 1.0 * MM;
+      var tbTop = (BY + 0.5) * MM;
+      var tbWidth = 48.0 * MM;
+      var tbHeight = (LH - 0.5) * MM;
+      var shape = slide.insertShape(SlidesApp.ShapeType.TEXT_BOX, tbLeft, tbTop, tbWidth, tbHeight);
+      var textRange = shape.getText();
+      shape.setContentAlignment(SlidesApp.ContentAlignment.TOP);
+
       lines.forEach(function (l, li) {
-        var p = (li === 0) ? cell.getChild(0).asParagraph() : cell.appendParagraph("");
-        p.setText(l.text);                         // full text — Docs wraps it, no truncation
-        p.setLineSpacing(0.9).setSpacingBefore(0).setSpacingAfter(0);
-        var t = p.editAsText();
-        t.setFontFamily(FONT).setFontSize(l.size).setBold(!!l.bold).setForegroundColor(l.color);
+        var tr = (li === 0) ? textRange.setText(l.text) : textRange.appendParagraph(l.text).getRange();
+        tr.getTextStyle()
+          .setFontFamily(FONT)
+          .setFontSize(l.size)
+          .setBold(!!l.bold)
+          .setForegroundColor(l.color);
+        tr.getParagraphStyle()
+          .setLineSpacing(90)
+          .setSpaceBefore(0)
+          .setSpaceAfter(0);
       });
+
+      // Strict horizontal line across the label at 25mm + GAP/2 exactly like manual kitchen.html
+      if (idx < n - 1) {
+        var lineY = (BY + LH + GAP / 2) * MM;
+        var line = slide.insertLine(SlidesApp.LineCategory.STRAIGHT, 1.0 * MM, lineY, 49.0 * MM, lineY);
+        line.getLineFill().setSolidFill("#000000");
+        line.setWeight(1);
+      }
     });
 
-    // Google Docs FORCES an empty paragraph both before and after a table (a table may
-    // not be the body's first or last element). Each renders ~5.7mm at the 11pt normal
-    // style. Crush EVERY empty body-level paragraph to font-size 1 (the label text lives
-    // inside table cells, so no real content is ever an empty body child). The trailing
-    // one shrinks reliably (~2.25pt); the leading one is Docs-enforced and can resist
-    // shrinking, so PAD above is sized to absorb a full ~5.7mm leading offset too — the
-    // strip then always fits ONE page (the offset is a constant top margin, not the
-    // cumulative drift that was the actual bug).
-    var nc = body.getNumChildren();
-    for (var ci = 0; ci < nc; ci++) {
-      var ch = body.getChild(ci);
-      if (ch.getType() === DocumentApp.ElementType.PARAGRAPH && ch.asParagraph().getText() === "") {
-        ch.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
-      }
-    }
+    deck.saveAndClose();
 
-    doc.saveAndClose();
-    var pdfBlob = DriveApp.getFileById(docId).getAs("application/pdf");
+    // Export the resized single continuous slide as PDF base64
+    var pdfBlob = DriveApp.getFileById(deckId).getAs("application/pdf");
+    pdfBlob.setName("labels_" + mealStr + "_" + _formatDateIst(new Date()) + ".pdf");
     return Utilities.base64Encode(pdfBlob.getBytes());
   } finally {
-    // Always clean up the temp doc, even if the export failed.
-    try { DriveApp.getFileById(docId).setTrashed(true); } catch (e) {}
+    try {
+      DriveApp.getFileById(deckId).setTrashed(true);
+    } catch (cleanupErr) {}
   }
 }
 

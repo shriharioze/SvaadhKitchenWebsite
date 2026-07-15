@@ -10,7 +10,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 - `03_Admin_Kitchen.gs` — getAdminData, menu CRUD, setKitchenClosed (per-meal), refunds queue, driver/labels/packaging
 - `04_Reports_Misc.gs` — chatbot (handleChat/buildSystemPrompt/callGemini), analytics (_analyticsCore), forecast, archiver, compactWalletLedger, getOrdersInRangeWithArchive
 - `06_Bulk_Orders.gs` — bulk plans (week/15day/month), postpone, pricing parity
-- `07_Labels_Auto.gs` — auto label PDFs at cutoff+5
+- `07_Labels_Auto.gs` — auto label PDFs at cutoff+5 (Google Slides API absolute coordinate positioning, exact 27.7mm pitch + dividing lines to prevent thermal printer drift)
 - `10_Hdfc_Gateway.gs` — HDFC SmartGateway: sessions, webhooks, refunds, on-account settlement
 - `11/12_*.gs` — order + payout reconcilers (self-healing)
 - `docs/order.html` — THE customer app (APP_VERSION marker); `docs/Admin/vault_admin.html` — admin panel; `docs/index.html` — SEO home; `docs/chat.js` — chat widget
