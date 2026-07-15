@@ -4683,7 +4683,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.15.02";
+    const APP_VERSION = "v26.07.15.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6221,6 +6221,10 @@
         // Monthly On-Account customers: check for an unpaid previous-month bill
         // and surface a skippable "settle your bill" modal (once per session).
         maybeShowOnAccountBill();
+
+        // Nudge returning customers with no email on file to add one (so they can
+        // self-reset their PIN). Skippable; re-appears next visit until added.
+        setTimeout(function () { try { _maybePromptEmail(); } catch (_) {} }, 1000);
 
         trackGA("login", {
           method: "PIN",
@@ -11385,6 +11389,64 @@
           toast("PIN reset. Please enter your new PIN to continue.");
         }
       } catch (e) { toast("PIN reset. Please log in with your new PIN."); }
+    }
+
+    // ── POST-LOGIN "add your email" prompt ───────────────────────────────────
+    // Returning customers usually skip the address page, so they'd never see the
+    // email field there. This nudges blank-email customers on login to add one (so
+    // they can self-reset their PIN). NOT mandatory — "Skip for now" is always
+    // available; it re-appears on the next visit until an email is saved.
+    function _validEmail(e) { return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(e || "").trim()); }
+
+    function _maybePromptEmail() {
+      try {
+        if (S.profile && String(S.profile.email || "").trim()) return; // already has one
+        if (!S.phone) return;
+        if (sessionStorage.getItem("sk_email_prompt_shown")) return;   // once per visit
+        if (document.querySelector(".bill-modal-overlay")) return;     // don't stack on another modal
+      } catch (e) { return; }
+      _showEmailCollectModal();
+    }
+
+    function _showEmailCollectModal() {
+      const phone = S.phone || (localStorage.getItem('sk_logged_in_phone') || "");
+      if (!phone) return;
+      try { sessionStorage.setItem("sk_email_prompt_shown", "1"); } catch (e) {}
+      const ov = document.createElement("div");
+      ov.className = "bill-modal-overlay";
+      ov.style.cssText = "display:flex;align-items:center;justify-content:center;padding:20px;z-index:60040;";
+      const box = document.createElement("div");
+      box.style.cssText = "background:var(--card-bg,#fff);max-width:380px;width:100%;border-radius:18px;padding:22px 20px;box-shadow:0 16px 48px rgba(0,0,0,0.3);text-align:center;";
+      const INP = "width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:1rem;margin-top:12px;box-sizing:border-box;text-align:left;";
+      const BTN = "width:100%;padding:12px;border:none;border-radius:12px;font-size:0.92rem;font-weight:700;cursor:pointer;margin-top:12px;";
+      box.innerHTML =
+        '<div style="font-size:1.8rem;">📧</div>'
+        + '<div style="font-size:1.05rem;font-weight:800;color:#1E1240;margin:4px 0 6px;">Add your email</div>'
+        + '<div style="font-size:0.85rem;color:var(--text-color,#475569);line-height:1.5;">So you can reset your PIN yourself if you ever forget it — a one-time code is emailed to you, no need to message us. We\'ll only use it for account &amp; PIN help.</div>'
+        + '<input id="ecEmail" type="email" autocomplete="email" placeholder="you@example.com" style="' + INP + '">'
+        + '<div id="ecErr" style="color:#dc2626;font-size:0.75rem;margin-top:6px;min-height:1em;text-align:left;"></div>'
+        + '<button id="ecSave" style="' + BTN + 'background:linear-gradient(135deg,#f47c3c,#e2632b);color:#fff;">Save & continue</button>'
+        + '<button id="ecSkip" style="' + BTN + 'background:transparent;color:#94a3b8;margin-top:6px;">Skip for now</button>';
+      ov.appendChild(box); document.body.appendChild(ov);
+      const close = () => { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+      box.querySelector("#ecSkip").onclick = close;
+      ov.addEventListener("click", e => { if (e.target === ov) close(); });
+      const inp = box.querySelector("#ecEmail"), err = box.querySelector("#ecErr"), save = box.querySelector("#ecSave");
+      setTimeout(() => { try { inp.focus(); } catch (_) {} }, 60);
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") save.click(); });
+      save.onclick = async () => {
+        const em = (inp.value || "").trim().toLowerCase();
+        err.textContent = "";
+        if (!_validEmail(em)) { err.textContent = "Please enter a valid email address (e.g. you@example.com)."; return; }
+        save.disabled = true; save.textContent = "Saving…";
+        try {
+          await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "upsertProfile", phone: phone, email: em }) });
+        } catch (e) {}
+        if (S.profile) S.profile.email = em;
+        if ($("emailInput")) { $("emailInput").value = em; try { _onEmailInput(); } catch (_) {} }
+        close();
+        toast("✅ Email saved — you can now reset your PIN yourself if needed.", 4000);
+      };
     }
 
     /**
