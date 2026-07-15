@@ -40,12 +40,12 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 - After every backend deploy: one read-only live smoke call proving the change.
 
 ## Admin GET diagnostics (append &pin=<ADMIN PIN — ask the owner, never commit it>)
-`version` · `getPendingRefunds` · `listRecentRefunds&n=20` · `hdfcRefundTransportTest` · `auditOnAccountDrift` · `listSocieties` · `auditAmanoraTowers` · `backfillBulkPlan` · `seedAmanoraTowerAliases` · `compactWalletLedger` · `getForecastedMonthlySales` · `getDefaultCutoffs`
+`version` · `getPendingRefunds` · `listRecentRefunds&n=20` · `hdfcRefundTransportTest` · `auditOnAccountDrift` · `listSocieties` · `auditAmanoraTowers` · `backfillBulkPlan` · `seedAmanoraTowerAliases` · `compactWalletLedger` · `getForecastedMonthlySales` · `getDefaultCutoffs` · `getDefaultOrderCaps`
 Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec`
 
 ## Facts that get answered wrong from stale data
 - PRICING_V2 is LIVE: Chapati 10, WO-Chapati 9, Phulka 8, Ghee Phulka 11, Bhakri 22, Sabji Mini 24/Full 48, Dal 24, Rice 13, Salad 8, Curd 13. No market surcharge (Inflation_Surcharge column = loyalty accrual only).
-- Cutoffs (admin-editable defaults, verify live): B 7:00 / L 9:00 / D 16:30. Sundays closed.
+- Cutoffs (admin-editable defaults, verify live): B 7:00 / L 9:00 / D 16:30. Sundays closed. Delivery Caps (admin-editable defaults via SK_Default_Caps): B 11 / L 24 / D 23.
 - Bulk plans PUBLIC: Week 6d 5% / 15-Day 13d 7.5% / Month 26d 10%; postpone 2+2 / 4+4 within 30 days; cancel forfeits that meal's bulk discount.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 

@@ -72,6 +72,10 @@ function doGet(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getDefaultCutoffs());
     }
+    if (action === "getDefaultOrderCaps") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(getDefaultOrderCaps());
+    }
     if (action === "getRateCard") return jsonRes(getRateCard()); // public — no login needed
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
     if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
@@ -626,6 +630,11 @@ function doPost(e) {
       return jsonRes(setDefaultCutoffs(body));
     }
 
+    if (action === "setDefaultOrderCaps") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(setDefaultOrderCaps(body));
+    }
+
     if (action === "upsertProfile") {
       // Capture PIN if provided during mid-flow profile upserts
       const profile = { ...body, pin: body.pin || "" };
@@ -927,15 +936,17 @@ function _isCapExemptLocation(society, area) {
   return !!(m && Number(m[1]) >= 1 && Number(m[1]) <= 12);
 }
 
-// Effective per-meal delivery caps for one date: the site-wide DEFAULT_ORDER_CAPS,
-// overridden per meal by any positive per-date Order_Cap_JSON value the admin set.
+// Effective per-meal delivery caps for one date: the admin-editable site-wide
+// defaults from SK_Default_Caps (_getDefaultOrderCaps), overridden per meal by
+// any positive per-date Order_Cap_JSON value the admin set.
 // (Blank/0/invalid per-date values fall back to the default — matching the admin
 // panel, which deletes the key when the input is blank or 0.)
 function _effectiveOrderCaps(perDateCaps) {
+  const defaults = _getDefaultOrderCaps();
   const out = {};
   ["Breakfast", "Lunch", "Dinner"].forEach(function (m) {
     const v = Number(perDateCaps && perDateCaps[m]);
-    out[m] = (!isNaN(v) && v > 0) ? v : (DEFAULT_ORDER_CAPS[m] || 0);
+    out[m] = (!isNaN(v) && v > 0) ? v : (defaults[m] || 0);
   });
   return out;
 }

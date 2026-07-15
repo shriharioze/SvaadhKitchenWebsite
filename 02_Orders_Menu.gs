@@ -980,8 +980,8 @@ function _getMenuUncached(dateStr) {
   let stockLimits = {};
   try { if (r && r.Stock_JSON) stockLimits = JSON.parse(r.Stock_JSON); } catch(e) {}
 
-  // Per-meal max-order caps. Site-wide defaults (DEFAULT_ORDER_CAPS: B 11 / L 25 /
-  // D 25) apply to EVERY date; a positive per-date Order_Cap_JSON value overrides.
+  // Per-meal max-order caps. Site-wide defaults (admin-editable via SK_Default_Caps)
+  // apply to EVERY date; a positive per-date Order_Cap_JSON value overrides.
   // When a meal's active delivery count reaches its cap it is SOLD OUT for delivery.
   let orderCaps = {};
   try { if (r && r.Order_Cap_JSON) orderCaps = JSON.parse(r.Order_Cap_JSON); } catch(e) {}
@@ -3539,6 +3539,50 @@ function setDefaultCutoffs(body) {
   if (ws.getLastRow() < 2) ws.appendRow([b, l, d]);
   else ws.getRange(2, 1, 1, 3).setValues([[b, l, d]]);
   try { CacheService.getScriptCache().remove("default_cutoffs_v1"); } catch (e) {}
+  return { success: true, defaults: { Breakfast: b, Lunch: l, Dinner: d } };
+}
+
+// ── DEFAULT DELIVERY CAPS (admin-editable via SK_Default_Caps sheet) ──────
+// Same pattern as _getDefaultCutoffs: single row, 3 columns, 5-min cache.
+// Falls back to the hardcoded DEFAULT_ORDER_CAPS constant if the sheet is
+// empty/missing. _effectiveOrderCaps (Code.gs) reads this instead of the
+// constant directly so the admin can change caps without a redeploy.
+function _getDefaultOrderCaps() {
+  try {
+    var hit = CacheService.getScriptCache().get("default_caps_v1");
+    if (hit !== null) return JSON.parse(hit);
+  } catch (e) {}
+  var out = { Breakfast: DEFAULT_ORDER_CAPS.Breakfast, Lunch: DEFAULT_ORDER_CAPS.Lunch, Dinner: DEFAULT_ORDER_CAPS.Dinner };
+  try {
+    var ws = getOrCreateTab(getSpreadsheet(), TAB_DEFAULT_CAPS, ["Breakfast", "Lunch", "Dinner"]);
+    if (ws.getLastRow() >= 2) {
+      var vals = ws.getRange(2, 1, 1, 3).getValues()[0];
+      ["Breakfast", "Lunch", "Dinner"].forEach(function (k, i) {
+        var n = Number(vals[i]);
+        if (vals[i] !== "" && !isNaN(n) && n > 0) out[k] = n;
+      });
+    }
+  } catch (e) {}
+  try { CacheService.getScriptCache().put("default_caps_v1", JSON.stringify(out), 300); } catch (e) {}
+  return out;
+}
+
+// Admin panel read (current site-wide default delivery caps).
+function getDefaultOrderCaps() {
+  return { success: true, defaults: _getDefaultOrderCaps() };
+}
+
+// Admin panel write — updates the SK_Default_Caps sheet (one row) and busts the
+// cache so the new defaults apply immediately. Does NOT touch any per-day
+// Order_Cap_JSON override — those still win for their specific date.
+function setDefaultOrderCaps(body) {
+  var b = Number(body && body.breakfast), l = Number(body && body.lunch), d = Number(body && body.dinner);
+  if (isNaN(b) || b < 0 || isNaN(l) || l < 0 || isNaN(d) || d < 0)
+    return { success: false, error: "Invalid cap value(s)." };
+  var ws = getOrCreateTab(getSpreadsheet(), TAB_DEFAULT_CAPS, ["Breakfast", "Lunch", "Dinner"]);
+  if (ws.getLastRow() < 2) ws.appendRow([b, l, d]);
+  else ws.getRange(2, 1, 1, 3).setValues([[b, l, d]]);
+  try { CacheService.getScriptCache().remove("default_caps_v1"); } catch (e) {}
   return { success: true, defaults: { Breakfast: b, Lunch: l, Dinner: d } };
 }
 

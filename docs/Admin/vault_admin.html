@@ -1028,6 +1028,38 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           </div>
         </div>
 
+        <!-- DEFAULT DELIVERY CAPS (site-wide baseline, applies to every date that has
+             no per-date Order_Cap_JSON override below). Separate from the per-day panel
+             — saved immediately on its own "Save Defaults" button, not tied to Save Menu. -->
+        <div class="meal-card">
+          <div class="meal-card-head">
+            <span class="meal-icon">📦</span>
+            <span class="meal-card-title">Default Delivery Caps (All Days)</span>
+          </div>
+          <div class="meal-card-body">
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Max delivery orders per meal, every day. A per-date override (below) takes priority for that date only.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div>
+                <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌅 Breakfast</label>
+                <input type="number" min="0" id="defCapBf" inputmode="numeric"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);text-align:center;">
+              </div>
+              <div>
+                <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">☀️ Lunch</label>
+                <input type="number" min="0" id="defCapL" inputmode="numeric"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);text-align:center;">
+              </div>
+              <div>
+                <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌙 Dinner</label>
+                <input type="number" min="0" id="defCapD" inputmode="numeric"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);text-align:center;">
+              </div>
+            </div>
+            <button onclick="saveDefaultCaps()" style="margin-top:12px;padding:9px 18px;border:none;border-radius:8px;background:var(--accent,#2D1A5E);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;">Save Defaults</button>
+            <span id="defCapSavedNote" style="margin-left:10px;font-size:.75rem;color:var(--muted);"></span>
+          </div>
+        </div>
+
         <!-- CUTOFF OVERRIDES -->
         <div class="meal-card">
           <div class="meal-card-head">
@@ -2478,6 +2510,7 @@ async function bootApp() {
   // Initialize UI state
   switchPage('menu');
   await loadDefaultCutoffs(); // populate S_DEFAULT_CUTOFFS before selectDate renders today's badges
+  await loadDefaultCaps();    // populate default delivery cap inputs + per-date cap placeholders
   selectDate(toISO(ist));
 
   renderBfMasterTable();
@@ -3310,7 +3343,7 @@ function renderOrdersClosedPanel() {
   panel.innerHTML = meals.map(m => {
     const isClosed = !!S.ordersClosed[m.key];
     const cap    = (S.orderCaps && S.orderCaps[m.key]) ? S.orderCaps[m.key] : "";          // per-date override (what the admin typed)
-    const defCap = (S.defaultCaps && S.defaultCaps[m.key]) ? Number(S.defaultCaps[m.key]) : 0; // site-wide default (B 11 / L 25 / D 25)
+    const defCap = (S.defaultCaps && S.defaultCaps[m.key]) ? Number(S.defaultCaps[m.key]) : 0; // site-wide default (admin-editable via Default Delivery Caps panel)
     const effCap = cap ? Number(cap) : defCap;                                              // what's actually enforced today
     const count = (S.orderCounts && S.orderCounts[m.key] != null) ? Number(S.orderCounts[m.key]) : null;
     const capHit = effCap > 0 && count != null && count >= effCap;
@@ -3938,6 +3971,52 @@ async function saveDefaultCutoffs() {
   }
 }
 // ─────────────────────────────────────────────────────────────
+// DEFAULT DELIVERY CAPS — load from backend + save (same pattern as cutoffs)
+async function loadDefaultCaps() {
+  try {
+    const res = await fetch(`${APPS_SCRIPT_URL}?action=getDefaultOrderCaps&pin=${S.sessionPin}&_t=${Date.now()}`);
+    const data = await res.json();
+    if (data && data.success && data.defaults) {
+      S.defaultCaps = data.defaults;
+    }
+  } catch (e) { console.warn("loadDefaultCaps failed, using fallback", e); }
+  const d = S.defaultCaps || {};
+  const bfEl = document.getElementById("defCapBf");
+  const lEl  = document.getElementById("defCapL");
+  const dEl  = document.getElementById("defCapD");
+  if (bfEl) bfEl.value = d.Breakfast || "";
+  if (lEl)  lEl.value  = d.Lunch || "";
+  if (dEl)  dEl.value  = d.Dinner || "";
+  // Re-render the per-date cap panel so placeholders update
+  renderOrdersClosedPanel();
+}
+
+async function saveDefaultCaps() {
+  const b = parseInt(document.getElementById("defCapBf").value, 10);
+  const l = parseInt(document.getElementById("defCapL").value, 10);
+  const d = parseInt(document.getElementById("defCapD").value, 10);
+  if (isNaN(b) || isNaN(l) || isNaN(d) || b < 0 || l < 0 || d < 0) {
+    toast("Please set all three default caps (0 or higher).");
+    return;
+  }
+  const note = document.getElementById("defCapSavedNote");
+  if (note) note.textContent = "Saving…";
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ _action: "setDefaultOrderCaps", pin: S.sessionPin, breakfast: b, lunch: l, dinner: d })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Save failed");
+    S.defaultCaps = data.defaults;
+    await loadDefaultCaps(); // refresh inputs + per-date cap placeholders
+    if (note) { note.textContent = "✅ Saved"; setTimeout(() => { note.textContent = ""; }, 3000); }
+    toast("Default delivery caps updated for all days.");
+  } catch (e) {
+    if (note) note.textContent = "";
+    toast("Error: " + e.message, 4000);
+  }
+}
 
 function toast(msg, ms=2500) {
   const t = document.getElementById("toast");
