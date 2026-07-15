@@ -1023,6 +1023,16 @@
       background: #d4b200;
     }
 
+    .qty-btn.limit-reached,
+    .qty-control.qty-active .qty-btn.limit-reached {
+      opacity: 0.38 !important;
+      cursor: not-allowed !important;
+      background: #eaeaea !important;
+      border-color: #d0d0d0 !important;
+      color: #999 !important;
+      box-shadow: none !important;
+    }
+
     .qty-control.qty-active .qty-input {
       border-color: #c9ab00;
       background: #fffbe6;
@@ -2022,6 +2032,16 @@
 
     [data-theme="dark"] .qty-control.qty-active .qty-btn:hover {
       background: #E8C840;
+    }
+
+    [data-theme="dark"] .qty-btn.limit-reached,
+    [data-theme="dark"] .qty-control.qty-active .qty-btn.limit-reached {
+      opacity: 0.38 !important;
+      cursor: not-allowed !important;
+      background: #2f2f2f !important;
+      border-color: #444 !important;
+      color: #777 !important;
+      box-shadow: none !important;
     }
 
     [data-theme="dark"] .qty-control.qty-active .qty-input {
@@ -4683,7 +4703,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.15.06";
+    const APP_VERSION = "v26.07.15.07";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6999,8 +7019,12 @@
   </div>`;
       }
       const qty = S.orders[date]?.[meal]?.items?.[colKey] || 0;
+      const maxQty = _getMaxQty(date, meal, colKey);
+      const isLimitReached = (maxQty < Infinity && qty >= maxQty);
       const eid = `qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
+      const pid = `plus_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
       const bid = `badge_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
+      const safeColKey = colKey.replace(/"/g, '&quot;');
       return `<div class="item-row">
     <div>
       <div class="item-name">${name}</div>
@@ -7011,7 +7035,7 @@
       <button class="qty-btn" onclick="changeQty('${date}','${meal}','${colKey}',${price},-1)">−</button>
       <input class="qty-input" type="number" id="${eid}" min="0" value="${qty}"
         oninput="setQty('${date}','${meal}','${colKey}',${price},this.value)">
-      <button class="qty-btn" onclick="changeQty('${date}','${meal}','${colKey}',${price},+1)">+</button>
+      <button class="qty-btn${isLimitReached ? ' limit-reached' : ''}" id="${pid}" data-colkey="${safeColKey}" onclick="changeQty('${date}','${meal}','${colKey}',${price},+1)">+</button>
       <button class="qty-del" title="Clear" onclick="setQty('${date}','${meal}','${colKey}',${price},0)">🗑</button>
     </div>
   </div>`;
@@ -7053,10 +7077,26 @@
       if (qty > 0) wrap.classList.add('qty-active');
       else wrap.classList.remove('qty-active');
     }
+    function _showLimitReachedMessage(colKey, maxQty) {
+      const comboInfo = SABJI_COMBO_MAP[colKey];
+      if (comboInfo) {
+        if (maxQty <= 0) {
+          toast(`⚡ Limited raw material — maximum stock reached for this Sabji Combo (shared limit used).`, 4200);
+        } else {
+          toast(`⚡ Limited raw material — maximum stock reached for this Sabji Combo (${maxQty} max possible right now).`, 4200);
+        }
+      } else {
+        toast(`⚡ Limited raw material — maximum stock reached for this item (${maxQty} max).`, 4200);
+      }
+    }
     function changeQty(date, meal, colKey, price, delta) {
       if (!S.orders[date]?.[meal]) return;
       const cur    = S.orders[date][meal].items[colKey] || 0;
       const maxQty = _getMaxQty(date, meal, colKey);
+      if (delta > 0 && cur >= maxQty && maxQty < Infinity) {
+        _showLimitReachedMessage(colKey, maxQty);
+        return;
+      }
       const nxt    = Math.min(maxQty, Math.max(0, cur + delta));
       S.orders[date][meal].items[colKey] = nxt;
       const el = $(`qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_"));
@@ -7067,7 +7107,11 @@
     function setQty(date, meal, colKey, price, rawVal) {
       if (!S.orders[date]?.[meal]) return;
       const maxQty = _getMaxQty(date, meal, colKey);
-      let v = Math.min(maxQty, Math.max(0, parseInt(rawVal) || 0));
+      const reqVal = parseInt(rawVal) || 0;
+      if (reqVal > maxQty && maxQty < Infinity) {
+        _showLimitReachedMessage(colKey, maxQty);
+      }
+      let v = Math.min(maxQty, Math.max(0, reqVal));
       S.orders[date][meal].items[colKey] = v;
       const el = $(`qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_"));
       if (el && el.value != String(v)) el.value = v;
@@ -7345,12 +7389,29 @@
         }
       });
     }
+    function _syncPlusButtons(date, meal) {
+      const prefix = `plus_${date}_${meal}_`.replace(/[^a-zA-Z0-9_]/g, "_");
+      document.querySelectorAll(`[id^="${prefix}"]`).forEach(btn => {
+        const colKey = btn.getAttribute("data-colkey");
+        if (!colKey) return;
+        const cur = (S.orders[date]?.[meal]?.items?.[colKey] || 0);
+        const maxQty = _getMaxQty(date, meal, colKey);
+        if (maxQty < Infinity && cur >= maxQty) {
+          btn.classList.add('limit-reached');
+          btn.title = `Limited raw material (${maxQty} max)`;
+        } else {
+          btn.classList.remove('limit-reached');
+          btn.title = "";
+        }
+      });
+    }
     function refreshBadge(date, meal) {
       const sub = S.orders[date]?.[meal]?.subtotal || 0;
       const badge = $(`mtb_${date}_${meal}`); if (!badge) return;
       badge.style.display = sub > 0 ? "block" : "none"; badge.textContent = `₹${sub}`;
       refreshBillBtn();
       _refreshComboBadges(date, meal);
+      _syncPlusButtons(date, meal);
     }
     function hasAnyOrder() {
       for (const date of S.selectedDates) for (const meal of ["Breakfast", "Lunch", "Dinner"]) if ((S.orders[date]?.[meal]?.subtotal || 0) > 0) return true;
