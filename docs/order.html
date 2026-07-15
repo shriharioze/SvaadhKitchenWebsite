@@ -4683,7 +4683,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.15.03";
+    const APP_VERSION = "v26.07.15.04";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11403,7 +11403,14 @@
         if (S.profile && String(S.profile.email || "").trim()) return; // already has one
         if (!S.phone) return;
         if (sessionStorage.getItem("sk_email_prompt_shown")) return;   // once per visit
-        if (document.querySelector(".bill-modal-overlay")) return;     // don't stack on another modal
+        // Don't stack on another VISIBLE modal. NOTE: several .bill-modal-overlay
+        // panels (Manage Orders / Pricing / Guide) live in the DOM permanently at
+        // display:none — a plain querySelector matches those too and would suppress
+        // this popup forever, so we must check for an actually-VISIBLE one.
+        var _modalUp = Array.prototype.some.call(
+          document.querySelectorAll(".bill-modal-overlay"),
+          function (el) { return getComputedStyle(el).display !== "none"; });
+        if (_modalUp) return;
       } catch (e) { return; }
       _showEmailCollectModal();
     }
