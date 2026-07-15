@@ -293,7 +293,7 @@ const BUSINESS_CONTEXT = {
     process: "Open the order form → enter phone number → fill address → pick dates → choose meals → review bill → pay via gateway (UPI/card), Wallet, or On Account.",
     advance: "Select multiple dates on the calendar to order for the full week in one go — or use a Bulk plan (Week/15-Day/Month) for automatic daily meals with a discount.",
     per_meal_address: "Each meal can go to a different address — breakfast at home, lunch at office, dinner back home.",
-    edit_cancel: "Use 'View/Edit existing orders' to cancel before the cutoff (editing = cancel and re-place). Bulk 15-Day/Month days can be POSTPONED to another date instead of cancelling.",
+    edit_cancel: "Use 'Manage Orders' to cancel before the cutoff (editing = cancel and re-place). Bulk 15-Day/Month days can be POSTPONED to another date instead of cancelling.",
     tracking: "Once the driver marks an order dispatched, an 'Out for Delivery' badge shows in the Manage Orders dashboard.",
     pwa: "The website installs as a mobile app (PWA) — tap 'Install App' on the home or order page.",
     no_login: "No login needed — phone number is your identity. Details are saved automatically."

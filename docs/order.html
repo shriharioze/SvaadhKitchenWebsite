@@ -7000,11 +7000,12 @@
       }
       const qty = S.orders[date]?.[meal]?.items?.[colKey] || 0;
       const eid = `qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
+      const bid = `badge_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
       return `<div class="item-row">
     <div>
       <div class="item-name">${name}</div>
       <div class="item-price">₹${price} each</div>
-      ${isLowStock ? `<div style="margin-top:4px;">${getStockBadge(colKey, remaining)}</div>` : ''}
+      <div id="${bid}" style="margin-top:4px;${isLowStock ? '' : 'display:none;'}">${isLowStock ? getStockBadge(colKey, remaining) : ''}</div>
     </div>
     <div class="qty-control${qty > 0 ? ' qty-active' : ''}">
       <button class="qty-btn" onclick="changeQty('${date}','${meal}','${colKey}',${price},-1)">−</button>
@@ -7017,6 +7018,34 @@
     }
 
     // QTY
+    const SABJI_COMBO_MAP = {
+      "Dry Sabji Mini (100ml)":   { groupKey: "Dry",   weight: 0.6, peer: "Dry Sabji Full (250ml)" },
+      "Dry Sabji Full (250ml)":   { groupKey: "Dry",   weight: 1.4, peer: "Dry Sabji Mini (100ml)" },
+      "Curry Sabji Mini (100ml)": { groupKey: "Curry", weight: 0.6, peer: "Curry Sabji Full (250ml)" },
+      "Curry Sabji Full (250ml)": { groupKey: "Curry", weight: 1.4, peer: "Curry Sabji Mini (100ml)" }
+    };
+    function _getMaxQty(date, meal, colKey) {
+      const menu = S.menuCache[date] || {};
+      const rem = ((menu.units_remaining || {})[meal] || {})[colKey];
+      let maxQty = (rem !== undefined) ? rem : Infinity;
+
+      const comboInfo = SABJI_COMBO_MAP[colKey];
+      if (comboInfo) {
+        const st = ((menu.combo_stock || {})[meal] || {})[comboInfo.groupKey];
+        if (st && typeof st.remainingBudget === "number") {
+          const peerQty = (S.orders[date]?.[meal]?.items?.[comboInfo.peer] || 0);
+          const peerWeight = SABJI_COMBO_MAP[comboInfo.peer].weight;
+          const budgetLeftForMe = st.remainingBudget - (peerQty * peerWeight);
+          if (budgetLeftForMe <= 0) {
+            maxQty = 0;
+          } else {
+            const comboMax = Math.floor((budgetLeftForMe + 0.0001) / comboInfo.weight);
+            maxQty = Math.min(maxQty, Math.max(0, comboMax));
+          }
+        }
+      }
+      return maxQty;
+    }
     function _syncQtyActiveClass(el, qty) {
       if (!el) return;
       const wrap = el.closest ? el.closest('.qty-control') : el.parentElement;
@@ -7027,8 +7056,7 @@
     function changeQty(date, meal, colKey, price, delta) {
       if (!S.orders[date]?.[meal]) return;
       const cur    = S.orders[date][meal].items[colKey] || 0;
-      const rem    = ((S.menuCache[date]?.units_remaining || {})[meal] || {})[colKey];
-      const maxQty = (rem !== undefined) ? rem : Infinity;
+      const maxQty = _getMaxQty(date, meal, colKey);
       const nxt    = Math.min(maxQty, Math.max(0, cur + delta));
       S.orders[date][meal].items[colKey] = nxt;
       const el = $(`qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_"));
@@ -7038,8 +7066,7 @@
     }
     function setQty(date, meal, colKey, price, rawVal) {
       if (!S.orders[date]?.[meal]) return;
-      const rem    = ((S.menuCache[date]?.units_remaining || {})[meal] || {})[colKey];
-      const maxQty = (rem !== undefined) ? rem : Infinity;
+      const maxQty = _getMaxQty(date, meal, colKey);
       let v = Math.min(maxQty, Math.max(0, parseInt(rawVal) || 0));
       S.orders[date][meal].items[colKey] = v;
       const el = $(`qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_"));
@@ -7298,11 +7325,32 @@
 
       return baseName;
     }
+    function _refreshComboBadges(date, meal) {
+      if (!S.menuCache[date]?.combo_stock?.[meal]) return;
+      Object.keys(SABJI_COMBO_MAP).forEach(colKey => {
+        const bid = `badge_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
+        const el = $(bid);
+        if (!el) return;
+        const maxQty = _getMaxQty(date, meal, colKey);
+        if (maxQty === Infinity) {
+          el.style.display = "none";
+        } else if (maxQty <= 0) {
+          el.style.display = "block";
+          el.innerHTML = `<span style="font-size:0.7rem;font-weight:700;color:#c0392b;background:#fdf0ee;padding:3px 10px;border-radius:20px;border:1px solid #f4c6c0;">⚡ Limit Reached</span>`;
+        } else if (maxQty <= 10) {
+          el.style.display = "block";
+          el.innerHTML = getStockBadge(colKey, maxQty);
+        } else {
+          el.style.display = "none";
+        }
+      });
+    }
     function refreshBadge(date, meal) {
       const sub = S.orders[date]?.[meal]?.subtotal || 0;
       const badge = $(`mtb_${date}_${meal}`); if (!badge) return;
       badge.style.display = sub > 0 ? "block" : "none"; badge.textContent = `₹${sub}`;
       refreshBillBtn();
+      _refreshComboBadges(date, meal);
     }
     function hasAnyOrder() {
       for (const date of S.selectedDates) for (const meal of ["Breakfast", "Lunch", "Dinner"]) if ((S.orders[date]?.[meal]?.subtotal || 0) > 0) return true;

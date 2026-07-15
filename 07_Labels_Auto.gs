@@ -16,10 +16,11 @@
 // stays as a harmless backstop: same filename → the file is replaced, never
 // duplicated.
 //
-// PDF engine: Google Slides advanced API (enabled in appsscript.json) — the
-// only GAS-native renderer that handles Devanagari text with precise mm
-// positioning, then exports to PDF. The temp presentation is trashed after
-// export.
+// PDF engine: Google Docs (`DocumentApp`) borderless table with cumulative
+// 0.75 pt (`96-dpi pixel`) pitch compensation (`cumPtNext - cumPtCurr`).
+// This ensures exact Devanagari (`Noto Sans Devanagari`) rendering without
+// row-height drift (`+0.08 mm/row`) or page overflow. The temp doc is trashed
+// after export.
 // ============================================================
 
 var LBL_AUTO_MEALS     = ["Lunch", "Dinner"]; // Breakfast excluded per spec
@@ -218,7 +219,14 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
 
       // ── One row = one full 27.7mm label pitch ──
       var row = table.getRow(idx);
-      row.setMinimumHeight(BLOCK * MM);
+      // Cumulative sub-point tracking: Docs rounds row min-heights to integer 96-dpi
+      // pixels (0.75 pt multiples). Passing raw BLOCK*MM (78.52 pt) causes Docs to round
+      // EVERY row up to 78.75 pt (105 px), adding +0.08mm/label (+2.44mm over 30 labels).
+      // Tracking cumulative 0.75 pt units ensures exact compensation (e.g. 105px, 104px, 105px)
+      // so total pitch after n labels stays within 0.05mm of exact n × BLOCK.
+      var cumPtNext = Math.round((idx + 1) * BLOCK * MM / 0.75) * 0.75;
+      var cumPtCurr = Math.round(idx * BLOCK * MM / 0.75) * 0.75;
+      row.setMinimumHeight(cumPtNext - cumPtCurr);
       var cell = row.getCell(0);
       cell.setPaddingTop(0.5 * MM).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
       cell.clear(); // leaves one empty paragraph

@@ -83,9 +83,9 @@
     "order_url": "https://www.svaadhkitchen.in/order.html",
     "mobile_app": "You can install our website as a mobile app (PWA) on your phone. Click 'Install App' on the home page or order page for a home-screen icon and fast access.",
     "process": "Open the order form → enter phone number → fill delivery address → pick dates on calendar → choose meals → review bill → pay via gateway (UPI/card), Wallet, or On Account.",
-    "live_tracking": "Once an order is marked 'Out for Delivery' by our driver, you'll see a '🚗 Out for Delivery' badge in your 'View/Edit upcoming orders' dashboard.",
+    "live_tracking": "Once an order is marked 'Out for Delivery' by our driver, you'll see a '🚗 Out for Delivery' badge in your 'Manage Orders' dashboard.",
     "advance_ordering": "You can select multiple dates on the calendar to order for the whole week in one go — or use a Bulk plan (Week / 15-Day / Month) for automatic daily meals with a discount.",
-    "edit_cancel": "You can cancel any order before its cutoff time using 'View/Edit existing orders' on the order form. Editing isn't available — cancel and re-place instead. Bulk 15-Day/Month days can also be POSTPONED to another date instead of cancelling.",
+    "edit_cancel": "You can cancel any order before its cutoff time using 'Manage Orders' on the order form. Editing isn't available — cancel and re-place instead. Bulk 15-Day/Month days can also be POSTPONED to another date instead of cancelling.",
     "no_login": "No login needed — your phone number is your identity. Your address and details are saved for the next order."
   },
   "contact": {
