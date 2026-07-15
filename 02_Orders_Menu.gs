@@ -109,6 +109,7 @@ function getCustomer(phone) {
     landmark:           r.Landmark || "",
     payment_preference: r.Payment_Freq || "Daily Payment",
     meal_addresses:     r.Meal_Addresses || "",
+    email:              r.Email || "",
     promoCount: (function(v){
       if (v === "" || v === null || v === undefined) return null;
       var num = Number(v);
@@ -176,6 +177,7 @@ function verifyLogin(phone, pin) {
       landmark:           r.Landmark || "",
       payment_preference: r.Payment_Freq || "Daily Payment",
       meal_addresses:     r.Meal_Addresses || "",
+      email:              r.Email || "",   // for the Forgot-PIN OTP + blank-email nudge
       promoCount: (function(v){
         if (v === "" || v === null || v === undefined) return null;
         var num = Number(v);
@@ -188,6 +190,130 @@ function verifyLogin(phone, pin) {
       pending_amount:     pendingAmount
     }
   };
+}
+
+// ── FORGOT-PIN EMAIL OTP ─────────────────────────────────────────────────────
+// Self-service PIN reset: a customer who forgot their PIN gets a 6-digit code
+// e-mailed to the address ON FILE (collected while logged in / at signup — NEVER
+// bound at reset time, so nobody can attach a fresh email to seize an account).
+// Free via Apps Script MailApp (≈100 emails/day on a consumer Gmail — ample).
+// Hardening: 6-digit code, 10-min expiry, ≤5 verify attempts, ≤3 sends/hour/phone
+// (CacheService, auto-expiring). New PIN is set ONLY after a correct code.
+var _OTP_TTL_SEC        = 600; // 10 minutes
+var _OTP_MAX_VERIFY     = 5;   // wrong-code attempts before the code is burned
+var _OTP_MAX_SENDS_PER_HR = 3; // OTP emails per phone per hour
+
+function _sanitizeEmail(raw) {
+  var e = String(raw == null ? "" : raw).trim().toLowerCase();
+  if (!e || e.length > 254) return "";
+  // Conservative single-address check (no spaces, one @, dotted TLD).
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(e)) return "";
+  return e;
+}
+function _maskEmail(email) {
+  var e = String(email || ""); var at = e.indexOf("@");
+  if (at < 1) return "your email";
+  var name = e.slice(0, at);
+  return (name.length <= 2 ? name.charAt(0) : name.slice(0, 2)) + "***" + e.slice(at);
+}
+
+// Find a customer's email in LIVE or ARCHIVE (Forgot-PIN cold path).
+function _findCustomerEmailAnywhere(phone) {
+  var ss = getSpreadsheet();
+  var pStr = _normalizePhone(phone);
+  var r = getAllRows(getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS))
+            .find(function (x) { return _normalizePhone(x.Phone) === pStr; });
+  if (r) return { found: true, source: "live", email: _sanitizeEmail(r.Email), name: r.Customer_Name || "" };
+  if (typeof _findArchivedCustomer === "function") {
+    var arc = _findArchivedCustomer(pStr);
+    if (arc) return { found: true, source: "archive", email: _sanitizeEmail(arc.profile && arc.profile.email), name: arc.name || "" };
+  }
+  return { found: false };
+}
+
+// Set a new PIN AFTER OTP verification — bypasses _upsertCustomer's takeover guard
+// (a valid code to the on-file email already proves ownership). Restores an archived
+// customer into live first so they then log in normally.
+function _setPinAfterOtp(phone, newPin) {
+  var ss = getSpreadsheet();
+  var pStr = _normalizePhone(phone);
+  var ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var find = function () { return getAllRows(ws).find(function (x) { return _normalizePhone(x.Phone) === pStr; }); };
+  var r = find();
+  if (!r && typeof _findArchivedCustomer === "function") {
+    var arc = _findArchivedCustomer(pStr);
+    if (arc) { _restoreArchivedCustomer(arc); r = find(); }
+  }
+  if (!r) return false;
+  var hIdx = headerIndex(ws);
+  ws.getRange(r._row, hIdx["PIN"]).setValue("'" + String(newPin).trim());
+  SpreadsheetApp.flush();
+  return true;
+}
+
+// STEP 1 — email a fresh OTP to the address on file. { ok, emailHint } or a reason.
+function requestPinResetOtp(phone) {
+  var pStr = _normalizePhone(phone);
+  if (!pStr) return { ok: false, reason: "bad_phone" };
+  var info = _findCustomerEmailAnywhere(pStr);
+  if (!info.found) return { ok: false, reason: "not_found" };
+  if (!info.email) return { ok: false, reason: "no_email" };
+
+  var cache = CacheService.getScriptCache();
+  var rlKey = "pinotp_rl_" + pStr;
+  var sends = Number(cache.get(rlKey) || 0);
+  if (sends >= _OTP_MAX_SENDS_PER_HR) return { ok: false, reason: "rate_limited" };
+
+  var otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+  cache.put("pinotp_" + pStr, JSON.stringify({ otp: otp, email: info.email, attempts: 0, exp: Date.now() + _OTP_TTL_SEC * 1000 }), _OTP_TTL_SEC);
+  cache.put(rlKey, String(sends + 1), 3600);
+
+  var mins = Math.round(_OTP_TTL_SEC / 60);
+  try {
+    MailApp.sendEmail({
+      to: info.email,
+      name: "Svaadh Kitchen",
+      subject: "Your Svaadh Kitchen PIN reset code: " + otp,
+      body: "Hi" + (info.name ? " " + String(info.name).split(" ")[0] : "") + ",\n\n" +
+            "Your Svaadh Kitchen PIN reset code is: " + otp + "\n\n" +
+            "Enter it in the app to set a new 4-digit PIN. This code expires in " + mins + " minutes.\n\n" +
+            "Didn't request this? You can safely ignore this email — your PIN stays unchanged.\n\n" +
+            "— Team Svaadh Kitchen"
+    });
+  } catch (e) { return { ok: false, reason: "send_failed" }; }
+  return { ok: true, emailHint: _maskEmail(info.email), expiresInMin: mins };
+}
+
+// STEP 2 — verify the code and set the new PIN. { ok } or a reason (+ attemptsLeft).
+function verifyPinResetOtp(phone, otp, newPin) {
+  var pStr = _normalizePhone(phone);
+  var code = String(otp || "").trim();
+  var pin  = String(newPin || "").trim();
+  if (!/^\d{4}$/.test(pin)) return { ok: false, reason: "bad_pin" };
+  var WEAK = ["0000","1111","2222","3333","4444","5555","6666","7777","8888","9999","1234","4321","9876","2580"];
+  if (WEAK.indexOf(pin) !== -1) return { ok: false, reason: "weak_pin" };
+
+  var cache = CacheService.getScriptCache();
+  var key = "pinotp_" + pStr;
+  var raw = cache.get(key);
+  if (!raw) return { ok: false, reason: "expired" };
+  var data; try { data = JSON.parse(raw); } catch (e) { cache.remove(key); return { ok: false, reason: "expired" }; }
+  if (Date.now() > data.exp) { cache.remove(key); return { ok: false, reason: "expired" }; }
+  if (data.attempts >= _OTP_MAX_VERIFY) { cache.remove(key); return { ok: false, reason: "too_many_attempts" }; }
+  if (code !== data.otp) {
+    data.attempts++;
+    cache.put(key, JSON.stringify(data), _OTP_TTL_SEC);
+    return { ok: false, reason: "bad_otp", attemptsLeft: Math.max(0, _OTP_MAX_VERIFY - data.attempts) };
+  }
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { return { ok: false, reason: "busy" }; }
+  try {
+    if (!_setPinAfterOtp(pStr, pin)) return { ok: false, reason: "not_found" };
+    cache.remove(key);
+    cache.remove("pinotp_rl_" + pStr); // clear the rate-limit once they're through
+    return { ok: true };
+  } finally { lock.releaseLock(); }
 }
 
 // ── AUTO-SETTLE PENDING ORDERS ──────────────────────────────
@@ -2809,7 +2935,13 @@ function _upsertCustomer(ss, profile) {
     if (profile.standardOrder !== undefined) update("Standard_Order", profile.standardOrder);
     if (profile.onAccount !== undefined) update("On_Account", profile.onAccount);
     if (profile.billingCycle !== undefined) update("Billing_Cycle", profile.billingCycle);
-    
+    // Email (for Forgot-PIN OTP). Only overwrite with a VALID address; a blank/invalid
+    // value never wipes a stored email (guards against a client sending "" on a partial save).
+    if (profile.email !== undefined) {
+      const _em = _sanitizeEmail(profile.email);
+      if (_em) update("Email", _em);
+    }
+
     SpreadsheetApp.flush(); // Ensure writes are committed
   } else {
     // For new records, construct a clean Row Array mapping directly to our schema
@@ -2834,6 +2966,7 @@ function _upsertCustomer(ss, profile) {
         case "Standard_Order":  val = profile.standardOrder || ""; break;
         case "Billing_Cycle":   val = profile.billingCycle || "Daily"; break;
         case "On_Account":      val = profile.onAccount || "No"; break;
+        case "Email":           val = _sanitizeEmail(profile.email); break;
         case "Review_Promo_Count": val = ""; break;
         default:                val = "";
       }

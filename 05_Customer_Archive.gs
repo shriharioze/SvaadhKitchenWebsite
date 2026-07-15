@@ -185,7 +185,8 @@ function fetchArchivedAddress(phone) {
       delivery_point:     g("Delivery_Point"),
       payment_preference: g("Payment_Freq"),
       billingCycle:       g("Billing_Cycle"),
-      onAccount:          g("On_Account")
+      onAccount:          g("On_Account"),
+      email:              g("Email")
       // PIN intentionally omitted — keep the customer's current PIN.
     };
     _upsertCustomer(ss, profile);   // restore into SK_Customers (create/update)
@@ -236,6 +237,7 @@ function _findArchivedCustomer(phone) {
         flat: g("Flat"), floor: g("Floor"), society: g("Society"), maps: g("Maps_Link"),
         landmark: g("Landmark"), meal_addresses: g("Meal_Addresses"), delivery_point: g("Delivery_Point"),
         payment_preference: g("Payment_Freq"), billingCycle: g("Billing_Cycle"), onAccount: g("On_Account"),
+        email: g("Email"),   // preserve email across archive→restore (Forgot-PIN OTP)
         pin: pin   // restore the OLD PIN → no reset for the returning customer
       }
     };

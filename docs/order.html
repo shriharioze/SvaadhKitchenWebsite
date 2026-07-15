@@ -3290,10 +3290,8 @@
               onchange="_tryAutoSubmitPin()" onkeyup="checkPinLength()">
           </div>
           <div id="forgotPinWrap" style="margin-top:14px;display:none;">
-            <a href="https://wa.me/919322246765?text=Hi,%20I%20forgot%20my%20Svaadh%20Kitchen%20PIN.%20Please%20clear%20my%20PIN%20so%20I%20can%20reset%20it."
-              target="_blank"
-              style="font-size:0.75rem;color:#1a73e8;text-decoration:none;font-weight:600;padding:6px 12px;background:#f0f4f8;border-radius:6px;">Forgot
-              PIN? Message us to reset</a>
+            <button type="button" onclick="_openForgotPinFlow()"
+              style="font-size:0.75rem;color:#1a73e8;font-weight:600;padding:6px 12px;background:#f0f4f8;border:none;border-radius:6px;cursor:pointer;">🔑 Forgot PIN? Reset by email</button>
           </div>
         </div>
         <p class="text-sm" style="margin-top:8px;" data-i18n="phone_hint">We'll load your saved details if you've
@@ -3382,6 +3380,15 @@
               onclick="event.stopPropagation();toast('Uncheck this if you want lunch delivered to your office, and dinner to your home.',6000)"
               style="margin-left:8px;background:#eee;color:#7f8c8d;border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;cursor:pointer;font-weight:700;">?</span></span>
         </label>
+
+        <!-- Email — used ONLY to reset your PIN by OTP if you forget it (customer-level, always shown) -->
+        <div class="form-group" id="emailFieldWrap" style="margin-bottom:16px;">
+          <label><span>📧 Email</span> <span style="font-size:0.72rem;color:#0284c7;font-weight:600;">(so you can reset your PIN if you forget it)</span></label>
+          <input type="email" id="emailInput" autocomplete="email" placeholder="you@example.com" oninput="_onEmailInput()">
+          <div id="emailNudge" style="display:none;margin-top:6px;font-size:0.72rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;">
+            💡 Add your email once — if you ever forget your PIN, you can reset it yourself via a code sent here (no need to message us).
+          </div>
+        </div>
 
         <!-- SINGLE ADDRESS (shown when sameAddr=true) -->
         <div id="singleAddrBlock">
@@ -4676,7 +4683,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.15.01";
+    const APP_VERSION = "v26.07.15.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5693,6 +5700,15 @@
       const society=($("societyInput")?.value||"").trim();
       row.style.display = (!area && !society && S.phone) ? "block" : "none";
     }
+    // Keep S.profile.email in step with the input, and show the "add your email"
+    // nudge only while it's blank (so returning customers who never set one are
+    // encouraged to — that's what enables self-service Forgot-PIN via OTP).
+    function _onEmailInput(){
+      const v = ($("emailInput")?.value || "").trim();
+      if (S.profile) S.profile.email = v;
+      const nudge = $("emailNudge");
+      if (nudge) nudge.style.display = v ? "none" : "block";
+    }
     async function fetchArchivedAddr(){
       if(!S.phone){ toast("Please enter your phone number first."); return; }
       const btn=document.getElementById("fetchArchivedBtn");
@@ -5801,6 +5817,7 @@
           // string on single-address edits, which the server SKIPPED — so the
           // stored Meal_Addresses kept the OLD address/maps forever after an edit.
           meal_addresses: JSON.stringify(S.mealAddrs),
+          email: ($("emailInput")?.value || S.profile.email || "").trim(),
           _action: "upsertProfile"
         };
         fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(profile) });
@@ -6191,6 +6208,7 @@
           delivery_point: profileData.delivery_point || "door",
           maps: profileData.maps || "", landmark: profileData.landmark || "", payment_preference: profileData.payment_preference || "Daily Payment",
           meal_addresses: profileData.meal_addresses || "",
+          email: profileData.email || "",
           promoCount: pc,
           feeExempt: (profileData.feeExempt === true || String(profileData.feeExempt) === "true"),
           onAccount: String(profileData.onAccount || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
@@ -6278,6 +6296,8 @@
       $("deliveryPointSelection").value = S.profile.delivery_point || "door";
       $("mapsInput").value = S.profile.maps || "";
       $("landmarkInput").value = S.profile.landmark || "";
+      if ($("emailInput")) $("emailInput").value = S.profile.email || "";
+      try { _onEmailInput(); } catch (_) {} // sync S.profile.email + show/hide the "add your email" nudge
       $("payFreqSelect").value = S.profile.payment_preference;
       // Returning customer whose profile was archived after long inactivity →
       // offer the "fetch my saved address" button when the address is blank.
@@ -11257,6 +11277,114 @@
       box.appendChild(btn);
       ov.appendChild(box);
       document.body.appendChild(ov);
+    }
+
+    // ── FORGOT PIN via EMAIL OTP ─────────────────────────────────────────────
+    // Self-service reset: email a 6-digit code to the address on file → verify it +
+    // set a new PIN → log in. No email on file → WhatsApp fallback. All copy is set
+    // via textContent/known-safe HTML; the only interpolated value (masked email
+    // hint) comes from our backend.
+    function _openForgotPinFlow() {
+      const phone = S.phone || (localStorage.getItem('sk_logged_in_phone') || "");
+      if (!phone) { toast("Please enter your phone number first."); return; }
+      const WA = "https://wa.me/919322246765?text=" + encodeURIComponent("Hi, I forgot my Svaadh Kitchen PIN and have no email on file. Please help me reset it.");
+      const ov = document.createElement("div");
+      ov.className = "bill-modal-overlay";
+      ov.style.cssText = "display:flex;align-items:center;justify-content:center;padding:20px;z-index:60060;";
+      const box = document.createElement("div");
+      box.style.cssText = "background:var(--card-bg,#fff);max-width:380px;width:100%;border-radius:18px;padding:22px 20px;box-shadow:0 16px 48px rgba(0,0,0,0.3);";
+      box.innerHTML = '<div style="font-size:1.05rem;font-weight:800;color:#1E1240;margin-bottom:6px;">🔑 Reset your PIN</div><div id="fpBody" style="font-size:0.85rem;color:var(--text-color,#475569);line-height:1.55;"></div>';
+      ov.appendChild(box); document.body.appendChild(ov);
+      const bodyEl = box.querySelector("#fpBody");
+      const close = () => { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+      ov.addEventListener("click", e => { if (e.target === ov) close(); });
+      const BTN = "width:100%;padding:12px;border:none;border-radius:12px;font-size:0.9rem;font-weight:700;cursor:pointer;margin-top:12px;";
+      const PRIMARY = BTN + "background:linear-gradient(135deg,#f47c3c,#e2632b);color:#fff;";
+      const PLAIN = BTN + "background:#eef2f7;color:#334155;";
+      const INP = "width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:1rem;margin-top:10px;box-sizing:border-box;";
+
+      const post = async (payload) => {
+        try { const r = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(payload) }); return await r.json(); }
+        catch (e) { return null; }
+      };
+
+      function showRequest() {
+        bodyEl.innerHTML = '<p>We\'ll email a 6-digit code to the address saved on your account, so you can set a new PIN yourself.</p>'
+          + '<button id="fpSend" style="' + PRIMARY + '">📧 Email me a reset code</button>'
+          + '<button id="fpCancel" style="' + PLAIN + '">Cancel</button>';
+        box.querySelector("#fpCancel").onclick = close;
+        const b = box.querySelector("#fpSend");
+        b.onclick = async () => {
+          b.disabled = true; b.textContent = "Sending…";
+          const r = await post({ _action: "requestPinResetOtp", phone: phone });
+          if (r && r.ok) { showVerify(r.emailHint, r.expiresInMin); return; }
+          b.disabled = false; b.textContent = "📧 Email me a reset code";
+          showReason(r && r.reason);
+        };
+      }
+
+      function showReason(reason) {
+        let msg;
+        if (reason === "no_email") msg = "We don't have an email on your account yet, so we can't send a code. Please reset via WhatsApp — and next time you're logged in, add your email so you can do this yourself.";
+        else if (reason === "not_found") msg = "We couldn't find an account for this number.";
+        else if (reason === "rate_limited") msg = "You've asked for a few codes already. Please wait a little while, then try again — or WhatsApp us.";
+        else msg = "Sorry, we couldn't send the code right now. Please try again in a moment, or WhatsApp us.";
+        bodyEl.innerHTML = '<p>' + msg + '</p>'
+          + '<a href="' + WA + '" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;' + PRIMARY + '">💬 Message us on WhatsApp</a>'
+          + '<button id="fpClose" style="' + PLAIN + '">Close</button>';
+        box.querySelector("#fpClose").onclick = close;
+      }
+
+      function showVerify(hint, mins) {
+        bodyEl.innerHTML = '<p>We sent a 6-digit code to <b></b> (expires in ' + (mins || 10) + ' min). Enter it with your new PIN.</p>'
+          + '<input id="fpOtp" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="' + INP + '">'
+          + '<input id="fpPin" inputmode="numeric" maxlength="4" type="password" placeholder="New 4-digit PIN" style="' + INP + '">'
+          + '<div id="fpErr" style="color:#dc2626;font-size:0.75rem;margin-top:6px;min-height:1em;"></div>'
+          + '<button id="fpGo" style="' + PRIMARY + '">Set new PIN</button>'
+          + '<button id="fpResend" style="' + PLAIN + '">Resend code</button>';
+        box.querySelector("b").textContent = hint || "your email"; // safe: no HTML injection
+        const otpEl = box.querySelector("#fpOtp"), pinEl = box.querySelector("#fpPin"), errEl = box.querySelector("#fpErr");
+        otpEl.oninput = () => otpEl.value = otpEl.value.replace(/\D/g, "").slice(0, 6);
+        pinEl.oninput = () => pinEl.value = pinEl.value.replace(/\D/g, "").slice(0, 4);
+        box.querySelector("#fpResend").onclick = showRequest;
+        const go = box.querySelector("#fpGo");
+        go.onclick = async () => {
+          const otp = otpEl.value.trim(), np = pinEl.value.trim();
+          errEl.textContent = "";
+          if (!/^\d{6}$/.test(otp)) { errEl.textContent = "Enter the 6-digit code from your email."; return; }
+          if (!/^\d{4}$/.test(np)) { errEl.textContent = "Choose a new 4-digit PIN."; return; }
+          go.disabled = true; go.textContent = "Verifying…";
+          const r = await post({ _action: "verifyPinResetOtp", phone: phone, otp: otp, newPin: np });
+          if (r && r.ok) { close(); await _loginWithNewPin(phone, np); return; }
+          go.disabled = false; go.textContent = "Set new PIN";
+          const reason = r && r.reason;
+          errEl.textContent =
+            reason === "bad_otp" ? ("Incorrect code" + (typeof r.attemptsLeft === "number" ? " — " + r.attemptsLeft + " tries left." : ".")) :
+            reason === "expired" ? "That code expired. Tap “Resend code”." :
+            reason === "too_many_attempts" ? "Too many wrong tries. Tap “Resend code” for a fresh one." :
+            reason === "weak_pin" ? "Please pick a less obvious PIN (not 1234, 0000, etc.)." :
+            reason === "bad_pin" ? "PIN must be 4 digits." :
+            "Something went wrong. Please try again.";
+        };
+      }
+      showRequest();
+    }
+
+    // After an OTP reset, log the customer in with their new PIN (same path as a normal login).
+    async function _loginWithNewPin(phone, newPin) {
+      try {
+        localStorage.setItem('sk_logged_in_phone', phone);
+        localStorage.setItem('sk_logged_in_pin', newPin);
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=verifyLogin&phone=${phone}&pin=${newPin}`);
+        const vd = await res.json();
+        if (vd.success) {
+          toast("✅ PIN reset — you're logged in!", 3500);
+          handleLoginSuccess(vd.profile, false);
+          if (vd.notice) _showLoginNotice(vd.notice, phone);
+        } else {
+          toast("PIN reset. Please enter your new PIN to continue.");
+        }
+      } catch (e) { toast("PIN reset. Please log in with your new PIN."); }
     }
 
     /**
