@@ -221,7 +221,7 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
 
     doc.saveAndClose();
     var pdfBlob = DriveApp.getFileById(docId).getAs("application/pdf");
-    pdfBlob.setName("labels_" + mealStr + "_" + _formatDateIst(new Date()) + ".pdf");
+    pdfBlob.setName("labels_" + mealStr + "_" + Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd") + ".pdf");
     return Utilities.base64Encode(pdfBlob.getBytes());
   } finally {
     try {
