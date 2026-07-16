@@ -411,12 +411,20 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     else if (dayFood >= 325) tierRate = 0.05;
     const dayTierDisc = Math.round(dayFood * tierRate);
 
-    totalBulkPool += Math.round(dayFood * _rate); // plan rate: 5% / 7.5% / 10%
+    let dayTotalDailyFood = 0;
     meals.forEach(function (m) {
-      mealFoodTotal[m.meal] = (mealFoodTotal[m.meal] || 0) + m.food;
+      const delivery = (isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
+      const smallFee = (isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
+      m.baseFood = m.food;
+      m.delivery = delivery;
+      m.smallFee = smallFee;
+      m.dailyFood = m.baseFood + delivery + smallFee;
+      dayTotalDailyFood += m.dailyFood;
+      mealFoodTotal[m.meal] = (mealFoodTotal[m.meal] || 0) + m.dailyFood;
       mealCount[m.meal] = (mealCount[m.meal] || 0) + 1;
     });
-    dayList.push({ date: date, meals: meals, dayFood: dayFood, isDayFree: isDayFree, dayTierDisc: dayTierDisc });
+    totalBulkPool += dayTotalDailyFood * _rate; // plan rate: 5% / 7.5% / 10%
+    dayList.push({ date: date, meals: meals, dayFood: dayFood, dayDailyFood: dayTotalDailyFood, isDayFree: isDayFree, dayTierDisc: dayTierDisc });
   });
 
   // Split the batch's total bulk discount across meals PROPORTIONAL to each meal's food
@@ -426,7 +434,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
   const mealPool = {}; let poolAssigned = 0;
   mealKeys.forEach(function (mk, i) {
     if (i === mealKeys.length - 1) mealPool[mk] = totalBulkPool - poolAssigned;
-    else { mealPool[mk] = grandFood > 0 ? Math.round(totalBulkPool * mealFoodTotal[mk] / grandFood) : 0; poolAssigned += mealPool[mk]; }
+    else { mealPool[mk] = grandFood > 0 ? totalBulkPool * mealFoodTotal[mk] / grandFood : 0; poolAssigned += mealPool[mk]; }
   });
 
   // PASS 2 — build rows. Each meal's pool is spread evenly across its days via a running
@@ -441,24 +449,24 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
       const last = (i === day.meals.length - 1);
 
       mealSeen[m.meal] = (mealSeen[m.meal] || 0) + 1;
-      const tgt = Math.round((mealPool[m.meal] || 0) * mealSeen[m.meal] / (mealCount[m.meal] || 1));
+      const tgt = (mealPool[m.meal] || 0) * mealSeen[m.meal] / (mealCount[m.meal] || 1);
       const bulkShare = tgt - (mealBulkAssigned[m.meal] || 0);
       mealBulkAssigned[m.meal] = tgt;
 
-      const tierShare = last ? (day.dayTierDisc - tierAssigned) : Math.round(day.dayTierDisc * (m.food / day.dayFood));
+      const tierShare = last ? (day.dayTierDisc - tierAssigned) : Math.round(day.dayTierDisc * (m.dailyFood / (day.dayDailyFood || 1)));
       tierAssigned += tierShare;
 
-      const delivery = (day.isDayFree || isPickup) ? 0 : BULK_DELIVERY;
-      const smallFee = (day.isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
+      const delivery = m.delivery;
+      const smallFee = m.smallFee;
       const discount = bulkShare + tierShare;
-      const net = Math.max(0, Math.round(m.food - discount + delivery + smallFee));
+      const net = Math.max(0, Math.round(m.dailyFood - discount));
 
       rows.push({
-        date: day.date, meal: m.meal, food: m.food,
+        date: day.date, meal: m.meal, food: m.dailyFood, baseFood: m.baseFood,
         bulkDisc: bulkShare, tierDisc: tierShare, discount: discount,
         delivery: delivery, smallFee: smallFee, net: net, items: m.items
       });
-      total += net; totalFood += m.food; totalBulkDisc += bulkShare; totalTierDisc += tierShare;
+      total += net; totalFood += m.dailyFood; totalBulkDisc += bulkShare; totalTierDisc += tierShare;
     });
   });
 
@@ -590,7 +598,7 @@ function submitBulkOrder(body) {
     return { success: true, dryRun: true, plan: priced.plan, total: priced.total, bulkRate: priced.bulkRate,
              count: priced.rows.length, totalFood: priced.totalFood, totalBulkDisc: priced.totalBulkDisc,
              totalTierDisc: priced.totalTierDisc, lunch: priced.lunch, dinner: priced.dinner,
-             rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };
+             rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, baseFood: r.baseFood, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };
   }
 
   // Write rows
@@ -675,7 +683,7 @@ function submitBulkOrder(body) {
     set("Items_JSON", JSON.stringify(itemsObj));
     r.items.forEach(function (it) { const col = ITEM_COL_MAP[it.colKey]; if (col && hIdx[col]) set(col, it.qty); });
     set("Special_Notes_Kitchen", bulkNote);
-    set("Food_Subtotal", r.food);
+    set("Food_Subtotal", r.baseFood || r.food);
     set("Small_Order_Fee", r.smallFee);
     set("Delivery_Charge", r.delivery);
     set("Discount_Amount", r.discount);

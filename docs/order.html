@@ -12697,17 +12697,20 @@
         const nm = (typeof getItemName === "function") ? getItemName(ck, meal) : ck;
         items += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#444;"><span>' + qty + ' × ' + nm + '</span><span>₹' + (getPrice(ck, meal) * qty) + '</span></div>';
       });
+      const fmt = function(v) { return Number(Number(v).toFixed(2)); };
+      const deliveryPerDay = rows[0].delivery || 0, smallFeePerDay = rows[0].smallFee || 0;
       const ratePct = (q.bulkRate ? Math.round(q.bulkRate * 1000) / 10 : 5); // 5 / 7.5 / 10
-      let lines = '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:5px 0;color:#555;border-top:1px solid #f0f0f0;margin-top:4px;"><span>Food (₹' + foodPerDay + '/day × ' + days + ')</span><span>₹' + food + '</span></div>'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (' + ratePct + '%)</span><span>−₹' + bulk + '</span></div>'
-        + (tier > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Volume discount</span><span>−₹' + tier + '</span></div>' : "")
-        + (delivery > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#777;"><span>🚚 Delivery</span><span>₹' + delivery + '</span></div>' : "")
-        + (smallFee > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#777;"><span>📦 Small-order fee</span><span>₹' + smallFee + '</span></div>' : "")
-        + '<div style="display:flex;justify-content:space-between;font-weight:700;font-size:0.85rem;color:#b45309;padding-top:4px;"><span>' + meal + ' subtotal</span><span>₹' + net + '</span></div>';
+      let feeItems = (deliveryPerDay > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#777;"><span>🚚 Delivery</span><span>₹' + fmt(deliveryPerDay) + '</span></div>' : "")
+                   + (smallFeePerDay > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#777;"><span>📦 Small-order fee</span><span>₹' + fmt(smallFeePerDay) + '</span></div>' : "");
+      let lines = '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:5px 0;color:#555;border-top:1px solid #f0f0f0;margin-top:4px;"><span>Food (₹' + fmt(foodPerDay) + '/day × ' + days + ')</span><span>₹' + fmt(food) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (' + ratePct + '%)</span><span>−₹' + fmt(bulk) + '</span></div>'
+        + (tier > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Volume discount</span><span>−₹' + fmt(tier) + '</span></div>' : "")
+        + '<div style="display:flex;justify-content:space-between;font-weight:700;font-size:0.85rem;color:#b45309;padding-top:4px;"><span>' + meal + ' subtotal</span><span>₹' + fmt(net) + '</span></div>';
       return '<div style="border:1px solid #fde4c8;border-radius:12px;padding:11px 13px;margin-bottom:12px;">'
         + '<div style="font-weight:800;color:#92400e;font-size:0.88rem;margin-bottom:6px;">' + icon + ' ' + meal + ' <span style="font-weight:600;color:#999;font-size:0.72rem;">· ' + days + ' days (' + range + ')</span></div>'
         + items
         + (hasSabji ? '<div style="font-size:0.7rem;color:#b45309;font-style:italic;margin:4px 0 2px;">🍲 Sabji of the day — chef\'s choice</div>' : "")
+        + feeItems
         + lines + '</div>';
     }
 
