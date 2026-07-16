@@ -160,37 +160,34 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
   if (!orders || !orders.length) return "";
   var mealStr = String(meal || "");
   var n = orders.length;
-  var LH = 25.0; // 25mm label height
-  var GAP = (typeof gapMm === "number" && !isNaN(gapMm)) ? gapMm : 2.7;
-  var BLOCK = LH + GAP; // 27.7mm pitch
-  var MM = 2.834645669; // pt per mm
-  var totalHPt = Math.round(n * BLOCK * MM * 100) / 100;
-  var widthPt = Math.round(50 * MM * 100) / 100;
-  var FONT = (lang === "Devanagari") ? "Noto Sans Devanagari" : "Hind";
+  var MM = 2.834645669; // mm → pt
+  var W = 50, LH = 25, GAP = (typeof gapMm === "number" && !isNaN(gapMm)) ? gapMm : 2.7;
+  var BLOCK = LH + GAP;
+  var totalH = n * BLOCK;
+  var FONT = (lang === "Devanagari") ? "Noto Sans Devanagari" : "Arial";
 
-  var title = "tmp_labels_" + mealStr + "_" + Date.now();
-  var presentation = Slides.Presentations.create({ title: title });
-  var deckId = presentation.presentationId;
+  var doc = DocumentApp.create("tmp_labels_" + mealStr + "_" + Date.now());
+  var docId = doc.getId();
 
   try {
-    // 1. Resize presentation page to exact label strip dimensions [50mm × n*27.7mm]
-    Slides.Presentations.batchUpdate({
-      requests: [{
-        updatePageSize: {
-          pageSize: {
-            width: { magnitude: widthPt, unit: "PT" },
-            height: { magnitude: totalHPt, unit: "PT" }
-          }
-        }
-      }]
-    }, deckId);
+    var body = doc.getBody();
+    // Page height = the strip (n × BLOCK) + safety pad. Pad covers the ONE mandatory
+    // trailing paragraph Docs keeps after a table (shrunk to font-size 1 ≈ 0.4mm) AND
+    // per-row pixel rounding. Without the pad the last label spills to a 2nd page.
+    var PAD = 12;
+    body.setPageWidth(W * MM).setPageHeight((totalH + PAD) * MM);
+    body.setMarginTop(0).setMarginBottom(0).setMarginLeft(2 * MM).setMarginRight(2 * MM);
 
-    // 2. Open via SlidesApp for absolute coordinate positioning of text boxes & dividing lines
-    var deck = SlidesApp.openById(deckId);
-    var slide = deck.getSlides()[0];
+    // ONE borderless row PER LABEL, min height = BLOCK (25mm label + 2.7mm gap).
+    var cellsSeed = [];
+    for (var i = 0; i < n; i++) cellsSeed.push(["."]);
+    var table = body.insertTable(0, cellsSeed);
+    table.setBorderWidth(0);
+
+    var TINY = {};
+    TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse the trailing structural paragraph
 
     orders.forEach(function (order, idx) {
-      var BY = idx * BLOCK; // top of label idx in mm
       var summary = _lblItemSummary(order, meal, lang);
       var fields = [{ text: "Name: " + (order.name || ""), bold: true, color: "#000000", base: 9.5 }];
       if (summary) fields.push({ text: summary, bold: false, color: "#222222", base: 8.5 });
@@ -198,46 +195,37 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
       if (order.notes) fields.push({ text: "* " + order.notes, bold: false, color: "#B86000", base: 7 });
       var lines = _lblFitLabel(fields);
 
-      // Add absolute-positioned text box for the 25mm label block
-      var tbLeft = 1.0 * MM;
-      var tbTop = (BY + 0.5) * MM;
-      var tbWidth = 48.0 * MM;
-      var tbHeight = (LH - 0.5) * MM;
-      var shape = slide.insertShape(SlidesApp.ShapeType.TEXT_BOX, tbLeft, tbTop, tbWidth, tbHeight);
-      var textRange = shape.getText();
-      shape.setContentAlignment(SlidesApp.ContentAlignment.TOP);
-
+      var row = table.getRow(idx);
+      var cumPtNext = Math.round((idx + 1) * BLOCK * MM / 0.75) * 0.75;
+      var cumPtCurr = Math.round(idx * BLOCK * MM / 0.75) * 0.75;
+      row.setMinimumHeight(cumPtNext - cumPtCurr);
+      var cell = row.getCell(0);
+      cell.setPaddingTop(0.5 * MM).setPaddingBottom(0).setPaddingLeft(0).setPaddingRight(0);
+      cell.clear(); // leaves one empty paragraph
       lines.forEach(function (l, li) {
-        var tr = (li === 0) ? textRange.setText(l.text) : textRange.appendParagraph(l.text).getRange();
-        tr.getTextStyle()
-          .setFontFamily(FONT)
-          .setFontSize(l.size)
-          .setBold(!!l.bold)
-          .setForegroundColor(l.color);
-        tr.getParagraphStyle()
-          .setLineSpacing(90)
-          .setSpaceBefore(0)
-          .setSpaceAfter(0);
+        var p = (li === 0) ? cell.getChild(0).asParagraph() : cell.appendParagraph("");
+        p.setText(l.text);
+        p.setLineSpacing(0.9).setSpacingBefore(0).setSpacingAfter(0);
+        var t = p.editAsText();
+        t.setFontFamily(FONT).setFontSize(l.size).setBold(!!l.bold).setForegroundColor(l.color);
       });
-
-      // Strict horizontal line across the label at 25mm + GAP/2 exactly like manual kitchen.html
-      if (idx < n - 1) {
-        var lineY = (BY + LH + GAP / 2) * MM;
-        var line = slide.insertLine(SlidesApp.LineCategory.STRAIGHT, 1.0 * MM, lineY, 49.0 * MM, lineY);
-        line.getLineFill().setSolidFill("#000000");
-        line.setWeight(1);
-      }
     });
 
-    deck.saveAndClose();
+    var nc = body.getNumChildren();
+    for (var ci = 0; ci < nc; ci++) {
+      var ch = body.getChild(ci);
+      if (ch.getType() === DocumentApp.ElementType.PARAGRAPH && ch.asParagraph().getText() === "") {
+        ch.asParagraph().setAttributes(TINY).setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+      }
+    }
 
-    // Export the resized single continuous slide as PDF base64
-    var pdfBlob = DriveApp.getFileById(deckId).getAs("application/pdf");
+    doc.saveAndClose();
+    var pdfBlob = DriveApp.getFileById(docId).getAs("application/pdf");
     pdfBlob.setName("labels_" + mealStr + "_" + _formatDateIst(new Date()) + ".pdf");
     return Utilities.base64Encode(pdfBlob.getBytes());
   } finally {
     try {
-      DriveApp.getFileById(deckId).setTrashed(true);
+      DriveApp.getFileById(docId).setTrashed(true);
     } catch (cleanupErr) {}
   }
 }
