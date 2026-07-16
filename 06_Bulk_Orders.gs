@@ -448,7 +448,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
       const tierShare = last ? (day.dayTierDisc - tierAssigned) : Math.round(day.dayTierDisc * (m.food / day.dayFood));
       tierAssigned += tierShare;
 
-      const delivery = (day.isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
+      const delivery = (day.isDayFree || isPickup) ? 0 : BULK_DELIVERY;
       const smallFee = (day.isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
       const discount = bulkShare + tierShare;
       const net = Math.max(0, Math.round(m.food - discount + delivery + smallFee));
