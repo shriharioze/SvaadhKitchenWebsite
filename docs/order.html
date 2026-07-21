@@ -5978,15 +5978,30 @@
           if (!area) { toast(t('toast_area')); return false; }
           const isPickup = (area === "Self Pickup");
           const society = $("societyInput").value.trim();
+          const wing = $("wingInput").value.trim();
+          const flat = $("flatInput").value.trim();
+          const floor = $("floorInput").value.trim();
+          const landmark = $("landmarkInput").value.trim();
+          const mapsVal = $("mapsInput").value.trim();
+
           if (!isPickup) {
             if (!society) { toast(t('toast_society')); return false; }
-          }
-          // STRICT: maps link must be a Google Maps link (or empty).
-          if (!isPickup && !_isGoogleMapsLink($("mapsInput").value)) {
-            _mapsLinkFeedback($("mapsInput"));
-            toast("⚠️ That doesn't look like a Google Maps link. Please paste a link like maps.app.goo.gl/… or google.com/maps/… (or leave it blank).", 6000);
-            try { $("mapsInput").focus(); } catch (_) {}
-            return false;
+            
+            const isPG = /\bpg\b/i.test(`${society} ${wing} ${flat} ${floor} ${landmark}`);
+            if (isPG && !mapsVal) {
+              $("mapsInput").style.borderColor = "#e74c3c";
+              $("mapsInput").style.background = "#fdf0ee";
+              toast("⚠️ Since you entered 'PG' in your address, the Google Maps link is compulsory. Please paste your location link.", 6000);
+              try { $("mapsInput").focus(); } catch (_) {}
+              return false;
+            }
+            // STRICT: maps link must be a Google Maps link (or empty).
+            if (!_isGoogleMapsLink(mapsVal)) {
+              _mapsLinkFeedback($("mapsInput"));
+              toast("⚠️ That doesn't look like a Google Maps link. Please paste a link like maps.app.goo.gl/… or google.com/maps/… (or leave it blank).", 6000);
+              try { $("mapsInput").focus(); } catch (_) {}
+              return false;
+            }
           }
 
           S.profile = {
@@ -5996,13 +6011,13 @@
             // start getting charged delivery on the bill page.
             ...S.profile,
             name, first_name: firstName, last_name: lastName, area,
-            wing: isPickup ? "" : $("wingInput").value.trim(),
-            flat: isPickup ? "" : $("flatInput").value.trim(),
-            floor: isPickup ? "" : $("floorInput").value.trim(),
+            wing: isPickup ? "" : wing,
+            flat: isPickup ? "" : flat,
+            floor: isPickup ? "" : floor,
             society,
             delivery_point: isPickup ? "door" : $("deliveryPointSelection").value,
-            maps: isPickup ? "" : $("mapsInput").value.trim(),
-            landmark: isPickup ? "" : $("landmarkInput").value.trim(),
+            maps: isPickup ? "" : mapsVal,
+            landmark: isPickup ? "" : landmark,
             payment_preference: $("payFreqSelect").value
           };
           // Keep the per-meal addresses in lock-step with a single-address edit —
@@ -6026,16 +6041,29 @@
           const _pfxOf = { Breakfast: "bf", Lunch: "l", Dinner: "d" };
           mealsData.forEach(meal => {
             if (meal.addr.area) {
-              if (meal.addr.area === "Self Pickup" || meal.addr.society) {
+              const isPickup = (meal.addr.area === "Self Pickup");
+              if (isPickup || meal.addr.society) {
                 validCount++;
               } else {
                 errorMsg = `Please provide a Society / Building name for your ${meal.name} address.`;
               }
-              // STRICT: maps link must be a Google Maps link (or empty).
-              if (!errorMsg && meal.addr.area !== "Self Pickup" && !_isGoogleMapsLink(meal.addr.maps)) {
-                errorMsg = `⚠️ The ${meal.name} maps link doesn't look like a Google Maps link. Please paste a link like maps.app.goo.gl/… (or leave it blank).`;
+              
+              if (!errorMsg && !isPickup) {
+                const mapsVal = String(meal.addr.maps || "").trim();
+                const isPG = /\bpg\b/i.test(`${meal.addr.wing || ""} ${meal.addr.flat || ""} ${meal.addr.floor || ""} ${meal.addr.society || ""} ${meal.addr.landmark || ""}`);
                 const _mEl = $(_pfxOf[meal.name] + "_mapsInput");
-                if (_mEl) { _mapsLinkFeedback(_mEl); try { _mEl.focus(); } catch (_) {} }
+
+                if (isPG && !mapsVal) {
+                  errorMsg = `⚠️ Since you entered 'PG', the Google Maps link for ${meal.name} is compulsory. Please paste your location link.`;
+                  if (_mEl) {
+                    _mEl.style.borderColor = "#e74c3c";
+                    _mEl.style.background = "#fdf0ee";
+                    try { _mEl.focus(); } catch (_) {}
+                  }
+                } else if (!_isGoogleMapsLink(mapsVal)) {
+                  errorMsg = `⚠️ The ${meal.name} maps link doesn't look like a Google Maps link. Please paste a link like maps.app.goo.gl/… (or leave it blank).`;
+                  if (_mEl) { _mapsLinkFeedback(_mEl); try { _mEl.focus(); } catch (_) {} }
+                }
               }
             }
           });
