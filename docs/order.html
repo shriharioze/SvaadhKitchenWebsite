@@ -6895,7 +6895,7 @@
         <div class="meal-header-left">
           <span class="meal-icon">${ICONS[meal]}</span>
           <div>
-            <div class="meal-title">${meal}</div>
+            <div class="meal-title">${(meal === 'Breakfast' && date === '2026-07-25') ? 'Upwas Special' : meal}</div>
             <div class="meal-cutoff-txt" id="cutdown_${date}_${meal}"></div>
           </div>
         </div>
@@ -7000,7 +7000,7 @@
         const items = menu.breakfast || [];
         if (!items.length) return `<div class="info-box">${t('bf_menu_not_set')}</div>`;
         S.orders[date].Breakfast.bfItems = items;
-        html += `<div class="section-label">${t('today_breakfast_label')}</div>`;
+        html += `<div class="section-label">${date === '2026-07-25' ? 'UPWAS SPECIAL' : t('today_breakfast_label')}</div>`;
         html += items.map(item => itemRow(date, "Breakfast", item.name, item.price, item.name)).join("");
         html += `<div class="section-label" style="margin-top:10px;">${t('extras_label')}</div>`;
         html += itemRow(date, "Breakfast", "Curd (50g)", getPrice("B_CURD", "Breakfast", date), "B_CURD");

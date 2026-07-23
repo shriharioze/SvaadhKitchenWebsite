@@ -972,7 +972,14 @@ function _getMenuUncached(dateStr) {
   });
 
   let oosItems = { Breakfast: [], Lunch: [], Dinner: [] };
-  try { if (r && r.OOS_JSON) oosItems = JSON.parse(r.OOS_JSON); } catch(e) {}
+  try {
+    if (r && r.OOS_JSON) {
+      oosItems = JSON.parse(r.OOS_JSON);
+      if (oosItems.Breakfast) {
+        oosItems.Breakfast = oosItems.Breakfast.map(name => NAME_MAP[name] || name);
+      }
+    }
+  } catch(e) {}
 
   let ordersClosed = {};
   try { if (r && r.Orders_Closed) ordersClosed = JSON.parse(r.Orders_Closed); } catch(e) {}
