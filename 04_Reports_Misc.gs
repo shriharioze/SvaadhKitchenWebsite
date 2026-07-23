@@ -3362,7 +3362,7 @@ function adminCancelOrder(body) {
       rType = anyWallet ? "wallet" : "manual_upi";
     }
 
-    const result = deleteOrder(phone, m.Submission_ID, rType);
+    const result = deleteOrder(phone, m.Submission_ID, rType, { isAdmin: true });
     if (result.success) {
       if (typeof result.message === "string" && result.message.includes("Wallet")) refundedToWallet = true;
     }

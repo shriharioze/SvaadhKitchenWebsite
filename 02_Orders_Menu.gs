@@ -1070,7 +1070,16 @@ function getKitchenClosedDates() {
     rows.forEach(function(r) {
       const isClosed = (r.Kitchen_Closed === true ||
         String(r.Kitchen_Closed || "").toLowerCase() === "true");
-      if (!isClosed) return;
+      // Also include dates with ANY per-meal closure. Admin closing even one
+      // meal should never break a customer's loyalty streak.
+      var hasPartial = false;
+      if (!isClosed && r.Closed_Meals_JSON) {
+        try {
+          var cm = JSON.parse(r.Closed_Meals_JSON);
+          hasPartial = !!(cm && (cm.Breakfast || cm.Lunch || cm.Dinner));
+        } catch (e) {}
+      }
+      if (!isClosed && !hasPartial) return;
       const d = r.Date instanceof Date
         ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd")
         : String(r.Date).trim();
@@ -3182,8 +3191,18 @@ function _kitchenClosedSet() {
     const ws = getOrCreateTab(ss, TAB_MENU, []);
     const out = [];
     getAllRows(ws).forEach(function(r) {
+      // Include dates with FULL-DAY closure OR ANY per-meal closure.
+      // When admin closes even one meal, that day should never break a
+      // customer's loyalty streak — the customer didn't choose to skip.
       const isClosed = (r.Kitchen_Closed === true || String(r.Kitchen_Closed || "").toLowerCase() === "true");
-      if (!isClosed) return;
+      var hasPartial = false;
+      if (!isClosed && r.Closed_Meals_JSON) {
+        try {
+          var cm = JSON.parse(r.Closed_Meals_JSON);
+          hasPartial = !!(cm && (cm.Breakfast || cm.Lunch || cm.Dinner));
+        } catch (e) {}
+      }
+      if (!isClosed && !hasPartial) return;
       const d = r.Date instanceof Date ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Date).trim();
       if (d) out.push(d);
     });
@@ -3828,14 +3847,16 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         .filter(x => String(x.Submission_ID) !== String(rowId) && _isOrderCancelled(x.Payment_Status))
         .reduce((s, x) => s + _fp(x), 0);
       bulkFullPrice = _fp(r);
-      bulkClawbackApplied = Math.min(_totalBulk, _sumBefore + bulkFullPrice) - Math.min(_totalBulk, _sumBefore);
+      // Admin cancel (kitchen close) → NO bulk discount clawback. Full refund.
+      bulkClawbackApplied = isAdminCall ? 0 : (Math.min(_totalBulk, _sumBefore + bulkFullPrice) - Math.min(_totalBulk, _sumBefore));
     }
 
     // Over-discount claw-back: only claw back discounts that were ACTUALLY applied
     // to remaining orders (read from their Discount_Amount column), not a theoretical
     // volume tier. submitOrder only applies loyalty (6th-day) discounts, not volume tiers.
+    // ADMIN CANCEL: skip entirely — remaining orders keep their discounts untouched.
     let overDiscount = 0;
-    {
+    if (!isAdminCall) {
       const discColIdx = hIdx["Discount_Amount"];
       const netColIdx  = hIdx["Net_Total"];
 
@@ -3880,55 +3901,56 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // Mirrors submitOrder's DYNAMIC threshold (1 meal → ₹100, 2+ meals → ₹150):
     // the day WAS free under its old meal-count threshold but the REMAINING
     // orders no longer qualify under theirs → fees are owed.
-    const _mealsIn = (rowsArr) => new Set(
-      rowsArr.filter(x => (Number(x.Food_Subtotal) || 0) > 0)
-             .map(x => String(x.Meal_Type).trim())
-    ).size;
-    const oldThreshold = _mealsIn(sameDayRows.concat([r])) <= 1 ? 100 : 150;
-    const remThreshold = _mealsIn(sameDayRows) <= 1 ? 100 : 150;
-    const freeAreaNames2 = getAreas().filter(a => a.free).map(a => a.name);
-    const isNonFree = (area) => !freeAreaNames2.includes(area) && area !== "Self Pickup";
-
+    // ADMIN CANCEL: skip entirely — remaining orders keep free delivery / no small fee.
+    // The customer should not suffer because admin closed the kitchen.
     let deliveryOwed = 0;
     let smallFeeOwed = 0;
 
-    if (!isBulk && oldDaySubtotal >= oldThreshold && remainingDaySubtotal < remThreshold) {
-      // Day total drops below free-delivery threshold → remaining orders now owe fees.
-      // We claw the amounts from THIS refund, AND update those rows in the sheet so that
-      // if they are later cancelled themselves, the clawback doesn't fire a second time.
-      const delivColIdx   = hIdx["Delivery_Charge"];
-      const smallFeeColIdx = hIdx["Small_Order_Fee"];
-      const netColIdx2    = hIdx["Net_Total"];
+    if (!isAdminCall) {
+      const _mealsIn = (rowsArr) => new Set(
+        rowsArr.filter(x => (Number(x.Food_Subtotal) || 0) > 0)
+               .map(x => String(x.Meal_Type).trim())
+      ).size;
+      const oldThreshold = _mealsIn(sameDayRows.concat([r])) <= 1 ? 100 : 150;
+      const remThreshold = _mealsIn(sameDayRows) <= 1 ? 100 : 150;
+      const freeAreaNames2 = getAreas().filter(a => a.free).map(a => a.name);
+      const isNonFree = (area) => !freeAreaNames2.includes(area) && area !== "Self Pickup";
 
-      sameDayRows.forEach(x => {
-        const xArea = x.Area || "";
-        const xSub  = Number(x.Food_Subtotal) || 0;
-        let netDelta = 0;
+      if (!isBulk && oldDaySubtotal >= oldThreshold && remainingDaySubtotal < remThreshold) {
+        // Day total drops below free-delivery threshold → remaining orders now owe fees.
+        // We claw the amounts from THIS refund, AND update those rows in the sheet so that
+        // if they are later cancelled themselves, the clawback doesn't fire a second time.
+        const delivColIdx   = hIdx["Delivery_Charge"];
+        const smallFeeColIdx = hIdx["Small_Order_Fee"];
+        const netColIdx2    = hIdx["Net_Total"];
 
-        // 1. Delivery Clawback: order was in non-free area but charged ₹0 due to threshold
-        // Delivery is ₹11 everywhere — refund deduction, row Delivery_Charge and
-        // Net_Total bump must all use the same figure (was 11/10/10: ₹1 hole).
-        if (xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
-          deliveryOwed += 11;
-          netDelta += 11;
-          if (delivColIdx && !opts.dryRun) ws.getRange(x._row, delivColIdx).setValue(11);
-        }
+        sameDayRows.forEach(x => {
+          const xArea = x.Area || "";
+          const xSub  = Number(x.Food_Subtotal) || 0;
+          let netDelta = 0;
 
-        // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹53 was waived due to threshold
-        const xMeal = String(x.Meal_Type).trim();
-        if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
-            && (Number(x.Small_Order_Fee) || 0) === 0) {
-          smallFeeOwed += 11;
-          netDelta += 11;
-          if (smallFeeColIdx && !opts.dryRun) ws.getRange(x._row, smallFeeColIdx).setValue(11);
-        }
+          // 1. Delivery Clawback: order was in non-free area but charged ₹0 due to threshold
+          if (xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
+            deliveryOwed += 11;
+            netDelta += 11;
+            if (delivColIdx && !opts.dryRun) ws.getRange(x._row, delivColIdx).setValue(11);
+          }
 
-        // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback)
-        // (sheet writes only on a REAL cancellation — the dry-run preview must not mutate)
-        if (netDelta > 0 && netColIdx2 && !opts.dryRun) {
-          ws.getRange(x._row, netColIdx2).setValue((Number(x.Net_Total) || 0) + netDelta);
-        }
-      });
+          // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹53 was waived due to threshold
+          const xMeal = String(x.Meal_Type).trim();
+          if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
+              && (Number(x.Small_Order_Fee) || 0) === 0) {
+            smallFeeOwed += 11;
+            netDelta += 11;
+            if (smallFeeColIdx && !opts.dryRun) ws.getRange(x._row, smallFeeColIdx).setValue(11);
+          }
+
+          // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback)
+          if (netDelta > 0 && netColIdx2 && !opts.dryRun) {
+            ws.getRange(x._row, netColIdx2).setValue((Number(x.Net_Total) || 0) + netDelta);
+          }
+        });
+      }
     }
 
     // Loyalty Clawback Logic
