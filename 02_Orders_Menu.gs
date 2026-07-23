@@ -2944,6 +2944,17 @@ function _upsertCustomer(ss, profile) {
 
     SpreadsheetApp.flush(); // Ensure writes are committed
   } else {
+    // ── Auto-flag Enkin accounts ──────────────────────────────────
+    // New users whose last name is "Enkin" (case-insensitive) are
+    // automatically set to On Account, Fee Exempt, Monthly billing.
+    const _nameParts = String(profile.name || "").trim().split(/\s+/);
+    const _isEnkin = _nameParts.length > 0 && _nameParts[_nameParts.length - 1].toLowerCase() === "enkin";
+    if (_isEnkin) {
+      profile.onAccount = "Yes";
+      profile.billingCycle = "Monthly";
+      profile.payment_preference = "Monthly";
+    }
+
     // For new records, construct a clean Row Array mapping directly to our schema
     const newRow = CUSTOMERS_HEADERS.map(h => {
       let val = "";
@@ -2966,6 +2977,7 @@ function _upsertCustomer(ss, profile) {
         case "Standard_Order":  val = profile.standardOrder || ""; break;
         case "Billing_Cycle":   val = profile.billingCycle || "Daily"; break;
         case "On_Account":      val = profile.onAccount || "No"; break;
+        case "Fee_Exempt":      val = _isEnkin ? "Yes" : ""; break;
         case "Email":           val = _sanitizeEmail(profile.email); break;
         case "Review_Promo_Count": val = ""; break;
         default:                val = "";
