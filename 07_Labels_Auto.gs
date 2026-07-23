@@ -100,11 +100,12 @@ function _lblItemSummary(order, meal, lang) {
 // (the 2026-07-06 "5 of 32 labels" incident). Docs allows setting an exact
 // custom page size AFTER creation, so the strip is a single page of exactly
 // 50mm × (n × block) like the kitchen page's jsPDF output. Pitch precision
-// comes from a borderless table with ONE row per label at min-height = BLOCK
-// (25mm label + 2.7mm die-cut gap): fitted text sits in the top 25mm, the empty
-// bottom 2.7mm is the physical gap. No separate gap row / horizontal rule (a Docs
-// HR renders ~4.3mm not 2.7mm and drifted the strip). The temp doc is trashed
-// after export.
+// comes from a table with ONE row per label at min-height = BLOCK (25mm label
+// + 2.7mm die-cut gap): fitted text sits in the top 25mm, the empty bottom
+// 2.7mm is the physical gap. A thin 0.5pt table border draws separator lines
+// between labels (collapsed model — no height overhead). No separate gap row /
+// horizontal rule (a Docs HR renders ~4.3mm not 2.7mm and drifted the strip).
+// The temp doc is trashed after export.
 // ── Auto-fit text sizing (NEVER truncates) ───────────────────────────────────
 // Mirrors the kitchen page: long text WRAPS (Docs wraps at spaces inside the cell)
 // and the whole label's font is scaled DOWN uniformly until every wrapped line fits
@@ -143,7 +144,7 @@ var LBL_MIN_SCALE   = 0.42;       // ~4pt floor for a 9.5pt base — readable, s
 function _lblFitLabel(fields) {   // fields: [{ text, bold, color, base }]
   var scale = 1.0;
   for (var iter = 0; iter < 60; iter++) {
-    var total = 0;
+    var total = 3; // 2 × 1.5pt inter-field gaps (after Name & Summary) matching manual's 0.5mm
     for (var i = 0; i < fields.length; i++) {
       var sz = fields[i].base * scale;
       total += _lblWrapLines(fields[i].text, sz) * sz * LBL_LH_FACTOR;
@@ -178,20 +179,27 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
     body.setPageWidth(W * MM).setPageHeight((totalH + PAD) * MM);
     body.setMarginTop(0).setMarginBottom(0).setMarginLeft(2 * MM).setMarginRight(2 * MM);
 
-    // ONE borderless row PER LABEL, min height = BLOCK (25mm label + 2.7mm gap).
+    // ONE row PER LABEL, min height = BLOCK (25mm label + 2.7mm gap).
+    // 0.5pt black border = separator lines between labels (collapsed model, no
+    // height overhead — unlike the old appendHorizontalRule() which was 4.3mm).
     var cellsSeed = [];
     for (var i = 0; i < n; i++) cellsSeed.push(["."]);
     var table = body.insertTable(0, cellsSeed);
-    table.setBorderWidth(0);
+    table.setBorderWidth(0.5);
+    table.setBorderColor("#000000");
 
     var TINY = {};
     TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse the trailing structural paragraph
 
     orders.forEach(function (order, idx) {
       var summary = _lblItemSummary(order, meal, lang);
-      var fields = [{ text: "Name: " + (order.name || ""), bold: true, color: "#000000", base: 9.5 }];
-      if (summary) fields.push({ text: summary, bold: false, color: "#222222", base: 8.5 });
-      if (order.area) fields.push({ text: String(order.area), bold: true, color: "#000000", base: 9 });
+      // ALWAYS include Name + Summary + Area (even if empty) so vertical spacing
+      // is consistent — matches manual kitchen.html which always draws all fields.
+      var fields = [
+        { text: "Name: " + (order.name || ""), bold: true, color: "#000000", base: 9.5 },
+        { text: summary || "",                  bold: false, color: "#222222", base: 8.5 },
+        { text: String(order.area || ""),        bold: true, color: "#000000", base: 9   }
+      ];
       if (order.notes) fields.push({ text: "* " + order.notes, bold: false, color: "#B86000", base: 7 });
       var lines = _lblFitLabel(fields);
 
@@ -205,7 +213,9 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
       lines.forEach(function (l, li) {
         var p = (li === 0) ? cell.getChild(0).asParagraph() : cell.appendParagraph("");
         p.setText(l.text);
-        p.setLineSpacing(0.9).setSpacingBefore(0).setSpacingAfter(0);
+        // 1.5pt spacingAfter on Name (li=0) and Summary (li=1) = ~0.5mm gap,
+        // matching the manual canvas renderer's explicit 0.5mm inter-field gaps.
+        p.setLineSpacing(0.9).setSpacingBefore(0).setSpacingAfter(li < 2 ? 1.5 : 0);
         var t = p.editAsText();
         t.setFontFamily(FONT).setFontSize(l.size).setBold(!!l.bold).setForegroundColor(l.color);
       });
