@@ -7071,8 +7071,9 @@ async function handleBatchAction(tabId, actionType) {
   const selectedItems = Array.from(checks).filter(c => c.checked).map(c => ({...c.dataset}));
   if (!selectedItems.length) return;
 
-  const actionLabel = actionType === 'approve' ? 'APPROVE' : 'REJECT';
-  const icon = actionType === 'approve' ? '✅' : '❌';
+  let actionLabel = 'REJECT', icon = '❌';
+  if (actionType === 'approve') { actionLabel = 'APPROVE'; icon = '✅'; }
+  else if (actionType === 'wallet') { actionLabel = 'ADD TO WALLET'; icon = '💳'; }
   if (!(await showUIConfirm(`Are you sure you want to ${actionLabel} ${selectedItems.length} selected items?`, `Batch ${actionLabel}`, icon))) return;
 
   sLoading(true, `Processing ${selectedItems.length} items...`);
