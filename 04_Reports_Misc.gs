@@ -2891,7 +2891,9 @@ function batchProcessApprovals(body) {
   items.forEach(item => {
     let res;
     if (tab === 'refunds') {
-      res = (action === 'approve') ? markRefunded(item.submissionId) : markRefundRejected(item.submissionId);
+      if (action === 'wallet') res = markRefunded(item.submissionId, true);
+      else if (action === 'approve') res = markRefunded(item.submissionId, false);
+      else res = markRefundRejected(item.submissionId);
     } else if (tab === 'payments') {
       const payload = { ...item, status: (action === 'approve' ? 'Paid' : 'Payment Rejected') };
       res = markOrdersStatus(payload);

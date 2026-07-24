@@ -1854,6 +1854,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
             <div id="batchRefunds" class="batch-actions-bar">
               <span class="batch-count" id="batchRefundCount">0 items selected</span>
               <button class="approve-row-btn" onclick="handleBatchAction('refunds', 'approve')">✅ Approve Selected</button>
+              <button class="approve-row-btn" style="background:#0c64c7;" onclick="handleBatchAction('refunds', 'wallet')">💳 Add to Wallet Selected</button>
               <button class="reject-row-btn" onclick="handleBatchAction('refunds', 'reject')">❌ Reject Selected</button>
             </div>
           </div>
@@ -7181,6 +7182,11 @@ async function loadRefunds() {
                     onclick="markAsRefunded('${r.Submission_ID}', '${r.Name}', ${r.Amount})">
               ${isUnverified ? 'Verify & Refund' : 'Apply Refund'}
             </button>
+            <button class="approve-row-btn" 
+                    style="background:#0c64c7;"
+                    onclick="addToWalletRefund('${r.Submission_ID}', '${r.Name}', ${r.Amount})">
+              Add to Wallet
+            </button>
             <button class="reject-row-btn" onclick="rejectRefund('${r.Submission_ID}', '${r.Name}')">Reject</button>
           </div>
         </td>
@@ -7224,6 +7230,26 @@ async function markAsRefunded(subId, name, amt) {
     const data = await res.json();
     if (data.success) {
       toast("Marked as Refunded ✅");
+      await loadRefunds();
+      refreshApprovalCounts();
+    } else throw new Error(data.error);
+  } catch(e) { 
+    sLoading(false);
+    toast("Error: " + e.message, 4000); 
+  }
+}
+
+async function addToWalletRefund(subId, name, amt) {
+  if (!(await showUIConfirm(`Convert ₹${amt} refund for ${name} into Svaadh Wallet credits instead?`, "Add to Wallet", "💳"))) return;
+  sLoading(true, "Adding to wallet...");
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ _action: "markRefunded", forceWallet: true, pin: S.sessionPin, submissionId: subId })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast("Added to Wallet ✅");
       await loadRefunds();
       refreshApprovalCounts();
     } else throw new Error(data.error);

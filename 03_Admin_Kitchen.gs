@@ -696,7 +696,7 @@ function listRecentRefunds(n) {
   return { success: true, total: rows.length, rows: rows.slice(-take) };
 }
 
-function markRefunded(submissionId) {
+function markRefunded(submissionId, forceWallet = false) {
   // Serialize so a double-click / concurrent batch can't process the same
   // refund row twice (which would credit the wallet again).
   const lock = LockService.getScriptLock();
@@ -726,12 +726,20 @@ function markRefunded(submissionId) {
       if (curStatus.indexOf("refunded") === 0 || curStatus.indexOf("rejected") === 0) {
         return {success: true, alreadyProcessed: true};
       }
-      const mode = modeIdx !== -1 ? String(row[modeIdx]).toLowerCase() : "upi";
+      
+      let mode = modeIdx !== -1 ? String(row[modeIdx]).toLowerCase() : "upi";
+      if (forceWallet) {
+        mode = "wallet";
+        if (modeIdx !== -1) {
+          ws.getRange(i + 1, modeIdx + 1).setValue("Wallet");
+        }
+      }
+      
       const phone = phoneIdx !== -1 ? String(row[phoneIdx]) : "";
       const name = nameIdx !== -1 ? String(row[nameIdx]) : "Customer";
       const amt = amtIdx !== -1 ? Number(row[amtIdx]) : 0;
 
-      // Logic: If user chose Wallet refund, perform the ledger entry now
+      // Logic: If user chose Wallet refund (or we forced it), perform the ledger entry now
       if (mode === "wallet" && phone && amt > 0) {
         _appendWalletTransaction(phone, name, "Order Cancellation Refund", amt, true, String(submissionId));
       }

@@ -421,7 +421,7 @@ function doPost(e) {
     }
     if (action === "markRefunded") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
-      return jsonRes(markRefunded(body.submissionId));
+      return jsonRes(markRefunded(body.submissionId, body.forceWallet));
     }
     if (action === "toggleFeeExempt") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
