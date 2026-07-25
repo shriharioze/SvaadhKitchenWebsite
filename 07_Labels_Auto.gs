@@ -185,8 +185,7 @@ function _lblBuildPdfB64(orders, meal, lang, gapMm) {
     var cellsSeed = [];
     for (var i = 0; i < n; i++) cellsSeed.push(["."]);
     var table = body.insertTable(0, cellsSeed);
-    table.setBorderWidth(0.5);
-    table.setBorderColor("#000000");
+    table.setBorderWidth(0);
 
     var TINY = {};
     TINY[DocumentApp.Attribute.FONT_SIZE] = 1; // collapse the trailing structural paragraph
