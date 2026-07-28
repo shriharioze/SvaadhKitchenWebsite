@@ -7424,10 +7424,6 @@ function _getAvailableItemsForMeal(mealType) {
   if (mealType === 'Breakfast') {
     return S.bfMaster.map(x => ({key: x.id||x.name, label: x.name, price: Number(x.price)||0}));
   }
-  // Lunch/Dinner — also add dynamic sabjis from master if present
-  const dynamic = (S.sabjiMaster||[]).map(x => ({key:x.id||x.name, label:x.name, price:Number(x.price)||22}));
-  const existingKeys = new Set(staples.map(s=>s.key));
-  dynamic.forEach(d => { if (!existingKeys.has(d.key)) staples.push(d); });
   return staples;
 }
 
