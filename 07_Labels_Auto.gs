@@ -35,7 +35,7 @@ var LBL_EN = {
   Jowar_Bhakri: "J", Bajra_Bhakri: "B",
   Dry_Sabji_Mini: "D100", Dry_Sabji_Full: "D250",
   Curry_Sabji_Mini: "C100", Curry_Sabji_Full: "C250",
-  Dal: "DAL", Rice: "R", Salad: "S", Curd: "CU",
+  Dal: "DAL", Dal_Fry: "DF", Rice: "R", Salad: "S", Curd: "CU",
   "Kanda Poha": "KP", "Ghee Upma": "GU", "Thalipeeth": "TP",
   "Paneer Paratha": "PP", "Methi Thepla": "MT", "Sabudana Khichdi": "SK"
 };
@@ -44,12 +44,12 @@ var LBL_MR = {
   Jowar_Bhakri: "जो", Bajra_Bhakri: "बाज",
   Dry_Sabji_Mini: "सु १००", Dry_Sabji_Full: "सु २५०",
   Curry_Sabji_Mini: "र १००", Curry_Sabji_Full: "र २५०",
-  Dal: "दाल", Rice: "भात", Salad: "स", Curd: "दही",
+  Dal: "दाल", Dal_Fry: "डा.फ्रा.", Rice: "भात", Salad: "स", Curd: "दही",
   "Kanda Poha": "कांपो", "Ghee Upma": "घीऊ", "Thalipeeth": "था",
   "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु"
 };
 var LBL_LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "Jowar_Bhakri", "Bajra_Bhakri",
-  "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Rice", "Salad", "Curd"];
+  "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"];
 
 // Per-order item summary — direct port of kitchen.html getBulkItemSummary().
 function _lblItemSummary(order, meal, lang) {

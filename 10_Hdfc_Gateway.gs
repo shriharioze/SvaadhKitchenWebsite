@@ -338,7 +338,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
     "Jowar Bhakri": 20, "Bajra Bhakri": 20,
     "Dry Sabji Mini (100ml)": 22, "Dry Sabji Full (250ml)": 45,
     "Curry Sabji Mini (100ml)": 22, "Curry Sabji Full (250ml)": 45,
-    "Dal (200ml)": 22, "Rice (100g)": 12, "Salad (40g)": 7, "Curd (50g)": 12
+    "Dal (200ml)": 22, "Dal Fry [200ml]": 37, "Rice (100g)": 12, "Salad (40g)": 7, "Curd (50g)": 12
   };
   function priceOf(colKey, meal, menu) {
     if (meal === "Breakfast") {

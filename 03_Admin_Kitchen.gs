@@ -906,18 +906,21 @@ function getKitchenSummary(date) {
       if (cMini > 0) summaryParts.push(cMini + " Mini Curry");
       if (cFull > 0) summaryParts.push(cFull + " Full Curry");
 
-      if (!m.other) m.other = {Dal:{kg:0, count:0}, Rice:{count:0}, Salad:{count:0}, Curd:{count:0}};
+      if (!m.other) m.other = {Dal:{kg:0, count:0}, Dal_Fry:{kg:0, count:0}, Rice:{count:0}, Salad:{count:0}, Curd:{count:0}};
       if (!m.riceMatrix)  m.riceMatrix  = {};
       if (!m.saladMatrix) m.saladMatrix = {};
       if (!m.curdMatrix)  m.curdMatrix  = {};
 
       var dalQ = Number(r.Dal)   || 0;
+      var dalFryQ = Number(r.Dal_Fry) || 0;
       var riceQ = Number(r.Rice)  || 0;
       var saladQ = Number(r.Salad) || 0;
       var curdQ = Number(r.Curd)  || 0;
       
       m.other.Dal.kg      += dalQ * 1.33;
       m.other.Dal.count   += dalQ;
+      m.other.Dal_Fry.kg      += dalFryQ * 1.33;
+      m.other.Dal_Fry.count   += dalFryQ;
       m.other.Rice.count  += riceQ;
       m.other.Salad.count += saladQ;
       m.other.Curd.count  += curdQ;
@@ -937,6 +940,7 @@ function getKitchenSummary(date) {
       }
 
       if (dalQ > 0) summaryParts.push(dalQ + " Dal");
+      if (dalFryQ > 0) summaryParts.push(dalFryQ + " Dal Fry");
       if (riceQ > 0) summaryParts.push(riceQ + " Rice");
       if (saladQ > 0) summaryParts.push(saladQ + " Salad");
       if (curdQ > 0) summaryParts.push(curdQ + " Curd");
@@ -980,7 +984,7 @@ function getKitchenSummary(date) {
         Jowar_Bhakri: Number(r.Jowar_Bhakri)||0, Bajra_Bhakri: Number(r.Bajra_Bhakri)||0,
         Dry_Sabji_Mini: Number(r.Dry_Sabji_Mini)||0, Dry_Sabji_Full: Number(r.Dry_Sabji_Full)||0,
         Curry_Sabji_Mini: Number(r.Curry_Sabji_Mini)||0, Curry_Sabji_Full: Number(r.Curry_Sabji_Full)||0,
-        Dal: Number(r.Dal)||0, Rice: Number(r.Rice)||0, Salad: Number(r.Salad)||0, Curd: Number(r.Curd)||0,
+        Dal: Number(r.Dal)||0, Dal_Fry: Number(r.Dal_Fry)||0, Rice: Number(r.Rice)||0, Salad: Number(r.Salad)||0, Curd: Number(r.Curd)||0,
         "Kanda Poha": Number(r["Kanda Poha"])||0, "Ghee Upma": Number(r["Ghee Upma"])||0,
         "Thalipeeth": Number(r["Thalipeeth"])||0, "Palak Paratha": Number(r["Palak Paratha"])||0,
         "Paneer Paratha": Number(r["Paneer Paratha"])||0, "Methi Thepla": Number(r["Methi Thepla"])||0,
@@ -998,6 +1002,7 @@ function getKitchenSummary(date) {
     if (!meals[meal]) return;
     var m = meals[meal];
     if (m.other && m.other.Dal) m.other.Dal.kg = Math.round(m.other.Dal.kg * 100) / 100;
+    if (m.other && m.other.Dal_Fry) m.other.Dal_Fry.kg = Math.round(m.other.Dal_Fry.kg * 100) / 100;
   });
 
   return {
@@ -1664,7 +1669,7 @@ function getOrderSummary(date) {
   var LUNCH_DINNER_COLS = [
     "Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
     "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full",
-    "Dal","Rice","Salad","Curd"
+    "Dal","Dal_Fry","Rice","Salad","Curd"
   ];
 
   dayRows.forEach(function(r) {
@@ -1750,7 +1755,7 @@ function getLabelOrders(date, meal) {
   // Merge IntentAmplify orders so their labels print too (name prefixed [IA]).
   var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
   var COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
-              "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Rice","Salad"];
+              "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Dal_Fry","Rice","Salad"];
 
   var orders = rows
     .filter(function(r) {
@@ -1830,6 +1835,7 @@ function getPackagingExpenses(date) {
       add("Sabji Container (Mini)", (Number(r.Dry_Sabji_Mini)||0) + (Number(r.Curry_Sabji_Mini)||0));
       add("Sabji Container (Full)", (Number(r.Dry_Sabji_Full)||0) + (Number(r.Curry_Sabji_Full)||0));
       add("Dal Container",          Number(r.Dal)   || 0);
+      add("Dal Container",          Number(r.Dal_Fry) || 0);
       add("Rice Container",         Number(r.Rice)  || 0);
       add("Salad Container",        Number(r.Salad) || 0);
       add("Curd Container",         Number(r.Curd)  || 0);
