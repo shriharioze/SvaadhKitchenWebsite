@@ -4694,6 +4694,7 @@
       from { opacity:0; transform:translateX(-50%) translateY(20px); }
       to   { opacity:1; transform:translateX(-50%) translateY(0); }
     }
+    .badge-new { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; border-radius: 4px; padding: 1px 5px; font-size: 0.65rem; font-weight: bold; margin-left: 6px; vertical-align: middle; }
   </style>
 
   <script>
@@ -4704,7 +4705,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.28.02";
+    const APP_VERSION = "v26.07.28.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5120,7 +5121,7 @@
         {
           group: "Dal / Rice / Extras", items: [
             { name: "Dal [200ml]", price: 22, colKey: "Dal [200ml]" },
-            { name: "Dal Fry [200ml]", price: 37, colKey: "Dal Fry [200ml]" },
+            { name: "Dal Fry [200ml] <span class='badge-new'>NEW</span>", price: 37, colKey: "Dal Fry [200ml]" },
             { name: "Rice [100g]", price: 12, colKey: "Rice [100g]" },
             { name: "Salad [40g]", price: 7, colKey: "Salad [40g]" },
             { name: "Curd [50g]", price: 12, colKey: "Curd [50g]" },
@@ -5153,7 +5154,7 @@
         {
           group: "Dal / Rice / Extras", items: [
             { name: "Dal [200ml]", price: 22, colKey: "Dal [200ml]" },
-            { name: "Dal Fry [200ml]", price: 37, colKey: "Dal Fry [200ml]" },
+            { name: "Dal Fry [200ml] <span class='badge-new'>NEW</span>", price: 37, colKey: "Dal Fry [200ml]" },
             { name: "Rice [100g]", price: 12, colKey: "Rice [100g]" },
             { name: "Salad [40g]", price: 7, colKey: "Salad [40g]" },
             { name: "Curd [50g]", price: 12, colKey: "Curd [50g]" },
