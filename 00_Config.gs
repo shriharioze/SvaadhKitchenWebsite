@@ -169,12 +169,12 @@ const ORDERS_HEADERS = [
   "Items_JSON",
   "Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
   "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full",
-  "Dal","Rice","Salad","Curd","Dal_Fry",
+  "Dal","Rice","Salad","Curd",
   "BF_Item_1","BF_Qty_1","BF_Item_2","BF_Qty_2","BF_Item_3","BF_Qty_3","BF_Item_4","BF_Qty_4",
   "Special_Notes_Kitchen","Special_Notes_Delivery",
   "Food_Subtotal","Delivery_Charge","Discount_Amount","Review_Discount","Net_Total",
   "Payment_Method","Payment_Status","Payment_Freq","First_Time","Source","Refund_Preference", "Packed", "Delivery_Point",
-  "Inflation_Surcharge", "Loyalty_Discount", "Wallet_Credit", "Small_Order_Fee", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Bulk_Plan", "Bulk_Postponed"
+  "Inflation_Surcharge", "Loyalty_Discount", "Wallet_Credit", "Small_Order_Fee", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Bulk_Plan", "Bulk_Postponed", "Dal_Fry"
 ];
 
 const ITEM_COL_MAP = {
