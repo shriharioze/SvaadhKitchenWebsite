@@ -1954,7 +1954,7 @@ function _submitOrderInternal(body) {
   const stripDisplaySuffix = (name) => {
     return String(name)
       .replace(/\s*\[.*?\]\s*/g, '')   // removes [175g], [200ml], [2 pcs] etc.
-      .replace(/\s*\(.*?\)\s*/g, '')   // removes (2 pieces), (100ml) etc.
+      .replace(/\s*\(.*?\)\s*/g, '')   // removes (2 pieces), [100ml] etc.
       .trim();
   };
 

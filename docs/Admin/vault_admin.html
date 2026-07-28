@@ -2178,14 +2178,14 @@ const GLOBAL_STAPLE_PRICES = {
   "Ghee Phulka": 10,
   "Jowar Bhakri": 20,
   "Bajra Bhakri": 20,
-  "Dry Sabji Mini (100ml)": 22, "Dry Sabji (Mini)": 22, "Dry_Sabji_Mini": 22, "L_DRY_MINI": 22, "D_DRY_MINI": 22,
-  "Dry Sabji Full (250ml)": 45, "Dry Sabji (Full)": 45, "Dry_Sabji_Full": 45, "L_DRY_FULL": 45, "D_DRY_FULL": 45,
-  "Curry Sabji Mini (100ml)": 22, "Curry Sabji (Mini)": 22, "Curry_Sabji_Mini": 22, "L_CURRY_MINI": 22, "D_CURRY_MINI": 22,
-  "Curry Sabji Full (250ml)": 45, "Curry Sabji (Full)": 45, "Curry_Sabji_Full": 45, "L_CURRY_FULL": 45, "D_CURRY_FULL": 45,
-  "Dal (200ml)": 22, "Dal": 22,
-  "Rice (100g)": 12, "Rice": 12,
-  "Salad (40g)": 7, "Salad": 7,
-  "Curd (50g)": 12, "Curd": 12
+  "Dry Sabji Mini [100ml]": 22, "Dry Sabji (Mini)": 22, "Dry_Sabji_Mini": 22, "L_DRY_MINI": 22, "D_DRY_MINI": 22,
+  "Dry Sabji Full [250ml]": 45, "Dry Sabji (Full)": 45, "Dry_Sabji_Full": 45, "L_DRY_FULL": 45, "D_DRY_FULL": 45,
+  "Curry Sabji Mini [100ml]": 22, "Curry Sabji (Mini)": 22, "Curry_Sabji_Mini": 22, "L_CURRY_MINI": 22, "D_CURRY_MINI": 22,
+  "Curry Sabji Full [250ml]": 45, "Curry Sabji (Full)": 45, "Curry_Sabji_Full": 45, "L_CURRY_FULL": 45, "D_CURRY_FULL": 45,
+  "Dal [200ml]": 22, "Dal": 22,
+  "Rice [100g]": 12, "Rice": 12,
+  "Salad [40g]": 7, "Salad": 7,
+  "Curd [50g]": 12, "Curd": 12
 };
 
 // PRICING_V2 (live since the surcharge-removal go-live): the staple BASE prices above
@@ -2209,18 +2209,18 @@ function colKeyToDisplayName(k) {
     // Lunch legacy codes
     "L_CHAPATI":"Chapati","L_WO_CHAPATI":"Without Oil Chapati","L_PHULKA":"Phulka","L_GHEE_PHULKA":"Ghee Phulka",
     "L_JOWAR":"Jowar Bhakri","L_BA_JRA":"Bajra Bhakri",
-    "L_DRY_MINI":"Dry Sabji Mini (100ml)","L_DRY_FULL":"Dry Sabji Full (250ml)",
-    "L_CURRY_MINI":"Curry Sabji Mini (100ml)","L_CURRY_FULL":"Curry Sabji Full (250ml)",
-    "L_DAL":"Dal (200ml)","L_RICE":"Rice (100g)","L_SALAD":"Salad (40g)","L_CURD":"Curd (50g)",
+    "L_DRY_MINI":"Dry Sabji Mini [100ml]","L_DRY_FULL":"Dry Sabji Full [250ml]",
+    "L_CURRY_MINI":"Curry Sabji Mini [100ml]","L_CURRY_FULL":"Curry Sabji Full [250ml]",
+    "L_DAL":"Dal [200ml]","L_RICE":"Rice [100g]","L_SALAD":"Salad [40g]","L_CURD":"Curd [50g]",
     // Dinner legacy codes
     "D_CHAPATI":"Chapati","D_WO_CHAPATI":"Without Oil Chapati","D_PHULKA":"Phulka","D_GHEE_PHULKA":"Ghee Phulka",
     "D_JOWAR":"Jowar Bhakri","D_BA_JRA":"Bajra Bhakri",
-    "D_DRY_MINI":"Dry Sabji Mini (100ml)","D_DRY_FULL":"Dry Sabji Full (250ml)",
-    "D_CURRY_MINI":"Curry Sabji Mini (100ml)","D_CURRY_FULL":"Curry Sabji Full (250ml)",
-    "D_DAL":"Dal (200ml)","D_RICE":"Rice (100g)","D_SALAD":"Salad (40g)","D_CURD":"Curd (50g)",
+    "D_DRY_MINI":"Dry Sabji Mini [100ml]","D_DRY_FULL":"Dry Sabji Full [250ml]",
+    "D_CURRY_MINI":"Curry Sabji Mini [100ml]","D_CURRY_FULL":"Curry Sabji Full [250ml]",
+    "D_DAL":"Dal [200ml]","D_RICE":"Rice [100g]","D_SALAD":"Salad [40g]","D_CURD":"Curd [50g]",
     // Canonical names (already human-readable but underscored)
-    "Dry_Sabji_Mini":"Dry Sabji Mini (100ml)","Dry_Sabji_Full":"Dry Sabji Full (250ml)",
-    "Curry_Sabji_Mini":"Curry Sabji Mini (100ml)","Curry_Sabji_Full":"Curry Sabji Full (250ml)",
+    "Dry_Sabji_Mini":"Dry Sabji Mini [100ml]","Dry_Sabji_Full":"Dry Sabji Full [250ml]",
+    "Curry_Sabji_Mini":"Curry Sabji Mini [100ml]","Curry_Sabji_Full":"Curry Sabji Full [250ml]",
     "Without_Oil_Chapati":"Without Oil Chapati","Ghee_Phulka":"Ghee Phulka",
     "Jowar_Bhakri":"Jowar Bhakri","Bajra_Bhakri":"Bajra Bhakri",
     "Kanda_Poha":"Kanda Poha [175g]",
@@ -3202,14 +3202,14 @@ const OOS_FIXED_ITEMS = [
   { label:"Ghee Phulka",         colKey:"Ghee Phulka" },
   { label:"Jowar Bhakri",        colKey:"Jowar Bhakri" },
   { label:"Bajra Bhakri",        colKey:"Bajra Bhakri" },
-  { label:"Dry Sabji Mini (100ml)", colKey:"Dry Sabji Mini (100ml)" },
-  { label:"Dry Sabji Full (250ml)", colKey:"Dry Sabji Full (250ml)" },
-  { label:"Curry Sabji Mini (100ml)", colKey:"Curry Sabji Mini (100ml)" },
-  { label:"Curry Sabji Full (250ml)", colKey:"Curry Sabji Full (250ml)" },
-  { label:"Dal (200ml)",         colKey:"Dal (200ml)" },
-  { label:"Rice (100g)",         colKey:"Rice (100g)" },
-  { label:"Salad (40g)",         colKey:"Salad (40g)" },
-  { label:"Curd (50g)",          colKey:"Curd (50g)" },
+  { label:"Dry Sabji Mini [100ml]", colKey:"Dry Sabji Mini [100ml]" },
+  { label:"Dry Sabji Full [250ml]", colKey:"Dry Sabji Full [250ml]" },
+  { label:"Curry Sabji Mini [100ml]", colKey:"Curry Sabji Mini [100ml]" },
+  { label:"Curry Sabji Full [250ml]", colKey:"Curry Sabji Full [250ml]" },
+  { label:"Dal [200ml]",         colKey:"Dal [200ml]" },
+  { label:"Rice [100g]",         colKey:"Rice [100g]" },
+  { label:"Salad [40g]",         colKey:"Salad [40g]" },
+  { label:"Curd [50g]",          colKey:"Curd [50g]" },
 ];
 
 function renderOOSPanel() {

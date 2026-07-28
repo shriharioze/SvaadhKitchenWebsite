@@ -346,9 +346,9 @@ const BULK_DELIVERY = 11; // MUST equal submitOrder/_computeAuthoritativeTotal D
 const BULK_LD_PRICE = {
   "Chapati": 9, "Without Oil Chapati": 8, "Phulka": 7, "Ghee Phulka": 10,
   "Jowar Bhakri": 20, "Bajra Bhakri": 20,
-  "Dry Sabji Mini (100ml)": 22, "Dry Sabji Full (250ml)": 45,
-  "Curry Sabji Mini (100ml)": 22, "Curry Sabji Full (250ml)": 45,
-  "Dal (200ml)": 22, "Dal Fry [200ml]": 37, "Rice (100g)": 12, "Salad (40g)": 7, "Curd (50g)": 12
+  "Dry Sabji Mini [100ml]": 22, "Dry Sabji Full [250ml]": 45,
+  "Curry Sabji Mini [100ml]": 22, "Curry Sabji Full [250ml]": 45,
+  "Dal [200ml]": 22, "Dal Fry [200ml]": 37, "Rice [100g]": 12, "Salad [40g]": 7, "Curd [50g]": 12
 };
 
 // Authoritative per-item price (Lunch/Dinner). V2 = ceil(base × 1.06), else base.
@@ -780,8 +780,8 @@ function _bulkTestBody(extra) {
     plan: "week",
     phone: "9999900001",
     profile: { name: "ZZ_TEST_BULK", area: "Bhosale Nagar" }, // free-delivery area
-    dinner: { items: [{ colKey: "Phulka", qty: 4 }, { colKey: "Dry Sabji Full (250ml)", qty: 1 }, { colKey: "Dal (200ml)", qty: 1 }, { colKey: "Salad (40g)", qty: 1 }] },
-    lunch:  { items: [{ colKey: "Phulka", qty: 3 }, { colKey: "Curd (50g)", qty: 1 }] }
+    dinner: { items: [{ colKey: "Phulka", qty: 4 }, { colKey: "Dry Sabji Full [250ml]", qty: 1 }, { colKey: "Dal [200ml]", qty: 1 }, { colKey: "Salad [40g]", qty: 1 }] },
+    lunch:  { items: [{ colKey: "Phulka", qty: 3 }, { colKey: "Curd [50g]", qty: 1 }] }
   }, extra || {});
 }
 // 1) Dry-run pricing — NO writes. Run this first; read the Execution Log.

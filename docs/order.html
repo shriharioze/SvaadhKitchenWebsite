@@ -109,21 +109,21 @@
         "@type": "MenuSection",
         "name": "Sabji & Curry",
         "hasMenuItem": [
-          {"@type": "MenuItem", "name": "Dry Sabji Mini (100ml)", "offers": {"@type": "Offer", "price": "22", "priceCurrency": "INR"}},
-          {"@type": "MenuItem", "name": "Dry Sabji Full (250ml)", "offers": {"@type": "Offer", "price": "45", "priceCurrency": "INR"}},
-          {"@type": "MenuItem", "name": "Curry Sabji Mini (100ml)", "offers": {"@type": "Offer", "price": "22", "priceCurrency": "INR"}},
-          {"@type": "MenuItem", "name": "Curry Sabji Full (250ml)", "offers": {"@type": "Offer", "price": "45", "priceCurrency": "INR"}}
+          {"@type": "MenuItem", "name": "Dry Sabji Mini [100ml]", "offers": {"@type": "Offer", "price": "22", "priceCurrency": "INR"}},
+          {"@type": "MenuItem", "name": "Dry Sabji Full [250ml]", "offers": {"@type": "Offer", "price": "45", "priceCurrency": "INR"}},
+          {"@type": "MenuItem", "name": "Curry Sabji Mini [100ml]", "offers": {"@type": "Offer", "price": "22", "priceCurrency": "INR"}},
+          {"@type": "MenuItem", "name": "Curry Sabji Full [250ml]", "offers": {"@type": "Offer", "price": "45", "priceCurrency": "INR"}}
         ]
       },
       {
         "@type": "MenuSection",
         "name": "Basics",
         "hasMenuItem": [
-          {"@type": "MenuItem", "name": "Dal (200ml)", "offers": {"@type": "Offer", "price": "22", "priceCurrency": "INR"}},
+          {"@type": "MenuItem", "name": "Dal [200ml]", "offers": {"@type": "Offer", "price": "22", "priceCurrency": "INR"}},
           {"@type": "MenuItem", "name": "Dal Fry [200ml]", "offers": {"@type": "Offer", "price": "37", "priceCurrency": "INR"}},
-          {"@type": "MenuItem", "name": "Rice (100g)", "offers": {"@type": "Offer", "price": "12", "priceCurrency": "INR"}},
-          {"@type": "MenuItem", "name": "Salad (40g)", "offers": {"@type": "Offer", "price": "7", "priceCurrency": "INR"}},
-          {"@type": "MenuItem", "name": "Curd (50g)", "offers": {"@type": "Offer", "price": "12", "priceCurrency": "INR"}}
+          {"@type": "MenuItem", "name": "Rice [100g]", "offers": {"@type": "Offer", "price": "12", "priceCurrency": "INR"}},
+          {"@type": "MenuItem", "name": "Salad [40g]", "offers": {"@type": "Offer", "price": "7", "priceCurrency": "INR"}},
+          {"@type": "MenuItem", "name": "Curd [50g]", "offers": {"@type": "Offer", "price": "12", "priceCurrency": "INR"}}
         ]
       }
     ]
@@ -201,7 +201,7 @@
       "name": "What meals and items are available?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "We offer a Make-Your-Own-Meal system — no fixed thali. Lunch and Dinner: Chapati ₹10, Without Oil Chapati ₹9, Phulka ₹8, Ghee Phulka ₹11, Jowar Bhakri ₹22, Bajra Bhakri ₹22, Dry Sabji Mini (100ml) ₹24, Dry Sabji Full (250ml) ₹48, Curry Sabji Mini (100ml) ₹24, Curry Sabji Full (250ml) ₹48, Dal (200ml) ₹24, Dal Fry (200ml) ₹40, Rice (100g) ₹13, Salad (40g) ₹8, Curd (50g) ₹13. Breakfast rotates daily — Kanda Poha [175g], Upma [200g], Sabudana Khichdi [200g], Sheera [200g] and more."
+        "text": "We offer a Make-Your-Own-Meal system — no fixed thali. Lunch and Dinner: Chapati ₹10, Without Oil Chapati ₹9, Phulka ₹8, Ghee Phulka ₹11, Jowar Bhakri ₹22, Bajra Bhakri ₹22, Dry Sabji Mini [100ml] ₹24, Dry Sabji Full [250ml] ₹48, Curry Sabji Mini [100ml] ₹24, Curry Sabji Full [250ml] ₹48, Dal [200ml] ₹24, Dal Fry [200ml] ₹40, Rice [100g] ₹13, Salad [40g] ₹8, Curd [50g] ₹13. Breakfast rotates daily — Kanda Poha [175g], Upma [200g], Sabudana Khichdi [200g], Sheera [200g] and more."
       }
     },
     {
@@ -4704,7 +4704,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.28.01";
+    const APP_VERSION = "v26.07.28.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5075,10 +5075,10 @@
       "Ghee Phulka":"Limited portions — order soon",
       "Jowar Bhakri":"Limited portions — order soon",
       "Bajra Bhakri":"Limited portions — order soon",
-      "Dry Sabji Mini (100ml)":"Limited servings available today",
-      "Dry Sabji Full (250ml)":"Limited servings available today",
-      "Curry Sabji Mini (100ml)":"Limited servings available today",
-      "Curry Sabji Full (250ml)":"Limited servings available today",
+      "Dry Sabji Mini [100ml]":"Limited servings available today",
+      "Dry Sabji Full [250ml]":"Limited servings available today",
+      "Curry Sabji Mini [100ml]":"Limited servings available today",
+      "Curry Sabji Full [250ml]":"Limited servings available today",
       "Dal":"Limited servings — won't be prepared again today",
       "Dal Fry":"Limited servings — won't be prepared again today",
       "Rice":"Limited servings — won't be prepared again today",
@@ -5107,23 +5107,23 @@
         },
         {
           group: "Today's Sabji (Dry)", dynamic: "dry", items: [
-            { name: "Dry Sabji Mini (100ml)", price: 22, colKey: "Dry Sabji Mini (100ml)" },
-            { name: "Dry Sabji Full (250ml)", price: 45, colKey: "Dry Sabji Full (250ml)" },
+            { name: "Dry Sabji Mini [100ml]", price: 22, colKey: "Dry Sabji Mini [100ml]" },
+            { name: "Dry Sabji Full [250ml]", price: 45, colKey: "Dry Sabji Full [250ml]" },
           ]
         },
         {
           group: "Today's Sabji (Curry)", dynamic: "curry", items: [
-            { name: "Curry Sabji Mini (100ml)", price: 22, colKey: "Curry Sabji Mini (100ml)" },
-            { name: "Curry Sabji Full (250ml)", price: 45, colKey: "Curry Sabji Full (250ml)" },
+            { name: "Curry Sabji Mini [100ml]", price: 22, colKey: "Curry Sabji Mini [100ml]" },
+            { name: "Curry Sabji Full [250ml]", price: 45, colKey: "Curry Sabji Full [250ml]" },
           ]
         },
         {
           group: "Dal / Rice / Extras", items: [
-            { name: "Dal (200ml)", price: 22, colKey: "Dal (200ml)" },
+            { name: "Dal [200ml]", price: 22, colKey: "Dal [200ml]" },
             { name: "Dal Fry [200ml]", price: 37, colKey: "Dal Fry [200ml]" },
-            { name: "Rice (100g)", price: 12, colKey: "Rice (100g)" },
-            { name: "Salad (40g)", price: 7, colKey: "Salad (40g)" },
-            { name: "Curd (50g)", price: 12, colKey: "Curd (50g)" },
+            { name: "Rice [100g]", price: 12, colKey: "Rice [100g]" },
+            { name: "Salad [40g]", price: 7, colKey: "Salad [40g]" },
+            { name: "Curd [50g]", price: 12, colKey: "Curd [50g]" },
           ]
         },
       ],
@@ -5140,23 +5140,23 @@
         },
         {
           group: "Today's Sabji (Dry)", dynamic: "dry", items: [
-            { name: "Dry Sabji Mini (100ml)", price: 22, colKey: "Dry Sabji Mini (100ml)" },
-            { name: "Dry Sabji Full (250ml)", price: 45, colKey: "Dry Sabji Full (250ml)" },
+            { name: "Dry Sabji Mini [100ml]", price: 22, colKey: "Dry Sabji Mini [100ml]" },
+            { name: "Dry Sabji Full [250ml]", price: 45, colKey: "Dry Sabji Full [250ml]" },
           ]
         },
         {
           group: "Today's Sabji (Curry)", dynamic: "curry", items: [
-            { name: "Curry Sabji Mini (100ml)", price: 22, colKey: "Curry Sabji Mini (100ml)" },
-            { name: "Curry Sabji Full (250ml)", price: 45, colKey: "Curry Sabji Full (250ml)" },
+            { name: "Curry Sabji Mini [100ml]", price: 22, colKey: "Curry Sabji Mini [100ml]" },
+            { name: "Curry Sabji Full [250ml]", price: 45, colKey: "Curry Sabji Full [250ml]" },
           ]
         },
         {
           group: "Dal / Rice / Extras", items: [
-            { name: "Dal (200ml)", price: 22, colKey: "Dal (200ml)" },
+            { name: "Dal [200ml]", price: 22, colKey: "Dal [200ml]" },
             { name: "Dal Fry [200ml]", price: 37, colKey: "Dal Fry [200ml]" },
-            { name: "Rice (100g)", price: 12, colKey: "Rice (100g)" },
-            { name: "Salad (40g)", price: 7, colKey: "Salad (40g)" },
-            { name: "Curd (50g)", price: 12, colKey: "Curd (50g)" },
+            { name: "Rice [100g]", price: 12, colKey: "Rice [100g]" },
+            { name: "Salad [40g]", price: 7, colKey: "Salad [40g]" },
+            { name: "Curd [50g]", price: 12, colKey: "Curd [50g]" },
           ]
         },
       ],
@@ -7007,7 +7007,7 @@
         html += `<div class="section-label">${date === '2026-07-25' ? 'UPWAS SPECIAL' : t('today_breakfast_label')}</div>`;
         html += items.map(item => itemRow(date, "Breakfast", item.name, item.price, item.name)).join("");
         html += `<div class="section-label" style="margin-top:10px;">${t('extras_label')}</div>`;
-        html += itemRow(date, "Breakfast", "Curd (50g)", getPrice("B_CURD", "Breakfast", date), "B_CURD");
+        html += itemRow(date, "Breakfast", "Curd [50g]", getPrice("B_CURD", "Breakfast", date), "B_CURD");
       } else {
         const groups = FIXED_MEAL_ITEMS[meal];
         const dryName = meal === "Lunch" ? menu.lunch_dry : menu.dinner_dry;
@@ -7086,10 +7086,10 @@
 
     // QTY
     const SABJI_COMBO_MAP = {
-      "Dry Sabji Mini (100ml)":   { groupKey: "Dry",   weight: 0.6, peer: "Dry Sabji Full (250ml)" },
-      "Dry Sabji Full (250ml)":   { groupKey: "Dry",   weight: 1.4, peer: "Dry Sabji Mini (100ml)" },
-      "Curry Sabji Mini (100ml)": { groupKey: "Curry", weight: 0.6, peer: "Curry Sabji Full (250ml)" },
-      "Curry Sabji Full (250ml)": { groupKey: "Curry", weight: 1.4, peer: "Curry Sabji Mini (100ml)" }
+      "Dry Sabji Mini [100ml]":   { groupKey: "Dry",   weight: 0.6, peer: "Dry Sabji Full [250ml]" },
+      "Dry Sabji Full [250ml]":   { groupKey: "Dry",   weight: 1.4, peer: "Dry Sabji Mini [100ml]" },
+      "Curry Sabji Mini [100ml]": { groupKey: "Curry", weight: 0.6, peer: "Curry Sabji Full [250ml]" },
+      "Curry Sabji Full [250ml]": { groupKey: "Curry", weight: 1.4, peer: "Curry Sabji Mini [100ml]" }
     };
     function _getMaxQty(date, meal, colKey) {
       const menu = S.menuCache[date] || {};
@@ -7284,7 +7284,7 @@
           g.items.forEach(it => {
             nameToColKey[it.name] = it.colKey;
             // Items_JSON stores SIZE-LESS names (e.g. "Dry Sabji Full" for
-            // "Dry Sabji Full (250ml)"), so also map the suffix-stripped name.
+            // "Dry Sabji Full [250ml]"), so also map the suffix-stripped name.
             const shortName = it.name.replace(/\s*\([^)]*\)\s*$/, "").trim();
             if (shortName && shortName !== it.name) nameToColKey[shortName] = it.colKey;
           })
@@ -7385,7 +7385,7 @@
     }
 
     function getItemName(colKey, meal, date) {
-      if (meal === "Breakfast") { if (colKey === "B_CURD") return "Curd (50g)"; for (const [n, ck] of Object.entries(BREAKFAST_COL_MAP)) { if (ck === colKey) return n; } return colKey; }
+      if (meal === "Breakfast") { if (colKey === "B_CURD") return "Curd [50g]"; for (const [n, ck] of Object.entries(BREAKFAST_COL_MAP)) { if (ck === colKey) return n; } return colKey; }
 
       let baseName = colKey;
       for (const g of FIXED_MEAL_ITEMS[meal] || []) {
@@ -8357,7 +8357,7 @@
     // ═══════════════════════════════════════════════════════════
     // ── Duplicate-order sig helpers ──────────────────────────────
     // Build a normalised signature from cart items [{colKey, qty}].
-    // Strips display-suffix like "(250ml)" so "Dry Sabji Full (250ml)" → "Dry Sabji Full".
+    // Strips display-suffix like "[250ml]" so "Dry Sabji Full [250ml]" → "Dry Sabji Full".
     function _dupStripSuffix(name) {
       return String(name)
         .replace(/\s*\[[^\]]*\]/g, '')

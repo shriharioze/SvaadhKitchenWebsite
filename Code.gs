@@ -1048,9 +1048,9 @@ function _isOrderCancelled(paymentStatus) {
 
 // ── STOCK LIMIT HELPERS ─────────────────────────────────────
 // Canonical item key: strip weight/measure display suffixes like "[200g]",
-// "(100ml)", "(2 pcs)". submitOrder writes Items_JSON with STRIPPED names
+// "[100ml]", "(2 pcs)". submitOrder writes Items_JSON with STRIPPED names
 // (via its stripDisplaySuffix), while stock limits are keyed by the FULL
-// display/master name ("Dry Sabji Mini (100ml)", "Sabudana Khichdi [200g]").
+// display/master name ("Dry Sabji Mini [100ml]", "Sabudana Khichdi [200g]").
 // Without stripping on BOTH sides the count lookup never matched → every item
 // showed "0 ordered", units_remaining never decremented, auto-sold-out never
 // fired, and the submit-time stock block never saw cumulative usage.
@@ -1105,8 +1105,8 @@ function countOrderedUnits(ordersRows, dateStr) {
 // limits. Only Lunch/Dinner carry sabjis.
 const SABJI_COMBO_WEIGHTS = { Mini: 0.6, Full: 1.4 };
 const SABJI_COMBO_GROUPS = {
-  "__COMBO_DRY__":   { Mini: "Dry Sabji Mini (100ml)",   Full: "Dry Sabji Full (250ml)",   label: "Dry Sabji" },
-  "__COMBO_CURRY__": { Mini: "Curry Sabji Mini (100ml)", Full: "Curry Sabji Full (250ml)", label: "Curry Sabji" }
+  "__COMBO_DRY__":   { Mini: "Dry Sabji Mini [100ml]",   Full: "Dry Sabji Full [250ml]",   label: "Dry Sabji" },
+  "__COMBO_CURRY__": { Mini: "Curry Sabji Mini [100ml]", Full: "Curry Sabji Full [250ml]", label: "Curry Sabji" }
 };
 
 // Computes the current weighted-usage status for one meal's combo groups.

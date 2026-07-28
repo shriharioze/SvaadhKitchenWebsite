@@ -33,16 +33,16 @@
       { "name": "Bajra Bhakri",         "price": 22, "unit": "per piece" }
     ],
     "sabji": [
-      { "name": "Dry Sabji Mini (100ml)",   "price": 24 },
-      { "name": "Dry Sabji Full (250ml)",   "price": 48 },
-      { "name": "Curry Sabji Mini (100ml)", "price": 24 },
-      { "name": "Curry Sabji Full (250ml)", "price": 48 }
+      { "name": "Dry Sabji Mini [100ml]",   "price": 24 },
+      { "name": "Dry Sabji Full [250ml]",   "price": 48 },
+      { "name": "Curry Sabji Mini [100ml]", "price": 24 },
+      { "name": "Curry Sabji Full [250ml]", "price": 48 }
     ],
     "basics": [
-      { "name": "Dal (200ml)",  "price": 24 },
-      { "name": "Rice (100g)", "price": 13 },
-      { "name": "Salad (40g)", "price": 8  },
-      { "name": "Curd (50g)",  "price": 13 }
+      { "name": "Dal [200ml]",  "price": 24 },
+      { "name": "Rice [100g]", "price": 13 },
+      { "name": "Salad [40g]", "price": 8  },
+      { "name": "Curd [50g]",  "price": 13 }
     ],
     "breakfast": "Rotating daily menu — items like Kanda Poha, Upma, Sabudana Khichdi, Paratha, Sheera (₹35–₹70 range). Check the order form for today's breakfast options.",
     "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹105 before discounts. Build lighter or bigger — you only pay for what you pick."
