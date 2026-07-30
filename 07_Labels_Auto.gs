@@ -353,8 +353,44 @@ function setupLabelAutoTrigger() {
     if (t.getHandlerFunction() === "labelAutoTick") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("labelAutoTick").timeBased().everyMinutes(1).create();
-  return "labelAutoTick trigger installed (every 1 min). Labels auto-generate at cutoff+"
-    + LBL_AUTO_DELAY_MIN + " min for " + LBL_AUTO_MEALS.join(" + ") + ".";
+  return "Auto-label trigger armed.";
+}
+
+// ── CLEANUP OLD LABELS ───────────────────────────────────────
+// Called by autoMarkDeliveredDaily (04_Reports_Misc.gs) to keep Drive clean
+function cleanupOldLabels() {
+  try {
+    var sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    var root = DriveApp.getRootFolder();
+    var pathParts = ["Svaadh Kitchen", "Accounting", "Tally Form Daily Sheets", "Processed_Orders", "Labels"];
+    var folder = root;
+    for (var i = 0; i < pathParts.length; i++) {
+      var iter = folder.getFoldersByName(pathParts[i]);
+      if (!iter.hasNext()) return; // Path doesn't exist
+      folder = iter.next();
+    }
+    
+    // The Labels folder contains year folders, which contain month folders, which contain PDFs
+    var years = folder.getFolders();
+    while (years.hasNext()) {
+      var yearFolder = years.next();
+      var months = yearFolder.getFolders();
+      while (months.hasNext()) {
+        var monthFolder = months.next();
+        var files = monthFolder.getFilesByType(MimeType.PDF);
+        while (files.hasNext()) {
+          var file = files.next();
+          if (file.getDateCreated() < sevenDaysAgo) {
+            file.setTrashed(true);
+          }
+        }
+      }
+    }
+  } catch(e) {
+    Logger.log("cleanupOldLabels failed: " + e.message);
+  }
 }
 
 // ── Editor test helper: generate for a specific date/meal RIGHT NOW ─────────

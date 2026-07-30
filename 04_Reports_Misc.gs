@@ -3116,6 +3116,7 @@ function markDelivered(body) {
 // is only auto-marked once ALL its (non-cancelled) orders are in the past —
 // otherwise we'd pre-mark tomorrow's delivery as done.
 function autoMarkDeliveredDaily() {
+  try { cleanupOldLabels(); } catch(e) { Logger.log("cleanupOldLabels err: " + e.message); }
   var ss    = getSpreadsheet();
   var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
   var ws    = getOrCreateTab(ss, TAB_ORDERS, []);

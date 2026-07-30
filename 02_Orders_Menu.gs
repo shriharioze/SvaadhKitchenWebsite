@@ -2824,7 +2824,7 @@ function _submitOrderInternal(body) {
   }
 
   if (payFreq === "Prepaid Wallet" || payFreq.includes("10 days") || payFreq.includes("Wallet")) {
-    try { _updateLedger(ss, profile, orders); } catch(e) { /* non-fatal */ }
+    // try { _updateLedger(ss, profile, orders); } catch(e) { /* non-fatal */ } // Disabled to save Drive space
   }
 
   // Sync final promoCount back to customer sheet
