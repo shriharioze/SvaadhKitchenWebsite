@@ -360,8 +360,8 @@ function setupLabelAutoTrigger() {
 // Called by autoMarkDeliveredDaily (04_Reports_Misc.gs) to keep Drive clean
 function cleanupOldLabels() {
   try {
-    var sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    var oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
     
     var root = DriveApp.getRootFolder();
     var pathParts = ["Svaadh Kitchen", "Accounting", "Tally Form Daily Sheets", "Processed_Orders", "Labels"];
@@ -382,7 +382,7 @@ function cleanupOldLabels() {
         var files = monthFolder.getFilesByType(MimeType.PDF);
         while (files.hasNext()) {
           var file = files.next();
-          if (file.getDateCreated() < sevenDaysAgo) {
+          if (file.getDateCreated() < oneDayAgo) {
             file.setTrashed(true);
           }
         }
