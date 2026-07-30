@@ -398,6 +398,13 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
   const initialStreakInfo  = _calculateLoyaltyStreak(phoneStr);
   let virtualStreakCount   = initialStreakInfo.streak || 0;
   let virtualPastSurcharge = initialStreakInfo.pastSurcharge || 0;
+
+  // ── Streak overflow guard ─────────
+  if (virtualStreakCount >= 6) {
+    virtualStreakCount = 0;
+    virtualPastSurcharge = 0;
+  }
+
   // Streak gap guard (mirrors submitOrder + the cart) so the gateway-recomputed
   // amount equals the cart and never applies the 6th-day reward across a gap.
   let prevStreakDate = initialStreakInfo.end || null;

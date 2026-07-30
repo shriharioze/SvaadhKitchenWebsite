@@ -1972,6 +1972,20 @@ function _submitOrderInternal(body) {
   let virtualStreakCount = initialStreakInfo.streak;
   let virtualPastSurcharge = initialStreakInfo.pastSurcharge;
 
+  // ── Streak overflow guard (mirrors frontend order.html ~7574) ─────────
+  // _calculateLoyaltyStreak can return streak >= 6 if an earlier cycle's
+  // 6th-day reward was never written to the sheet (e.g. customer booked a
+  // future date before the current date — the gap detection at THAT time
+  // reset the streak, so is6thDay never fired, but the backward walk NOW
+  // sees all 6+ days consecutively). Without this reset virtualStreakCount
+  // stays > 5 and the === 5 check never matches again — the customer
+  // permanently loses their loyalty reward. Reset to 0 so a new cycle
+  // starts cleanly.
+  if (virtualStreakCount >= 6) {
+    virtualStreakCount = 0;
+    virtualPastSurcharge = 0;
+  }
+
   // ════ KITCHEN CLOSURE PRE-FLIGHT ════
   // Reject the entire submission if ANY ordered date has been marked
   // Kitchen Closed via the admin Daily Menu toggle. Customer calendar
