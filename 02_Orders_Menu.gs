@@ -2934,21 +2934,29 @@ function _upsertCustomer(ss, profile) {
       }
     };
     if (profile.name !== undefined) update("Customer_Name", profile.name);
-    if (profile.area !== undefined) update("Area",          profile.area);
-    if (profile.wing !== undefined) update("Wing",          profile.wing);
-    if (profile.flat !== undefined) update("Flat",          profile.flat);
-    if (profile.floor !== undefined) update("Floor",         profile.floor);
-    if (profile.society !== undefined) update("Society",       profile.society);
-    if (profile.area !== undefined || profile.society !== undefined) update("Full_Address",  fullAddr);
-    
-    // Auto-derive Maps Link if missing
-    let finalMaps = profile.maps || "";
-    if (!finalMaps) {
-      finalMaps = _deriveMapsLink(fullAddr, profile.society || "");
+    // GUARD: Self Pickup / Porter are TEMPORARY delivery overrides (cap-full flow) —
+    // they must NOT overwrite the customer's real saved address. When the profile
+    // arrives with one of these as the area, skip ALL address field updates so the
+    // customer's original address stays intact for future orders.
+    const _isNonDeliveryArea = /pickup|porter/i.test(String(profile.area || ""));
+    if (!_isNonDeliveryArea) {
+      if (profile.area !== undefined) update("Area",          profile.area);
+      if (profile.wing !== undefined) update("Wing",          profile.wing);
+      if (profile.flat !== undefined) update("Flat",          profile.flat);
+      if (profile.floor !== undefined) update("Floor",         profile.floor);
+      if (profile.society !== undefined) update("Society",       profile.society);
+      if (profile.area !== undefined || profile.society !== undefined) update("Full_Address",  fullAddr);
     }
-    update("Maps_Link", finalMaps);
+    if (!_isNonDeliveryArea) {
+      // Auto-derive Maps Link if missing
+      let finalMaps = profile.maps || "";
+      if (!finalMaps) {
+        finalMaps = _deriveMapsLink(fullAddr, profile.society || "");
+      }
+      update("Maps_Link", finalMaps);
 
-    if (profile.landmark !== undefined) update("Landmark",      profile.landmark || "");
+      if (profile.landmark !== undefined) update("Landmark",      profile.landmark || "");
+    }
     if (profile.delivery_point !== undefined) update("Delivery_Point", _getDeliveryPointLabel(profile.delivery_point));
     if (profile.payment_preference !== undefined) update("Payment_Freq",  profile.payment_preference);
     // SECURITY: never CHANGE an existing non-blank PIN via upsert. Only write
@@ -2969,7 +2977,9 @@ function _upsertCustomer(ss, profile) {
     // which skipped the empty string old single-address clients send — so an
     // address edit left the stored Meal_Addresses stale with the OLD address
     // forever). New clients always send the full JSON for both address modes.
-    if (profile.meal_addresses !== undefined) update("Meal_Addresses", profile.meal_addresses);
+    // GUARD: Skip when Self Pickup / Porter — the JSON would contain the temporary
+    // non-delivery area for every meal, wiping the customer's real addresses.
+    if (profile.meal_addresses !== undefined && !_isNonDeliveryArea) update("Meal_Addresses", profile.meal_addresses);
     if (profile.standardOrder !== undefined) update("Standard_Order", profile.standardOrder);
     if (profile.onAccount !== undefined) update("On_Account", profile.onAccount);
     if (profile.billingCycle !== undefined) update("Billing_Cycle", profile.billingCycle);
