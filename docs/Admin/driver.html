@@ -264,6 +264,32 @@
 
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+const APP_VERSION = "v26.07.31.02";
+(function() {
+  const savedVer = localStorage.getItem("sk_admin_ver");
+  if (savedVer !== APP_VERSION) {
+    localStorage.setItem("sk_admin_ver", APP_VERSION);
+    location.reload(true);
+  }
+})();
+setInterval(async function() {
+  try {
+    const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+    const html = await res.text();
+    const m = html.match(/const APP_VERSION = "([^"]+)"/);
+    if (m && m[1] !== APP_VERSION) location.reload(true);
+  } catch (e) {}
+}, 15 * 60 * 1000);
+document.addEventListener("visibilitychange", async function() {
+  if (document.visibilityState === "visible") {
+    try {
+      const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+      const html = await res.text();
+      const m = html.match(/const APP_VERSION = "([^"]+)"/);
+      if (m && m[1] !== APP_VERSION) location.reload(true);
+    } catch (e) {}
+  }
+});
 
 // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
 async function fetchWithTimeout(url, options = {}, timeoutMs) {
