@@ -753,8 +753,12 @@ function _countActiveMealOrders(rows, dateStr) {
     if (_isOrderCancelled(r.Payment_Status)) continue;
     // The cap is a DELIVERY limit — Self Pickup / Porter orders don't use a
     // delivery slot, so they neither count toward the cap nor get blocked by it.
+    // Shree Laxmi Vihar society orders also don't consume a delivery slot (owner-
+    // approved exemption 2026-07-31) — excluded from the count entirely.
     const ar = String(r.Area || "").toLowerCase();
     if (ar.indexOf("pickup") !== -1 || ar === "porter") continue;
+    const soc = _normSocietyBase(r.Society || "");
+    if (soc.indexOf("shreelaxmivihar") !== -1) continue;
     const mt = String(r.Meal_Type || "").trim();
     if (c[mt] === undefined) continue;
     if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; } // counted once below
@@ -2108,6 +2112,10 @@ function _submitOrderInternal(body) {
             // Owner-approved exempt LOCATIONS (WeWork; Cybercity Magarpatta towers
             // 1–12 — customers collect at the gate) keep delivery even at the cap.
             const _locExemptW = _isCapExemptLocation(_m.society || profile.society, _m.area || profile.area);
+            // Shree Laxmi Vihar society — doesn't count toward cap AND never blocked
+            // (owner-approved 2026-07-31, synced with _countActiveMealOrders).
+            const _slvSocW = _normSocietyBase(String(_m.society || profile.society || ""));
+            const _isSLVW = _slvSocW.indexOf("shreelaxmivihar") !== -1;
             // Per-meal bypass CAPPED MEAL keeps delivery even at the cap (big orders
             // are worth the slot) — but only while alternatives are ON; a cap_alt=false
             // HARD close (kitchen out of capacity) is never bypassed. Uses the
@@ -2115,7 +2123,7 @@ function _submitOrderInternal(body) {
             // money — the bill itself is priced authoritatively later/by the gateway.
             const _bypassMinW = CAP_DELIVERY_BYPASS_MIN[_mt] || 200;
             const _bigMealW = _altOnW && (Number(_m.subtotal) || 0) >= _bypassMinW;
-            if (!_isFreeAreaW && !_bigMealW && !_locExemptW) {
+            if (!_isFreeAreaW && !_bigMealW && !_locExemptW && !_isSLVW) {
               const _idxMtW = _delIdxW && _delIdxW[_mt];
               const _socW = _normSocietyKey(_m.society || profile.society || "");
               const _socAlreadyW  = !!(_socW && _idxMtW && _idxMtW.soc[_socW]);
