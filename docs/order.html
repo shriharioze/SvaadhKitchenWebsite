@@ -4710,7 +4710,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.07.30.02";
+    const APP_VERSION = "v26.07.31.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -11838,7 +11838,7 @@
           if (data.error) {
             try { ov.remove(); } catch(_) {}
             await sAlert(
-              "Could not verify payment.\n\nIf money was deducted, WhatsApp us at +91 93222 46765 with order ID: " + orderId + "\n\nError: " + data.error,
+              "Could not verify payment. If money was deducted, please wait for 10 minutes. Our automated reconciler system will try to place the order for you. If it still does not show up in your upcoming orders after 10 minutes, please WhatsApp us at +91 93222 46765 with your order ID: " + orderId + "\n\nError: " + data.error,
               "Verification Issue", "⚠️"
             );
             return;
