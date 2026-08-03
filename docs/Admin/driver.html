@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.03.2">
+  <meta name="app-version" content="v26.08.03.1">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -265,32 +265,6 @@
 
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-const APP_VERSION = "v26.08.03.2";
-(function() {
-  const savedVer = localStorage.getItem("sk_admin_ver");
-  if (savedVer !== APP_VERSION) {
-    localStorage.setItem("sk_admin_ver", APP_VERSION);
-    location.reload(true);
-  }
-})();
-setInterval(async function() {
-  try {
-    const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
-    const html = await res.text();
-    const m = html.match(/const APP_VERSION = "([^"]+)"/);
-    if (m && m[1] !== APP_VERSION) location.reload(true);
-  } catch (e) {}
-}, 15 * 60 * 1000);
-document.addEventListener("visibilitychange", async function() {
-  if (document.visibilityState === "visible") {
-    try {
-      const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
-      const html = await res.text();
-      const m = html.match(/const APP_VERSION = "([^"]+)"/);
-      if (m && m[1] !== APP_VERSION) location.reload(true);
-    } catch (e) {}
-  }
-});
 
 // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
 async function fetchWithTimeout(url, options = {}, timeoutMs) {
@@ -386,29 +360,7 @@ function clearDriverSearch(meal) {
   // the input is still focusable and ready for another query.
 }
 
-    // ── APP VERSION + AUTO-UPDATE ──
-    // Match this string to the <meta name="app-version"> tag in <head>.
-    // On every page load we fetch the deployed HTML (cache-busted) and
-    // compare its meta-version to this constant. If they differ, the
-    // user is running cached/stale HTML — silently hard-reload so the
-    // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.08.03.1";
-    (async function _versionCheck() {
-      try {
-        const badge = document.getElementById("appVerBadge");
-        if (badge) badge.textContent = DRIVER_VERSION;
-        const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
-        if (!res.ok) return;
-        const html = await res.text();
-        const m = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
-        if (m && m[1] && m[1] !== DRIVER_VERSION) {
-          console.log("[Driver] Version mismatch: running=" + DRIVER_VERSION
-                      + ", latest=" + m[1] + " — reloading to pick up new build");
-          const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
-          window.location.replace(window.location.href + sep + "_v=" + Date.now());
-        }
-      } catch (_) { /* network blip — try again next load */ }
-    })();
+    // (Version check removed to prevent infinite loops)
 
 // ── RATE LIMITING ──
 let attempts = 0;
@@ -533,10 +485,10 @@ async function loadOrders() {
   try {
     // Fetch orders + the learned delivery route together.
     const [res, routeRes] = await Promise.all([
-      fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${date}&pin=${D.sessionPin}&_t=${Date.now()}`),
+      safeFetchJson(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${date}&pin=${D.sessionPin}&_t=${Date.now()}`),
       fetch(`${APPS_SCRIPT_URL}?action=getDeliveryRoute&pin=${D.sessionPin}&_t=${Date.now()}`).catch(() => null)
     ]);
-    const data = await res.json();
+    const data = res;
     if (data.error) throw new Error(data.error);
     if (routeRes) {
       try {
