@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.14.4">
+  <meta name="app-version" content="v26.08.03.2">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2123,7 +2123,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.07.31.03";
+const APP_VERSION = "v26.08.03.2";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2275,7 +2275,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.06.14.4";
+    const ADMIN_VERSION = "v26.08.03.2";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -4536,8 +4536,29 @@ async function loadOrderSummary(manual=false, silent=false) {
   if (!manual && !silent && el) el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading orders…</p></div>`;
 
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getOrderSummary&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    let data;
+    let url = `${APPS_SCRIPT_URL}?action=getOrderSummary&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        if (text.trim().startsWith("<")) {
+          if (attempt === 0) { await new Promise(r => setTimeout(r, 1200)); continue; }
+          throw new Error("Server temporarily busy. Please tap 🔍 Load to retry.");
+        }
+        data = JSON.parse(text);
+        break;
+      } catch(err) {
+        if (attempt === 0 && !err.message.includes("STRICT") && !err.message.includes("REQUIRED")) {
+          await new Promise(r => setTimeout(r, 1200));
+          continue;
+        }
+        if (err.name === "SyntaxError" || err.message.includes("Unexpected token")) {
+          throw new Error("Server temporarily busy. Please tap 🔍 Load to retry.");
+        }
+        throw err;
+      }
+    }
     if (manual) sLoading(false);
     if (data.error) { 
       if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${data.error}</p>`; 
@@ -4554,7 +4575,8 @@ async function loadOrderSummary(manual=false, silent=false) {
     else stopOrdersAutoRefresh();
   } catch(e) {
     if (manual) sLoading(false);
-    if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${e.message}</p>`;
+    const errMsg = e.message.includes("Unexpected token") ? "Server temporarily busy. Please tap 🔍 Load to retry." : e.message;
+    if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Error: ${errMsg}</p>`;
     throw e;
   }
 }
