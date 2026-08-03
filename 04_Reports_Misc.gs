@@ -1923,7 +1923,15 @@ function archiveMonth(year, month) {
     // Critical fix for the "half-deleted" bug: clear data range and re-write
     // only kept rows in one operation instead of N deleteRow() calls.
     function rebuildSheet(ws, headers, keepRows, appendRows) {
-      var allKeep = keepRows.concat(appendRows || []);
+      // Filter out purely blank rows that may have snuck into keepRows
+      var allKeepRaw = keepRows.concat(appendRows || []);
+      var allKeep = [];
+      for (var i = 0; i < allKeepRaw.length; i++) {
+        if (allKeepRaw[i].join("").trim() !== "") {
+          allKeep.push(allKeepRaw[i]);
+        }
+      }
+
       var lastRow = ws.getLastRow();
       var lastCol = ws.getLastColumn();
       if (lastRow > 1) {
@@ -1932,6 +1940,14 @@ function archiveMonth(year, month) {
       if (allKeep.length > 0) {
         ws.getRange(2, 1, allKeep.length, headers.length).setValues(allKeep);
       }
+
+      // Physically delete excess rows so we don't accumulate thousands of blanks
+      var rowsNeeded = allKeep.length + 1; // 1 for header
+      var totalRows = ws.getMaxRows();
+      if (totalRows > rowsNeeded) {
+        ws.deleteRows(rowsNeeded + 1, totalRows - rowsNeeded);
+      }
+
       SpreadsheetApp.flush();
       var nowRows = ws.getLastRow() - 1;
       return nowRows === allKeep.length
@@ -2024,6 +2040,8 @@ function archiveOldWebhooks() {
     var keep = [];
     var byMonth = {}; // "YYYY-MM" -> { year, month, rows: [] }
     for (var i = 1; i < all.length; i++) {
+      if (all[i].join("").trim() === "") continue; // skip purely blank rows
+
       var recv = all[i][recvIdx];
       var dStr = recv instanceof Date
         ? Utilities.formatDate(recv, "Asia/Kolkata", "yyyy-MM-dd")
@@ -2066,6 +2084,14 @@ function archiveOldWebhooks() {
     var lastRow = ws.getLastRow(), lastCol = ws.getLastColumn();
     if (lastRow > 1) ws.getRange(2, 1, lastRow - 1, Math.max(lastCol, headers.length)).clearContent();
     if (keep.length > 0) ws.getRange(2, 1, keep.length, headers.length).setValues(keep);
+
+    // Physically delete excess rows to avoid thousands of blank rows at the bottom
+    var rowsNeeded = keep.length + 1; // 1 for header
+    var totalRows = ws.getMaxRows();
+    if (totalRows > rowsNeeded) {
+      ws.deleteRows(rowsNeeded + 1, totalRows - rowsNeeded);
+    }
+
     SpreadsheetApp.flush();
     if ((ws.getLastRow() - 1) !== keep.length) {
       return { success: false, error: "Live-log rebuild mismatch. Archive files ARE written — verify before re-running." };
