@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.03.4">
+  <meta name="app-version" content="v26.08.03.5">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2123,7 +2123,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.08.03.4";
+const APP_VERSION = "v26.08.03.5";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2297,7 +2297,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.08.03.4";
+    const ADMIN_VERSION = "v26.08.03.5";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -4542,27 +4542,7 @@ async function loadOrderSummary(manual=false, silent=false) {
   try {
     let data;
     let url = `${APPS_SCRIPT_URL}?action=getOrderSummary&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = await safeFetchJson(url);
-        const text = await res.text();
-        if (text.trim().startsWith("<")) {
-          if (attempt === 0) { await new Promise(r => setTimeout(r, 1200)); continue; }
-          throw new Error("Server temporarily busy. Please tap 🔍 Load to retry.");
-        }
-        data = JSON.parse(text);
-        break;
-      } catch(err) {
-        if (attempt === 0 && !err.message.includes("STRICT") && !err.message.includes("REQUIRED")) {
-          await new Promise(r => setTimeout(r, 1200));
-          continue;
-        }
-        if (err.name === "SyntaxError" || err.message.includes("Unexpected token")) {
-          throw new Error("Server temporarily busy. Please tap 🔍 Load to retry.");
-        }
-        throw err;
-      }
-    }
+    data = await safeFetchJson(url);
     if (manual) sLoading(false);
     if (data.error) { 
       if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${data.error}</p>`; 
