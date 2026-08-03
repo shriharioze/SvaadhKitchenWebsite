@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.03.1">
+  <meta name="app-version" content="v26.08.03.2">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -265,7 +265,7 @@
 
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-const APP_VERSION = "v26.08.03.1";
+const APP_VERSION = "v26.08.03.2";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -296,6 +296,29 @@ document.addEventListener("visibilitychange", async function() {
 async function fetchWithTimeout(url, options = {}, timeoutMs) {
   const fetchOpts = typeof options === 'number' ? {} : options;
   return fetch(url, fetchOpts);
+}
+
+async function safeFetchJson(url, options = {}) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      if (text.trim().startsWith('<')) {
+        if (attempt === 0) { await new Promise(r => setTimeout(r, 1200)); continue; }
+        throw new Error('Server temporarily busy. Please try again.');
+      }
+      return JSON.parse(text);
+    } catch(err) {
+      if (attempt === 0 && !err.message.includes('STRICT') && !err.message.includes('REQUIRED')) {
+        await new Promise(r => setTimeout(r, 1200));
+        continue;
+      }
+      if (err.name === 'SyntaxError' || err.message.includes('Unexpected token')) {
+        throw new Error('Server temporarily busy. Please try again.');
+      }
+      throw err;
+    }
+  }
 }
 
 // ── KITCHEN LOCATION — update to your actual kitchen lat/lng ──────────────────
@@ -433,8 +456,7 @@ async function verifyPin(autoPin) {
   const pinToVerify = autoPin || D.pin;
   try {
     const today = todayIST();
-    const res   = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${today}&pin=${pinToVerify}&_t=${Date.now()}`);
-    const data  = await res.json();
+    const data  = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${today}&pin=${pinToVerify}&_t=${Date.now()}`);
     if (data.error) {
       if (!autoPin) {
         attempts++;
