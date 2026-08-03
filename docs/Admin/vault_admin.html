@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.03.2">
+  <meta name="app-version" content="v26.08.03.3">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2123,7 +2123,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.08.03.2";
+const APP_VERSION = "v26.08.03.3";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2133,7 +2133,7 @@ const APP_VERSION = "v26.08.03.2";
 })();
 setInterval(async function() {
   try {
-    const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+    const data = await safeFetchJson(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
     const html = await res.text();
     const m = html.match(/const APP_VERSION = "([^"]+)"/);
     if (m && m[1] !== APP_VERSION) location.reload(true);
@@ -2142,7 +2142,7 @@ setInterval(async function() {
 document.addEventListener("visibilitychange", async function() {
   if (document.visibilityState === "visible") {
     try {
-      const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+      _areasList = await safeFetchJson(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
       const html = await res.text();
       const m = html.match(/const APP_VERSION = "([^"]+)"/);
       if (m && m[1] !== APP_VERSION) location.reload(true);
@@ -2150,6 +2150,28 @@ document.addEventListener("visibilitychange", async function() {
   }
 });
 
+async function safeFetchJson(url, options = {}) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      if (text.trim().startsWith('<')) {
+        if (attempt === 0) { await new Promise(r => setTimeout(r, 1200)); continue; }
+        throw new Error('Server temporarily busy. Please try again.');
+      }
+      return JSON.parse(text);
+    } catch(err) {
+      if (attempt === 0 && !err.message.includes('STRICT') && !err.message.includes('REQUIRED')) {
+        await new Promise(r => setTimeout(r, 1200));
+        continue;
+      }
+      if (err.name === 'SyntaxError' || err.message.includes('Unexpected token')) {
+        throw new Error('Server temporarily busy. Please try again.');
+      }
+      throw err;
+    }
+  }
+}
 // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
 async function fetchWithTimeout(url, options = {}, timeoutMs) {
   const fetchOpts = typeof options === 'number' ? {} : options;
@@ -2275,7 +2297,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.08.03.2";
+    const ADMIN_VERSION = "v26.08.03.3";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -2608,7 +2630,6 @@ async function loadAttendance() {
   document.getElementById("attTable").innerHTML = "";
   try {
     const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "getAttendanceData", pin: S.sessionPin, date: dEl.value }) });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed to load");
     _attData = data;
     const sf = document.getElementById("attStaffFilter");
@@ -2864,8 +2885,7 @@ function openPayslip(name) {
 async function _attPost(action, extra) {
   sLoading(true, "Updating attendance...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: action, pin: S.sessionPin, ...extra }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: action, pin: S.sessionPin, ...extra }) });
     if (!data.success) throw new Error(data.error || "Failed");
     const dm = document.getElementById("attDetailModal"); if (dm) dm.remove();
     await loadAttendance();
@@ -3455,7 +3475,7 @@ async function saveCurrentMenu() {
 
   try {
     console.log("Saving menu payload:", payload);
-    const res  = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST", body: JSON.stringify(payload)
     });
     
@@ -3597,7 +3617,6 @@ async function deleteBfItem(id) {
   try {
     const res = await fetch(APPS_SCRIPT_URL,{method:"POST",
       body:JSON.stringify({_action:"deleteBreakfastItem",pin:S.sessionPin,id})});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     S.bfMaster = S.bfMaster.filter(m => m.id!==id);
     renderBfMasterTable(); renderBfGrid();
@@ -3607,7 +3626,7 @@ async function deleteBfItem(id) {
 
 async function apiBf(item) {
   try {
-    const res  = await fetch(APPS_SCRIPT_URL,{method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL,{method:"POST",
       body:JSON.stringify({_action:"saveBreakfastItem",pin:S.sessionPin,...item})});
     return await res.json();
   } catch(e) { toast("Error: "+e.message,4000); return {}; }
@@ -3675,7 +3694,6 @@ async function deleteSabjiItem(id) {
   try {
     const res  = await fetch(APPS_SCRIPT_URL,{method:"POST",
       body:JSON.stringify({_action:"deleteSabjiItem",pin:S.sessionPin,id})});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     S.sabjiMaster = S.sabjiMaster.filter(m=>m.id!==id);
     renderSabjiMasterTable(); renderSabjiLists();
@@ -3685,7 +3703,7 @@ async function deleteSabjiItem(id) {
 
 async function apiSabji(item) {
   try {
-    const res  = await fetch(APPS_SCRIPT_URL,{method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL,{method:"POST",
       body:JSON.stringify({_action:"saveSabjiItem",pin:S.sessionPin,...item})});
     return await res.json();
   } catch(e) { toast("Error: "+e.message,4000); return {}; }
@@ -3955,7 +3973,6 @@ function decimalTo12hr(dec) {
 async function loadDefaultCutoffs() {
   try {
     const res = await fetch(`${APPS_SCRIPT_URL}?action=getDefaultCutoffs&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
     if (data && data.success && data.defaults) S_DEFAULT_CUTOFFS = data.defaults;
   } catch (e) { console.warn("loadDefaultCutoffs failed, using fallback", e); }
   const d = S_DEFAULT_CUTOFFS;
@@ -3986,8 +4003,7 @@ async function saveDefaultCutoffs() {
   const note = document.getElementById("defCutoffSavedNote");
   if (note) note.textContent = "Saving…";
   try {
-    const res = await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "setDefaultCutoffs", pin: S.sessionPin, breakfast: b, lunch: l, dinner: d }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "setDefaultCutoffs", pin: S.sessionPin, breakfast: b, lunch: l, dinner: d }) });
     if (!data.success) throw new Error(data.error || "Save failed");
     await loadDefaultCutoffs(); // refresh every dependent label/badge
     if (note) { note.textContent = "✅ Saved"; setTimeout(() => { note.textContent = ""; }, 3000); }
@@ -4001,8 +4017,7 @@ async function saveDefaultCutoffs() {
 // DEFAULT DELIVERY CAPS — load from backend + save (same pattern as cutoffs)
 async function loadDefaultCaps() {
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getDefaultOrderCaps&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getDefaultOrderCaps&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (data && data.success && data.defaults) {
       S.defaultCaps = data.defaults;
     }
@@ -4029,11 +4044,10 @@ async function saveDefaultCaps() {
   const note = document.getElementById("defCapSavedNote");
   if (note) note.textContent = "Saving…";
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "setDefaultOrderCaps", pin: S.sessionPin, breakfast: b, lunch: l, dinner: d })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || "Save failed");
     S.defaultCaps = data.defaults;
     await loadDefaultCaps(); // refresh inputs + per-date cap placeholders
@@ -4121,8 +4135,7 @@ async function loadPackaging(force = false, silent = false) {
       if (!from || !to) { if (!silent) sAlert("Please select both From and To dates."); if (el) el.innerHTML=""; return; }
       url = `${APPS_SCRIPT_URL}?action=getPackagingExpenses&from=${from}&to=${to}&pin=${S.sessionPin}&_t=${Date.now()}`;
     }
-    const res  = await fetch(url);
-    const data = await res.json();
+    const data = await safeFetchJson(url);
     if (data.error) throw new Error(data.error);
     _pkgData = data;
     if (el) el.innerHTML = _pkgMode === "day" ? renderPackagingDay(data) : renderPackagingRange(data);
@@ -4345,8 +4358,7 @@ async function generateLabels() {
   document.getElementById("downloadLabelBtn").style.display = "none";
 
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getLabelOrders&date=${date}&meal=${meal}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getLabelOrders&date=${date}&meal=${meal}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (data.error) throw new Error(data.error);
 
     if (!data.orders || !data.orders.length) {
@@ -4506,11 +4518,10 @@ async function saveLabelsToDrive() {
     const pdfB64 = doc.output('datauristring').split(',')[1];
     sBtnLoading(btn, true, "Saving to Drive");
 
-    const res  = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ _action: 'saveLabels', pin: S.sessionPin, date, meal, lang, pdf: pdfB64 })
     });
-    const data = await res.json();
     sBtnLoading(btn, false);
     if (!data.success) throw new Error(data.error || "Failed to save");
 
@@ -4540,7 +4551,7 @@ async function loadOrderSummary(manual=false, silent=false) {
     let url = `${APPS_SCRIPT_URL}?action=getOrderSummary&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetch(url);
+        const data = await safeFetchJson(url);
         const text = await res.text();
         if (text.trim().startsWith("<")) {
           if (attempt === 0) { await new Promise(r => setTimeout(r, 1200)); continue; }
@@ -4693,7 +4704,6 @@ let _areasList = [];
 async function loadAreasMaster() {
   try {
     const res = await fetch(`${APPS_SCRIPT_URL}?action=getAreas&_t=${Date.now()}`);
-    _areasList = await res.json();
     renderAreasMasterTable();
   } catch(e) { toast("Failed to load areas: " + e.message, 3000); }
 }
@@ -4722,7 +4732,6 @@ async function addAreaItem() {
   if (!name || !label) { toast("Enter area name and label", 2000); return; }
   try {
     const res  = await fetch(APPS_SCRIPT_URL, {method:"POST", body: JSON.stringify({_action:"saveArea", pin:S.sessionPin, name, label, free})});
-    const data = await res.json();
     if (data.error) { toast("Error: " + data.error, 3000); return; }
     document.getElementById("newAreaName").value  = "";
     document.getElementById("newAreaLabel").value = "";
@@ -4734,8 +4743,7 @@ async function addAreaItem() {
 async function deleteAreaItem(name) {
   if (!(await showUIConfirm(`Delete area "${name}"? Orders already placed won't be affected.`, "Delete Area", "📍"))) return;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, {method:"POST", body: JSON.stringify({_action:"deleteArea", pin:S.sessionPin, name})});
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST", body: JSON.stringify({_action:"deleteArea", pin:S.sessionPin, name})});
     if (data.error) { toast("Error: " + data.error, 3000); return; }
     toast("Area deleted", 2000);
     loadAreasMaster();
@@ -4787,8 +4795,7 @@ async function generateLabels() {
   btn.style.display = "none";
 
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getLabelOrders&pin=${S.sessionPin}&date=${date}&meal=${meal}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getLabelOrders&pin=${S.sessionPin}&date=${date}&meal=${meal}&_t=${Date.now()}`);
     if (data.error) { preview.innerHTML = `<p style="color:var(--red);padding:20px;">Error: ${data.error}</p>`; return; }
 
     labelOrders = data.orders || [];
@@ -5056,11 +5063,10 @@ async function saveLabelsToDrive() {
     btn.textContent = "⏳ Saving to Drive…";
 
     const pdfB64 = doc.output("datauristring").split(",")[1];
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action:"saveLabels", pin:S.sessionPin, date, meal, lang, pdf:pdfB64 })
     });
-    const data = await res.json();
 
     if (data.url) {
       btn.innerHTML = `<a href="${data.url}" target="_blank" style="color:#fff;text-decoration:none;">✅ Saved — Open in Drive (${data.name})</a>`;
@@ -5092,9 +5098,8 @@ function orderJumpDay(delta) {
 async function adminCancelMealOrder(phone, date, meal) {
   if (!(await showUIConfirm(`Cancel ${meal} order for this customer on ${date}?\nThis cannot be undone.`, "Cancel Order", "🗑️"))) return;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body: JSON.stringify({_action:"adminCancelOrder", pin:S.sessionPin, phone, date, meal})});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     toast(`✅ ${data.message || meal + " order cancelled"}`);
     loadOrderSummary(true);
@@ -5151,8 +5156,7 @@ async function loadForecast() {
   if (!el) return;
   el.innerHTML = `<div class="analytics-section" style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getForecastedMonthlySales&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getForecastedMonthlySales&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error || "Forecast unavailable");
     el.innerHTML = renderForecast(data);
   } catch (e) {
@@ -5206,8 +5210,7 @@ async function loadAnalytics() {
   const el = document.getElementById("analyticsContent");
   el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getAnalytics&dateFrom=${from}&dateTo=${to}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getAnalytics&dateFrom=${from}&dateTo=${to}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     el.innerHTML = renderAnalytics(data, from, to);
   } catch(e) {
@@ -5340,8 +5343,7 @@ async function loadChurn(days) {
   el.innerHTML = `<div class="spinner" style="margin:0 auto;width:20px;height:20px;"></div>`;
   const since = toISO(new Date(getIST().getTime() - days*86400000));
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getChurnReport&sinceDate=${since}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getChurnReport&sinceDate=${since}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     if (!data.count) { el.innerHTML = `<p style="color:var(--green);font-weight:600;">✅ No churned customers in the last ${days} days!</p>`; return; }
     const fmtD = d => d?(p=>p[2]+"/"+p[1]+"/"+p[0])(d.split("-")):"—";
@@ -5387,8 +5389,7 @@ async function loadTenday() {
   el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   document.getElementById("tendayWaBtn").style.display = "none";
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=get10DayBilling&dateFrom=${from}&dateTo=${to}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=get10DayBilling&dateFrom=${from}&dateTo=${to}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     _tendayData = data;
     el.innerHTML = renderTenday(data);
@@ -5443,7 +5444,7 @@ async function tendayToggle(phone, currentStatus) {
   const btn = document.getElementById(`tdpaybtn_${phone}`);
   btn.disabled = true; btn.textContent = "…";
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body:JSON.stringify({_action:"markCustomersPaid", pin:S.sessionPin,
         phones:[phone], dateFrom:from, dateTo:to,
         ...(newStatus==="Pending"&&{reverseToPending:true})})});
@@ -5553,7 +5554,6 @@ async function loadHistory() {
   tableEl.innerHTML = "";
   try {
     const res  = await fetch(`${APPS_SCRIPT_URL}?action=getOrderHistory&dateFrom=${from}&dateTo=${to}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     _histAllOrders = data.orders;
     _histFilter = "all";
@@ -5740,8 +5740,7 @@ async function adminAddWalletCredit() {
   if (!amount || amount <= 0) { status.innerHTML = `<span style="color:#dc2626;">⚠ Enter a valid amount.</span>`; return; }
   status.innerHTML = `<span style="color:#166534;">Adding ₹${amount} to ${phone}…</span>`;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"adminCreditWallet", phone, amount, pin: S.sessionPin }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"adminCreditWallet", phone, amount, pin: S.sessionPin }) });
     if (data.success) {
       status.innerHTML = `<span style="color:#16a34a;font-weight:700;">✅ ${data.msg || `₹${amount} credited to ${phone}. New balance: ₹${data.newBalance}`}</span>`;
       document.getElementById("wcPhone").value  = "";
@@ -5775,8 +5774,7 @@ async function loadCustomers(force = false, silent = false) {
   ["csort-recent","csort-name","csort-spent","csort-pending"].forEach(id=>document.getElementById(id)?.classList.remove("sel"));
   document.getElementById("csort-recent")?.classList.add("sel");
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     _custData = data.customers;
     _custDataLoaded = true;
@@ -5844,8 +5842,7 @@ async function loadCustomerDetail(phone) {
   wrap.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   wrap.scrollIntoView({behavior:"smooth", block:"start"});
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     wrap.innerHTML = renderCustomerDetail(data);
     // Render bulk calendar now that the DOM element exists
@@ -5875,11 +5872,10 @@ async function toggleVIP(phone, status) {
   
   sLoading(true, "Updating VIP status...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "toggleFeeExempt", pin: S.sessionPin, phone, status: status ? "Yes" : "No" })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     toast(status ? "🌟 User is now a VIP!" : "User status reset to Standard.");
     loadCustomerDetail(phone);
@@ -5899,11 +5895,10 @@ async function adminResetPin(phone, name) {
 
   sLoading(true, "Resetting PIN...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "adminResetPin", pin: S.sessionPin, phone })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || "Could not reset PIN.");
     toast("🔑 PIN cleared — customer will set a new one on next login.");
     loadCustomerDetail(phone);
@@ -5920,8 +5915,7 @@ async function loadIACustomers() {
   if (!el) return;
   el.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=ia_customers&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=ia_customers&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (data.error) throw new Error(data.error);
     const list = data.customers || [];
     if (!list.length) { el.innerHTML = `<div class="no-orders-msg">No IA employees yet.</div>`; return; }
@@ -5947,8 +5941,7 @@ async function iaResetPin(phone, name, btn) {
     "Reset IA PIN", "🔑"))) return;
   if (btn) { btn.disabled = true; btn.textContent = "Resetting…"; }
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"ia_resetPin", pin:S.sessionPin, phone }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"ia_resetPin", pin:S.sessionPin, phone }) });
     if (!data.success) throw new Error(data.error || "Could not reset PIN.");
     toast("🔑 IA PIN cleared — employee will set a new one on next login.");
     if (btn) btn.textContent = "✓ Reset";
@@ -5966,11 +5959,10 @@ async function whitelistNewVIP() {
   
   sLoading(true, "Whitelisting number...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "toggleFeeExempt", pin: S.sessionPin, phone, status: "Yes" })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     toast("🌟 Number whitelisted successfully!");
     loadCustomers(true);
@@ -5997,11 +5989,10 @@ async function toggleOnAccount(phone, status) {
   
   sLoading(true, "Updating status...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "markOnAccount", pin: S.sessionPin, phone, status: status ? "Yes" : "No", cycle })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     toast(status ? `💳 User authorized (${cycle})` : "Authorization revoked");
     loadCustomerDetail(phone);
@@ -6026,11 +6017,10 @@ async function whitelistOnAccount() {
   
   sLoading(true, "Updating records...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "markOnAccount", pin: S.sessionPin, phone, status: "Yes", cycle })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     toast("💳 Number authorized successfully!");
     loadCustomers(true);
@@ -6076,11 +6066,10 @@ function renderCustomerDetail(data) {
 
     sLoading(true, "Saving Favorite...");
     try {
-      const res = await fetch(APPS_SCRIPT_URL, {
+      const data = await safeFetchJson(APPS_SCRIPT_URL, {
         method: "POST",
         body: JSON.stringify({ _action: "setStandardOrder", pin: S.sessionPin, phone, items, templateName: templateName.trim(), meal })
       });
-      const data = await res.json();
       if (!data.success) throw new Error(data.error);
       toast("⭐ Favorite Saved!");
       loadCustomerDetail(phone); 
@@ -6096,11 +6085,10 @@ function renderCustomerDetail(data) {
     
     sLoading(true, "Deleting Favorite...");
     try {
-      const res = await fetch(APPS_SCRIPT_URL, {
+      const data = await safeFetchJson(APPS_SCRIPT_URL, {
         method: "POST",
         body: JSON.stringify({ _action: "removeStandardOrder", pin: S.sessionPin, phone, templateName })
       });
-      const data = await res.json();
       if (!data.success) throw new Error(data.error);
       toast("🗑️ Favorite Deleted");
       loadCustomerDetail(phone);
@@ -6230,11 +6218,10 @@ function renderCustomerDetail(data) {
     sLoading(true, `Placing orders for ${selectedDates.length} days...`);
     try {
       const templates = selectedFavs.map(chk => ({ name: chk.value, items: JSON.parse(chk.dataset.raw), meal: chk.dataset.meal }));
-      const res = await fetch(APPS_SCRIPT_URL, {
+      const data = await safeFetchJson(APPS_SCRIPT_URL, {
         method: "POST",
         body: JSON.stringify({ _action: "placeBulkOrders", pin: S.sessionPin, phone, name, templates, dates: selectedDates })
       });
-      const data = await res.json();
       if (!data.success) throw new Error(data.error);
       toast(`✅ Successfully placed ${data.count} orders!`);
       loadCustomerDetail(phone);
@@ -6326,8 +6313,7 @@ async function loadPayments(force = false, silent = false) {
     el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   }
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getDatePayments&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getDatePayments&date=${date}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     if (el) el.innerHTML = renderPayments(data);
     _paymentsDataLoaded = true;
@@ -6372,9 +6358,8 @@ async function togglePayment(phone, currentStatus) {
   const btn = document.getElementById(`paybtn_${phone}`);
   btn.disabled = true; btn.textContent = "…";
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body: JSON.stringify({_action:"markOrdersStatus",pin:S.sessionPin,date:_payDate,phone,status:newStatus})});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     btn.className = `pay-toggle ${newStatus==="Paid"?"paid":"pending"}`;
     btn.textContent = newStatus==="Paid" ? "✓ Paid" : "⏳ Pending";
@@ -6408,8 +6393,7 @@ async function markAllPaid() {
 // ── APPROVALS SUB-TABS ──
 async function refreshApprovalCounts() {
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getPendingCounts&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getPendingCounts&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (data.error) return;
     
     const r = document.getElementById("tabRefunds");
@@ -6449,11 +6433,10 @@ async function loadBillingTab(cycle) {
 
   content.innerHTML = `<div style="text-align:center;padding:32px;"><div class="spinner"></div><p style="font-size:.78rem;color:#888;margin-top:8px;">Loading ${cycle} billing data…</p></div>`;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ _action: 'getBillingData', pin: S.sessionPin, cycle, filterValue })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Unknown error');
     const fmtDate = d => d ? d.split('-').reverse().join(' / ') : '';
     if (cycle === 'Daily') {
@@ -6636,11 +6619,10 @@ async function markBillingPaidJS(sids, phone) {
   if (!ok) return;
   sLoading(true, 'Updating payment status…');
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ _action: 'markBillingCollected', pin: S.sessionPin, submissionIds: sids })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     // Show toast with 8-second undo window
     _toastWithUndo(`✅ ${data.count} order(s) marked as Paid`, sids, _currentBillingCycle);
@@ -6670,11 +6652,10 @@ async function _undoMarkPaid(sids, cycle) {
   if (toastEl) { toastEl.classList.remove("show"); toastEl.innerHTML = ""; }
   sLoading(true, 'Undoing…');
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ _action: 'undoMarkPaid', pin: S.sessionPin, submissionIds: sids })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Undo failed');
     toast('↩ Mark Paid reversed — orders set back to Pending');
     loadBillingTab(cycle);
@@ -6810,8 +6791,7 @@ async function loadIAPayments() {
   const wrap = document.getElementById("iaPaymentsContent");
   wrap.innerHTML = '<div class="empty-msg">Loading…</div>';
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=ia_pendingApprovals&pin=${S.sessionPin}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=ia_pendingApprovals&pin=${S.sessionPin}`);
     if (data.error) throw new Error(data.error);
     const orders = data.orders || [];
     if (!orders.length) { wrap.innerHTML = '<div class="empty-msg">No IntentAmplify payments to verify. ✅</div>'; updateBatchBar('ia'); return; }
@@ -6836,8 +6816,7 @@ async function loadIAPayments() {
 async function approveIA(id, date, meal, btn) {
   btn.disabled = true; btn.textContent = '…';
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:id, date, meal, admin:'admin' }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:id, date, meal, admin:'admin' }) });
     if (data.success) { const tr = btn.closest('tr'); if (tr) tr.remove(); updateBatchBar('ia'); }
     else { alert(data.error || 'Failed'); btn.disabled=false; btn.textContent='✅ Mark Paid'; }
   } catch (e) { alert('Failed: ' + e.message); btn.disabled=false; btn.textContent='✅ Mark Paid'; }
@@ -6851,8 +6830,7 @@ async function approveIASelected() {
   let ok = 0;
   for (const c of checks) {
     try {
-      const res  = await fetch(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:c.dataset.id, date:c.dataset.date, meal:c.dataset.meal, admin:'admin' }) });
-      const data = await res.json();
+      const data = await safeFetchJson(APPS_SCRIPT_URL, { method:'POST', body: JSON.stringify({ _action:'ia_approve', pin:S.sessionPin, submission_id:c.dataset.id, date:c.dataset.date, meal:c.dataset.meal, admin:'admin' }) });
       if (data.success) ok++;
     } catch (e) {}
   }
@@ -6866,8 +6844,7 @@ async function loadPendingPayments() {
   sLoading(true, "Fetching pending payments...");
   const wrap = document.getElementById("pendingPaymentsContent");
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getPendingUPIPayments&pin=${S.sessionPin}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getPendingUPIPayments&pin=${S.sessionPin}`);
     if (data.error) throw new Error(data.error);
 
     if (!data.length) {
@@ -6962,9 +6939,8 @@ async function rejectUPIPayment(phone, date, sid, name) {
   if (!(await showUIConfirm(`Reject payment for ${name}? This will mark it as "Payment Rejected".`, "Reject Payment", "❌"))) return;
   sLoading(true, "Rejecting payment...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body: JSON.stringify({_action:"rejectUPIPayment", pin:S.sessionPin, phone, date, sid})});
-    const data = await res.json();
     if (data.success) {
       toast("Payment Rejected ❌");
       await loadPendingPayments();
@@ -7002,9 +6978,8 @@ async function approveUPIPayment(phone, date, sid, isCancelled=false, name="", a
   }
   sLoading(true, isCancelled ? "Processing refund..." : "Verifying payment...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body: JSON.stringify({_action:"markOrdersStatus", pin:S.sessionPin, phone, date, sid, status:"Paid"})});
-    const data = await res.json();
     if (data.success) {
       toast(isCancelled ? "Refund Processed ✅" : "Payment Verified ✅");
       await loadPendingPayments();
@@ -7022,8 +6997,7 @@ async function loadPendingRecharges() {
   sLoading(true, "Fetching recharge requests...");
   const wrap = document.getElementById("pendingRechargesContent");
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getPendingRecharges&pin=${S.sessionPin}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getPendingRecharges&pin=${S.sessionPin}`);
     if (data.error) throw new Error(data.error);
 
     if (!data.length) {
@@ -7074,9 +7048,8 @@ async function rejectWalletRecharge(phone, timestamp, name) {
   if (!(await showUIConfirm(`Reject wallet recharge for ${name}?`, "Reject Recharge", "❌"))) return;
   sLoading(true, "Rejecting recharge...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body: JSON.stringify({ _action: "rejectWalletRecharge", pin: S.sessionPin, phone, timestamp }) });
-    const data = await res.json();
     if (data.success) {
       toast("Recharge Rejected ❌");
       await loadPendingRecharges();
@@ -7126,7 +7099,7 @@ async function handleBatchAction(tabId, actionType) {
 
   sLoading(true, `Processing ${selectedItems.length} items...`);
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({
         _action: "batchProcessApprovals",
@@ -7136,7 +7109,6 @@ async function handleBatchAction(tabId, actionType) {
         items: selectedItems
       })
     });
-    const data = await res.json();
     if (data.success) {
       toast(`${data.successCount} of ${data.total} items processed! ${icon}`);
       if (tabId === 'refunds') await loadRefunds();
@@ -7154,9 +7126,8 @@ async function activateWalletRecharge(phone, timestamp, amt, name) {
   if (!(await showUIConfirm(`Activate ₹${amt} credits for ${name || phone}?`, "Activate Credits", "💳"))) return;
   sLoading(true, "Activating credits...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {method:"POST",
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {method:"POST",
       body: JSON.stringify({ _action: "approveWalletRecharge", pin: S.sessionPin, phone, timestamp }) });
-    const data = await res.json();
     if (data.success) {
       toast(data.msg || "Wallet Activated ✅");
       if (data.msg) await showUIConfirm(data.msg, "Wallet Activated", "💳", { confirmLabel: "OK", hideCancel: true });
@@ -7174,8 +7145,7 @@ async function loadRefunds() {
   sLoading(true, "Fetching refund requests...");
   const wrap = document.getElementById("refundsContent");
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getPendingRefunds&pin=${S.sessionPin}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getPendingRefunds&pin=${S.sessionPin}`);
     if (data.error) throw new Error(data.error);
     
     if (!data.length) {
@@ -7255,11 +7225,10 @@ async function rejectRefund(subId, name) {
   if (!(await showUIConfirm(`Reject refund request for ${name}?`, "Reject Refund", "❌"))) return;
   sLoading(true, "Rejecting refund...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "markRefundRejected", pin: S.sessionPin, submissionId: subId })
     });
-    const data = await res.json();
     if (data.success) {
       toast("Refund Rejected ❌");
       await loadRefunds();
@@ -7272,11 +7241,10 @@ async function markAsRefunded(subId, name, amt) {
   if (!(await showUIConfirm(`Confirm you have paid ₹${amt} to ${name} via UPI? This will mark it as refunded.`, "Confirm Refund", "💸"))) return;
   sLoading(true, "Processing refund...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "markRefunded", pin: S.sessionPin, submissionId: subId })
     });
-    const data = await res.json();
     if (data.success) {
       toast("Marked as Refunded ✅");
       await loadRefunds();
@@ -7292,11 +7260,10 @@ async function addToWalletRefund(subId, name, amt) {
   if (!(await showUIConfirm(`Convert ₹${amt} refund for ${name} into Svaadh Wallet credits instead?`, "Add to Wallet", "💳"))) return;
   sLoading(true, "Adding to wallet...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "markRefunded", forceWallet: true, pin: S.sessionPin, submissionId: subId })
     });
-    const data = await res.json();
     if (data.success) {
       toast("Added to Wallet ✅");
       await loadRefunds();
@@ -7319,8 +7286,7 @@ async function loadReviewUsers(force = false, silent = false) {
     wrap.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading customers…</p></div>`;
   }
   try {
-    const res = await fetch(`${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}&_t=${Date.now()}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
     _reviewUsers = data.customers;
     _reviewUsersLoaded = true;
@@ -7401,11 +7367,10 @@ async function grantReviewReward(phone, name) {
   if (!(await showUIConfirm(`Mark ${name} as Reviewed?\nThis will add 3 discount credits (10% off each).`, "Add Review Reward", "🎁"))) return;
   sLoading(true, "Updating customer...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({ _action: "markReviewed", pin: S.sessionPin, phone: phone })
     });
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     toast(`✅ Added 3 credits to ${name}! New balance: ${data.newCount}`);
     loadReviewUsers(); // refresh
@@ -7648,7 +7613,7 @@ async function quickOrderStandard(phone, name, rawItems, favName, mealType) {
   sLoading(true, 'Placing order as On Account…');
   try {
     const customer = _custData.find(c => c.phone === phone);
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({
         _action: 'processOrder', pin: S.sessionPin,
@@ -7668,7 +7633,6 @@ async function quickOrderStandard(phone, name, rawItems, favName, mealType) {
         payment_status: 'On Account'
       })
     });
-    const data = await res.json();
     if (data.success) {
       toast(`✅ Order placed as On Account for ${name}!`);
       loadCustomers(true);
@@ -7748,7 +7712,7 @@ async function placeBulkOrders(customer, selectedDates, templates) {
 
   sLoading(true, "Placing Bulk Orders...");
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({
         _action: "processOrder",
@@ -7770,7 +7734,6 @@ async function placeBulkOrders(customer, selectedDates, templates) {
         payment_status: "Paid"
       })
     });
-    const data = await res.json();
     if (data.success) {
       sAlert(`Successfully placed ${orders.reduce((s,o)=>s+o.meals.length,0)} orders!`, "Success", "✅");
       loadCustomers(true);
@@ -7816,7 +7779,7 @@ async function submitManualEntry() {
 
   sBtnLoading(btn, true, 'Submitting…');
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({
         _action: 'submitManualOrder',
@@ -7831,7 +7794,6 @@ async function submitManualEntry() {
         paymentStatus: payStatus
       })
     });
-    const data = await res.json();
     sBtnLoading(btn, false);
     if (!data.success) throw new Error(data.error || 'Submission failed');
 
@@ -7904,8 +7866,7 @@ function initExpensePage() {
 
 async function loadExpenseMeta() {
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getCustomExpenseCategories&pin=${S.sessionPin}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomExpenseCategories&pin=${S.sessionPin}`);
     if (data.success) _expCustomCats = data.categories || {};
   } catch(e) { _expCustomCats = {}; }
   _populateExpCategoryDropdown();
@@ -8002,10 +7963,9 @@ function showAddCustomItemModal(category) {
 
 async function _saveCustomCategory(category, item) {
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({
       _action:"saveCustomExpenseCategory", pin:S.sessionPin, category, item
     })});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error);
     _expCustomCats = data.categories || {};
     _populateExpCategoryDropdown();
@@ -8038,10 +7998,9 @@ async function submitExpense() {
 
   status.innerHTML = `<span style="color:#64748b;">Saving…</span>`;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({
       _action:"saveExpense", pin:S.sessionPin, date, category, item, amount, frequency:freq, payment_mode:payMode, notes
     })});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed");
     status.innerHTML = `<span style="color:#16a34a;font-weight:700;">✅ Saved! (${data.id})</span>`;
     // Reset form
@@ -8062,8 +8021,7 @@ async function loadRecurringTemplates() {
     const ist = getIST();
     const to  = toISO(ist);
     const from = (() => { const d = new Date(ist); d.setDate(d.getDate()-90); return toISO(d); })();
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getExpenses&pin=${S.sessionPin}&from=${from}&to=${to}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getExpenses&pin=${S.sessionPin}&from=${from}&to=${to}`);
     if (!data.success) return;
     // Keep only recurring entries, deduplicate by item
     const seen = {}; const templates = [];
@@ -8119,8 +8077,7 @@ async function loadExpenseLog() {
   const el = $("expLogContent");
   el.innerHTML = `<div style="text-align:center;padding:30px;color:#94a3b8;">Loading…</div>`;
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getExpenses&pin=${S.sessionPin}&from=${from}&to=${to}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getExpenses&pin=${S.sessionPin}&from=${from}&to=${to}`);
     if (!data.success) throw new Error(data.error);
     renderExpenseLog(data.expenses || []);
   } catch(e) {
@@ -8177,8 +8134,7 @@ function renderExpenseLog(expenses) {
 async function deleteExpenseEntry(id) {
   if (!await sConfirm("Delete this expense entry?", "Confirm", "🗑️")) return;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"deleteExpense", pin:S.sessionPin, id }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"deleteExpense", pin:S.sessionPin, id }) });
     if (!data.success) throw new Error(data.error);
     toast("✅ Deleted");
     loadExpenseLog();
@@ -8203,8 +8159,7 @@ async function loadExpenseAnalytics() {
   const el = $("expAnaContent");
   el.innerHTML = `<div style="text-align:center;padding:30px;color:#94a3b8;">Loading…</div>`;
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getExpenseAnalytics&pin=${S.sessionPin}&from=${from}&to=${to}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getExpenseAnalytics&pin=${S.sessionPin}&from=${from}&to=${to}`);
     if (!data.success) throw new Error(data.error);
     renderExpenseAnalytics(data);
   } catch(e) {
@@ -8385,10 +8340,9 @@ async function submitInventoryEntry() {
 
   status.innerHTML = `<span style="color:#64748b;">Saving…</span>`;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({
       _action:"saveInventoryEntry", pin:S.sessionPin, item, date, quantity:qty, unit, price, notes
     })});
-    const data = await res.json();
     if (!data.success) throw new Error(data.error || "Failed");
     status.innerHTML = `<span style="color:#16a34a;font-weight:700;">✅ Logged! (${data.id})</span>`;
     // Reset
@@ -8404,8 +8358,7 @@ async function submitInventoryEntry() {
 
 async function loadInventory() {
   try {
-    const res  = await fetch(`${APPS_SCRIPT_URL}?action=getInventoryData&pin=${S.sessionPin}`);
-    const data = await res.json();
+    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getInventoryData&pin=${S.sessionPin}`);
     if (!data.success) return;
     _invData = data;
     renderInventorySummary(data.items || []);
@@ -8547,8 +8500,7 @@ function renderInventoryHistory() {
 async function deleteInvEntry(id) {
   if (!await sConfirm("Delete this inventory entry?", "Confirm", "🗑️")) return;
   try {
-    const res  = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"deleteInventoryEntry", pin:S.sessionPin, id }) });
-    const data = await res.json();
+    const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"deleteInventoryEntry", pin:S.sessionPin, id }) });
     if (!data.success) throw new Error(data.error);
     toast("✅ Deleted");
     _invInitDone = false; loadInventory();
