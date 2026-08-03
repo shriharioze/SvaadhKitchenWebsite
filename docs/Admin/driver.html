@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.06.06.1">
+  <meta name="app-version" content="v26.08.03.1">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -207,6 +207,7 @@
       <div style="display:inline-flex;border:1px solid rgba(255,255,255,0.25);border-radius:99px;overflow:hidden;">
         <button id="sortBtnRoute" onclick="setSortMode('route')" style="background:none;border:none;color:#fff;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;">🧭 Route</button>
         <button id="sortBtnName" onclick="setSortMode('name')" style="background:none;border:none;color:#fff;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;">🔤 A–Z</button>
+        <button id="sortBtnArea" onclick="setSortMode('area')" style="background:none;border:none;color:#fff;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;">📌 Area</button>
       </div>
       <span id="routeStatus" style="font-size:0.62rem;color:rgba(255,255,255,0.55);"></span>
     </div>
@@ -264,7 +265,7 @@
 
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-const APP_VERSION = "v26.07.31.03";
+const APP_VERSION = "v26.08.03.1";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -340,8 +341,8 @@ function applyDriverSearch(meal, query) {
   const cards = panel.querySelectorAll(".order-card[data-meal='" + meal + "']");
   let shown = 0;
   cards.forEach(card => {
-    const name = card.getAttribute("data-search") || "";
-    const match = !q || name.indexOf(q) !== -1;
+    const searchText = card.getAttribute("data-search") || "";
+    const match = !q || searchText.indexOf(q) !== -1;
     card.style.display = match ? "" : "none";
     if (match) shown++;
   });
@@ -368,7 +369,7 @@ function clearDriverSearch(meal) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const DRIVER_VERSION = "v26.06.06.1";
+    const DRIVER_VERSION = "v26.08.03.1";
     (async function _versionCheck() {
       try {
         const badge = document.getElementById("appVerBadge");
@@ -587,7 +588,7 @@ function setSyncBadge() {
 
 // ── SORT MODE TOGGLE ────────────────────────────────────────────────────────
 function setSortMode(mode) {
-  _sortMode = (mode === "name") ? "name" : "route";
+  _sortMode = (mode === "name") ? "name" : (mode === "area") ? "area" : "route";
   localStorage.setItem("sk_driver_sort", _sortMode);
   updateSortToggleUI();
   if (_lastData) renderAll(_lastData);
@@ -598,8 +599,10 @@ function updateSortToggleUI() {
   const off = "background:none;color:#fff;";
   const r = document.getElementById("sortBtnRoute");
   const n = document.getElementById("sortBtnName");
+  const a = document.getElementById("sortBtnArea");
   if (r) r.style.cssText = "border:none;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;" + (_sortMode === "route" ? on : off);
   if (n) n.style.cssText = "border:none;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;" + (_sortMode === "name" ? on : off);
+  if (a) a.style.cssText = "border:none;font-size:0.68rem;font-weight:700;padding:4px 12px;cursor:pointer;" + (_sortMode === "area" ? on : off);
 }
 
 // ── DELIVERY ROUTE ──────────────────────────────────────────────────────────
@@ -636,14 +639,53 @@ async function rebuildRoute() {
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
+// ── ENKIN CONSOLIDATION ──────────────────────────────────────────────────────
+// Collapses all Enkin orders for a meal into ONE representative card.
+// The consolidated card carries _enkinGroupIds (all submission IDs) so
+// markDelivered can batch-mark them all.
+function _consolidateEnkin(orders) {
+  const enkinOrders = [];
+  const otherOrders = [];
+  orders.forEach(o => {
+    if (String(o.name || "").toLowerCase().indexOf("enkin") !== -1) {
+      enkinOrders.push(o);
+    } else {
+      otherOrders.push(o);
+    }
+  });
+  if (enkinOrders.length <= 1) return orders; // 0–1 Enkin → nothing to consolidate
+
+  // Pick the first Enkin order as the representative card
+  const rep = { ...enkinOrders[0] };
+  rep.name = `Enkin (×${enkinOrders.length})`;
+  rep._enkinGroupIds = enkinOrders.map(o => o.submissionId);
+  rep._enkinNames = enkinOrders.map(o => o.name);
+  // If ANY Enkin is already delivered, the group is delivered (use earliest time)
+  const deliveredOnes = enkinOrders.filter(o => o.deliveredAt);
+  if (deliveredOnes.length === enkinOrders.length) {
+    rep.deliveredAt = deliveredOnes.sort((a,b) => new Date(a.deliveredAt) - new Date(b.deliveredAt))[0].deliveredAt;
+  } else {
+    rep.deliveredAt = ""; // not all delivered yet → show as undelivered
+  }
+  // If any has enRouteAt, the group has enRouteAt
+  if (enkinOrders.some(o => o.enRouteAt)) rep.enRouteAt = enkinOrders.find(o => o.enRouteAt).enRouteAt;
+
+  return [...otherOrders, rep];
+}
+
 function renderAll(data) {
   _lastData = data; // remember for re-render when the sort toggle changes
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const raw = ((data.meals || {})[meal] || []);
+
+    // ── Enkin consolidation: collapse N Enkin orders → 1 card ──
+    const consolidated = _consolidateEnkin(raw);
+
     // Undelivered (top) sort depends on the driver's chosen mode:
     //   "route" → learned building order (society grouped in his preferred stop
     //             sequence; unknown buildings sink to bottom; within: wing→flat→name)
     //   "name"  → simple A–Z by customer name (helpful early, before route is learned)
+    //   "area"  → alphabetical by area, then society, then name
     // Delivered (bottom): always by time delivered (oldest→newest) — a running log.
     const routeMap = _deliveryRoute[meal] || {};
     const socKey = (o) => _canonSocKey(o.society || o.area || "");
@@ -668,18 +710,27 @@ function renderAll(data) {
       if (fa !== fb) return fa - fb;
       return byName(a, b);
     };
+    const byArea = (a, b) => {
+      const aa = String(a.area || "").toLowerCase(), ab = String(b.area || "").toLowerCase();
+      if (aa !== ab) return aa.localeCompare(ab);
+      const sa = socKey(a), sb = socKey(b);
+      if (sa !== sb) return sa.localeCompare(sb);
+      return byName(a, b);
+    };
     const byDeliveredTime = (a, b) => {
       const ta = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
       const tb = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
       return ta - tb;
     };
-    const undeliveredSort = (_sortMode === "name") ? byName : byRoute;
+    const undeliveredSort = (_sortMode === "name") ? byName : (_sortMode === "area") ? byArea : byRoute;
     const orders = [
-      ...raw.filter(o => !o.deliveredAt).sort(undeliveredSort),
-      ...raw.filter(o => o.deliveredAt).sort(byDeliveredTime)
+      ...consolidated.filter(o => !o.deliveredAt).sort(undeliveredSort),
+      ...consolidated.filter(o => o.deliveredAt).sort(byDeliveredTime)
     ];
     _ordersData[meal] = orders;
-    document.getElementById("cnt_"+meal).textContent = orders.length;
+    // Tab count: show total original order count (not consolidated)
+    const originalCount = raw.length;
+    document.getElementById("cnt_"+meal).textContent = originalCount;
     document.getElementById("panel_"+meal).innerHTML = renderMealPanel(orders, meal);
     // Re-apply any active search query for this meal after re-render.
     applyDriverSearch(meal);
@@ -784,7 +835,7 @@ function renderMealPanel(orders, meal) {
   const prevQuery = (_searchQuery && _searchQuery[meal]) || "";
   const searchBar = `<div class="driver-search-bar" style="padding:10px 12px 0;background:#fff;">
     <div style="position:relative;">
-      <input type="search" id="search_${meal}" placeholder="🔍 Search customer name…" value="${prevQuery.replace(/"/g,'&quot;')}"
+      <input type="search" id="search_${meal}" placeholder="🔍 Search name or area…" value="${prevQuery.replace(/"/g,'&quot;')}"
              oninput="applyDriverSearch('${meal}', this.value)"
              style="width:100%;padding:8px 32px 8px 12px;font-size:0.85rem;border:1.5px solid #ddd;border-radius:10px;font-family:inherit;box-sizing:border-box;background:#fafafa;">
       ${prevQuery ? `<button type="button" onclick="clearDriverSearch('${meal}')" aria-label="Clear" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;color:#888;padding:4px 8px;">✕</button>` : ""}
@@ -852,15 +903,29 @@ function renderCard(o, i, meal) {
   }
   const isPickup = displayArea.toLowerCase().includes("pickup");
 
-  return `<div class="order-card${isDelivered?" delivered":""}" id="dcard_${o.submissionId}" data-meal="${meal}" data-search="${String(o.name||"").toLowerCase().replace(/"/g,'&quot;')}">
+  // Build search string: name + area (for area-based filtering)
+  const searchStr = [String(o.name||""), displayArea, String(o.society||"")].join(" ").toLowerCase().replace(/"/g,'&quot;');
+
+  // Enkin consolidated card: show a badge listing all individual names
+  const isEnkinGroup = !!(o._enkinGroupIds && o._enkinGroupIds.length > 1);
+  const enkinBadge = isEnkinGroup
+    ? `<div style="background:#f3e5f5;border:1px solid #ce93d8;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.78rem;color:#6a1b9a;">
+         📦 <b>Consolidated:</b> ${o._enkinNames.join(", ")}
+       </div>`
+    : "";
+  // Enkin group: store all IDs as a data attribute for batch marking
+  const enkinIdsAttr = isEnkinGroup ? ` data-enkin-ids="${o._enkinGroupIds.join(",")}"` : "";
+
+  return `<div class="order-card${isDelivered?" delivered":""}" id="dcard_${o.submissionId}" data-meal="${meal}" data-search="${searchStr}"${enkinIdsAttr}>
     <div class="order-header">
-      <div class="order-num">DELIVERY #${i+1}</div>
+      <div class="order-num">DELIVERY #${i+1}${isEnkinGroup ? ` <span style="background:#ce93d8;color:#fff;padding:1px 6px;border-radius:6px;font-size:0.6rem;margin-left:4px;">GROUP</span>` : ""}</div>
       ${isDelivered
         ? `<div class="delivered-time" id="dtag_${o.submissionId}">✅ ${fmtTime(o.deliveredAt)}</div>`
         : `<div class="delivered-time" id="dtag_${o.submissionId}" style="display:none;"></div>`}
     </div>
     <div class="cust-name">${o.name || "—"}</div>
     <div class="cust-phone">${hasPhone ? "📞 "+o.phone : ""}</div>
+    ${enkinBadge}
     <div class="address-box">
       ${isPickup 
         ? `<div style="color:#d32f2f; font-size:1.1rem; font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:4px;">🏠 SELF PICKUP</div><div style="font-size:0.8rem; color:#666;">Customer set "${displayArea}" in profile</div>`
@@ -904,7 +969,7 @@ function renderCard(o, i, meal) {
         onclick="markDelivered('${o.submissionId}','${meal}',this)"
         ${(isDelivered || !o.enRouteAt) ? "disabled" : ""}>
         ${o.enRouteAt && !isDelivered ? `<span style="float:left;">🚗</span>` : ""}
-        ${isDelivered ? `✅ Delivered at ${fmtTime(o.deliveredAt)}` : (!o.enRouteAt ? "🔒 Start Delivery to Unlock" : "⬜ Mark Delivered")}
+        ${isDelivered ? `✅ Delivered at ${fmtTime(o.deliveredAt)}` : (!o.enRouteAt ? "🔒 Start Delivery to Unlock" : (isEnkinGroup ? `⬜ Mark All ${o._enkinGroupIds.length} Delivered` : "⬜ Mark Delivered"))}
       </button>
     </div>
   </div>`;
@@ -998,13 +1063,45 @@ window.addEventListener("load", () => {
 // ── MARK DELIVERED ────────────────────────────────────────────────────────────
 async function markDelivered(submissionId, meal, btn) {
   if (!submissionId || btn.classList.contains("done")) return;
+
+  // ── Enkin consolidated card: batch-mark all IDs ────────────────────────
+  const card = document.getElementById("dcard_"+submissionId);
+  const enkinIdsStr = card && card.getAttribute("data-enkin-ids");
+  if (enkinIdsStr) {
+    const allIds = enkinIdsStr.split(",").filter(Boolean);
+    sBtnLoading(btn, true, `Marking ${allIds.length} orders`);
+    const deliveredAt = new Date().toISOString();
+
+    // Optimistic UI
+    btn.className = "btn-delivered done";
+    btn.innerHTML = `✅ All ${allIds.length} delivered at ${fmtTime(deliveredAt)}`;
+    if (card) card.classList.add("delivered");
+    const tag = document.getElementById("dtag_"+submissionId);
+    if (tag) { tag.style.display=""; tag.textContent = `✅ ${fmtTime(deliveredAt)}`; }
+    const order = (_ordersData[meal]||[]).find(o=>o.submissionId===submissionId);
+    if (order) order.deliveredAt = deliveredAt;
+    updateProgress(meal);
+    setTimeout(() => { const panel = document.getElementById("panel_"+meal); if (card && panel) panel.appendChild(card); }, 500);
+
+    try {
+      const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
+        body: JSON.stringify({_action:"batchMarkDelivered", pin:D.sessionPin, submissionIds:allIds, deliveredAt})});
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed");
+    } catch(e) {
+      // Queue each for offline sync
+      allIds.forEach(sid => _queueDelivery(sid, meal, deliveredAt));
+    }
+    return;
+  }
+
+  // ── Normal single-order delivery ───────────────────────────────────────
   sBtnLoading(btn, true, "Marking");
   const deliveredAt = new Date().toISOString(); // proper UTC — fmtTime adds +5:30 for display
 
   // Optimistically update UI immediately for better field UX
   btn.className = "btn-delivered done";
   btn.innerHTML = `✅ Delivered at ${fmtTime(deliveredAt)}`;
-  const card = document.getElementById("dcard_"+submissionId);
   if (card) card.classList.add("delivered");
   const tag = document.getElementById("dtag_"+submissionId);
   if (tag) { tag.style.display=""; tag.textContent = `✅ ${fmtTime(deliveredAt)}`; }

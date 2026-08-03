@@ -389,6 +389,10 @@ function doPost(e) {
       if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
       return jsonRes(batchMarkEnRoute(body));
     }
+    if (action === "batchMarkDelivered") {
+      if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});
+      return jsonRes(batchMarkDelivered(body));
+    }
     if (action === "setStandardOrder") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(setStandardOrder(body.phone, body.items, body.templateName, body.meal));

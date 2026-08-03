@@ -3109,6 +3109,42 @@ function markDelivered(body) {
   return {success:true, submissionId:sid, deliveredAt:deliveredAt};
 }
 
+// ── BATCH MARK DELIVERED (Enkin consolidated card) ────────────────────────────
+// Accepts { submissionIds: [...], deliveredAt: "..." } and marks all IDs as
+// delivered in SK_Deliveries. Used by the driver page's consolidated Enkin card
+// so one tap marks all 5–10 Enkin orders as delivered at once.
+function batchMarkDelivered(body) {
+  var ids         = body.submissionIds;
+  var deliveredAt = body.deliveredAt;
+  if (!ids || !ids.length) return {success:false, error:"submissionIds required"};
+
+  var ss  = getSpreadsheet();
+  var ws  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
+  var rows = getAllRows(ws);
+  var hIdx = headerIndex(ws);
+
+  // Build a set of existing SIDs for fast lookup
+  var existingMap = {};
+  rows.forEach(function(r) { existingMap[String(r.Submission_ID || "")] = r; });
+
+  var updated = 0;
+  ids.forEach(function(sid) {
+    sid = String(sid);
+    if (existingMap[sid]) {
+      ws.getRange(existingMap[sid]._row, hIdx["Delivered_At"]).setValue(deliveredAt);
+    } else {
+      var newRowArr = [];
+      newRowArr[hIdx["Submission_ID"] - 1] = sid;
+      newRowArr[hIdx["Delivered_At"] - 1]  = deliveredAt;
+      newRowArr[hIdx["EnRoute_At"] - 1]    = "";
+      ws.appendRow(newRowArr);
+    }
+    updated++;
+  });
+
+  return {success:true, updated:updated, deliveredAt:deliveredAt};
+}
+
 // ── AUTO-MARK DELIVERED (daily 00:00 IST safety net) ─────────────────────────
 // If the driver forgets to tap "Mark Delivered", any order dated BEFORE today
 // is auto-marked delivered at the start of the next day. Deliveries are keyed
