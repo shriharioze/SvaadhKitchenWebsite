@@ -4034,8 +4034,8 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // Net_Total already correctly encodes: food + delivery + fees + surcharge − discount − mealCredit − reviewDiscount
     // Bulk uses the commitment-discount clawback (fullPrice − bulk clawback); regular
     // orders use Net_Total − same-day/loyalty adjustments.
-    const adjustment = isBulk ? bulkClawbackApplied : (overDiscount + deliveryOwed + smallFeeOwed + loyaltyClawback);
-    const rawRefund  = isBulk ? bulkFullPrice : (Number(r.Net_Total) || 0);
+    const adjustment = (isBulk && !isAdminCall) ? bulkClawbackApplied : (overDiscount + deliveryOwed + smallFeeOwed + loyaltyClawback);
+    const rawRefund  = (isBulk && !isAdminCall) ? bulkFullPrice : (Number(r.Net_Total) || 0);
     const netRefund = rawRefund - adjustment;           // may be negative
     const refundAmt = Math.max(0, netRefund);           // amount actually returned
     const cancellationCharge = Math.max(0, -netRefund); // deficit charged to wallet if order < clawback
@@ -4044,7 +4044,9 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     function buildRefundBreakdown() {
       const lines = [];
       if (isBulk) {
-        if (bulkClawbackApplied > 0) {
+        if (isAdminCall) {
+          lines.push(`Full refund of ₹${refundAmt} (admin cancellation — your bulk plan discount on remaining days is preserved).`);
+        } else if (bulkClawbackApplied > 0) {
           lines.push(`This was a bulk order — the bulk discount on this meal is deducted from your refund.`);
           lines.push(`Full price ₹${bulkFullPrice} − ₹${bulkClawbackApplied} bulk discount = ₹${refundAmt} refund.`);
         } else {
