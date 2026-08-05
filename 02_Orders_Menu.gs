@@ -1071,6 +1071,7 @@ function getKitchenClosedDates() {
     // and must skip admin days-off so they don't break a customer's streak.
     const cutoff = Utilities.formatDate(new Date(Date.now() - 40 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
     const closed = [];
+    const exempt = [];
     rows.forEach(function(r) {
       const isClosed = (r.Kitchen_Closed === true ||
         String(r.Kitchen_Closed || "").toLowerCase() === "true");
@@ -1088,10 +1089,13 @@ function getKitchenClosedDates() {
         ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd")
         : String(r.Date).trim();
       if (!d || d < cutoff) return;            // recent past + future
-      closed.push(d);
+      
+      if (isClosed) closed.push(d); // Fully closed -> calendar blocked
+      exempt.push(d);               // Fully or partially closed -> streak exempt
     });
     closed.sort();
-    return { closedDates: closed };
+    exempt.sort();
+    return { closedDates: closed, exemptDates: exempt };
   });
 }
 

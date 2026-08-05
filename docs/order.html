@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.08.05.02";
+    const APP_VERSION = "v26.08.05.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6751,11 +6751,13 @@
         const res  = await apiFetch(`${APPS_SCRIPT_URL}?action=getKitchenClosedDates&_t=${Date.now()}`, {}, { silent: true });
         const data = await res.json();
         S.kitchenClosedDates = Array.isArray(data.closedDates) ? data.closedDates : [];
+        S.streakExemptDates  = Array.isArray(data.exemptDates) ? data.exemptDates : S.kitchenClosedDates;
       } catch (e) {
         // Soft-fail: if the fetch errors, the calendar still works (just
         // without the closed-day markers). The server-side guard in
         // submitOrder will still block any closed-day submission.
         S.kitchenClosedDates = S.kitchenClosedDates || [];
+        S.streakExemptDates  = S.streakExemptDates || [];
       }
     }
     function toggleDate(ds) {
@@ -10106,7 +10108,7 @@
       const diff = Math.round((date2 - date1) / 86400000);
       if (diff <= 0) return false;
       if (diff === 1) return true;
-      const closed = new Set(S.kitchenClosedDates || []);
+      const closed = new Set(S.streakExemptDates || S.kitchenClosedDates || []);
       let cur = new Date(date1); cur.setDate(cur.getDate() + 1);
       while (cur < date2) {
         const iso = cur.toISOString().split('T')[0];
@@ -10173,7 +10175,7 @@
         if (diff === 1) return true;
         // Longer gap is still "consecutive" only if EVERY in-between day is a
         // Sunday or an admin-marked day off — those never break the streak.
-        const closed = new Set(S.kitchenClosedDates || []);
+        const closed = new Set(S.streakExemptDates || S.kitchenClosedDates || []);
         let cur = new Date(date1); cur.setDate(cur.getDate() + 1);
         while (cur < date2) {
           const iso = cur.toISOString().split('T')[0];
