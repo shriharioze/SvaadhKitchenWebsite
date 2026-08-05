@@ -1019,8 +1019,9 @@ function _hdfcMarkRefundSettled(gatewayOrderId, refundId) {
       var note   = String(data[i][cNote] || "");
       var status = String(data[i][cStatus] || "").toLowerCase();
       var isGw   = cMode === -1 ? true : String(data[i][cMode] || "").toLowerCase() === "gateway";
-      if (isGw && note.indexOf(gatewayOrderId) !== -1 && status !== "refunded") {
-        ws.getRange(i + 1, cStatus + 1).setValue("Refunded");
+      if (isGw && note.indexOf(gatewayOrderId) !== -1 && status.indexOf("refunded") !== 0) {
+        var nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
+        ws.getRange(i + 1, cStatus + 1).setValue("Refunded at " + nowStr);
         ws.getRange(i + 1, cNote   + 1).setValue(note + " | settled:" + (refundId || "") + " @ " + new Date());
         console.log("_hdfcMarkRefundSettled: row " + (i+1) + " marked Refunded for " + gatewayOrderId);
       }

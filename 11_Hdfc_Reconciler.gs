@@ -573,7 +573,8 @@ function reconcilePendingRefunds() {
 
     var st = String(rf.status || "").toUpperCase();
     if (st.indexOf("SUCCESS") !== -1 || st === "REFUNDED") {
-      refWs.getRange(i + 1, cStatus + 1).setValue("Refunded");
+      var nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
+      refWs.getRange(i + 1, cStatus + 1).setValue("Refunded at " + nowStr);
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(String(data[i][cNote] || "") + " | settled via reconciler @ " + new Date());
       settled++;
     } else if (st.indexOf("FAIL") !== -1) {
@@ -638,7 +639,8 @@ function retryQueuedRefunds() {
     var rf = hdfc_initiateRefund(gOrderId, amt, reqId, phone);
     if (rf && rf.success) {
       ok++;
-      var st = (rf.status === "SUCCESS" || rf.status === "REFUNDED") ? "Refunded" : "Processing";
+      var nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
+      var st = (rf.status === "SUCCESS" || rf.status === "REFUNDED") ? ("Refunded at " + nowStr) : "Processing";
       refWs.getRange(i + 1, cStatus + 1).setValue(st);
       if (cMode !== -1) refWs.getRange(i + 1, cMode + 1).setValue("gateway");
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(note + " | RETRIED ok: " + (rf.refund_id || reqId) + " (" + rf.status + ")");
