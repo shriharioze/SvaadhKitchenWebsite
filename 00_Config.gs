@@ -13,7 +13,8 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION   = 30.1; // 2026-08-04: BULK REFUND FIX. Corrected admin bulk refund logic to refund strictly Net_Total instead of Net_Total + Bulk_Clawback.
+const CODE_VERSION   = 30.2; // 2026-08-05: REFUND WEBHOOK FIX. Fixed order_id and refund_id extraction for REFUND_SUCCEEDED webhooks which send payload in content.refund instead of content.order.
+// 2026-08-04: BULK REFUND FIX. Corrected admin bulk refund logic to refund strictly Net_Total instead of Net_Total + Bulk_Clawback.
 // 2026-08-03: ARCHIVE ROW DELETION FIX. Changed clearContent to deleteRows in archiveOldWebhooks to prevent empty row bloat. Also fixed vault_admin 'res' reference error.
 // 2026-07-30: LOYALTY FIX. Added overflow guard (virtualStreakCount >= 6) to backend submitOrder and Gateway recompute to fix permanently lost rewards when chronology diverges.
 // 2026-07-28: DAL FRY COLUMN HOTFIX. (1) Added missing dynamic columns (Small_Order_Fee, etc.) to ORDERS_HEADERS so the schema is exactly 60 columns. (2) Moved Dal_Fry to the absolute end of ORDERS_HEADERS so it doesn't overwrite any dynamically appended headers or shift older data.

@@ -1558,9 +1558,11 @@ function hdfc_processWebhookLog() {
         //   auto-refunds:     AUTO_REFUND_INITIATED / AUTO_REFUND_SUCCEEDED / AUTO_REFUND_FAILED
         // On success → flip the matching SK_Refunds row to "Refunded" via
         // _hdfcMarkRefundSettled (matches Refund_Mode=gateway + the order id in the note).
-        var rOid   = String(order.order_id || "").trim();
+        var rPayload = content.refund || {};
+        var rTxnDetail = rPayload.txn_detail || {};
+        var rOid   = String(order.order_id || rTxnDetail.order_id || "").trim();
         var rList  = Array.isArray(order.refunds) ? order.refunds : [];
-        var rRefId = rList.length ? String(rList[rList.length - 1].id || rList[rList.length - 1].unique_request_id || "") : "";
+        var rRefId = rList.length ? String(rList[rList.length - 1].id || rList[rList.length - 1].unique_request_id || "") : String(rPayload.id || rPayload.unique_request_id || "");
         var ev     = eventName.toUpperCase();
         if (rOid && (ev.indexOf("SUCCEEDED") !== -1 || ev === "ORDER_REFUNDED")) {
           _hdfcMarkRefundSettled(rOid, rRefId);
