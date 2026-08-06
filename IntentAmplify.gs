@@ -45,7 +45,7 @@ const IA_ORDERS_HEADERS = [
 const IA_MENU_HEADERS = ["Date", "Meal", "Items_JSON", "Updated_By", "Updated_At"];
 
 const IA_MEALS   = ["Lunch", "Dinner"];
-const IA_CUTOFFS = { Lunch: { h: 11, m: 0 }, Dinner: { h: 17, m: 0 } };
+const IA_CUTOFFS = { Lunch: { h: 10, m: 30 }, Dinner: { h: 16, m: 30 } };
 const IA_TZ      = "Asia/Kolkata";
 
 // Default items available every day (sabjis added per-day by admin Set Menu).
