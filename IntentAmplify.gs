@@ -50,20 +50,21 @@ const IA_TZ      = "Asia/Kolkata";
 
 // Default items available every day (sabjis added per-day by admin Set Menu).
 const IA_FIXED_ITEMS = [
-  { name: "Chapati",             price: 9,  cat: "Roti" },
-  { name: "Without Oil Chapati", price: 8,  cat: "Roti" },
-  { name: "Phulka",              price: 7,  cat: "Roti" },
-  { name: "Ghee Phulka",         price: 10, cat: "Roti" },
-  { name: "Jowar Bhakri",        price: 20, cat: "Roti" },
-  { name: "Bajra Bhakri",        price: 20, cat: "Roti" },
-  { name: "Dry Sabji Mini [100ml]",  price: 22, cat: "Sabji" },
-  { name: "Dry Sabji Full [250ml]",  price: 45, cat: "Sabji" },
-  { name: "Curry Sabji Mini [100ml]",price: 22, cat: "Sabji" },
-  { name: "Curry Sabji Full [250ml]",price: 45, cat: "Sabji" },
-  { name: "Dal [200ml]",         price: 22, cat: "Dal"  },
-  { name: "Rice [100g]",         price: 12, cat: "Rice" },
-  { name: "Salad [40g]",         price: 7,  cat: "Extra"},
-  { name: "Curd [50g]",          price: 12, cat: "Extra"}
+  { name: "Chapati",             price: 10, cat: "Roti" },
+  { name: "Without Oil Chapati", price: 9,  cat: "Roti" },
+  { name: "Phulka",              price: 8,  cat: "Roti" },
+  { name: "Ghee Phulka",         price: 11, cat: "Roti" },
+  { name: "Jowar Bhakri",        price: 22, cat: "Roti" },
+  { name: "Bajra Bhakri",        price: 22, cat: "Roti" },
+  { name: "Dry Sabji Mini [100ml]",  price: 24, cat: "Sabji" },
+  { name: "Dry Sabji Full [250ml]",  price: 48, cat: "Sabji" },
+  { name: "Curry Sabji Mini [100ml]",price: 24, cat: "Sabji" },
+  { name: "Curry Sabji Full [250ml]",price: 48, cat: "Sabji" },
+  { name: "Dal [200ml]",         price: 24, cat: "Dal"  },
+  { name: "Dal Fry [200ml] <span class='badge-new'>NEW</span>", price: 40, cat: "Dal" },
+  { name: "Rice [100g]",         price: 13, cat: "Rice" },
+  { name: "Salad [40g]",         price: 8,  cat: "Extra"},
+  { name: "Curd [50g]",          price: 13, cat: "Extra"}
 ];
 
 // ── Utilities (IA-scoped; reuse project getSpreadsheet) ──────
@@ -230,12 +231,12 @@ function ia_getMenu(dateStr, meal) {
     const dryName   = meal === "Lunch" ? main.lunch_dry   : main.dinner_dry;
     const curryName = meal === "Lunch" ? main.lunch_curry : main.dinner_curry;
     if (dryName) {
-      items.push({ name: dryName + " (Dry · 100ml)", price: 22, cat: "Sabji", col: "Dry_Sabji_Mini" });
-      items.push({ name: dryName + " (Dry · 250ml)", price: 45, cat: "Sabji", col: "Dry_Sabji_Full" });
+      items.push({ name: dryName + " (Dry · 100ml)", price: 24, cat: "Sabji", col: "Dry_Sabji_Mini" });
+      items.push({ name: dryName + " (Dry · 250ml)", price: 48, cat: "Sabji", col: "Dry_Sabji_Full" });
     }
     if (curryName) {
-      items.push({ name: curryName + " (Curry · 100ml)", price: 22, cat: "Sabji", col: "Curry_Sabji_Mini" });
-      items.push({ name: curryName + " (Curry · 250ml)", price: 45, cat: "Sabji", col: "Curry_Sabji_Full" });
+      items.push({ name: curryName + " (Curry · 100ml)", price: 24, cat: "Sabji", col: "Curry_Sabji_Mini" });
+      items.push({ name: curryName + " (Curry · 250ml)", price: 48, cat: "Sabji", col: "Curry_Sabji_Full" });
     }
     return { items: items, custom: false, source: "main_menu" };
   } catch (e) {
@@ -647,7 +648,7 @@ function ia_itemToCol(name) {
     "Jowar Bhakri": "Jowar_Bhakri", "Bajra Bhakri": "Bajra_Bhakri",
     "Dry Sabji Mini [100ml]": "Dry_Sabji_Mini", "Dry Sabji Full [250ml]": "Dry_Sabji_Full",
     "Curry Sabji Mini [100ml]": "Curry_Sabji_Mini", "Curry Sabji Full [250ml]": "Curry_Sabji_Full",
-    "Dal [200ml]": "Dal", "Rice [100g]": "Rice", "Salad [40g]": "Salad", "Curd [50g]": "Curd"
+    "Dal [200ml]": "Dal", "Dal Fry [200ml] <span class='badge-new'>NEW</span>": "Dal_Fry", "Rice [100g]": "Rice", "Salad [40g]": "Salad", "Curd [50g]": "Curd"
   };
   return map[name] || null;
 }

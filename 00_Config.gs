@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION = 30.7; // Updated: Changed IA cutoffs to 10:30 AM and 4:30 PM
+const CODE_VERSION = 30.8; // Updated: Synced IA fixed items with Pricing V2 base prices and added Dal Fry
 // 2026-08-05: REFUND STATUS TIMESTAMP. Updated _hdfcMarkRefundSettled and 11_Hdfc_Reconciler to append the settlement timestamp directly into the Status column ("Refunded at YYYY-MM-DD HH:mm") for better visibility, and updated idempotency checks to use indexOf.
 // 2026-08-05: REFUND WEBHOOK FIX. Fixed order_id and refund_id extraction for REFUND_SUCCEEDED webhooks which send payload in content.refund instead of content.order.
 // 2026-08-04: BULK REFUND FIX. Corrected admin bulk refund logic to refund strictly Net_Total instead of Net_Total + Bulk_Clawback.
