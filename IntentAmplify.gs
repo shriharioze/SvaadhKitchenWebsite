@@ -1142,3 +1142,59 @@ function _ia_legacyVerifyWritePaid(orderId, ws) {
   return { success: true, submission_id: orderId, total: entry.expected_amount };
 }
 
+// ── IA Admin Cancel Order ──────────────────────────────────────────────────
+function ia_adminCancelOrder(phone, dateStr, meal) {
+  const ws = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+  const rows = ia_rows(ws);
+  const targetDate = ia_dateStr(dateStr);
+  const targetPhone = ia_normPhone(phone);
+  const targetMeal = String(meal).trim().toLowerCase();
+  
+  let matches = [];
+  rows.forEach(function(r) {
+    if (ia_dateStr(r.Date) === targetDate && 
+        String(r.Meal).trim().toLowerCase() === targetMeal && 
+        ia_normPhone(r.Phone) === targetPhone) {
+      if (!String(r.Payment_Status).toLowerCase().startsWith("cancelled")) {
+        matches.push(r);
+      }
+    }
+  });
+
+  if (matches.length === 0) return { success: false, error: "No matching orders found" };
+  
+  let refunded = false;
+  
+  matches.forEach(function(m) {
+    ws.getRange(m._row, 10).setValue("Cancelled by Admin"); // Col J: Payment_Status
+    
+    // Auto-refund if Gateway
+    const payStatus = String(m.Payment_Status || "");
+    const payRef = String(m.Payment_Ref || ""); // Col K
+    const approvedBy = String(m.Approved_By || ""); // Col L
+    if (payStatus === "Paid" && approvedBy === "Gateway (HDFC)" && payRef && typeof hdfc_initiateRefund === "function") {
+      const amount = Number(m.Subtotal) || 0;
+      if (amount > 0) {
+        const reqId = "IA_CAN_" + String(m.Submission_ID) + "_" + Date.now().toString().slice(-6);
+        try {
+          const rf = hdfc_initiateRefund(payRef, amount, reqId, "");
+          if (rf && rf.success) {
+             refunded = true;
+             ws.getRange(m._row, 14).setValue(String(m.Notes || "") + " | Auto-refunded HDFC"); // Col N: Notes
+          } else {
+             ws.getRange(m._row, 14).setValue(String(m.Notes || "") + " | Refund FAILED: " + (rf ? rf.error : ""));
+          }
+        } catch(e) {
+          ws.getRange(m._row, 14).setValue(String(m.Notes || "") + " | Refund FAILED exception");
+        }
+      }
+    }
+  });
+  
+  SpreadsheetApp.flush();
+  
+  return { 
+    success: true, 
+    message: matches.length + " IA " + meal + " order(s) cancelled." + (refunded ? " (Gateway Refund Initiated)" : "") 
+  };
+}

@@ -3396,7 +3396,12 @@ function adminCancelOrder(body) {
     return rPhone === phone && rMeal === meal && orderDate === dateStr && status !== 'deleted' && !status.startsWith('cancelled');
   });
 
-  if (!matches.length) return {success:false, error: "No matching orders found"};
+  if (!matches.length) {
+    if (typeof ia_adminCancelOrder === "function") {
+      return ia_adminCancelOrder(phone, dateStr, meal);
+    }
+    return {success:false, error: "No matching orders found"};
+  }
 
   // 1. Determine Global Batch Refund Type
   // If ANY order in the batch is wallet-paid, or any OTHER order in the sheet for this guest/meal is wallet-paid
