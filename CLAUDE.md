@@ -18,7 +18,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 
 ## Deploy workflow — git push alone does NOT deploy the backend
 - Backend: `clasp push -f` (updates HEAD, validates syntax) → bump CODE_VERSION in 00_Config.gs with a changelog comment → `clasp deploy -i AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W -d "msg"` → verify: GET `<exec>?action=version`.
-- Frontend: bump APP_VERSION in any modified HTML file (docs/order.html, docs/Admin/vault_admin.html, kitchen.html, driver.html, etc.) to trigger auto-reload for clients → git commit + push (GitHub Pages serves docs/ from main).
+- Frontend: bump APP_VERSION (and any visible version text) in any modified HTML file (docs/order.html, docs/intentamplify.html, docs/Admin/vault_admin.html, kitchen.html, driver.html, etc.) to trigger auto-reload for clients → git commit + push (GitHub Pages serves docs/ from main).
 - ALWAYS commit to git after deploying (live and git must never diverge).
 - Deploys take ~10s to propagate — re-check `?action=version` before concluding a fix "didn't work".
 
