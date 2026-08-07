@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.08.05.03";
+    const APP_VERSION = "v26.08.07.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10547,7 +10547,7 @@
             const stat = String(firstRow?.payment_status || "").trim();
             const isPendingRefund = stat.toLowerCase().includes("pending") || stat.toLowerCase().includes("verify");
             const cancelMsg = isPendingRefund
-              ? "Refund will be credited back, once Admin verifies the payment (Upto 3 working days)."
+              ? "Refund automatically initiated to your original payment method (1–3 working days)."
               : "Refund processed successfully ✅";
 
             return `<div class="order-manage-row" style="border-left: 4px solid #f57c00; background:#fffaf5;">
@@ -10659,7 +10659,7 @@
         // Split: full refund always goes to Wallet — no choice shown
         if (isPending) {
           await sAlert(
-            `Your Wallet portion will be refunded instantly.<br><br>The UPI portion will be added to your Wallet once Admin verifies the payment.`,
+            `Your Wallet portion will be refunded instantly.<br><br>The online payment portion will be automatically refunded to your original payment method (1–3 working days).`,
             "Refund to Wallet", "💳"
           );
         } else {
@@ -10749,7 +10749,7 @@
             await sAlert(serverMsg || "Order cancelled. Your loyalty reward has been reversed as this breaks your streak.", "Cancelled", "↩️");
           } else if (refundType === "wallet") {
             const msg = isPending
-              ? "Cancellation successful! Refund will be added to your Svaadh Wallet within 3 working days after Admin verification."
+              ? "Cancellation successful! Refund automatically initiated to your original payment method (1–3 working days)."
               : serverMsg || "Cancellation successful! Refund added to your Svaadh Wallet.";
             await sAlert(msg, "Done", "💳");
           } else if (refundType !== "none") {
