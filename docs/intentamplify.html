@@ -147,6 +147,19 @@
     .mo-card .it{font-size:.78rem;color:var(--muted);margin-top:3px;}
     .mo-pill{font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap;}
     .mo-pill.paid{background:#d7f5dd;color:#1c7a35;} .mo-pill.pend{background:#fff3cd;color:#946200;}
+    .mo-pill.cancelled{background:#fee2e2;color:#991b1b;}
+    .mo-card .mo-actions{margin-top:8px;display:flex;gap:8px;align-items:center;}
+    .mo-cancel-btn{background:none;border:1px solid #dc2626;color:#dc2626;font-size:.72rem;font-weight:600;padding:4px 12px;border-radius:8px;cursor:pointer;transition:all .2s;}
+    .mo-cancel-btn:hover{background:#dc2626;color:#fff;}
+    .mo-cancel-btn.locked{border-color:#ccc;color:#aaa;cursor:not-allowed;opacity:.6;border-style:dashed;}
+    .mo-cancel-btn.locked:hover{background:none;color:#aaa;}
+    .mo-confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:37000;align-items:center;justify-content:center;}
+    .mo-confirm-box{background:#fff;border-radius:16px;padding:24px 20px;max-width:340px;width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.2);}
+    .mo-confirm-box h3{font-size:1rem;margin:0 0 8px;color:var(--ink);}
+    .mo-confirm-box p{font-size:.82rem;color:var(--muted);margin:0 0 18px;}
+    .mo-confirm-btns{display:flex;gap:10px;justify-content:center;}
+    .mo-confirm-btns button{padding:8px 20px;border-radius:10px;font-size:.82rem;font-weight:600;border:none;cursor:pointer;}
+    .mo-confirm-btns .yes{background:#dc2626;color:#fff;} .mo-confirm-btns .no{background:#f3f3f3;color:#555;}
 
     /* WEEKLY MENU OVERLAY */
     .wm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30000;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);animation:fadeIn .2s;}
@@ -223,6 +236,18 @@
     <div class="mo-sheet">
       <div class="mo-h"><h2>🛒 My Orders</h2><button class="pd-x" style="background:#eee;color:#555;" onclick="closeManageOrders()">✕</button></div>
       <div id="moList"><div class="sub" style="margin:0">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- CANCEL ORDER CONFIRM -->
+  <div class="mo-confirm-overlay" id="moCancelOverlay" onclick="if(event.target===this){this.style.display='none';}">
+    <div class="mo-confirm-box">
+      <h3>🗑️ Cancel Order?</h3>
+      <p id="moCancelText">Are you sure you want to cancel this order?</p>
+      <div class="mo-confirm-btns">
+        <button class="no" id="moCancelNo">Keep</button>
+        <button class="yes" id="moCancelYes">Cancel Order</button>
+      </div>
     </div>
   </div>
 
@@ -393,7 +418,7 @@
   <script>
     const API = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     const APPS_SCRIPT_URL = API;
-    const APP_VERSION = "v26.08.06.01";
+    const APP_VERSION = "v26.08.06.02";
     const STEPS = ["Account","Dates","Meals","Pay"];
     const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const $ = id => document.getElementById(id);
@@ -1118,15 +1143,51 @@
       const orders=(r.orders||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
       if(!orders.length){ $("moList").innerHTML='<div class="sub" style="margin:0">No orders yet.</div>'; return; }
       $("moList").innerHTML=orders.map(function(o){
-        const paid=String(o.payment_status).toLowerCase()==="paid";
+        const stat=String(o.payment_status||"").toLowerCase();
+        const isCancelled=stat.startsWith("cancelled");
+        const isPaid=stat==="paid";
+        const pillClass=isCancelled?'cancelled':(isPaid?'paid':'pend');
         const dd=new Date(o.date+"T00:00:00").toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
-        const hl=(highlightId && String(o.submission_id||"")===String(highlightId))
+        const hl=(highlightId && String(o.submission_id||"")===""+highlightId)
           ? ' style="outline:2px solid #16a34a;outline-offset:1px;"' : '';
-        return `<div class="mo-card"${hl}><div class="top"><span>${dd} · ${o.meal}</span><span class="mo-pill ${paid?'paid':'pend'}">${o.payment_status}</span></div>`+
-               `<div class="it">${o.summary||""} · ₹${o.subtotal}</div></div>`;
+        // Cancel button: show only for non-cancelled orders
+        let cancelHtml='';
+        if(!isCancelled){
+          const canCancel=isOpen(o.date,o.meal);
+          if(canCancel){
+            cancelHtml=`<div class="mo-actions"><button class="mo-cancel-btn" onclick="cancelIAOrder('${o.submission_id}','${dd}','${o.meal}')">🗑 Cancel</button></div>`;
+          } else {
+            const c=cutoffOf(o.meal);
+            cancelHtml=`<div class="mo-actions"><button class="mo-cancel-btn locked" onclick="toast('🔒 Cutoff crossed (${fmt12(c.h,c.m)}) — cancellation closed for this order.')" title="Cutoff passed">🔒 Cancellation closed</button></div>`;
+          }
+        }
+        return `<div class="mo-card"${hl}><div class="top"><span>${dd} · ${o.meal}</span><span class="mo-pill ${pillClass}">${o.payment_status}</span></div>`+
+               `<div class="it">${o.summary||""} · ₹${o.subtotal}</div>${cancelHtml}</div>`;
       }).join("");
     }
     function closeManageOrders(){ $("moOverlay").style.display="none"; }
+
+    // ── Cancel IA order (customer self-service) ──
+    async function cancelIAOrder(sid, dateLabel, meal){
+      // Confirmation prompt
+      const ok = await new Promise(function(resolve){
+        const ov=$("moCancelOverlay"); if(!ov){resolve(confirm("Cancel your "+meal+" order for "+dateLabel+"?")); return;}
+        $("moCancelText").innerHTML="Cancel your <b>"+meal+"</b> order for <b>"+dateLabel+"</b>?";
+        ov.style.display="flex";
+        $("moCancelYes").onclick=function(){ov.style.display="none"; resolve(true);};
+        $("moCancelNo").onclick=function(){ov.style.display="none"; resolve(false);};
+      });
+      if(!ok) return;
+      toast("Cancelling…");
+      try{
+        const res=await post({_action:"ia_cancelOrder",phone:S.phone,pin:S.pinReal,submission_id:sid});
+        if(res.error){ toast("❌ "+res.error); return; }
+        toast("✅ "+(res.message||"Order cancelled."));
+        showManageOrders(); // refresh the list
+      }catch(e){
+        toast("❌ Network error. Please try again.");
+      }
+    }
   </script>
 </body>
 </html>

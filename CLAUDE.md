@@ -32,6 +32,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 7. On-account status check: use `_isOnAccountDueStatus` only. Kitchen-closed check: use `_closedMealsObj`/`_isMealKitchenClosed` (per-meal), not raw Kitchen_Closed.
 8. Stock keys: Items_JSON names are suffix-stripped; always join via `itemsJsonKey`/`_stripItemSuffix`.
 9. HDFC refund API returns 401 "Merchant disabled for refund" until HDFC enables the MID — cancelled gateway orders queue as manual refunds; run `retryQueuedRefunds()` (editor) once enabled. Test transport anytime: `?action=hdfcRefundTransportTest`.
+10. **SK_Orders lock rule:** EVERY function that writes to SK_Orders (appendRow OR setValue) MUST hold `LockService.getScriptLock()` with try/finally release. Unlocked writers cause Google Sheets' internal buffer to silently drop concurrent `appendRow` calls — the root cause of "missing order" incidents. Currently locked writers: `submitOrder` (10s), `submitBulkDirect` (20s), `deleteOrder` (15s), `markOrdersStatus` (8s), `_reconcileSingleEntry` (15s), `hdfc_markOrderPaid` (10s), `hdfc_markOrderFailed` (10s), `submitManualOrder` (10s), `archiveMonth` (30m). If you add a new SK_Orders writer, wrap it in a lock or orders WILL go missing.
 
 ## Testing rituals (these produced the quality — keep them)
 - Money/logic change in .gs: EXTRACT the real function text (regex, mind CRLF `\r?\n`) and eval it in a Node script with stubbed globals; assert realistic scenarios BEFORE deploying. Note: eval'd `const` doesn't leak — extract the RHS and assign to global.

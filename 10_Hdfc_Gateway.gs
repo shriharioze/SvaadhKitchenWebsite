@@ -1641,6 +1641,15 @@ function hdfc_markOrderPaid(order) {
 
   console.log("HDFC Status API confirmed CHARGED: " + orderId + " (TXN:" + txnId + ")");
 
+  // ── Step 2: Lock before touching SK_Orders — prevents silent appendRow drops ──
+  // Without this lock, concurrent submitOrder appendRow calls can be silently
+  // dropped by Google Sheets' internal write buffer (the #1 cause of lost orders).
+  const _mpLock = LockService.getScriptLock();
+  try { _mpLock.waitLock(10000); } catch (e) {
+    console.warn("hdfc_markOrderPaid: lock timeout for " + orderId + ", will retry next cycle.");
+    return { success: true, message: "Lock busy — will retry next webhook processing cycle." };
+  }
+
   try {
     const ss      = getSpreadsheet();
     const ws      = getOrCreateTab(ss, TAB_ORDERS, []);
@@ -1708,6 +1717,8 @@ function hdfc_markOrderPaid(order) {
   } catch (err) {
     console.error("hdfc_markOrderPaid error:", err.message);
     return { error: "Failed to update order: " + err.message };
+  } finally {
+    try { _mpLock.releaseLock(); } catch (_) {}
   }
 }
 
@@ -1734,6 +1745,12 @@ function hdfc_markOrderFailed(order) {
   if (!orderId) return { error: "Webhook: missing order_id." };
 
   console.log("HDFC Webhook FAILURE for order " + orderId + " (status=" + why + ")");
+
+  const _mfLock = LockService.getScriptLock();
+  try { _mfLock.waitLock(10000); } catch (e) {
+    console.warn("hdfc_markOrderFailed: lock timeout for " + orderId + ", will retry next cycle.");
+    return { success: true, message: "Lock busy — will retry next webhook processing cycle." };
+  }
 
   try {
     const ss   = getSpreadsheet();
@@ -1785,6 +1802,8 @@ function hdfc_markOrderFailed(order) {
   } catch (err) {
     console.error("hdfc_markOrderFailed error:", err.message);
     return { error: "Failed to mark order failed: " + err.message };
+  } finally {
+    try { _mfLock.releaseLock(); } catch (_) {}
   }
 }
 

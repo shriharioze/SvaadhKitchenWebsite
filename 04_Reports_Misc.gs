@@ -4070,6 +4070,12 @@ function _deriveMapsLink(addr, society) {
 
 // ── SUBMIT MANUAL ORDER (Admin Feature) ────────────────────
 function submitManualOrder(body) {
+  const _moLock = LockService.getScriptLock();
+  try { _moLock.waitLock(10000); } catch (e) {
+    return { error: "Server busy — please retry in a few seconds." };
+  }
+
+  try {
   const ss        = getSpreadsheet();
   const ordersWs  = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const custWs    = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
@@ -4182,6 +4188,9 @@ function submitManualOrder(body) {
 
   ordersWs.appendRow(row);
   return { success: true, sid: sid };
+  } finally {
+    try { _moLock.releaseLock(); } catch (_) {}
+  }
 }
 
 

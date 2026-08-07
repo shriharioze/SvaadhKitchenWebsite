@@ -687,7 +687,12 @@ function ia_rowsAsSK() {
       // driver/packaging views. (No IA cancel path exists today, so this is a
       // no-op now, but it future-proofs if one is added — same rule the
       // consumer prep functions apply.)
-      .filter(function (r) { return typeof _isOrderCancelled !== "function" || !_isOrderCancelled(r.Payment_Status); })
+      .filter(function (r) {
+        if (typeof _isOrderCancelled === "function") {
+          return !_isOrderCancelled(String(r.Payment_Status || "")) && !_isOrderCancelled(String(r.Delivery_Status || ""));
+        }
+        return true;
+      })
       // Exclude gateway orders not yet paid (Pending Payment) or abandoned
       // (Payment Failed) — they must never reach the kitchen/driver/label views.
       .filter(function (r) { return !ia_isGatewayUnpaid(r); })
@@ -820,7 +825,7 @@ function ia_config() {
     upi: IA_UPI_VPA,
     upi_name: IA_UPI_NAME,
     gateway: IA_GATEWAY_ENABLED,   // false → frontend shows manual UPI flow
-    version: "26.06.21.04"
+    version: "v26.08.06.02"
   };
 }
 
@@ -1198,4 +1203,97 @@ function ia_adminCancelOrder(phone, dateStr, meal) {
     success: true, 
     message: matches.length + " IA " + meal + " order(s) cancelled." + (refunded ? " (Gateway Refund Initiated)" : "") 
   };
+}
+
+// ── IA Customer Cancel Order ──────────────────────────────────────────────
+// Self-service cancellation by the IA customer. Authenticates via phone+PIN,
+// enforces the same cutoff rules as order placement (ia_isOpen), and auto-
+// refunds gateway payments — mirrors ia_adminCancelOrder but is customer-facing.
+function ia_customerCancelOrder(body) {
+  const phone = ia_normPhone(body.phone);
+  const pin   = String(body.pin || "").trim();
+  const sid   = String(body.submission_id || "").trim();
+
+  if (!phone || !pin) return { success: false, error: "Phone and PIN are required." };
+  if (!sid)           return { success: false, error: "Order ID is required." };
+
+  // Authenticate
+  const auth = ia_verifyLogin(phone, pin);
+  if (!auth.success) return { success: false, error: auth.error || "Incorrect PIN." };
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (e) {
+    return { success: false, error: "System busy. Please try again in a moment." };
+  }
+
+  try {
+    const ws   = ia_getTab(IA_TAB_ORDERS, IA_ORDERS_HEADERS);
+    const rows = ia_rows(ws);
+    const row  = rows.find(function (r) {
+      return String(r.Submission_ID || "").trim() === sid &&
+             ia_normPhone(r.Phone) === phone;
+    });
+
+    if (!row) return { success: false, error: "Order not found." };
+
+    // Already cancelled?
+    if (String(row.Payment_Status || "").toLowerCase().startsWith("cancelled")) {
+      return { success: false, error: "This order is already cancelled." };
+    }
+
+    // Cutoff enforcement — same rule as ordering: ia_isOpen(date, meal)
+    const orderDate = ia_dateStr(row.Date);
+    const orderMeal = String(row.Meal || "").trim();
+    if (!ia_isOpen(orderDate, orderMeal)) {
+      const c = IA_CUTOFFS[orderMeal];
+      const cutStr = c ? _ia_fmt12(c.h, c.m) : "cutoff";
+      return {
+        success: false,
+        error: "Cutoff has passed for " + orderMeal + " (" + cutStr + "). Cancellation is no longer allowed."
+      };
+    }
+
+    // Cancel the order
+    ws.getRange(row._row, 10).setValue("Cancelled by Customer"); // Col J: Payment_Status
+
+    // Auto-refund if Gateway paid
+    let refunded = false;
+    const payStatus  = String(row.Payment_Status || "");
+    const payRef     = String(row.Payment_Ref || "");    // Col K
+    const approvedBy = String(row.Approved_By || "");    // Col L
+    if (payStatus === "Paid" && approvedBy === "Gateway (HDFC)" && payRef && typeof hdfc_initiateRefund === "function") {
+      const amount = Number(row.Subtotal) || 0;
+      if (amount > 0) {
+        const reqId = "IA_CUST_CAN_" + sid + "_" + Date.now().toString().slice(-6);
+        try {
+          const rf = hdfc_initiateRefund(payRef, amount, reqId, "");
+          if (rf && rf.success) {
+            refunded = true;
+            ws.getRange(row._row, 14).setValue(String(row.Notes || "") + " | Auto-refunded HDFC (customer cancel)"); // Col N
+          } else {
+            ws.getRange(row._row, 14).setValue(String(row.Notes || "") + " | Refund FAILED: " + (rf ? rf.error : ""));
+          }
+        } catch (e) {
+          ws.getRange(row._row, 14).setValue(String(row.Notes || "") + " | Refund FAILED exception");
+        }
+      }
+    }
+
+    SpreadsheetApp.flush();
+
+    const msg = orderMeal + " order for " + orderDate + " cancelled."
+              + (refunded ? " Gateway refund initiated — it may take 3-5 business days." : "");
+    return { success: true, message: msg };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+// Tiny helper (server-side) to format 24h to 12h AM/PM string for error messages.
+function _ia_fmt12(h, m) {
+  var ap = h < 12 ? "AM" : "PM";
+  var hh = ((h + 11) % 12) + 1;
+  return hh + ":" + String(m).padStart(2, "0") + " " + ap;
 }

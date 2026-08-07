@@ -732,6 +732,7 @@ function doPost(e) {
     if (action === "ia_batchMarkEnRoute")     return jsonRes(ia_batchMarkEnRoute(body));
     if (action === "ia_hdfc_createSession")   return jsonRes(ia_hdfc_createSession(body));
     if (action === "ia_hdfc_verifyAndSubmit") return jsonRes(ia_hdfc_verifyAndSubmit(body));
+    if (action === "ia_cancelOrder")          return jsonRes(ia_customerCancelOrder(body));
 
     // Admin "place from favorite" / bulk-favorite placement (vault_admin.html)
     // posts _action:"processOrder" with the same {profile, orders:[{date,meals}]}
