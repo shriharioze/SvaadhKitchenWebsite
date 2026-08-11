@@ -793,7 +793,7 @@ function ia_getKitchenSummary(p) {
       Special_Notes_Kitchen: String(r.Notes||""), Special_Notes_Delivery: "", Delivery_Point: "", marathiNotes: "", Packed: false
     });
   });
-  ["Lunch","Dinner"].forEach(function(meal){ if(meals[meal]&&meals[meal].other&&meals[meal].other.Dal) meals[meal].other.Dal.kg=Math.round(meals[meal].other.Dal.kg*100)/100; });
+  ["Lunch","Dinner"].forEach(function(meal){ if(meals[meal]&&meals[meal].other&&meals[meal].other.Dal) meals[meal].other.Dal.kg=_customKitchenRound(meals[meal].other.Dal.kg); });
   return { date: date, meals: meals, orders: orders, cutoffs: {} };
 }
 

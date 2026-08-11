@@ -998,11 +998,18 @@ function getKitchenSummary(date) {
     });
   });
 
+function _customKitchenRound(val) {
+  if (val == null || isNaN(val)) return 0;
+  var intPart = Math.floor(val);
+  var decPart = val - intPart;
+  return (decPart >= 0.35 - 1e-9) ? intPart + 1 : intPart;
+}
+
   ["Lunch","Dinner"].forEach(function(meal) {
     if (!meals[meal]) return;
     var m = meals[meal];
-    if (m.other && m.other.Dal) m.other.Dal.kg = Math.round(m.other.Dal.kg * 100) / 100;
-    if (m.other && m.other.Dal_Fry) m.other.Dal_Fry.kg = Math.round(m.other.Dal_Fry.kg * 100) / 100;
+    if (m.other && m.other.Dal) m.other.Dal.kg = _customKitchenRound(m.other.Dal.kg);
+    if (m.other && m.other.Dal_Fry) m.other.Dal_Fry.kg = _customKitchenRound(m.other.Dal_Fry.kg);
   });
 
   return {

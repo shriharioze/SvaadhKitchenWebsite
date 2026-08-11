@@ -1557,16 +1557,23 @@
         </div>` : ""}
       </div>`;
 
+        function _customKitchenRound(val) {
+          if (val == null || isNaN(val)) return 0;
+          const intPart = Math.floor(val);
+          const decPart = val - intPart;
+          return (decPart >= 0.35 - 1e-9) ? intPart + 1 : intPart;
+        }
+
         const dal = current_m.other["Dal"];
         const dalFry = current_m.other["Dal_Fry"] || { count: 0, kg: 0 };
         const otherHtml = `
       <div class="item-card ${dal.kg === 0 ? "zero" : ""}">
         <span class="iname">${mr("Dal")}</span>
-        <span class="inum">${dal.kg}</span>
+        <span class="inum">${_customKitchenRound(dal.kg)}</span>
       </div>
       <div class="item-card ${dalFry.kg === 0 ? "zero" : ""}">
         <span class="iname">${mr("Dal_Fry")}</span>
-        <span class="inum">${dalFry.kg}</span>
+        <span class="inum">${_customKitchenRound(dalFry.kg)}</span>
       </div>` +
           ["Rice", "Salad", "Curd"].map(name => {
             const o = current_m.other[name];
