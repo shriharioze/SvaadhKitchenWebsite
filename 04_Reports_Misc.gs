@@ -2650,6 +2650,14 @@ function setupQuarterlyArchiveTrigger() {
   return setupMonthlyArchiveTrigger();
 }
 
+function stopMonthlyArchiveTrigger() {
+  var removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "runScheduledArchive") { ScriptApp.deleteTrigger(t); removed++; }
+  });
+  return "Auto-archiver stopped. Removed " + removed + " trigger(s).";
+}
+
 function runScheduledArchive() {
   // Archive the previous calendar month.
   // e.g. trigger fires May 10 → archive April (month 4, year this year)
@@ -2664,6 +2672,21 @@ function runScheduledArchive() {
 
   var result = archiveMonth(archiveYear, archiveMonth_);
   Logger.log("Monthly archive result: " + JSON.stringify(result));
+  
+  // Send email to admin
+  try {
+    var SP = PropertiesService.getScriptProperties();
+    var adminEmail = SP.getProperty("ADMIN_EMAIL");
+    if (adminEmail) {
+      var monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      var monthStr = monthNames[archiveMonth_ - 1] + " " + archiveYear;
+      var subject = result.success ? "✅ Auto-Archive Success: " + monthStr : "❌ Auto-Archive Failed: " + monthStr;
+      var body = "Auto-Archive run for " + monthStr + ".\n\nResult:\n" + JSON.stringify(result, null, 2);
+      MailApp.sendEmail(adminEmail, subject, body);
+    }
+  } catch (e) {
+    Logger.log("Failed to send archive email: " + e.message);
+  }
 }
 
 // ── CHURN REPORT ──────────────────────────────────────────────────────────────

@@ -610,7 +610,12 @@ function doPost(e) {
     if (action === "setupQuarterlyArchiveTrigger") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       try { setupQuarterlyArchiveTrigger(); return jsonRes({success:true}); }
-      catch(e) { return jsonRes({success:false, error:e.message}); }
+      catch(e) { return jsonRes({success:false, error:String(e)}); }
+    }
+    if (action === "stopMonthlyArchiveTrigger") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      try { var msg = stopMonthlyArchiveTrigger(); return jsonRes({success:true, message:msg}); }
+      catch(e) { return jsonRes({success:false, error:String(e)}); }
     }
     if (action === "setupAutoDeliveredTrigger") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});

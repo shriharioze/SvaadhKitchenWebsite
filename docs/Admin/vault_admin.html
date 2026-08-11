@@ -1660,6 +1660,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
               Archives the previous month's data. Run this once after deploying a new version.
             </div>
             <button class="btn-secondary" onclick="setupAutoTrigger()" style="font-size:.82rem;">
+              Set up auto-archive
+            </button>
+            <button class="btn-secondary" onclick="stopAutoTrigger()" style="font-size:.82rem; margin-left:8px; border-color: #ef4444; color: #ef4444;">
+              Stop auto-archive
+            </button>
               ⚙️ Setup Auto-Trigger (run once)
             </button>
             <div id="triggerStatus" style="margin-top:8px;"></div>
@@ -2123,7 +2128,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.08.03.5";
+const APP_VERSION = "v26.08.11.03";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -8230,6 +8235,36 @@ function renderExpenseAnalytics(d) {
   }
 
   el.innerHTML = html || `<div style="text-align:center;padding:40px;color:#94a3b8;">No expense data for this period.</div>`;
+}
+
+async function setupAutoTrigger() {
+  const statusEl = document.getElementById("triggerStatus");
+  statusEl.innerHTML = `<div style="color:#0369a1;font-size:.82rem;">⏳ Setting up trigger…</div>`;
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"setupQuarterlyArchiveTrigger", pin: S.sessionPin }) }).then(r=>r.json());
+    if (res && res.success) {
+      statusEl.innerHTML = `<div style="color:#166534;font-size:.82rem;">✅ Trigger registered! Auto-archive will run on the 10th of every month at ~2 AM IST.</div>`;
+    } else {
+      statusEl.innerHTML = `<div style="color:#2D1A5E;font-size:.82rem;">❌ ${(res && res.error) || "Failed to set up trigger"}</div>`;
+    }
+  } catch(e) {
+    statusEl.innerHTML = `<div style="color:#2D1A5E;font-size:.82rem;">❌ Error: ${e.message}</div>`;
+  }
+}
+
+async function stopAutoTrigger() {
+  const statusEl = document.getElementById("triggerStatus");
+  statusEl.innerHTML = `<div style="color:#0369a1;font-size:.82rem;">⏳ Stopping auto-archiver…</div>`;
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"stopMonthlyArchiveTrigger", pin: S.sessionPin }) }).then(r=>r.json());
+    if (res && res.success) {
+      statusEl.innerHTML = `<div style="color:#166534;font-size:.82rem;">🛑 ${res.message}</div>`;
+    } else {
+      statusEl.innerHTML = `<div style="color:#2D1A5E;font-size:.82rem;">❌ ${(res && res.error) || "Failed to stop trigger"}</div>`;
+    }
+  } catch(e) {
+    statusEl.innerHTML = `<div style="color:#2D1A5E;font-size:.82rem;">❌ Error: ${e.message}</div>`;
+  }
 }
 
 // ── INVENTORY ──────────────────────────────────────────────────────────────
