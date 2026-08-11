@@ -13,7 +13,9 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION = 31.2; // CUSTOM KITCHEN ROUNDING: Added _customKitchenRound rule (decimal >= 0.35 rounds up +1, <= 0.34 rounds down +0) applied to all kitchen summary counts/kg values (e.g. Varan 11.97 -> 12, Dal Fry 7.98 -> 8).
+const CODE_VERSION = 31.4; // NEGATIVE WALLET BALANCE RECOVERY. The system now automatically recovers negative wallet balances (e.g. from manual admin deductions) on a customer's next standard or bulk order. The checkout total is inflated by the exact debt amount, and upon successful payment (via Gateway or UPI), a "Debt Recovery Recharge" is logged to reset the balance to 0.
+// 2026-08-11: LOYALTY FUTURE DATES BUG FIX: _calculateLoyaltyStreak now correctly processes future-dated orders and starts its backward walk from the latest order date (or today). This prevents double day-6 loyalty rewards from being issued when subsequent multi-date bookings overlap future dates where a reward was already claimed.
+// 2026-08-11: CUSTOM KITCHEN ROUNDING: Added _customKitchenRound rule (decimal >= 0.35 rounds up +1, <= 0.34 rounds down +0) applied to all kitchen summary counts/kg values (e.g. Varan 11.97 -> 12, Dal Fry 7.98 -> 8).
 // 2026-08-07: LOCK CONTENTION FIX. hdfc_markOrderPaid, hdfc_markOrderFailed, submitManualOrder now acquire ScriptLock before touching SK_Orders.
 // 2026-08-05: REFUND STATUS TIMESTAMP. Updated _hdfcMarkRefundSettled and 11_Hdfc_Reconciler to append the settlement timestamp directly into the Status column ("Refunded at YYYY-MM-DD HH:mm") for better visibility, and updated idempotency checks to use indexOf.
 // 2026-08-05: REFUND WEBHOOK FIX. Fixed order_id and refund_id extraction for REFUND_SUCCEEDED webhooks which send payload in content.refund instead of content.order.

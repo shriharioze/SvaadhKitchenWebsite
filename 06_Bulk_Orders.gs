@@ -624,8 +624,10 @@ function submitBulkOrder(body) {
   // Idempotent: a retry skips already-written (date|meal) rows below, so no re-debit.
   const _isWalletPay = (paymentMethod === "Wallet");
   const _isSplitPay  = (paymentMethod === "Bulk (Split HDFC)" || paymentMethod === "Split (HDFC)");
-  const _walletRows  = (_isWalletPay || _isSplitPay) ? getAllRows(getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS)) : null;
-  let   _splitBudget = _isSplitPay ? Math.max(0, Number(body.wallet_applied || 0)) : 0;
+  const _walletRows  = getAllRows(getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS));
+  const _serverBal   = _calculateWalletBalance(phone, _walletRows);
+  const isDebtRecovery = (_serverBal < 0 && paymentMethod !== "On Account");
+  let   _splitBudget = isDebtRecovery ? _serverBal : (_isSplitPay ? Math.max(0, Number(body.wallet_applied || 0)) : 0);
   const submittedAt = getISTTimestamp();
   const bulkNote = String(body.notesKitchen || "Bulk order - sabji of the day (chef's choice)");
 
@@ -693,7 +695,12 @@ function submitBulkOrder(body) {
 
     // Per-row wallet deduction / status (see the block above submitBulkOrder's loop).
     let _rowStatus = paymentStatus, _rowWalletCredit = 0;
-    if (_isWalletPay) {
+    if (isDebtRecovery && _splitBudget < 0) {
+      _rowWalletCredit = _splitBudget;
+      _appendWalletTransaction(phone, name, "Debt Recovery Recharge", Math.abs(_splitBudget), true, sid);
+      _walletRows.push({ Phone: _normalizePhone(phone), Txn_Type: "Debt Recovery Recharge", Amount: Math.abs(_splitBudget), Verified: "TRUE" });
+      _splitBudget = 0;
+    } else if (_isWalletPay) {
       const _bal = _calculateWalletBalance(phone, _walletRows);
       if (_bal >= r.net) {
         _appendWalletTransaction(phone, name, "Bulk Order Deduction", r.net, true, sid);

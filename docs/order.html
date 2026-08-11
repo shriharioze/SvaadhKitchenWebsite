@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.08.07.01";
+    const APP_VERSION = "v26.08.11.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8016,6 +8016,15 @@
         `<div style="height:18px;"></div><div class="grand-total-box"><div><div class="label">${t('grand_total')}</div><div style="font-size:0.68rem;opacity:0.7;">${t('all_dates_label')}</div></div><div class="amount">₹${grandTotal}</div></div>`;
 
       const wb = Number(S.walletBalance) || 0;
+      
+      // If wallet is negative, we MUST collect it
+      if (wb < 0) {
+        $("billSummaryContent").innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; padding: 12px; margin-top: 10px; background: #fff0f0; border-radius: 8px; border: 1px solid #ffcdd2;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: #b71c1c;">💳 Past Dues Recovery</div>
+          <div style="font-size: 0.9rem; font-weight: 900; color: #b71c1c;">+₹${Math.abs(wb)}</div>
+        </div>`;
+      }
+
       const isOnAccount = (S.profile.onAccount === "Yes");
       
       // Hide all payment cards by default
@@ -8074,10 +8083,20 @@
         } else {
           S.paymentChoice = "UPI";
           $("paymentCard").style.display = "block";
+          if (wb < 0) {
+            setupStandardUPI(grandTotal + Math.abs(wb));
+          } else {
+            setupStandardUPI(grandTotal);
+          }
         }
       } else {
         S.paymentChoice = "UPI";
         $("paymentCard").style.display = "block";
+        if (wb < 0) {
+          setupStandardUPI(grandTotal + Math.abs(wb));
+        } else {
+          setupStandardUPI(grandTotal);
+        }
       }
 
 
@@ -8687,7 +8706,7 @@
                        : isSplitOrder ? "Split"
                        : (isWalletOrder ? "Wallet" : "UPI"),
         payment_status: (isFreeOrder || isWalletOrder || isOnAccountOrder) ? "Paid" : "Pending",
-        wallet_credit: isSplitOrder ? Math.min(Number(S.walletBalance) || 0, Number(S.grandTotal) || 0) : 0,
+        wallet_credit: (Number(S.walletBalance) < 0) ? Number(S.walletBalance) : (isSplitOrder ? Math.min(Number(S.walletBalance) || 0, Number(S.grandTotal) || 0) : 0),
         wallet_bonus:  isFreeOrder ? (Number(S.walletBonus) || 0) : 0,
         settle_all: settleAll
       };
@@ -12865,7 +12884,7 @@
     // to bulk_afterPaid, which finalizes (instant write) + confirms + shows the success screen.
     async function bulk_pay(total, mode) {
       const _isSplit = (mode === "Split");
-      const _walletHint = _isSplit ? Math.min(Math.max(0, Number(S.walletBalance) || 0), total) : 0;
+      const _walletHint = (Number(S.walletBalance) < 0) ? Number(S.walletBalance) : (_isSplit ? Math.min(Math.max(0, Number(S.walletBalance) || 0), total) : 0);
       if (S.bulkBusy) return; S.bulkBusy = true; _bulkPlacedShown = false;
       const _w = (screen && screen.availWidth) ? screen.availWidth : 1280, _h = (screen && screen.availHeight) ? screen.availHeight : 800;
       const popup = window.open("about:blank", "hdfc_payment", "width=" + _w + ",height=" + _h + ",top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes");

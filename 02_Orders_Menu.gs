@@ -2269,7 +2269,13 @@ function _submitOrderInternal(body) {
   //   Falls back to body.wallet_credit only for reconciler submissions (server-computed,
   //   used when the pending entry has expired after >30 min TTL).
   let splitWalletBudget = 0;
-  if (String(payMethod) === "Split") {
+  let isDebtRecovery = false;
+  
+  const serverBal = _calculateWalletBalance(profile.phone, allWalletRows);
+  if (serverBal < 0 && payMethod !== "On Account") {
+    splitWalletBudget = serverBal;
+    isDebtRecovery = true;
+  } else if (String(payMethod) === "Split") {
     splitWalletBudget = Math.max(0, Number(body.wallet_credit) || 0);
   } else if (String(payMethod) === "Split (HDFC)") {
     try {
@@ -2733,7 +2739,13 @@ function _submitOrderInternal(body) {
       let pStat = payStatus;
       let walletCreditUsed = 0;
       // ════ WALLET DEDUCTION LOGIC ════
-      if (payMethod === "Wallet") {
+      if (isDebtRecovery && splitWalletBudget < 0) {
+        // Collect the entire debt on this first meal
+        walletCreditUsed = splitWalletBudget;
+        _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Debt Recovery Recharge", Math.abs(splitWalletBudget), true, sid);
+        allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Debt Recovery Recharge", Amount: Math.abs(splitWalletBudget), Verified: "TRUE" });
+        splitWalletBudget = 0; // Collected, don't collect on subsequent meals
+      } else if (payMethod === "Wallet") {
         let currentBalance = _calculateWalletBalance(profile.phone, allWalletRows);
 
         if (currentBalance >= netTotal) {
@@ -3289,15 +3301,10 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
 
     const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Order_Date).trim();
 
-    // TODAY counts: an order already placed today is a real streak day. The
-    // frontend bill builder counts it, so the backend must too — otherwise a
-    // customer whose 5th day is today gets the 6th-day reward on the customer
-    // bill (frontend) but not in the sheet (backend disagreement: row stored
-    // with no discount and Loyalty_Discount="No"). Double-grant on a second
-    // same-day submission is prevented by the rewardDays.has(today) check and
-    // the same-day guard in submitOrder's projection loop.
-    if (d > todayISO) return; // future dates — ignore
-
+    // Fix: We must NOT ignore future dates here. Doing so hides already-issued 
+    // future rewards from the calculation and causes double-rewards when subsequent
+    // bookings overlap those dates.
+    
     if (!dailyTotals[d]) dailyTotals[d] = 0;
     // Hardened surcharge derivation: take the MAX of the stored
     // Inflation_Surcharge column and the food-derived value. Protects
@@ -3319,21 +3326,27 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
       rewardDays.add(d);
     }
   });
+  
+  let maxDate = todayISO;
+  Object.keys(dailyTotals).forEach(k => {
+    if (k > maxDate) maxDate = k;
+  });
 
   let streakCount = 0;
   let accumulatedSurcharge = 0;
   let streakEndDate = null; // most-recent counted day = the streak's end (used for gap checks at submit time)
 
   const closedSet = _kitchenClosedSet(); // admin days-off — skipped like Sundays, never break the streak
-  let d = new Date(); // start from TODAY — an already-placed order today is a streak day
-  let walkingToday = true;
+  // Start walking backward from the LATEST date the customer has an order,
+  // or TODAY (whichever is later). This ensures we don't miss future streaks.
+  let d = new Date(maxDate + "T12:00:00"); 
+  let gapAllowed = true;
   let safety = 0;
   while (safety < 40) {
     safety++;
     const iso = Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd");
     if (d.getDay() === 0 || closedSet[iso]) { // Skip Sunday OR admin-closed day — don't break streak
       d.setDate(d.getDate() - 1);
-      walkingToday = false;
       continue;
     }
     if (dailyTotals[iso] !== undefined) {
@@ -3345,17 +3358,19 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
       streakCount++;
       if (!streakEndDate) streakEndDate = iso; // walking backward → first counted day is the most recent
       accumulatedSurcharge += dailyTotals[iso];
-    } else if (!walkingToday) {
-      break; // gap in ordering on a PAST day — streak broken ("no order yet today" is not a gap)
+      gapAllowed = false; // Once we hit a solid order, any subsequent gap breaks the streak
+    } else {
+      if (iso < todayISO) {
+        break; // A gap on a past day ALWAYS breaks the streak
+      } else if (!gapAllowed) {
+        break; // A gap on today/future ALSO breaks if we already saw an order in the future
+      }
     }
-    walkingToday = false;
     d.setDate(d.getDate() - 1);
   }
 
-  // If today itself already received the loyalty reward (e.g. breakfast was submitted
-  // first and marked Loyalty_Discount=Yes), treat it as a cycle already reset —
-  // return streak=0 so any subsequent meal on the same day doesn't get a double reward.
-  if (rewardDays.has(todayISO)) {
+  // If the very latest day in the cycle already received the reward, reset to 0.
+  if (rewardDays.has(maxDate)) {
     return { streak: 0, pastSurcharge: 0, end: null };
   }
 

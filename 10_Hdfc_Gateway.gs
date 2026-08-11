@@ -696,9 +696,12 @@ function hdfc_createSession(body) {
   const clientWalletHt = Number(body.wallet_hint    || pendingEntry.wallet_hint    || 0);
   let   walletPortion  = 0;
 
-  if (paymentChoice === "Split") {
-    const phoneForBal  = pendingEntry.phone || phone;
-    const trueBalance  = _calculateWalletBalance(phoneForBal);
+  const phoneForBal  = pendingEntry.phone || phone;
+  const trueBalance  = _calculateWalletBalance(phoneForBal);
+
+  if (trueBalance < 0) {
+    walletPortion = trueBalance;
+  } else if (paymentChoice === "Split") {
     walletPortion      = Math.min(Math.max(0, trueBalance), authoritativeAmount);
     if (Math.abs(walletPortion - clientWalletHt) > 1) {
       console.warn("⚠️ WALLET HINT MISMATCH on hdfc_createSession — orderId=" + orderId
