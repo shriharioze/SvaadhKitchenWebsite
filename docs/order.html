@@ -8083,20 +8083,22 @@
         } else {
           S.paymentChoice = "UPI";
           $("paymentCard").style.display = "block";
+          let amountToPay = grandTotal;
           if (wb < 0) {
-            setupStandardUPI(grandTotal + Math.abs(wb));
-          } else {
-            setupStandardUPI(grandTotal);
+            amountToPay = grandTotal + Math.abs(wb);
           }
+          setupUPI(amountToPay);
+          S.amountToPay = amountToPay; // Cache it for later use
         }
       } else {
         S.paymentChoice = "UPI";
         $("paymentCard").style.display = "block";
+        let amountToPay = grandTotal;
         if (wb < 0) {
-          setupStandardUPI(grandTotal + Math.abs(wb));
-        } else {
-          setupStandardUPI(grandTotal);
+          amountToPay = grandTotal + Math.abs(wb);
         }
+        setupUPI(amountToPay);
+        S.amountToPay = amountToPay;
       }
 
 
@@ -8121,7 +8123,7 @@
             sw.innerHTML = `<a href="javascript:togglePaymentMode('Split')" class="btn-wallet-alt">🔀 Use ₹${wb} Wallet + Pay ₹${grandTotal - wb} via UPI</a>`;
           }
         }
-        setupUPI(grandTotal);
+        setupUPI(S.amountToPay || grandTotal);
       }
       $("btnNext").textContent = t('btn_place');
       checkPaymentConfirmation();
@@ -11686,7 +11688,7 @@
       if ($("paymentCard")) $("paymentCard").style.display = "none";
       if ($("hdfcGatewayCard")) {
         $("hdfcGatewayCard").style.display = "block";
-        const amt = S.grandTotal || 0;
+        const amt = S.amountToPay || S.grandTotal || 0;
         if ($("hdfcGatewayAmount")) $("hdfcGatewayAmount").textContent = "₹" + amt;
         if ($("hdfcPayBtnAmt"))     $("hdfcPayBtnAmt").textContent     = amt;
       }
