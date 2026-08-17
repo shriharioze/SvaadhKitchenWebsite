@@ -3345,10 +3345,6 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
   while (safety < 40) {
     safety++;
     const iso = Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd");
-    if (d.getDay() === 0 || closedSet[iso]) { // Skip Sunday OR admin-closed day — don't break streak
-      d.setDate(d.getDate() - 1);
-      continue;
-    }
     if (dailyTotals[iso] !== undefined) {
       if (rewardDays.has(iso)) {
         // This day was a 6th-day reward day — it marks the END of the previous cycle.
@@ -3360,6 +3356,10 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
       accumulatedSurcharge += dailyTotals[iso];
       gapAllowed = false; // Once we hit a solid order, any subsequent gap breaks the streak
     } else {
+      if (d.getDay() === 0 || closedSet[iso]) { // Skip Sunday OR admin-closed day — don't break streak
+        d.setDate(d.getDate() - 1);
+        continue;
+      }
       if (iso < todayISO) {
         break; // A gap on a past day ALWAYS breaks the streak
       } else if (!gapAllowed) {

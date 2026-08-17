@@ -601,6 +601,15 @@ function submitBulkOrder(body) {
              rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, baseFood: r.baseFood, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };
   }
 
+  // ── LOCK: prevent duplicate rows from concurrent finalize + reconciler calls ──
+  // Without this, two processes can read the sheet before either writes, both see
+  // zero existing rows, and both append the full batch — creating exact duplicates.
+  const _bulkLock = LockService.getScriptLock();
+  try { _bulkLock.waitLock(30000); } catch (_lockErr) {
+    return { success: false, error: "Bulk order is being processed by another request. Please wait a moment." };
+  }
+  try {
+
   // Write rows
   const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const hIdx = headerIndex(ordersWs);
@@ -779,6 +788,10 @@ function submitBulkOrder(body) {
   return { success: true, batch_id: batchId, total: priced.total,
            count: Object.keys(existingKeys).length + written.length, rows_written: written.length,
            already: written.length === 0, rows: written, lunch: priced.lunch, dinner: priced.dinner };
+
+  } finally {
+    try { _bulkLock.releaseLock(); } catch (_) {}
+  }
 }
 
 // ── TEST HELPERS (run from the Apps Script editor; remove before any LIVE wiring) ──

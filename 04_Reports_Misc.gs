@@ -1928,31 +1928,62 @@ function archiveMonth(year, month) {
       var allKeep = [];
       for (var i = 0; i < allKeepRaw.length; i++) {
         if (allKeepRaw[i].join("").trim() !== "") {
-          allKeep.push(allKeepRaw[i]);
+          // Defensively sanitize row before writing to bypass Date formatting bugs
+          var safeRow = [];
+          for (var j = 0; j < allKeepRaw[i].length; j++) {
+            var val = allKeepRaw[i][j];
+            if (val instanceof Date) {
+              // Convert JS Dates to string safely so Apps Script doesn't silent-drop them
+              val = isNaN(val.getTime()) 
+                ? "" 
+                : Utilities.formatDate(val, "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
+            }
+            safeRow.push(val);
+          }
+          allKeep.push(safeRow);
         }
       }
 
       var lastRow = ws.getLastRow();
       var lastCol = ws.getLastColumn();
-      if (lastRow > 1) {
-        ws.getRange(2, 1, lastRow - 1, Math.max(lastCol, headers.length)).clearContent();
-      }
-      if (allKeep.length > 0) {
-        ws.getRange(2, 1, allKeep.length, headers.length).setValues(allKeep);
-      }
+      var maxCol = Math.max(lastCol, headers.length);
+      
+      // Catch setValues errors so we don't accidentally leave the sheet permanently deleted!
+      try {
+        if (lastRow > 1) {
+          ws.getRange(2, 1, lastRow - 1, maxCol).clearContent();
+        }
+        if (allKeep.length > 0) {
+          ws.getRange(2, 1, allKeep.length, headers.length).setValues(allKeep);
+        }
 
-      // Physically delete excess rows so we don't accumulate thousands of blanks
-      var rowsNeeded = allKeep.length + 1; // 1 for header
-      var totalRows = ws.getMaxRows();
-      if (totalRows > rowsNeeded) {
-        ws.deleteRows(rowsNeeded + 1, totalRows - rowsNeeded);
-      }
+        // Physically delete excess rows so we don't accumulate thousands of blanks
+        var rowsNeeded = allKeep.length + 1; // 1 for header
+        var totalRows = ws.getMaxRows();
+        if (totalRows > rowsNeeded) {
+          ws.deleteRows(rowsNeeded + 1, totalRows - rowsNeeded);
+        }
 
-      SpreadsheetApp.flush();
-      var nowRows = ws.getLastRow() - 1;
-      return nowRows === allKeep.length
-        ? {success:true, written: nowRows}
-        : {success:false, expected: allKeep.length, actual: nowRows};
+        SpreadsheetApp.flush();
+        var nowRows = ws.getLastRow() - 1;
+        return nowRows === allKeep.length
+          ? {success:true, written: nowRows}
+          : {success:false, expected: allKeep.length, actual: nowRows};
+      } catch (err) {
+        // In case of a catastrophic error, attempt a rollback!
+        if (typeof log !== "undefined") {
+          log.push("CRITICAL Error in rebuildSheet: " + err.message + ". Attempting restoration...");
+        }
+        try {
+          if (allKeepRaw.length > 0) {
+            ws.getRange(2, 1, allKeepRaw.length, headers.length).setValues(allKeepRaw);
+            SpreadsheetApp.flush();
+          }
+        } catch (rollbackErr) {
+          if (typeof log !== "undefined") log.push("Rollback also failed! " + rollbackErr.message);
+        }
+        return {success:false, expected: allKeep.length, actual: 0};
+      }
     }
 
     if (toArchiveOrders.length > 0) {
