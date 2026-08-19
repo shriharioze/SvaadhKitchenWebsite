@@ -729,10 +729,14 @@ function checkDeliveryReachable(body) {
   return { results: results };
 }
 // Count ACTIVE (non-cancelled) orders per meal type for one date, from a rows
-// array. One order row = one order. Cancelled rows free their slot. Shared by
-// getMenu (display) and the submitOrder cap guard (authoritative).
+// array. One UNIQUE CUSTOMER NAME = one delivery slot. If the same customer has
+// multiple order rows for the same meal (e.g. 2 Lunch orders), they still count
+// as one delivery. Cancelled rows free their slot. Shared by getMenu (display)
+// and the submitOrder cap guard (authoritative).
 function _countActiveMealOrders(rows, dateStr) {
   const c = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  // Track unique customer names per meal — same person = same delivery stop.
+  const seen = { Breakfast: {}, Lunch: {}, Dinner: {} };
   // Bulk/internal channels collapse to ONE delivery slot each, no matter how many
   // orders they place: customers named "Enkin", and IntentAmplify ("[IA] …")
   // orders. They also BYPASS the cap when full (Enkin in submitOrder's guard; IA
@@ -763,7 +767,12 @@ function _countActiveMealOrders(rows, dateStr) {
     if (c[mt] === undefined) continue;
     if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; } // counted once below
     if (_isIA(r.Customer_Name))    { sawIA[mt]    = true; continue; } // counted once below
-    c[mt]++;
+    // Unique name per meal — same customer placing 2 orders = 1 delivery slot.
+    const nameKey = String(r.Customer_Name || "").trim().toLowerCase();
+    if (!seen[mt][nameKey]) {
+      seen[mt][nameKey] = true;
+      c[mt]++;
+    }
   }
   // IntentAmplify orders live in a separate IA_ tab (not in `rows`) — fold their
   // presence in as ONE slot per meal too (one corporate delivery, not n).

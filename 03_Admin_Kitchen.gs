@@ -45,7 +45,8 @@ function _getAdminDataUncached() {
   // countOrderedUnits(allOrders, date) was called per menu row → O(orders ×
   // dates) with a JSON.parse for every order each time (the ~40s hot spot).
   const countsByDate = {};
-  const mealOrderCounts = {};   // dd → {Breakfast,Lunch,Dinner} active order-row counts (for the per-meal order cap)
+  const mealOrderCounts = {};   // dd → {Breakfast,Lunch,Dinner} unique-customer delivery counts (for the per-meal order cap)
+  const _mealNamesSeen  = {};   // dd → {meal → {lowercaseName: true}} — dedup same customer placing multiple orders
   allOrdersAdm.forEach(function(row) {
     if (_isOrderCancelled(row.Payment_Status)) return;
     const dd = row.Order_Date instanceof Date
@@ -54,7 +55,15 @@ function _getAdminDataUncached() {
     if (!dd) return;
     const meal = String(row.Meal_Type || "");
     if (!mealOrderCounts[dd]) mealOrderCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
-    if (mealOrderCounts[dd][meal] !== undefined) mealOrderCounts[dd][meal]++;
+    if (!_mealNamesSeen[dd])  _mealNamesSeen[dd]  = { Breakfast: {}, Lunch: {}, Dinner: {} };
+    if (mealOrderCounts[dd][meal] !== undefined) {
+      // Unique customer name per meal — same person placing 2 orders = 1 delivery slot.
+      const _nk = String(row.Customer_Name || "").trim().toLowerCase();
+      if (_nk && !_mealNamesSeen[dd][meal][_nk]) {
+        _mealNamesSeen[dd][meal][_nk] = true;
+        mealOrderCounts[dd][meal]++;
+      }
+    }
     if (!countsByDate[dd]) countsByDate[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
     if (!countsByDate[dd][meal]) return;
     let items = {};
