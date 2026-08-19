@@ -2443,9 +2443,12 @@ async function verifyPin() {
       lockoutEnd = Date.now() + 60000;
       document.getElementById("loginErr").textContent = "Too many attempts. Wait 60s.";
     } else {
-      document.getElementById("loginErr").textContent = e.name === 'AbortError'
-        ? "Connection timed out — please try again"
-        : "Incorrect PIN — try again";
+      let errMsg = "Incorrect PIN — try again";
+      if (e.name === 'AbortError') errMsg = "Connection timed out — please try again";
+      else if (e.isMenuError && !e.isPinError) errMsg = "Google Server Busy — please retry";
+      else if (e.message && e.message.includes('Unexpected')) errMsg = "Google Server Error — please retry";
+      
+      document.getElementById("loginErr").textContent = errMsg;
     }
     S.pin = ""; renderPinDots();
   } finally {

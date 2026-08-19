@@ -46,6 +46,12 @@ function doGet(e) {
   // ─────────────────────────────────────────────────────────────
 
   try {
+    if (action === "testPerf") {
+      const s = Date.now();
+      _getAdminDataUncached();
+      return jsonRes({ms: Date.now() - s});
+    }
+
     if (action === "testError") {
       try { return jsonRes(_getAdminDataUncached()); } catch (e) { return jsonRes({error: e.message, stack: e.stack}); }
     }
