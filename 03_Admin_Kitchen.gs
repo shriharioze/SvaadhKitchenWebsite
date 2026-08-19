@@ -45,25 +45,15 @@ function _getAdminDataUncached() {
   // countOrderedUnits(allOrders, date) was called per menu row → O(orders ×
   // dates) with a JSON.parse for every order each time (the ~40s hot spot).
   const countsByDate = {};
-  const mealOrderCounts = {};   // dd → {Breakfast,Lunch,Dinner} unique-customer delivery counts (for the per-meal order cap)
-  const _mealNamesSeen  = {};   // dd → {meal → {lowercaseName: true}} — dedup same customer placing multiple orders
+  const _allDatesAdm = {};  // collect unique dates for delivery-count pass below
   allOrdersAdm.forEach(function(row) {
     if (_isOrderCancelled(row.Payment_Status)) return;
     const dd = row.Order_Date instanceof Date
       ? Utilities.formatDate(row.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(row.Order_Date || "").trim();
     if (!dd) return;
+    _allDatesAdm[dd] = true;
     const meal = String(row.Meal_Type || "");
-    if (!mealOrderCounts[dd]) mealOrderCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
-    if (!_mealNamesSeen[dd])  _mealNamesSeen[dd]  = { Breakfast: {}, Lunch: {}, Dinner: {} };
-    if (mealOrderCounts[dd][meal] !== undefined) {
-      // Unique customer name per meal — same person placing 2 orders = 1 delivery slot.
-      const _nk = String(row.Customer_Name || "").trim().toLowerCase();
-      if (_nk && !_mealNamesSeen[dd][meal][_nk]) {
-        _mealNamesSeen[dd][meal][_nk] = true;
-        mealOrderCounts[dd][meal]++;
-      }
-    }
     if (!countsByDate[dd]) countsByDate[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
     if (!countsByDate[dd][meal]) return;
     let items = {};
@@ -75,6 +65,14 @@ function _getAdminDataUncached() {
       if (meal === "Breakfast" && k === "Curd") k = "Breakfast Curd";
       countsByDate[dd][meal][k] = (countsByDate[dd][meal][k] || 0) + Number(pair[1] || 0);
     });
+  });
+  // Delivery counts: use the AUTHORITATIVE _countActiveMealOrders (shared with
+  // getMenu + submitOrder). It excludes pickup/porter/SLV, collapses Enkin/IA
+  // to 1 slot each, and deduplicates by unique customer name per meal. The
+  // admin panel now shows the EXACT number the cap enforcement uses.
+  const mealOrderCounts = {};
+  Object.keys(_allDatesAdm).forEach(function(dd) {
+    mealOrderCounts[dd] = _countActiveMealOrders(allOrdersAdm, dd);
   });
 
   const breakfastMaster = bfRows.map(r => ({
