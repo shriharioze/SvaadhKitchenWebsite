@@ -2414,16 +2414,12 @@ async function verifyPin() {
   const pinAttempt = S.pin;
   try {
     // 1. Parallel PIN verification and daily menu loading
-    const [pinRes, menuRes] = await Promise.all([
-      fetchWithTimeout(`${APPS_SCRIPT_URL}?action=verifyAdminPin&pin=${pinAttempt}&_t=${Date.now()}`),
-      fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getAdminData&pin=${pinAttempt}&_t=${Date.now()}`, 20000)
-    ]);
+    const menuRes = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getAdminData&pin=${pinAttempt}&_t=${Date.now()}`, 20000);
     
-    const pinData = await pinRes.json();
-    if (pinData.error || !pinData.success) { let e = new Error(pinData.error || "Incorrect PIN"); e.isPinError = true; throw e; }
+    
     
     const menuData = await menuRes.json();
-    if (menuData.error) { let e = new Error(menuData.error); e.isMenuError = true; throw e; }
+    if (menuData.error) { let e = new Error(menuData.error); if (menuData.error.includes("PIN")) e.isPinError = true; e.isMenuError = true; throw e; }
     
     attempts = 0;
     S.sessionPin = pinAttempt;

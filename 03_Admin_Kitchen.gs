@@ -53,12 +53,18 @@ function _getAdminDataUncached() {
   const _isEnkin = function (nm) { return String(nm || "").toLowerCase().indexOf("enkin") !== -1; };
   const _isIA    = function (nm) { return String(nm || "").trim().toLowerCase().indexOf("[ia]") === 0; };
 
+  const validMenuDates = {};
+  menuRows.forEach(function(r) {
+    const d = r.Date instanceof Date ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Date).trim();
+    if (d) validMenuDates[d] = true;
+  });
+
   allOrdersAdm.forEach(function(row) {
     if (_isOrderCancelled(row.Payment_Status)) return;
     const dd = row.Order_Date instanceof Date
       ? Utilities.formatDate(row.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(row.Order_Date || "").trim();
-    if (!dd) return;
+    if (!dd || !validMenuDates[dd]) return;
     const meal = String(row.Meal_Type || "").trim();
 
     // --- Delivery Cap Counting ---
