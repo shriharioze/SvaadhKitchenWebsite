@@ -61,7 +61,7 @@ const IA_FIXED_ITEMS = [
   { name: "Curry Sabji Mini [100ml]",price: 24, cat: "Sabji" },
   { name: "Curry Sabji Full [250ml]",price: 48, cat: "Sabji" },
   { name: "Dal [200ml]",         price: 24, cat: "Dal"  },
-  { name: "Dal Fry [200ml] <span class='badge-new'>NEW</span>", price: 40, cat: "Dal" },
+  { name: "Dal Fry [200ml]", price: 40, cat: "Dal" },
   { name: "Rice [100g]",         price: 13, cat: "Rice" },
   { name: "Salad [40g]",         price: 8,  cat: "Extra"},
   { name: "Curd [50g]",          price: 13, cat: "Extra"}
@@ -648,7 +648,7 @@ function ia_itemToCol(name) {
     "Jowar Bhakri": "Jowar_Bhakri", "Bajra Bhakri": "Bajra_Bhakri",
     "Dry Sabji Mini [100ml]": "Dry_Sabji_Mini", "Dry Sabji Full [250ml]": "Dry_Sabji_Full",
     "Curry Sabji Mini [100ml]": "Curry_Sabji_Mini", "Curry Sabji Full [250ml]": "Curry_Sabji_Full",
-    "Dal [200ml]": "Dal", "Dal Fry [200ml] <span class='badge-new'>NEW</span>": "Dal_Fry", "Rice [100g]": "Rice", "Salad [40g]": "Salad", "Curd [50g]": "Curd"
+    "Dal [200ml]": "Dal", "Dal Fry [200ml]": "Dal_Fry", "Rice [100g]": "Rice", "Salad [40g]": "Salad", "Curd [50g]": "Curd"
   };
   return map[name] || null;
 }

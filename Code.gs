@@ -46,6 +46,12 @@ function doGet(e) {
   // ─────────────────────────────────────────────────────────────
 
   try {
+    if (action === "testError") {
+      try { return jsonRes(_getAdminDataUncached()); } catch (e) { return jsonRes({error: e.message, stack: e.stack}); }
+    }
+    if (action === "testKitchen") {
+      try { return jsonRes(getKitchenSummary(p.date || "2026-08-19")); } catch (e) { return jsonRes({error: e.message, stack: e.stack}); }
+    }
     if (action === "version") return jsonRes({version: CODE_VERSION, status:"ok"});
     if (action === "health") {
       // Lightweight liveness probe — reads one cell to confirm sheet connectivity.
