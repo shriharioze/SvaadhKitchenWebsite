@@ -2420,10 +2420,10 @@ async function verifyPin() {
     ]);
     
     const pinData = await pinRes.json();
-    if (pinData.error || !pinData.success) throw new Error(pinData.error || "Incorrect PIN");
+    if (pinData.error || !pinData.success) { let e = new Error(pinData.error || "Incorrect PIN"); e.isPinError = true; throw e; }
     
     const menuData = await menuRes.json();
-    if (menuData.error) throw new Error(menuData.error);
+    if (menuData.error) { let e = new Error(menuData.error); e.isMenuError = true; throw e; }
     
     attempts = 0;
     S.sessionPin = pinAttempt;
