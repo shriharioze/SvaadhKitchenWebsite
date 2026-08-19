@@ -41,19 +41,61 @@ function _getAdminDataUncached() {
   const ordersWsAdm = getOrCreateTab(ss, TAB_ORDERS, []);
   const allOrdersAdm = getAllRows(ordersWsAdm);
 
-  // Build per-date ordered-unit counts in ONE pass over all orders. Previously
-  // countOrderedUnits(allOrders, date) was called per menu row → O(orders ×
-  // dates) with a JSON.parse for every order each time (the ~40s hot spot).
+  // Build per-date ordered-unit counts AND delivery counts in ONE pass over
+  // all orders (O(orders)). Calling count-per-date inside the loop scales
+  // poorly (O(orders × dates)).
   const countsByDate = {};
-  const _allDatesAdm = {};  // collect unique dates for delivery-count pass below
+  const mealOrderCounts = {};   // dd → {Breakfast,Lunch,Dinner} unique-customer delivery counts
+  const seen = {};
+  const sawEnkin = {};
+  const sawIA = {};
+  const vips = typeof _getVipPhonesCached === "function" ? _getVipPhonesCached() : {};
+  const _isEnkin = function (nm) { return String(nm || "").toLowerCase().indexOf("enkin") !== -1; };
+  const _isIA    = function (nm) { return String(nm || "").trim().toLowerCase().indexOf("[ia]") === 0; };
+
   allOrdersAdm.forEach(function(row) {
     if (_isOrderCancelled(row.Payment_Status)) return;
     const dd = row.Order_Date instanceof Date
       ? Utilities.formatDate(row.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(row.Order_Date || "").trim();
     if (!dd) return;
-    _allDatesAdm[dd] = true;
-    const meal = String(row.Meal_Type || "");
+    const meal = String(row.Meal_Type || "").trim();
+
+    // --- Delivery Cap Counting ---
+    if (!mealOrderCounts[dd]) {
+      mealOrderCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+      seen[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
+      sawEnkin[dd] = { Breakfast: false, Lunch: false, Dinner: false };
+      sawIA[dd] = { Breakfast: false, Lunch: false, Dinner: false };
+    }
+    if (mealOrderCounts[dd][meal] !== undefined) {
+      let isDelivery = true;
+      const phoneTrim = String(row.Phone || "").trim();
+      if (vips[phoneTrim]) {
+        isDelivery = false; // VIPs count as 0 slots
+      } else {
+        const ar = String(row.Area || "").toLowerCase();
+        if (ar.indexOf("pickup") !== -1 || ar === "porter") isDelivery = false;
+        else {
+          const soc = _normSocietyBase(row.Society || "");
+          if (soc.indexOf("shreelaxmivihar") !== -1) isDelivery = false;
+        }
+      }
+      
+      if (isDelivery) {
+        if (_isEnkin(row.Customer_Name)) { sawEnkin[dd][meal] = true; }
+        else if (_isIA(row.Customer_Name)) { sawIA[dd][meal] = true; }
+        else {
+          const nameKey = String(row.Customer_Name || "").trim().toLowerCase();
+          if (nameKey && !seen[dd][meal][nameKey]) {
+            seen[dd][meal][nameKey] = true;
+            mealOrderCounts[dd][meal]++;
+          }
+        }
+      }
+    }
+    // -----------------------------
+
     if (!countsByDate[dd]) countsByDate[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
     if (!countsByDate[dd][meal]) return;
     let items = {};
@@ -66,13 +108,27 @@ function _getAdminDataUncached() {
       countsByDate[dd][meal][k] = (countsByDate[dd][meal][k] || 0) + Number(pair[1] || 0);
     });
   });
-  // Delivery counts: use the AUTHORITATIVE _countActiveMealOrders (shared with
-  // getMenu + submitOrder). It excludes pickup/porter/SLV, collapses Enkin/IA
-  // to 1 slot each, and deduplicates by unique customer name per meal. The
-  // admin panel now shows the EXACT number the cap enforcement uses.
-  const mealOrderCounts = {};
-  Object.keys(_allDatesAdm).forEach(function(dd) {
-    mealOrderCounts[dd] = _countActiveMealOrders(allOrdersAdm, dd);
+
+  // Fold in IntentAmplify from its separate tab as 1 slot per meal per day
+  try {
+    if (typeof ia_rowsAsSK === "function") {
+      ia_rowsAsSK().forEach(function (r) {
+        if (_isOrderCancelled(r.Payment_Status)) return;
+        const dd = r.Order_Date instanceof Date
+          ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(r.Order_Date || "").trim();
+        if (!dd) return;
+        const meal = String(r.Meal_Type || "").trim();
+        if (sawIA[dd] && sawIA[dd][meal] !== undefined) sawIA[dd][meal] = true;
+      });
+    }
+  } catch (e) {}
+
+  Object.keys(mealOrderCounts).forEach(function(dd) {
+    ["Breakfast", "Lunch", "Dinner"].forEach(function(m) {
+      if (sawEnkin[dd][m]) mealOrderCounts[dd][m]++;
+      if (sawIA[dd][m])    mealOrderCounts[dd][m]++;
+    });
   });
 
   const breakfastMaster = bfRows.map(r => ({

@@ -731,12 +731,13 @@ function checkDeliveryReachable(body) {
 // Count ACTIVE (non-cancelled) orders per meal type for one date, from a rows
 // array. One UNIQUE CUSTOMER NAME = one delivery slot. If the same customer has
 // multiple order rows for the same meal (e.g. 2 Lunch orders), they still count
-// as one delivery. Cancelled rows free their slot. Shared by getMenu (display)
-// and the submitOrder cap guard (authoritative).
+// as one delivery. Cancelled rows free their slot. VIPs (Fee_Exempt) count as 0.
+// Shared by getMenu (display) and the submitOrder cap guard (authoritative).
 function _countActiveMealOrders(rows, dateStr) {
   const c = { Breakfast: 0, Lunch: 0, Dinner: 0 };
   // Track unique customer names per meal — same person = same delivery stop.
   const seen = { Breakfast: {}, Lunch: {}, Dinner: {} };
+  const vips = typeof _getVipPhonesCached === "function" ? _getVipPhonesCached() : {};
   // Bulk/internal channels collapse to ONE delivery slot each, no matter how many
   // orders they place: customers named "Enkin", and IntentAmplify ("[IA] …")
   // orders. They also BYPASS the cap when full (Enkin in submitOrder's guard; IA
@@ -755,6 +756,9 @@ function _countActiveMealOrders(rows, dateStr) {
       : String(r.Order_Date || "").trim();
     if (d !== dateStr) continue;
     if (_isOrderCancelled(r.Payment_Status)) continue;
+    // VIP exemption: VIPs don't count towards the delivery limit at all
+    const phoneTrim = String(r.Phone || "").trim();
+    if (vips[phoneTrim]) continue;
     // The cap is a DELIVERY limit — Self Pickup / Porter orders don't use a
     // delivery slot, so they neither count toward the cap nor get blocked by it.
     // Shree Laxmi Vihar society orders also don't consume a delivery slot (owner-

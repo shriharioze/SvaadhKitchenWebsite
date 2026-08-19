@@ -927,6 +927,21 @@ function _invalidateCache() {
   try { CacheService.getScriptCache().removeAll(keys); } catch(e) {}
 }
 
+function _getVipPhonesCached() {
+  return _cachedData("vip_phones_v1", 300, function() {
+    const ss = getSpreadsheet();
+    const ws = getOrCreateTab(ss, TAB_CUSTOMERS, []);
+    const rows = getAllRows(ws);
+    const vips = {};
+    rows.forEach(function(r) {
+      if (String(r.Fee_Exempt || "").toLowerCase() === "yes" || r.Fee_Exempt === true) {
+        if (r.Phone) vips[String(r.Phone).trim()] = true;
+      }
+    });
+    return vips;
+  });
+}
+
 // Locations that may keep ordering DELIVERY even when the per-meal cap is full
 // (owner-approved 2026-07-13). They still COUNT toward the cap (like free areas) —
 // they're just never BLOCKED by it:

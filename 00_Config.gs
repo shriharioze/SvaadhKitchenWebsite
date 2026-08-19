@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION = 31.6; // DELIVERY CAP UNIQUE-NAME COUNTING. _countActiveMealOrders and getAdminData now count UNIQUE customer names per meal per date instead of raw order rows. If the same customer (e.g. "Rohan Sharma") places 2 Lunch orders on the same day, they count as ONE delivery slot, not two. Prevents the cap from being artificially inflated by multi-order customers. Enkin/IA single-slot collapsing is unchanged.
+const CODE_VERSION = 31.7; // DELIVERY CAP VIP EXEMPTION & ADMIN SPEED FIX. (1) VIP customers (Fee_Exempt=Yes) now count as 0 towards the delivery cap, matching their fee exemption. (2) Reverted getAdminDataUncached to compute delivery counts in a single O(N) pass over all orders instead of O(orders * dates) nested loops, fixing a massive 40s+ load time regression in the admin panel introduced in v31.6.
 // 2026-08-11: LOYALTY FUTURE DATES BUG FIX: _calculateLoyaltyStreak now correctly processes future-dated orders and starts its backward walk from the latest order date (or today). This prevents double day-6 loyalty rewards from being issued when subsequent multi-date bookings overlap future dates where a reward was already claimed.
 // 2026-08-11: CUSTOM KITCHEN ROUNDING: Added _customKitchenRound rule (decimal >= 0.35 rounds up +1, <= 0.34 rounds down +0) applied to all kitchen summary counts/kg values (e.g. Varan 11.97 -> 12, Dal Fry 7.98 -> 8).
 // 2026-08-07: LOCK CONTENTION FIX. hdfc_markOrderPaid, hdfc_markOrderFailed, submitManualOrder now acquire ScriptLock before touching SK_Orders.
