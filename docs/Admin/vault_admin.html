@@ -308,6 +308,16 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
 .badge-set    { background: var(--green-soft); color: var(--green); border: 1px solid var(--green-border); }
 .badge-notset { background: var(--bg2); color: var(--muted); border: 1px solid var(--border); }
 
+.reload-hero-btn {
+  padding: 10px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: .88rem; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05); transition: all .15s;
+  display: flex; align-items: center; gap: 7px; margin-right: 8px;
+}
+.reload-hero-btn:hover   { background: var(--bg2); transform: translateY(-1px); }
+.reload-hero-btn:active  { transform: translateY(0); }
+
 /* Save button hero */
 .save-hero-btn {
   padding: 10px 22px; border-radius: var(--radius-sm); border: none;
@@ -931,6 +941,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
             <div class="date-sub" id="heroDateSub"></div>
           </div>
           <div class="date-hero-badges" id="heroBadges">
+            <button class="reload-hero-btn" onclick="loadFullAdminData()">🔄 Reload</button>
             <button class="save-hero-btn" id="saveHeroBtn" onclick="saveCurrentMenu()">
               <span id="saveBtnIcon">💾</span> Save Menu
             </button>
