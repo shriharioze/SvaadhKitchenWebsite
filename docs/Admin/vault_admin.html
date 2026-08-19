@@ -3081,8 +3081,7 @@ function selectDate(iso) {
        </button>`
     : "";
 
-  badges.innerHTML  = `${todayBadge}${statusBadge}${sundayChip}${kitchenChip}
-    <button class="save-hero-btn" id="saveHeroBtn" onclick="saveCurrentMenu()">
+  badges.innerHTML  = `${todayBadge}${statusBadge}${sundayChip}${kitchenChip}\n    <button class="reload-hero-btn" onclick="loadFullAdminData()">🔄 Reload</button>\n    <button class="save-hero-btn" id="saveHeroBtn" onclick="saveCurrentMenu()">
       <span id="saveBtnIcon">💾</span> Save Menu
     </button>`;
 
