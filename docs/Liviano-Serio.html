@@ -57,10 +57,10 @@
   "image": "https://www.svaadhkitchen.in/images/svaadh-kitchen-hero.PNG",
   "address": {
     "@type": "PostalAddress",
-    "streetAddress": "Bhosale Nagar",
-    "addressLocality": "Hadapsar",
+    "streetAddress": "Ganga Serio, Kharadi",
+    "addressLocality": "Kharadi",
     "addressRegion": "Pune, Maharashtra",
-    "postalCode": "411028",
+    "postalCode": "411014",
     "addressCountry": "IN"
   },
   "geo": {
@@ -3399,8 +3399,17 @@
           <button type="button" id="fetchArchivedBtn" onclick="fetchArchivedAddr()" style="background:#0284c7;color:#fff;border:none;border-radius:20px;padding:9px 22px;font-size:0.85rem;font-weight:700;cursor:pointer;">📥 Fetch my saved address</button>
         </div>
 
-        <!-- Same for all toggle -->
-        <label class="same-addr-row" id="sameAddrToggleRow" style="margin-bottom:16px;">
+        <!-- LS storefront notice: pickup now, doorstep delivery coming soon -->
+        <div style="display:flex;gap:10px;align-items:flex-start;background:#eef6ff;border:1.5px solid #bcd9f7;border-radius:12px;padding:12px 14px;margin-bottom:16px;">
+          <span style="font-size:1.15rem;line-height:1;">🛵</span>
+          <div style="font-size:0.82rem;color:#1c4d80;line-height:1.55;">
+            <strong>Doorstep delivery is launching here soon!</strong><br>
+            For now, <strong>📦 Self Pickup</strong> is available. We're saving your wing &amp; flat details below so you're all set from day one — we'll notify you the moment doorstep delivery starts.
+          </div>
+        </div>
+
+        <!-- Same for all toggle (hidden on LS — one fixed drop location) -->
+        <label class="same-addr-row" id="sameAddrToggleRow" style="margin-bottom:16px;display:none;">
           <input type="checkbox" id="sameAddrCheck" checked onchange="toggleAddressMode()">
           <span data-i18n="same_addr_label" style="display:inline-flex;align-items:center;">Same address for all meals
             (Breakfast, Lunch &amp; Dinner) <span class="info-icon"
@@ -3427,31 +3436,35 @@
           </div>
           <div id="pickupCard_single" class="pickup-info-card hidden">
             <h4>📍 Pickup your order from</h4>
-            <p><strong>Address:</strong> A 104, Shree laxmi vihar society</p>
-            <a href="https://maps.app.goo.gl/FnkeWh9KbaQkstrW8" target="_blank" class="pickup-link">
+            <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
+            <a href="https://www.google.com/maps/search/?api=1&query=Ganga+Serio+Kharadi+Pune" target="_blank" class="pickup-link">
               🗺️ View on Google Maps
             </a>
           </div>
           <div id="deliveryFields_single">
             <div class="form-group">
-              <label data-i18n="label_area">Delivery Area *</label>
-              <select id="areaSelect" onchange="syncSingleAddr()">
-                <option value="" data-i18n="select_area_ph">— Select area —</option>
-                <option value="Bhosale Nagar">Bhosale Nagar (Free Delivery)</option>
-                <option value="Magarpatta">Magarpatta</option>
-                <option value="Amanora">Amanora Town</option>
-                <option value="DP Road">DP Road</option>
-                <option value="Self Pickup">📦 Self Pickup (No Charges)</option>
+              <label>Delivery Area</label>
+              <!-- LS storefront: single fixed area (Kharadi), read-only -->
+              <select id="areaSelect" onchange="syncSingleAddr()" disabled style="background:#f4f4f2;color:#555;">
+                <option value="Kharadi">Kharadi</option>
               </select>
             </div>
             <div class="input-row3" style="margin-bottom:10px;">
               <div class="form-group" style="margin-bottom:0;">
-                <label data-i18n="label_wing">Wing / Block</label>
-                <input type="text" id="wingInput" placeholder="A / B1" oninput="syncSingleAddr()">
+                <label>Wing</label>
+                <!-- LS storefront: fixed wing list -->
+                <select id="wingInput" onchange="syncSingleAddr(); _lsSyncSociety('')">
+                  <option value="">— Select wing —</option>
+                  <option value="A">A</option><option value="B">B</option>
+                  <option value="C">C</option><option value="D">D</option>
+                  <option value="E1">E1</option><option value="E2">E2</option>
+                  <option value="F1">F1</option><option value="F2">F2</option>
+                  <option value="G1">G1</option><option value="G2">G2</option>
+                </select>
               </div>
               <div class="form-group" style="margin-bottom:0;">
-                <label data-i18n="label_flat">Flat / Office No.</label>
-                <input type="text" id="flatInput" placeholder="e.g. 104, Office 5" oninput="syncSingleAddr()">
+                <label>Flat No.</label>
+                <input type="text" id="flatInput" placeholder="e.g. 104" oninput="syncSingleAddr()">
               </div>
               <div class="form-group" style="margin-bottom:0;">
                 <label data-i18n="label_floor">Floor</label>
@@ -3459,8 +3472,9 @@
               </div>
             </div>
             <div class="form-group">
-              <label data-i18n="label_society">Society / Building / Office Park *</label>
-              <input type="text" id="societyInput" placeholder="e.g. Pentagon 1, Magarpatta" oninput="syncSingleAddr()">
+              <label>Society</label>
+              <!-- LS storefront: auto-set from wing — A/B/C/D → Liviano, E1–G2 → Serio -->
+              <input type="text" id="societyInput" placeholder="" readonly style="background:#f4f4f2;color:#555;" oninput="syncSingleAddr()">
             </div>
             <div class="form-group">
               <label data-i18n="label_delivery_point">Handover instructions</label>
@@ -3478,13 +3492,14 @@
                 <option value="other" data-i18n="opt_point_other">Other (see instructions)</option>
               </select>
             </div>
-            <div class="form-group">
+            <!-- LS storefront: Maps pin + Landmark removed (single known location) -->
+            <div class="form-group" style="display:none;">
               <label><span data-i18n="label_maps">📍 Google Maps Pin Link</span> <span
                   style="font-size:0.7rem;color:#aaa;" data-i18n="label_optional">(optional)</span></label>
               <input type="url" id="mapsInput" placeholder="Paste your Google Maps link here…"
                 oninput="syncSingleAddr(); _mapsLinkFeedback(this)">
             </div>
-            <div class="form-group" style="margin-bottom:0;">
+            <div class="form-group" style="display:none;margin-bottom:0;">
               <label><span data-i18n="label_landmark">🏷️ Landmark / Directions</span> <span
                   style="font-size:0.7rem;color:#aaa;" data-i18n="label_optional">(optional)</span></label>
               <input type="text" id="landmarkInput" placeholder="e.g. Opposite Reliance Fresh, Gate no. 2"
@@ -3513,8 +3528,8 @@
             </div>
             <div id="pickupCard_bf" class="pickup-info-card hidden">
               <h4>📍 Pickup your order from</h4>
-              <p><strong>Address:</strong> A 104, Shree laxmi vihar society</p>
-              <a href="https://maps.app.goo.gl/FnkeWh9KbaQkstrW8" target="_blank" class="pickup-link">
+              <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
+              <a href="https://www.google.com/maps/search/?api=1&query=Ganga+Serio+Kharadi+Pune" target="_blank" class="pickup-link">
                 🗺️ View on Google Maps
               </a>
             </div>
@@ -3583,8 +3598,8 @@
             </div>
             <div id="pickupCard_l" class="pickup-info-card hidden">
               <h4>📍 Pickup your order from</h4>
-              <p><strong>Address:</strong> A 104, Shree laxmi vihar society</p>
-              <a href="https://maps.app.goo.gl/FnkeWh9KbaQkstrW8" target="_blank" class="pickup-link">
+              <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
+              <a href="https://www.google.com/maps/search/?api=1&query=Ganga+Serio+Kharadi+Pune" target="_blank" class="pickup-link">
                 🗺️ View on Google Maps
               </a>
             </div>
@@ -3653,8 +3668,8 @@
             </div>
             <div id="pickupCard_d" class="pickup-info-card hidden">
               <h4>📍 Pickup your order from</h4>
-              <p><strong>Address:</strong> A 104, Shree laxmi vihar society</p>
-              <a href="https://maps.app.goo.gl/FnkeWh9KbaQkstrW8" target="_blank" class="pickup-link">
+              <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
+              <a href="https://www.google.com/maps/search/?api=1&query=Ganga+Serio+Kharadi+Pune" target="_blank" class="pickup-link">
                 🗺️ View on Google Maps
               </a>
             </div>
@@ -4557,7 +4572,7 @@
       </div>
       <div style="margin-top:6px; font-size:0.66rem; opacity:0.85;">
         <a href="https://www.svaadhkitchen.in" style="color:#888; text-decoration:none;">Svaadh Kitchen</a>
-        · A 104, Shree Laxmi Vihar Society, Bhosale Nagar, Hadapsar, Pune 411028
+        · G2 804, Ganga Serio, Kharadi, Pune 411014
       </div>
     </div>
 
@@ -4716,7 +4731,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.08.24.LS.01";
+    const APP_VERSION = "v26.08.24.LS.02";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -4724,7 +4739,6 @@
     // delivery caps/stock blocks and applies free delivery (LS rules live in
     // 00_Config.gs / 13_LivianoSerio.gs so they can be flipped server-side).
     const STOREFRONT = "LS";
-    const LS_SOCIETY_NAME = "Liviano Serio";
     const LS_FREE_DELIVERY = true; // mirrors backend LS_FREE_DELIVERY — keep in sync
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
@@ -6013,8 +6027,10 @@
           const area = $("areaSelect").value;
           if (!area) { toast(t('toast_area')); return false; }
           const isPickup = (area === "Self Pickup");
-          // LS storefront: society pinned to the single drop location.
-          const society = LS_SOCIETY_NAME;
+          // LS storefront: society auto-set from the selected wing
+          const _lsWing = $("wingInput").value;
+          if (!_lsWing) { toast("Please select your Wing"); try { $("wingInput").focus(); } catch (_) {} return false; }
+          const society = _lsSocietyForWing(_lsWing);
           const wing = $("wingInput").value.trim();
           const flat = $("flatInput").value.trim();
           const floor = $("floorInput").value.trim();
@@ -6664,8 +6680,8 @@
       S.profile.wing = _fld("wingInput", S.profile.wing);
       S.profile.flat = _fld("flatInput", S.profile.flat);
       S.profile.floor = _fld("floorInput", S.profile.floor);
-      // LS storefront: society pinned to the single drop location.
-      S.profile.society = LS_SOCIETY_NAME;
+      // LS storefront: society auto-set from the selected wing (A–D → Liviano, rest → Serio)
+      S.profile.society = _lsSocietyForWing($("wingInput") ? $("wingInput").value : "");
       S.profile.delivery_point = $("deliveryPointSelection").value;
       S.profile.maps = _fld("mapsInput", S.profile.maps);
       S.profile.landmark = _fld("landmarkInput", S.profile.landmark);
@@ -6689,26 +6705,86 @@
         wing: $(pfx + "_wingInput")?.value.trim() || "",
         flat: $(pfx + "_flatInput")?.value.trim() || "",
         floor: $(pfx + "_floorInput")?.value.trim() || "",
-        // LS storefront: society pinned to the single drop location.
-        society: LS_SOCIETY_NAME,
+        // LS storefront: society auto-set from the wing of that block
+        society: _lsSocietyForWing($(pfx + "_wingInput")?.value),
         delivery_point: $(pfx + "_deliveryPointSelection")?.value || "door",
         maps: $(pfx + "_mapsInput")?.value.trim() || "",
         landmark: $(pfx + "_landmarkInput")?.value.trim() || "",
       };
     }
 
-    // ══ LS STOREFRONT: pin the society inputs to the drop location ═════════
-    // Prefills + locks all four society fields; runs at boot and re-asserts
-    // after any address prefill (saved profile / archived-address restore).
+    // ══ LS STOREFRONT: fixed-address logic ══════════════════════════════════
+    // Area locked to Kharadi; Wing is a dropdown (A–G2); Society auto-set from
+    // wing (A/B/C/D → Liviano, E1/E2/F1/F2/G1/G2 → Serio); Maps + Landmark and
+    // the per-meal/same-address toggle are removed (single delivery zone).
+    const LS_WING_OPTS = ["A","B","C","D","E1","E2","F1","F2","G1","G2"];
+    const LS_LIVIANO_WINGS = ["A","B","C","D"];
+    function _lsSocietyForWing(w) {
+      w = String(w || "").trim().toUpperCase();
+      if (!w) return "";
+      return LS_LIVIANO_WINGS.indexOf(w) !== -1 ? "Liviano" : "Serio";
+    }
+    // Sync each society field from its wing select. prefix "" = single-address block.
+    function _lsSyncSociety(prefix) {
+      const wingEl = document.getElementById(prefix + "wingInput");
+      const socEl  = document.getElementById(prefix + "societyInput");
+      if (!socEl) return;
+      socEl.value = _lsSocietyForWing(wingEl ? wingEl.value : "");
+      socEl.readOnly = true;
+      socEl.style.background = "#f4f4f2";
+      socEl.style.color = "#555";
+    }
     function _lsPinSocietyInputs() {
-      ["societyInput", "bf_societyInput", "l_societyInput", "d_societyInput"].forEach(function (id) {
-        const el = document.getElementById(id);
+      // 1. Area selects locked to Kharadi
+      ["", "bf_", "l_", "d_"].forEach(pfx => {
+        const el = document.getElementById(pfx + "areaSelect");
         if (!el) return;
-        el.value = LS_SOCIETY_NAME;
-        el.readOnly = true;
+        if (!el.querySelector('option[value="Kharadi"]')) {
+          el.innerHTML = '<option value="Kharadi">Kharadi</option>';
+        }
+        el.value = "Kharadi";
+        el.disabled = true;
         el.style.background = "#f4f4f2";
+        el.style.color = "#555";
       });
-      if (S.profile) S.profile.society = LS_SOCIETY_NAME;
+      // 2. Wing text inputs → dropdowns with the fixed wing list
+      ["", "bf_", "l_", "d_"].forEach(pfx => {
+        const el = document.getElementById(pfx + "wingInput");
+        if (!el || el.tagName !== "INPUT") return;
+        const sel = document.createElement("select");
+        sel.id = el.id;
+        sel.className = el.className;
+        sel.style.cssText = el.style.cssText;
+        sel.onchange = el.oninput; // preserve sync handlers
+        el.parentNode.replaceChild(sel, el);
+      });
+      ["", "bf_", "l_", "d_"].forEach(pfx => {
+        const el = document.getElementById(pfx + "wingInput");
+        if (!el || el.tagName !== "SELECT" || el.options.length) return;
+        el.innerHTML = '<option value="">— Select wing —</option>' +
+          LS_WING_OPTS.map(w => `<option value="${w}">${w}</option>`).join("");
+      });
+      // 3. Society auto-derived from wing (all blocks)
+      ["", "bf_", "l_", "d_"].forEach(pfx => _lsSyncSociety(pfx));
+      // 4. Hide removed fields' wrappers (Maps, Landmark)
+      ["", "bf_", "l_", "d_"].forEach(pfx => {
+        ["mapsInput", "landmarkInput"].forEach(f => {
+          const el = document.getElementById(pfx + f);
+          if (el && el.closest(".form-group")) el.closest(".form-group").style.display = "none";
+        });
+      });
+      // 5. One fixed address for all meals — force same-address mode
+      const toggleRow = document.getElementById("sameAddrToggleRow");
+      if (toggleRow) toggleRow.style.display = "none";
+      const chk = document.getElementById("sameAddrCheck");
+      if (chk) chk.checked = true;
+      if (typeof S !== "undefined") {
+        S.sameAddr = true;
+        const pm = document.getElementById("perMealAddrBlock");
+        const sa = document.getElementById("singleAddrBlock");
+        if (pm) pm.style.display = "none";
+        if (sa) sa.style.display = "block";
+      }
     }
 
     // Returns the address object to use for a given meal type
@@ -8468,7 +8544,7 @@
     // two non-delivery routes that bypass the cap. Self Pickup / Porter switch the
     // whole order's area (both waive our delivery fee).
     const PORTER_TIMES = { Breakfast: "8:30 AM", Lunch: "11:00 AM", Dinner: "7:00 PM" };
-    const PICKUP_ADDRESS = "A 104, Shree Laxmi Vihar Society, Hadapsar";
+    const PICKUP_ADDRESS = "G2 804, Ganga Serio, Kharadi";
     const PICKUP_MAPS = "https://maps.app.goo.gl/uWSGMzGUY8PpTZfz5";
     // What fulfilment did the just-placed order use? Self Pickup / Porter switch
     // the order-level area, so profile.area (and per-meal areas) reflect it.
@@ -8706,7 +8782,7 @@
             notesKitchen: mObj.notesKitchen || "",
             notesDelivery: mObj.notesDelivery || "",
             subtotal: mObj.subtotal,
-            address: isMealPickup ? "Self Pickup (A 104, Shree laxmi vihar society)" : buildAddr(mAddr.wing, mAddr.flat, mAddr.floor, mAddr.society, mAddr.area, mAddr.delivery_point),
+            address: isMealPickup ? "Self Pickup (G2 804, Ganga Serio, Kharadi)" : buildAddr(mAddr.wing, mAddr.flat, mAddr.floor, mAddr.society, mAddr.area, mAddr.delivery_point),
             area: isMealPickup ? "Self Pickup" : mAddr.area, 
             wing: isMealPickup ? "" : (mAddr.wing || ""),
             flat: isMealPickup ? "" : (mAddr.flat || ""),
@@ -9910,7 +9986,7 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #9b59b6;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📦 Self Pickup</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              Pickup from: <b>A 104, Shree Laxmi Vihar Society, Bhosale Nagar, Hadapsar</b><br>
+              Pickup from: <b>G2 804, Ganga Serio, Kharadi</b><br>
               Select "Self Pickup" as your area when ordering — no delivery charge applies.<br>
               Collect at the same delivery timings as above.
             </div>
@@ -12462,7 +12538,7 @@
             notesKitchen:  mObj.notesKitchen  || "",
             notesDelivery: mObj.notesDelivery || "",
             subtotal: mObj.subtotal,
-            address:  isPickup ? "Self Pickup (A 104, Shree laxmi vihar society)" : buildAddr(mAddr.wing, mAddr.flat, mAddr.floor, mAddr.society, mAddr.area, mAddr.delivery_point),
+            address:  isPickup ? "Self Pickup (G2 804, Ganga Serio, Kharadi)" : buildAddr(mAddr.wing, mAddr.flat, mAddr.floor, mAddr.society, mAddr.area, mAddr.delivery_point),
             area:     isPickup ? "Self Pickup" : mAddr.area,
             wing: isPickup ? "" : (mAddr.wing  || ""),
             flat: isPickup ? "" : (mAddr.flat  || ""),
