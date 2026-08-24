@@ -4732,7 +4732,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.08.24.LS.04";
+    const APP_VERSION = "v26.08.24.LS.05";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -6979,7 +6979,10 @@
       activeDate = date;
       const menu = S.menuCache[date] || {};
       const avail = getMealAvailability(date);
-      const MEALS = ["Breakfast", "Lunch", "Dinner"];
+      // LS storefront: no Breakfast — Lunch & Dinner only
+      const MEALS = (typeof STOREFRONT !== "undefined" && STOREFRONT === "LS")
+        ? ["Lunch", "Dinner"]
+        : ["Breakfast", "Lunch", "Dinner"];
       const ICONS = { Breakfast: "🌅", Lunch: "☀️", Dinner: "🌙" };
       const ov = menu.cutoff_overrides || {};
       // CUTOFFS (declared near the top of this script) is the site-wide default —
@@ -11182,13 +11185,16 @@
       }
 
       const _todayISO2 = new Date().toLocaleDateString("en-CA");
-      $("wmBody").innerHTML = `
-    <div class="wm-day-title">${d.date === _todayISO2 ? "Today's Menu (" + d.dayName + ")" : d.dayName + ", " + d.displayDate}</div>
-    
+      // LS storefront: no Breakfast card in the weekly menu
+      const _bfCardLS = (typeof STOREFRONT !== "undefined" && STOREFRONT === "LS") ? "" : `
     <div class="wm-meal-card">
       <div class="wm-meal-label bf">☀️ Breakfast Menu</div>
       <div class="wm-bf-list">${bfChips}</div>
-    </div>
+    </div>`;
+      $("wmBody").innerHTML = `
+    <div class="wm-day-title">${d.date === _todayISO2 ? "Today's Menu (" + d.dayName + ")" : d.dayName + ", " + d.displayDate}</div>
+    
+    ${_bfCardLS}
     
     <div class="wm-meal-card">
       <div class="wm-meal-label ln">🍱 Lunch Sabjis</div>
