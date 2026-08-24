@@ -3428,7 +3428,8 @@
 
         <!-- SINGLE ADDRESS (shown when sameAddr=true) -->
         <div id="singleAddrBlock">
-          <div class="delivery-mode-toggle">
+          <!-- LS storefront: Delivery/Pickup toggle removed — single fixed zone (Kharadi) -->
+          <div class="delivery-mode-toggle" style="display:none;">
             <button type="button" class="dm-btn active" id="dm_delivery_single"
               onclick="setDeliveryMode('single','delivery')"><span>🚚</span> Delivery</button>
             <button type="button" class="dm-btn" id="dm_pickup_single"
@@ -3446,7 +3447,7 @@
               <label>Delivery Area</label>
               <!-- LS storefront: single fixed area (Kharadi), read-only -->
               <select id="areaSelect" onchange="syncSingleAddr()" disabled style="background:#f4f4f2;color:#555;">
-                <option value="Kharadi">Kharadi</option>
+                <option value="Kharadi" selected>Kharadi</option>
               </select>
             </div>
             <div class="input-row3" style="margin-bottom:10px;">
@@ -4731,7 +4732,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.08.24.LS.03";
+    const APP_VERSION = "v26.08.24.LS.04";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -6024,9 +6025,9 @@
         }
         const name = `${firstName} ${lastName}`;
         if (S.sameAddr) {
-          const area = $("areaSelect").value;
-          if (!area) { toast(t('toast_area')); return false; }
-          const isPickup = (area === "Self Pickup");
+          // LS storefront: area is a locked single zone — never block on it
+          const area = $("areaSelect").value || "Kharadi";
+          const isPickup = false; // LS: toggle removed; delivery rules handled by storefront
           // LS storefront: society auto-set from the selected wing
           const _lsWing = $("wingInput").value;
           if (!_lsWing) { toast("Please select your Wing"); try { $("wingInput").focus(); } catch (_) {} return false; }
