@@ -90,6 +90,15 @@ function _getAllOrdersBothTabsIfPresent(ss) {
   return out;
 }
 
+// Self-pickup label for order rows: LS storefront hands over at Ganga Serio,
+// main site at the Hadapsar kitchen. Used by submitOrder / bulk / reconciler
+// so Full_Address matches the storefront the order came from.
+function _lsPickupLabel(storefront) {
+  return (storefront === "LS")
+    ? "Self Pickup (" + LS_PICKUP_ADDRESS + ")"
+    : "Self Pickup (A 104, Shree laxmi vihar society, Hadapsar)";
+}
+
 // IA-style adapter: plain LS rows for concat() into kitchen/label/admin views
 // that already merge ia_rowsAsSK(). Returns [] until the tab exists.
 function ls_rowsAsSK() {

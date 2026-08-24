@@ -656,7 +656,7 @@ function submitBulkOrder(body) {
   const mapsLink = isPickup ? "" : String(profile.maps || (cRow && cRow.Maps_Link) || "");
   const landmark = isPickup ? "" : String(profile.landmark || (cRow && cRow.Landmark) || "");
   const _custAddrLine = [wing && ("Wing " + wing), flat && ("Flat " + flat), floor && (floor + " Floor"), society].filter(Boolean).join(", ");
-  const fullAddr = isPickup ? "Self Pickup (A 104, Shree laxmi vihar society, Hadapsar)" : [_custAddrLine, area].filter(Boolean).join(", ");
+  const fullAddr = isPickup ? _lsPickupLabel(_sfBulk) : [_custAddrLine, area].filter(Boolean).join(", ");
 
   // IDEMPOTENT: which (date|meal) rows already exist for this gateway id? A retry (finalize
   // re-fire / reconciler) must COMPLETE a partially-written batch, never double-write it.

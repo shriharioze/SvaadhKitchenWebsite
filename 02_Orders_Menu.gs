@@ -2645,7 +2645,7 @@ function _submitOrderInternal(body) {
 
       const _custAddrLine = [wing && `Wing ${wing}`, flat && `Flat ${flat}`, floor && `${floor} Floor`, society].filter(Boolean).join(", ");
       const fullAddr = isPickup
-                        ? "Self Pickup (A 104, Shree laxmi vihar society, Hadapsar)"
+                        ? _lsPickupLabel(_sf)
                         : isPorter
                         ? ("Porter (customer-booked courier) → " + (_custAddrLine || "address not provided"))
                         : [_custAddrLine, area].filter(Boolean).join(", ");

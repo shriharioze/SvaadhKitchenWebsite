@@ -300,7 +300,7 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
       const isPickup = area.toLowerCase().indexOf("pickup") !== -1;
 
       const buildAddr = function() {
-        if (isPickup) return "Self Pickup (A 104, Shree laxmi vihar society)";
+        if (isPickup) return _lsPickupLabel(String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "");
         const parts = [];
         if (m.wing)    parts.push("Wing " + m.wing);
         if (m.flat)    parts.push("Flat " + m.flat);
