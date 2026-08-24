@@ -573,7 +573,8 @@ function getOrderHistory(p) {
       notes:          r.Special_Notes || "",
       items:          items,
       delivery:       Number(r.Delivery_Charge) || 0,
-      discount:       Number(r.Loyalty_Discount) || 0
+      discount:       Number(r.Loyalty_Discount) || 0,
+      ls:             !!r._lsTab  // Liviano-Serio storefront → [LS] badge in admin UI
     };
   });
 
@@ -871,8 +872,11 @@ function markOrdersStatus(body) {
 
   var ss    = getSpreadsheet();
   var ws    = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  var hIdx  = headerIndex(ws);
-  var rows  = getAllRows(ws);
+  // Status ops must find orders from EITHER storefront. Each combined row
+  // carries _ws so every write lands in the row's OWN tab.
+  var rows  = _getAllOrdersBothTabsIfPresent(ss);
+  var _wsOf = function (x) { return x._ws || ws; };
+  var _hOf  = function (x) { return headerIndex(_wsOf(x)); };
   
   var matches = rows.filter(function(r) {
     const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
@@ -921,9 +925,6 @@ function markOrdersStatus(body) {
           return s + Math.round(xSub * scOldRate) - Math.round(xSub * scNewRate);
         }, 0);
         if (scOverDiscount > 0) {
-          const scHIdx   = headerIndex(ws);
-          const scDiscCol = scHIdx["Discount_Amount"];
-          const scNetCol  = scHIdx["Net_Total"];
           scSameDayRows.forEach(x => {
             const xSub      = Number(x.Food_Subtotal)      || 0;
             const xSurcharge= Number(x.Inflation_Surcharge)|| 0;
@@ -932,8 +933,9 @@ function markOrdersStatus(body) {
             const xReviewD  = Number(x.Review_Discount)    || 0;
             const newD   = Math.round(xSub * scNewRate);
             const newNet = xSub + xDelivery + xSmallFee + xSurcharge - newD - xReviewD;
-            if (scDiscCol) ws.getRange(x._row, scDiscCol).setValue(newD);
-            if (scNetCol)  ws.getRange(x._row, scNetCol) .setValue(newNet);
+            const xH = _hOf(x), xWs = _wsOf(x);
+            if (xH["Discount_Amount"]) xWs.getRange(x._row, xH["Discount_Amount"]).setValue(newD);
+            if (xH["Net_Total"])       xWs.getRange(x._row, xH["Net_Total"]) .setValue(newNet);
           });
         }
       }
@@ -950,26 +952,23 @@ function markOrdersStatus(body) {
       const scOldThr = _scThr(_scMeals(scSameDayRows.concat([r])));
       const scRemThr = _scThr(_scMeals(scSameDayRows));
       if (scOldTotal >= scOldThr && scRemaining < scRemThr) {
-        const scHIdx2    = headerIndex(ws);
-        const scDelCol   = scHIdx2["Delivery_Charge"];
-        const scSmallCol = scHIdx2["Small_Order_Fee"];
-        const scNetCol2  = scHIdx2["Net_Total"];
         scSameDayRows.forEach(x => {
           const xSub  = Number(x.Food_Subtotal) || 0;
           const xMeal = String(x.Meal_Type).trim();
           let scNetDelta = 0;
+          const xH2 = _hOf(x), xWs2 = _wsOf(x);
           // Delivery is ₹11 everywhere — refund deduction and stored charge must match.
           if (xSub > 0 && scIsNonFree(x.Area || "") && (Number(x.Delivery_Charge) || 0) === 0) {
             scDeliveryOwed += 11; scNetDelta += 11;
-            if (scDelCol) ws.getRange(x._row, scDelCol).setValue(11);
+            if (xH2["Delivery_Charge"]) xWs2.getRange(x._row, xH2["Delivery_Charge"]).setValue(11);
           }
           if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
               && (Number(x.Small_Order_Fee) || 0) === 0) {
             scSmallFeeOwed += 11; scNetDelta += 11;
-            if (scSmallCol) ws.getRange(x._row, scSmallCol).setValue(11);
+            if (xH2["Small_Order_Fee"]) xWs2.getRange(x._row, xH2["Small_Order_Fee"]).setValue(11);
           }
-          if (scNetDelta > 0 && scNetCol2) {
-            ws.getRange(x._row, scNetCol2).setValue((Number(x.Net_Total) || 0) + scNetDelta);
+          if (scNetDelta > 0 && xH2["Net_Total"]) {
+            xWs2.getRange(x._row, xH2["Net_Total"]).setValue((Number(x.Net_Total) || 0) + scNetDelta);
           }
         });
       }
@@ -1005,10 +1004,12 @@ function markOrdersStatus(body) {
       } else if (pref === "manual_upi") {
         finalCancelStatus = "Cancelled \u2013 UPI Refund Pending";
       }
-      ws.getRange(r._row, hIdx["Payment_Status"]).setValue(finalCancelStatus);
+      const rH = _hOf(r), rWs = _wsOf(r);
+      rWs.getRange(r._row, rH["Payment_Status"]).setValue(finalCancelStatus);
     } else {
       // ── Standard Payment Approval or Rejection
-      ws.getRange(r._row, hIdx["Payment_Status"]).setValue(status);
+      const rH = _hOf(r), rWs = _wsOf(r);
+      rWs.getRange(r._row, rH["Payment_Status"]).setValue(status);
     }
     updated++;
   });
@@ -1036,7 +1037,7 @@ function markOrderPacked(body) {
   var ss    = getSpreadsheet();
   var ws    = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   var hIdx  = headerIndex(ws);
-  var rows  = getAllRows(ws);
+  var rows  = _getAllOrdersBothTabsIfPresent(ss); // packed flag works for LS rows too
   
   if (hIdx.Packed === undefined) return {success:false, error: "Packed column not found"};
 
@@ -1045,7 +1046,10 @@ function markOrderPacked(body) {
   });
 
   if (order) {
-    ws.getRange(order._row, hIdx.Packed).setValue(true);
+    const oH = headerIndex(order._ws || ws);
+    const packedCol = oH.Packed;
+    if (packedCol === undefined) return {success:false, error: "Packed column not found"};
+    (order._ws || ws).getRange(order._row, packedCol).setValue(true);
     return {success:true};
   }
   
@@ -2330,6 +2334,17 @@ function getOrdersInRangeWithArchive(dateFrom, dateTo) {
     var d = fmtDate(r.Order_Date);
     return d >= dateFrom && d <= dateTo;
   });
+  // Liviano-Serio storefront rows (LS_Orders tab) join the SAME range reads so
+  // admin history/billing/analytics surfaces see them. Tagged _lsTab → [LS] badge.
+  try {
+    var lsWs = ss.getSheetByName(TAB_LS_ORDERS);
+    if (lsWs) {
+      getAllRows(lsWs).forEach(function(r) {
+        var d = fmtDate(r.Order_Date);
+        if (d >= dateFrom && d <= dateTo) { r._lsTab = true; liveRows.push(r); }
+      });
+    }
+  } catch (eLS) { /* LS tab absent — main-site behaviour unchanged */ }
   var archivedRows = _readArchivedOrdersInRange(dateFrom, dateTo);
   var seen = {};
   var combined = [];

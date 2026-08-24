@@ -37,7 +37,7 @@ function auditOnAccountStatusDrift() {
       onAcctPhones[_normalizePhone(r.Phone)] = r.Customer_Name || "";
     }
   });
-  const orderRows = getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
+  const orderRows = _getAllOrdersBothTabsIfPresent(ss); // on-account drift check spans both storefronts
   const flagged = [];
   orderRows.forEach(function (r) {
     const p = _normalizePhone(r.Phone);
@@ -152,8 +152,8 @@ function verifyLogin(phone, pin) {
   const isOnAccount = String(_get(r, "On_Account") || "").trim().toLowerCase() === "yes";
   
   if (isOnAccount) {
-    const wsOrders = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-    const orderRows = getAllRows(wsOrders);
+    // On-account dues are shared identity — scan BOTH storefront tabs.
+    const orderRows = _getAllOrdersBothTabsIfPresent(ss);
     for (const ord of orderRows) {
       if (_normalizePhone(_get(ord, "Phone")) === pStr) {
         if (_isOnAccountDueStatus(_get(ord, "Payment_Status"))) {
@@ -330,9 +330,7 @@ function _autoSettlePendingOrders(phone) {
     return { settled: 0, msg: "" };
   }
 
-  const wsOrders = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const rows = getAllRows(wsOrders);
-  const hIdx = headerIndex(wsOrders);
+  const rows = _getAllOrdersBothTabsIfPresent(ss); // on-account dues span both storefronts
 
   // Rule 2: Only target "on account" orders (ignore normal Pending/UPI)
   const pendingOrders = rows.filter(r => {
@@ -363,7 +361,9 @@ function _autoSettlePendingOrders(phone) {
   for (let order of pendingOrders) {
     let amount = _cleanNum(_get(order, "Net_Total"));
     if (currentWallet >= amount) {
-      wsOrders.getRange(order._row, hIdx["Payment_Status"]).setValue("Paid");
+      const oWsS = order._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+      const oHIdxS = headerIndex(oWsS);
+      oWsS.getRange(order._row, oHIdxS["Payment_Status"]).setValue("Paid");
       _appendWalletTransaction(phone, _get(order, "Customer_Name") || "Customer", "Auto-deducted for On Account order " + (_get(order, "Submission_ID") || _get(order, "Order_Date")), amount, true, "AUTO-" + Date.now() + "-" + Math.floor(Math.random()*1000));
       currentWallet -= amount;
       totalSettled += amount;
@@ -1018,7 +1018,9 @@ function _getMenuUncached(dateStr) {
   const ordersWs2   = getOrCreateTab(ss, TAB_ORDERS, []);
   // OPTIMIZATION: Only read the last 500 rows to compute stock limit (covers today and yesterday).
   // This prevents scanning thousands of old orders just to check today's stock.
-  const ordersRows2 = getRecentRows(ordersWs2, 500);
+  // LS_Orders rows are included so Liviano-Serio consumption depletes the SAME
+  // real stock shown to main-site customers.
+  const ordersRows2 = getRecentRows(ordersWs2, 500).concat(ls_rowsAsSK());
   const orderedCounts = countOrderedUnits(ordersRows2, dateStr);
   const unitsRemaining = {};
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
@@ -1233,7 +1235,7 @@ function _appendWalletTransaction(phone, name, txnType, amount, isVerified, refI
  *
  * This closes the 0.5% gap where GAS buffered writes silently failed.
  */
-function _missedOrderSafetyNet(ss, sid, row, phone) {
+function _missedOrderSafetyNet(ss, sid, row, phone, tabName) {
   try {
     const props  = PropertiesService.getScriptProperties();
     const raw    = props.getProperty("PENDING_ORDER_ROWS") || "{}";
@@ -1243,7 +1245,10 @@ function _missedOrderSafetyNet(ss, sid, row, phone) {
     // 10-min backup had already expired by the time anything could re-append it.
     const now    = Date.now();
     Object.keys(store).forEach(k => { if (now - store[k].ts > 60 * 60 * 1000) delete store[k]; });
-    store[sid]   = { ts: now, phone: String(phone || ""), row: row };
+    // tabName: which orders tab this row belongs to (SK_Orders default — legacy
+    // entries without a tab field are always SK). The verify pass re-appends into
+    // THIS tab, so an LS order's backup can never land in the wrong sheet.
+    store[sid]   = { ts: now, phone: String(phone || ""), row: row, tab: tabName || TAB_ORDERS };
     props.setProperty("PENDING_ORDER_ROWS", JSON.stringify(store));
   } catch(e) {
     console.error("_missedOrderSafetyNet save failed:", e.message);
@@ -1347,15 +1352,21 @@ function reconcileMissedOrdersLog(debug) {
   const candTotal = cand.length;
   cand = cand.slice(0, MAX_PER_RUN);
 
-  // Ids already present in LIVE SK_Orders (read just the 2 id columns — cheap).
-  const oWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const oH = oWs.getRange(1, 1, 1, oWs.getLastColumn()).getValues()[0].map(String);
-  const oSidCol = oH.indexOf("Submission_ID") + 1, oGwCol = oH.indexOf("Gateway_Order_ID") + 1;
+  // Ids already present in LIVE order tabs (read just the 2 id columns — cheap).
+  // Scans BOTH SK_Orders and LS_Orders so an LS row that already landed is never
+  // "restored" again into the wrong (or right!) tab as a duplicate.
   const liveSids = new Set(), liveGws = new Set();
-  if (oWs.getLastRow() > 1) {
-    if (oSidCol) oWs.getRange(2, oSidCol, oWs.getLastRow() - 1, 1).getValues().forEach(v => { const s = String(v[0] || "").trim(); if (s) liveSids.add(s); });
-    if (oGwCol)  oWs.getRange(2, oGwCol,  oWs.getLastRow() - 1, 1).getValues().forEach(v => { const s = String(v[0] || "").trim(); if (s) liveGws.add(s); });
-  }
+  [TAB_ORDERS, TAB_LS_ORDERS].forEach(function (_tabName) {
+    try {
+      const tWs = ss.getSheetByName(_tabName);
+      if (!tWs || tWs.getLastRow() < 2) return;
+      const tH = tWs.getRange(1, 1, 1, tWs.getLastColumn()).getValues()[0].map(String);
+      const tSidCol = tH.indexOf("Submission_ID") + 1, tGwCol = tH.indexOf("Gateway_Order_ID") + 1;
+      if (tSidCol) tWs.getRange(2, tSidCol, tWs.getLastRow() - 1, 1).getValues().forEach(v => { const s = String(v[0] || "").trim(); if (s) liveSids.add(s); });
+      if (tGwCol)  tWs.getRange(2, tGwCol,  tWs.getLastRow() - 1, 1).getValues().forEach(v => { const s = String(v[0] || "").trim(); if (s) liveGws.add(s); });
+    } catch (eTab) {}
+  });
+  const oWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const _fmtD = v => v instanceof Date ? Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd") : String(v || "").trim().slice(0, 10);
   const nowStamp = getISTTimestamp();
 
@@ -1415,12 +1426,20 @@ function reconcileMissedOrdersLog(debug) {
     // (b) Or in a monthly archive (pre-scanned sets)?
     if (!how && ((sid && archSids.has(sid)) || (gw && archGws.has(gw)))) how = "verified present in archive";
     // (c) Genuinely absent — restore from the captured Row_JSON, verified.
-    if (!how && cJson !== -1 && data[i][cJson] && sid && oSidCol) {
+    // Target tab routes by Submission_ID prefix: "LS-*" rows restore into
+    // LS_Orders, everything else into SK_Orders.
+    if (!how && cJson !== -1 && data[i][cJson] && sid) {
       try {
         const row = JSON.parse(String(data[i][cJson]));
         if (Array.isArray(row) && row.length && typeof _reappendUntilPresent === "function") {
-          const okAttempt = _reappendUntilPresent(oWs, oSidCol, sid, row, 3);
-          if (okAttempt) { how = "RESTORED from Row_JSON (append verified)"; liveSids.add(sid); }
+          const _rIsLS  = (sid.slice(0, 3).toUpperCase() === "LS-");
+          const _rWs    = _rIsLS ? getOrCreateTab(ss, TAB_LS_ORDERS, ORDERS_HEADERS) : oWs;
+          const _rH     = _rWs.getRange(1, 1, 1, _rWs.getLastColumn()).getValues()[0].map(String);
+          const _rSidCol = _rH.indexOf("Submission_ID") + 1;
+          if (_rSidCol) {
+            const okAttempt = _reappendUntilPresent(_rWs, _rSidCol, sid, row, 3);
+            if (okAttempt) { how = "RESTORED from Row_JSON (append verified)"; liveSids.add(sid); }
+          }
         }
       } catch (e) {}
     }
@@ -1757,30 +1776,43 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
     const store  = JSON.parse(raw);
     if (!Object.keys(store).length) return;
 
-    const ws     = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-    const hIdx   = headerIndex(ws);
-    const sidCol = hIdx["Submission_ID"];
-    if (!sidCol) return;
-
-    // Read all Submission_IDs from sheet (last 200 rows for speed)
-    const lastRow  = ws.getLastRow();
-    const startRow = Math.max(2, lastRow - 200);
-    const count    = lastRow - startRow + 1;
-    if (count <= 0) return;
-    const sidValues = ws.getRange(startRow, sidCol, count, 1).getValues().flat().map(String);
-    const inSheet   = new Set(sidValues);
+    // Multi-tab aware: each stash entry carries the orders tab it belongs to
+    // (legacy entries default to SK_Orders). Build a per-tab recent-SID index
+    // and verify/re-append against the entry's OWN tab.
+    const _tabsNeeded = {};
+    Object.entries(store).forEach(([sid, entry]) => {
+      const t = entry.tab || TAB_ORDERS;
+      if (!_tabsNeeded[t]) _tabsNeeded[t] = { ws: null, hIdx: null, sidCol: null, inSheet: new Set() };
+    });
+    Object.keys(_tabsNeeded).forEach(function (t) {
+      try {
+        const wsT   = ss.getSheetByName(t) || getOrCreateTab(ss, t === TAB_LS_ORDERS ? TAB_LS_ORDERS : TAB_ORDERS, ORDERS_HEADERS);
+        const hIdxT = headerIndex(wsT);
+        const sidColT = hIdxT["Submission_ID"];
+        if (!sidColT) return;
+        const lastRowT  = wsT.getLastRow();
+        const startRowT = Math.max(2, lastRowT - 200);
+        const countT    = lastRowT - startRowT + 1;
+        if (countT > 0) {
+          wsT.getRange(startRowT, sidColT, countT, 1).getValues().flat().map(String).forEach(function (s) { _tabsNeeded[t].inSheet.add(s); });
+        }
+        _tabsNeeded[t].ws = wsT; _tabsNeeded[t].hIdx = hIdxT; _tabsNeeded[t].sidCol = sidColT;
+      } catch (eT) { console.error("_verifyAndAlertMissedOrders: tab init failed for " + t + ": " + eT.message); }
+    });
 
     const missed = [];
     Object.entries(store).forEach(([sid, entry]) => {
-      if (!inSheet.has(sid)) {
-        console.error("MISSED ORDER DETECTED — " + sid + " not found in sheet after flush!");
+      const _tb = _tabsNeeded[entry.tab || TAB_ORDERS];
+      if (!_tb || !_tb.ws || !_tb.sidCol) return; // tab unavailable — skip this pass
+      if (!_tb.inSheet.has(sid)) {
+        console.error("MISSED ORDER DETECTED — " + sid + " not found in " + (entry.tab || TAB_ORDERS) + " after flush!");
         // Re-append AND verify it actually landed (retry under load). The old code
         // appended once and logged "succeeded" if appendRow didn't throw — but the
         // re-append was silently dropped too, so paid orders vanished with a success log
         // (29-Jun: 5 lost). _reappendUntilPresent re-reads to confirm and retries.
         // Pull the human-readable fields off the saved row (by header name, so dynamic
         // columns like Gateway_Order_ID are handled) for the audit tab.
-        const _hf = function (nm) { const c = hIdx[nm]; return (c && entry.row[c - 1] != null) ? String(entry.row[c - 1]) : ""; };
+        const _hf = function (nm) { const c = _tb.hIdx[nm]; return (c && entry.row[c - 1] != null) ? String(entry.row[c - 1]) : ""; };
         const _rec = {
           sid: sid, gatewayId: _hf("Gateway_Order_ID"), name: _hf("Customer_Name"),
           phone: entry.phone || _hf("Phone"), amount: _hf("Net_Total"),
@@ -1790,7 +1822,7 @@ function _verifyAndAlertMissedOrders(ss, submissionIds) {
           rowJson: (function () { try { return JSON.stringify(entry.row); } catch (e) { return ""; } })()
         };
 
-        const okAttempt = _reappendUntilPresent(ws, sidCol, sid, entry.row, 5);
+        const okAttempt = _reappendUntilPresent(_tb.ws, _tb.sidCol, sid, entry.row, 5);
         if (okAttempt) {
           console.log("Emergency re-append CONFIRMED for " + sid + " (attempt " + okAttempt + ")");
           missed.push({ sid: sid, phone: entry.phone, row: entry.row, recovered: true });
@@ -1909,7 +1941,11 @@ function submitOrder(body) {
 
 function _submitOrderInternal(body) {
   const ss = getSpreadsheet();
-  const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  // Storefront routing: storefront:"LS" writes to LS_Orders; absent/anything
+  // else = main site (SK_Orders), byte-identical legacy behaviour.
+  const _sf       = _lsStorefront(body);
+  const _isLS     = (_sf === "LS");
+  const ordersWs  = _lsOrdersWs(ss, _sf);
   const profile   = body.profile || {};
   const orders    = body.orders  || [];   // [{date, meals:[{type,items,notes,subtotal,area}]}]
 
@@ -1931,7 +1967,11 @@ function _submitOrderInternal(body) {
   // ── ONE-SHOT ROW FETCHES ────────────────────────────────────
   // Fetch once, share everywhere. Previously these tabs were re-read 5+ times
   // per submitOrder (day totals, loyalty, duplicate check, stock check, wallet).
-  const allOrderRows  = getAllRows(ordersWs);
+  // Identity (wallet/loyalty/day-totals/duplicates) is SHARED across storefronts,
+  // so this snapshot unions SK_Orders + LS_Orders. Cap counting below uses the
+  // SK-only slice — LS orders count 0 delivery slots (owner rule).
+  const allOrderRows  = _isLS ? _getAllOrdersBothTabs(ss) : _getAllOrdersBothTabsIfPresent(ss);
+  const skOnlyRows    = allOrderRows.filter(function (r) { return !r._lsTab; });
   const walletWsRef   = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
   const allWalletRows = getAllRows(walletWsRef);
   // Menu rows read once here — reused by stock check below (avoids duplicate sheet fetch)
@@ -2092,6 +2132,8 @@ function _submitOrderInternal(body) {
       // Per-meal max-order cap. Count active (non-cancelled) orders for this date
       // from the FULL sheet — authoritative, and exact because submitOrder runs
       // under LockService (concurrent orders can't both slip past the cap).
+      // LS storefront: caps never apply (single drop location, unlimited orders)
+      // and LS orders count 0 slots, so cap counting uses SK-only rows.
       let _orderCapW = {};
       try { if (_menuRowW && _menuRowW.Order_Cap_JSON) _orderCapW = JSON.parse(_menuRowW.Order_Cap_JSON); } catch(e) {}
       // Site-wide default caps (B 11 / L 25 / D 25) apply to every date; positive
@@ -2099,8 +2141,8 @@ function _submitOrderInternal(body) {
       _orderCapW = _effectiveOrderCaps(_orderCapW);
       let _capAltW = {};   // per-meal: offer Self Pickup / Porter when full? default ON
       try { if (_menuRowW && _menuRowW.Cap_Alt_JSON) _capAltW = JSON.parse(_menuRowW.Cap_Alt_JSON); } catch(e) {}
-      const _capCountsW   = _countActiveMealOrders(allOrderRows, _d);
-      const _delIdxW = _activeDeliveryIndex(allOrderRows, _d);
+      const _capCountsW   = _isLS ? null : _countActiveMealOrders(skOnlyRows, _d);
+      const _delIdxW = _isLS ? null : _activeDeliveryIndex(skOnlyRows, _d);
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
@@ -2185,7 +2227,10 @@ function _submitOrderInternal(body) {
   // ════ STOCK LIMIT PRE-FLIGHT ════
   // Hard-block submission if any requested item exceeds remaining stock.
   // Runs under LockService so concurrent submissions see each other's counts.
-  {
+  // LS storefront: NEVER blocked by stock (unlimited orders from the single
+  // drop location) — but LS consumption still counts via combined rows, so it
+  // depletes real stock for main-site customers too.
+  if (!_isLS) {
     const menuRowsStk = menuRowsAll;   // reuse the already-fetched menu rows
     const stockConflicts = [];
     for (const dateOrder of orders) {
@@ -2489,7 +2534,7 @@ function _submitOrderInternal(body) {
     prevStreakDate = _normDate(orderDate); // this date is now an ordered day — track for the next gap check
 
     for (const meal of order.meals) {
-      const sid = generateSubmissionID();
+      const sid = generateSubmissionID(_isLS ? "LS" : undefined);
       submissionIds.push(sid);
       meal._sid = sid; // carry sid for ledger
       
@@ -2527,10 +2572,9 @@ function _submitOrderInternal(body) {
       const isDayFree = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
 
       let delCharge = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !isFreeArea && sub > 0) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !isFreeArea && !_lsDeliveryFree(_sf) && sub > 0) {
         delCharge = DELIVERY;
       }
-
       let smallOrderFee = 0;
       if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
         smallOrderFee = 11;
@@ -2596,7 +2640,7 @@ function _submitOrderInternal(body) {
       const wing    = isPickup ? "" : (meal.wing    || profile.wing    || "");
       const flat    = isPickup ? "" : (meal.flat    || profile.flat    || "");
       const floor   = isPickup ? "" : (meal.floor   || profile.floor   || "");
-      const society = isPickup ? "" : (meal.society || profile.society || "");
+      const society = isPickup ? "" : (meal.society || profile.society || (_isLS ? LS_SOCIETY_NAME : ""));
       const area    = isPickup ? "Self Pickup" : (isPorter ? "Porter" : mealArea);
 
       const _custAddrLine = [wing && `Wing ${wing}`, flat && `Flat ${flat}`, floor && `${floor} Floor`, society].filter(Boolean).join(", ");
@@ -2679,7 +2723,9 @@ function _submitOrderInternal(body) {
       //
       // After the row is written, we cache.put(key) so future calls hit layer 1.
       const _incomingSig = _itemsSig(itemsObj);
-      const _dupKey      = `dup_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`;
+      // Namespaced per storefront — the script-wide cache is shared, and a key
+      // collision between tabs would false-dedupe a legitimate LS order (or vice versa).
+      const _dupKey      = `dup_${_isLS ? "ls" : "sk"}_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`;
       const _cache       = CacheService.getScriptCache();
 
       // Layer 1: cache lookup — TRUST BUT VERIFY. The key is reserved BEFORE the
@@ -2811,7 +2857,7 @@ function _submitOrderInternal(body) {
       if (walletCreditUsed > 0) set("Wallet_Credit", walletCreditUsed);
       set("Payment_Freq",        payFreq);
       set("First_Time",          firstTime);
-      set("Source",              "WebApp");
+      set("Source",              _isLS ? "LS" : "WebApp");
 
       // Fill individual item columns
       if (mealType === "Breakfast") {
@@ -2839,7 +2885,7 @@ function _submitOrderInternal(body) {
 
       ordersWs.appendRow(row);
       newRowsWritten++;
-      _missedOrderSafetyNet(ss, sid, row, profile.phone);  // safety net — verify write succeeded
+      _missedOrderSafetyNet(ss, sid, row, profile.phone, ordersWs.getName());  // safety net — verify write succeeded
     }
   }
 
@@ -3095,7 +3141,8 @@ function getDayTotalsForDates(phone, datesParam, preloadedRows) {
   const ss = getSpreadsheet();
   const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   // Allow caller to pass pre-fetched rows (submitOrder) so we don't re-hit the sheet.
-  const rows = Array.isArray(preloadedRows) ? preloadedRows : getAllRows(ws);
+  // Default read unions BOTH storefronts — day totals are shared identity.
+  const rows = Array.isArray(preloadedRows) ? preloadedRows : _getAllOrdersBothTabsIfPresent(ss);
 
   const result = {};
   dates.forEach(d => { result[d] = {}; });
@@ -3297,7 +3344,9 @@ function _calculateLoyaltyStreak(phone, preloadedRows) {
   if (!phone) return { streak: 0, pastSurcharge: 0 };
   const ss = getSpreadsheet();
   const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const rows = Array.isArray(preloadedRows) ? preloadedRows : getAllRows(ws);
+  // Streak history is SHARED across storefronts — a customer's LS orders count
+  // toward the same 6-day cycle. Default read unions SK_Orders + LS_Orders.
+  const rows = Array.isArray(preloadedRows) ? preloadedRows : _getAllOrdersBothTabsIfPresent(ss);
   const phoneStr = _normalizePhone(phone);
   const todayISO = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
 
@@ -3426,8 +3475,8 @@ function verifyOrderPlaced(body) {
   if (!cartEntries.length) return { found: false };
 
   const ss  = getSpreadsheet();
-  const ws  = getOrCreateTab(ss, TAB_ORDERS, []);
-  const rows = getAllRows(ws);
+  // Timeout recovery must see rows written from EITHER storefront.
+  const rows = _getAllOrdersBothTabsIfPresent(ss);
 
   const nowMs     = Date.now();
   const TEN_MIN   = 10 * 60 * 1000;
@@ -3462,8 +3511,8 @@ function verifyOrderPlaced(body) {
 function getCustomerOrders(phone) {
   if (!phone) return {orders:[], past_orders:[], wallet_balance: 0};
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const rows = getAllRows(ws);
+  // Customer order history is SHARED across storefronts — show LS rows too.
+  const rows = _getAllOrdersBothTabsIfPresent(ss);
   const today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
 
   const fmtD = function(r) {
@@ -3754,7 +3803,12 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   const isAdminCall = !!opts.isAdmin;
   const ss = getSpreadsheet();
   const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const rows = getAllRows(ws);
+  // Cancellations must find orders from EITHER storefront (shared identity).
+  // Each row carries _ws (its source sheet); ALL writes go through _wsOf/_hOf
+  // so an LS row is updated in LS_Orders, never by SK row-index accident.
+  const rows = _getAllOrdersBothTabsIfPresent(ss);
+  const _wsOf = (x) => x._ws || ws;
+  const _hOf  = (x) => headerIndex(_wsOf(x));
   const now = getISTDate();
   let msg = "Order deleted successfully";
   const today = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd");
@@ -3827,10 +3881,10 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   if (existingPendingRefund) {
     // Recovery path: refund row already exists, just ensure order row is marked cancelled.
     try {
-      const hIdxR = headerIndex(ws);
+      const hIdxR = _hOf(r);
       const statusColR = hIdxR["Payment_Status"] || hIdxR["Payment Status"];
       if (statusColR && !_isOrderCancelled(r.Payment_Status)) {
-        ws.getRange(r._row, statusColR).setValue("Cancelled \u2013 UPI Refund Pending");
+        _wsOf(r).getRange(r._row, statusColR).setValue("Cancelled \u2013 UPI Refund Pending");
       }
     } catch (e) { /* non-fatal */ }
     return {
@@ -3921,8 +3975,8 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // ADMIN CANCEL: skip entirely — remaining orders keep their discounts untouched.
     let overDiscount = 0;
     if (!isAdminCall) {
-      const discColIdx = hIdx["Discount_Amount"];
-      const netColIdx  = hIdx["Net_Total"];
+      // Per-row column maps — sameDayRows may span both storefront tabs.
+      const _colIn = (x, name) => { const h = _hOf(x); return h[name]; };
 
       // Sum of discounts actually applied to remaining rows
       const totalActualDiscount = sameDayRows.reduce((s, x) => s + (Number(x.Discount_Amount) || 0), 0);
@@ -3945,7 +3999,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
 
           // Update remaining rows: zero out their Discount_Amount and restore Net_Total
           // (sheet writes only on a REAL cancellation — the dry-run preview must not mutate)
-          if (overDiscount > 0 && discColIdx && netColIdx && !opts.dryRun) {
+          if (overDiscount > 0 && !opts.dryRun) {
             sameDayRows.forEach(x => {
               const xSub      = Number(x.Food_Subtotal)       || 0;
               const xSurcharge= Number(x.Inflation_Surcharge) || 0;
@@ -3953,8 +4007,10 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
               const xSmallFee = Number(x.Small_Order_Fee)     || 0;
               const xReviewD  = Number(x.Review_Discount)     || 0;
               const newNetTotal = xSub + xDelivery + xSmallFee + xSurcharge - xReviewD; // discount = 0
-              ws.getRange(x._row, discColIdx).setValue(0);
-              ws.getRange(x._row, netColIdx) .setValue(newNetTotal);
+              const discIdx = _colIn(x, "Discount_Amount");
+              const netIdx  = _colIn(x, "Net_Total");
+              if (discIdx) _wsOf(x).getRange(x._row, discIdx).setValue(0);
+              if (netIdx)  _wsOf(x).getRange(x._row, netIdx) .setValue(newNetTotal);
             });
           }
         }
@@ -3969,6 +4025,13 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     // The customer should not suffer because admin closed the kitchen.
     let deliveryOwed = 0;
     let smallFeeOwed = 0;
+    // Hoisted to function scope — buildRefundBreakdown() (below) interpolates
+    // remThreshold in its customer-facing lines. It was previously const-scoped
+    // inside this block, so ANY wallet/UPI cancellation that triggered the fee
+    // clawback crashed mid-flow (refund txn written, order left un-cancelled).
+    // Caught by the cross-tab cancel harness 2026-08-24; fix is scope-only —
+    // no math changes.
+    let remThreshold = 0;
 
     if (!isAdminCall) {
       const _mealsIn = (rowsArr) => new Set(
@@ -3976,7 +4039,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
                .map(x => String(x.Meal_Type).trim())
       ).size;
       const oldThreshold = _mealsIn(sameDayRows.concat([r])) <= 1 ? 100 : 150;
-      const remThreshold = _mealsIn(sameDayRows) <= 1 ? 100 : 150;
+      remThreshold = _mealsIn(sameDayRows) <= 1 ? 100 : 150;
       const freeAreaNames2 = getAreas().filter(a => a.free).map(a => a.name);
       const isNonFree = (area) => !freeAreaNames2.includes(area) && area !== "Self Pickup";
 
@@ -3984,20 +4047,18 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         // Day total drops below free-delivery threshold → remaining orders now owe fees.
         // We claw the amounts from THIS refund, AND update those rows in the sheet so that
         // if they are later cancelled themselves, the clawback doesn't fire a second time.
-        const delivColIdx   = hIdx["Delivery_Charge"];
-        const smallFeeColIdx = hIdx["Small_Order_Fee"];
-        const netColIdx2    = hIdx["Net_Total"];
-
         sameDayRows.forEach(x => {
           const xArea = x.Area || "";
           const xSub  = Number(x.Food_Subtotal) || 0;
           let netDelta = 0;
+          const xH = _hOf(x), xWs = _wsOf(x);
 
           // 1. Delivery Clawback: order was in non-free area but charged ₹0 due to threshold
           if (xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
             deliveryOwed += 11;
             netDelta += 11;
-            if (delivColIdx && !opts.dryRun) ws.getRange(x._row, delivColIdx).setValue(11);
+            const delivIdx = xH["Delivery_Charge"];
+            if (delivIdx && !opts.dryRun) xWs.getRange(x._row, delivIdx).setValue(11);
           }
 
           // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹53 was waived due to threshold
@@ -4006,12 +4067,14 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
               && (Number(x.Small_Order_Fee) || 0) === 0) {
             smallFeeOwed += 11;
             netDelta += 11;
-            if (smallFeeColIdx && !opts.dryRun) ws.getRange(x._row, smallFeeColIdx).setValue(11);
+            const smallIdx = xH["Small_Order_Fee"];
+            if (smallIdx && !opts.dryRun) xWs.getRange(x._row, smallIdx).setValue(11);
           }
 
           // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback)
-          if (netDelta > 0 && netColIdx2 && !opts.dryRun) {
-            ws.getRange(x._row, netColIdx2).setValue((Number(x.Net_Total) || 0) + netDelta);
+          const netIdx2 = xH["Net_Total"];
+          if (netDelta > 0 && netIdx2 && !opts.dryRun) {
+            xWs.getRange(x._row, netIdx2).setValue((Number(x.Net_Total) || 0) + netDelta);
           }
         });
       }
@@ -4052,11 +4115,12 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         // Loyalty_Discount stays "Yes" — the streak cycle was still consumed.
         if (!opts.dryRun && loyaltyClawback > 0) {
           const payoffRow = laterPayoffs[0];
-          const discColL = hIdx["Discount_Amount"];
-          const netColL  = hIdx["Net_Total"];
+          const pH = _hOf(payoffRow), pWs = _wsOf(payoffRow);
+          const discColL = pH["Discount_Amount"];
+          const netColL  = pH["Net_Total"];
           if (discColL && netColL) {
-            ws.getRange(payoffRow._row, discColL).setValue(0);
-            ws.getRange(payoffRow._row, netColL).setValue((Number(payoffRow.Net_Total) || 0) + loyaltyClawback);
+            pWs.getRange(payoffRow._row, discColL).setValue(0);
+            pWs.getRange(payoffRow._row, netColL).setValue((Number(payoffRow.Net_Total) || 0) + loyaltyClawback);
           }
         }
       }
@@ -4256,24 +4320,25 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   // For Split orders, "Pending" = wallet was deducted AND UPI payment was sent — must soft-cancel just like UPI.
   // Admin will verify and then "Verify & Refund" triggers the split refund logic in markOrdersStatus.
   if (String(r.Payment_Status || "").toLowerCase().includes("pending") && (refundType === "wallet" || refundType === "manual_upi")) {
-    let hIdx = headerIndex(ws);
+    const _rWs = _wsOf(r);
+    let hIdx = headerIndex(_rWs);
     
     // Robust header detection (support both underscores and spaces)
     const statusCol = hIdx["Payment_Status"] || hIdx["Payment Status"];
     
     if (!hIdx["Refund_Preference"]) {
-      const col = ws.getLastColumn() + 1;
-      ws.getRange(1, col).setValue("Refund_Preference")
+      const col = _rWs.getLastColumn() + 1;
+      _rWs.getRange(1, col).setValue("Refund_Preference")
         .setFontWeight("bold").setBackground("#c0392b").setFontColor("white");
-      hIdx = headerIndex(ws);
+      hIdx = headerIndex(_rWs);
     }
     const prefCol = hIdx["Refund_Preference"];
     
     if (statusCol && prefCol) {
-      ws.getRange(r._row, statusCol).setValue("Cancelled (Verify UPI)");
+      _rWs.getRange(r._row, statusCol).setValue("Cancelled (Verify UPI)");
       // Split orders: refund preference is always wallet (full amount back to wallet)
       const isSoftSplit = String(r.Payment_Method || "").trim().toLowerCase() === "split";
-      ws.getRange(r._row, prefCol).setValue(isSoftSplit ? "wallet" : refundType);
+      _rWs.getRange(r._row, prefCol).setValue(isSoftSplit ? "wallet" : refundType);
       console.info(`SUCCESS: Soft-cancelled row ${r._row} with preference ${isSoftSplit ? "wallet (split)" : refundType}`);
 
       // For split orders: wallet portion is already deducted — refund it immediately.
@@ -4300,7 +4365,8 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   // Orders are kept forever for audit trail. The Payment_Status remark
   // ensures the row is excluded from all prep/delivery counts via _isOrderCancelled().
   {
-    const hIdxFinal = headerIndex(ws);
+    const _fWs = _wsOf(r);
+    const hIdxFinal = headerIndex(_fWs);
     const statusColFinal = hIdxFinal["Payment_Status"] || hIdxFinal["Payment Status"];
     if (statusColFinal) {
       let cancelRemark;
@@ -4314,7 +4380,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         // Fallback for unknown type (e.g. zero-refund edge cases)
         cancelRemark = "Cancelled";
       }
-      ws.getRange(r._row, statusColFinal).setValue(cancelRemark);
+      _fWs.getRange(r._row, statusColFinal).setValue(cancelRemark);
       console.info(`ORDER SOFT-CANCELLED: Row ${r._row} (${rowId}) marked as '${cancelRemark}'`);
     } else {
       console.error(`SOFT-CANCEL FAILED: Payment_Status column not found in header index.`);

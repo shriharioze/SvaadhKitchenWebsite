@@ -326,8 +326,12 @@ function _checkWebhookLogForCharge(orderId, expectedAmount) {
  * @param {String} phone        Customer phone (used to fetch profile, day-totals, streak)
  * @returns {Number}            Authoritative grand total (rupees)
  */
-function _computeAuthoritativeTotal(savedOrders, phone) {
+function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
   if (!savedOrders || typeof savedOrders !== "object") return 0;
+  // Storefront: "LS" → Liviano-Serio checkout. MUST mirror submitOrder's LS rules
+  // (free delivery while LS_FREE_DELIVERY) so the gateway charge == the cart == rows.
+  const _sf = (String(storefront || "").trim().toUpperCase() === "LS") ? "LS" : "";
+  const _lsFreeDel = _lsDeliveryFree(_sf);
 
   // ── Authoritative price lookup (mirror of frontend FIXED_MEAL_ITEMS) ──
   // OLD (v1) L/D prices — must mirror LIVE's frontend FIXED_MEAL_ITEMS (order.html
@@ -411,8 +415,8 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
   const _closedSetGW = _kitchenClosedSet();
   const _orderedDaysGW = new Set(dateList);
   try {
-    const _gwWs = getSpreadsheet().getSheetByName(TAB_ORDERS);
-    if (_gwWs) getAllRows(_gwWs).forEach(function(r) {
+    // Ordered-days set spans BOTH storefront tabs (shared loyalty history).
+    _getAllOrdersBothTabsIfPresent(getSpreadsheet()).forEach(function(r) {
       if (_normalizePhone(r.Phone) !== phoneStr) return;
       if (_isOrderCancelled(r.Payment_Status)) return;
       const dd = r.Order_Date instanceof Date
@@ -567,7 +571,7 @@ function _computeAuthoritativeTotal(savedOrders, phone) {
       const combinedMealSub = sub + prevMealSub;
 
       let delCharge = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !isFreeArea && sub > 0) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !isFreeArea && !_lsFreeDel && sub > 0) {
         delCharge = DELIVERY;
       }
 
@@ -669,9 +673,13 @@ function hdfc_createSession(body) {
 
   // Bulk batch → bulk authoritative total (mirror of submitBulkOrder); otherwise the
   // regular per-day recompute. Either way the client `amount` is ignored.
+  // Storefront-aware: an LS checkout's stash entry carries storefront:"LS", and the
+  // authoritative recompute must apply the SAME LS delivery rule as the write path
+  // (free while LS_FREE_DELIVERY) so charge == cart == stored rows.
+  const _sfEntry = String(pendingEntry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "";
   const authoritativeAmount = pendingEntry.bulk
-    ? _bulkAuthoritativeTotal(pendingEntry.bulk, pendingEntry.phone || phone, pendingEntry.profile)
-    : _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || phone);
+    ? _bulkAuthoritativeTotal(pendingEntry.bulk, pendingEntry.phone || phone, pendingEntry.profile, _sfEntry)
+    : _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || phone, _sfEntry);
   const clientAmount        = Number(body.amount || 0);
   if (authoritativeAmount <= 0) {
     return { error: "Could not compute order total. Cart may be empty." };
@@ -1195,7 +1203,7 @@ function hdfc_verifyReturnPayload(body) {
       const pendingRaw   = props.getProperty("HDFC_PENDING_ORDERS") || "{}";
       const pendingEntry = JSON.parse(pendingRaw)[orderId] || null;
       if (pendingEntry && pendingEntry.orders) {
-        const fullTotal = _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || "");
+        const fullTotal = _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || "", pendingEntry.storefront);
         const charged   = Number(statusCheck.amount || 0);
 
         // For Split (Wallet + HDFC) payments, HDFC only charges (total - walletApplied).
@@ -1300,6 +1308,9 @@ function hdfc_savePendingOrder(body) {
     pending[orderId] = {
       ts:             now,
       phone:          body.phone         || "",
+      // Storefront marker — routes the reconciler/webhook self-heal write to
+      // LS_Orders for Liviano-Serio checkouts (absent = main site SK_Orders).
+      storefront:     _lsStorefront(body),
       amount:         body.amount        || 0,
       orders:         body.orders        || {},
       // Bulk batches stash { plan, lunch:{items}, dinner:{items} } here instead of
@@ -1655,9 +1666,15 @@ function hdfc_markOrderPaid(order) {
 
   try {
     const ss      = getSpreadsheet();
-    const ws      = getOrCreateTab(ss, TAB_ORDERS, []);
+    // Search BOTH storefront tabs — an LS checkout's rows live in LS_Orders.
+    // The orderId exists in exactly one tab, so scanning both is idempotent.
+    const _paidTabs = _lsOrderTabs(ss);
+    var updated = 0;
+
+    for (var tIdx = 0; tIdx < _paidTabs.length; tIdx++) {
+    const ws      = _paidTabs[tIdx];
     const data    = ws.getDataRange().getValues();
-    if (data.length < 2) return { error: "Orders sheet is empty." };
+    if (data.length < 2) continue;
 
     const headers     = data[0];
     const COL_GATEWAY = headers.indexOf("Gateway_Order_ID");
@@ -1667,10 +1684,8 @@ function hdfc_markOrderPaid(order) {
     const COL_NOTES   = headers.indexOf("Kitchen_Notes");
 
     if (COL_PSTATUS < 0) {
-      return { error: "Webhook: required columns missing in SK_Orders." };
+      continue;
     }
-
-    var updated = 0;
     for (var i = 1; i < data.length; i++) {
       let isMatch = false;
       if (COL_GATEWAY >= 0 && String(data[i][COL_GATEWAY] || "").trim() === orderId) {
@@ -1709,9 +1724,10 @@ function hdfc_markOrderPaid(order) {
         updated++;
       }
     }
+    } // end tab loop
 
     if (updated === 0) {
-      console.warn("HDFC Webhook: order " + orderId + " not found in SK_Orders (or already Paid).");
+      console.warn("HDFC Webhook: order " + orderId + " not found in any orders tab (or already Paid).");
       return { success: true, updated: 0, message: "Order " + orderId + " not found or already processed." };
     }
 
@@ -1757,18 +1773,21 @@ function hdfc_markOrderFailed(order) {
 
   try {
     const ss   = getSpreadsheet();
-    const ws   = getOrCreateTab(ss, TAB_ORDERS, []);
+    // Search BOTH storefront tabs (LS rows live in LS_Orders).
+    const _failTabs = _lsOrderTabs(ss);
+    var failed = 0, skippedPaid = 0;
+
+    for (var tIdx = 0; tIdx < _failTabs.length; tIdx++) {
+    const ws   = _failTabs[tIdx];
     const data = ws.getDataRange().getValues();
-    if (data.length < 2) return { success: true, message: "No orders to update." };
+    if (data.length < 2) continue;
 
     const headers     = data[0];
     const COL_GATEWAY = headers.indexOf("Gateway_Order_ID");
     const COL_SID     = headers.indexOf("Submission_ID");
     const COL_PSTATUS = headers.indexOf("Payment_Status");
     const COL_NOTES   = headers.indexOf("Kitchen_Notes");
-    if (COL_PSTATUS < 0) return { error: "Webhook: required columns missing in SK_Orders." };
-
-    var failed = 0, skippedPaid = 0;
+    if (COL_PSTATUS < 0) continue;
     for (var i = 1; i < data.length; i++) {
       let isMatch = false;
       if (COL_GATEWAY >= 0 && String(data[i][COL_GATEWAY] || "").trim() === orderId) {
@@ -1794,6 +1813,7 @@ function hdfc_markOrderFailed(order) {
         failed++;
       }
     }
+    } // end tab loop
 
     if (failed === 0) {
       return { success: true, message: skippedPaid
@@ -1823,7 +1843,7 @@ function _hdfcAmountMismatch(gatewayOrderId, chargedAmount) {
     const props = PropertiesService.getScriptProperties();
     const pendingEntry = JSON.parse(props.getProperty("HDFC_PENDING_ORDERS") || "{}")[gatewayOrderId] || null;
     if (!pendingEntry || !pendingEntry.orders) return null; // no basis to compare
-    const fullTotal     = _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || "");
+    const fullTotal     = _computeAuthoritativeTotal(pendingEntry.orders, pendingEntry.phone || "", pendingEntry.storefront);
     const walletApplied = (String(pendingEntry.payment_choice || "") === "Split") ? Number(pendingEntry.wallet_applied || 0) : 0;
     const expected      = Math.max(0, fullTotal - walletApplied);
     if (expected > 0 && charged < expected - 1) {

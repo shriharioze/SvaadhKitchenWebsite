@@ -2139,7 +2139,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.08.11.03";
+const APP_VERSION = "v26.08.24.01";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -4620,7 +4620,7 @@ function renderOrderSummary(data) {
     const custRows = m.customers.map(c => {
       const itemList = Object.entries(c.items).filter(([,q])=>q>0).map(([n,q])=>`${q}×${n}`).join(", ");
       return `<tr data-cust="${(c.name+' '+c.phone).replace(/"/g,'&quot;')}">
-        <td><strong>${c.name}</strong><br><span style="color:#aaa;font-size:0.72rem;">${c.phone}</span></td>
+        <td><strong>${c.name}</strong>${c.ls ? ' <span style="display:inline-block;margin-left:4px;padding:2px 7px;border-radius:6px;background:#2D1A5E;color:#fff;font-size:0.62rem;font-weight:800;letter-spacing:0.5px;vertical-align:middle;">[LS]</span>' : ''}<br><span style="color:#aaa;font-size:0.72rem;">${c.phone}</span></td>
         <td>${itemList||"—"}</td>
         <td><span class="area-chip">${c.area}</span><br><span style="font-size:0.7rem;color:#888;">${c.address}</span></td>
         <td style="text-align:right;white-space:nowrap;">
@@ -5649,7 +5649,7 @@ function renderHistTable() {
   const rows = list.map(o => `<tr>
     <td style="white-space:nowrap;">${fmtD(o.date)}</td>
     <td>${mChip(o.meal)}</td>
-    <td><strong>${o.name}</strong><br><span style="font-size:.7rem;color:var(--muted);">${o.phone}</span></td>
+    <td><strong>${o.name}</strong>${o.ls ? ' <span style="display:inline-block;padding:2px 7px;border-radius:6px;background:#2D1A5E;color:#fff;font-size:0.62rem;font-weight:800;letter-spacing:0.5px;vertical-align:middle;">[LS]</span>' : ''}<br><span style="font-size:.7rem;color:var(--muted);">${o.phone}</span></td>
     <td><span class="area-chip">${o.area||'—'}</span></td>
     <td style="text-align:right;font-weight:700;white-space:nowrap;">${fmtM(o.total)}</td>
     <td>${pBadge(o.status)}</td>
@@ -5692,7 +5692,7 @@ function renderHistList(list) {
         </div>
         <!-- Middle: customer + items -->
         <div style="flex:1;min-width:180px;">
-          <div style="font-weight:800;font-size:.92rem;color:var(--fg);">${o.name}</div>
+          <div style="font-weight:800;font-size:.92rem;color:var(--fg);">${o.name}${o.ls ? ' <span style="display:inline-block;padding:2px 7px;border-radius:6px;background:#2D1A5E;color:#fff;font-size:0.62rem;font-weight:800;letter-spacing:0.5px;vertical-align:middle;">[LS]</span>' : ''}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">${o.phone}${o.area?` · <span style="font-weight:600;color:#555;">${o.area}</span>`:''}${o.wing||o.flat?` · ${[o.wing,o.flat].filter(Boolean).join(' ')}`:''}</div>
           <div>${itemsHtml}</div>
           ${notesHtml}

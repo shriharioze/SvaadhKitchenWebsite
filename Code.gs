@@ -32,12 +32,16 @@ function doGet(e) {
   // Detect by presence of order_id + status params with no _action.
   // Redirect browser to the correct order page with all params forwarded.
   // IA orders (order_id starts with "IA") → intentamplify.html
+  // LS orders (order_id starts with "LS") → Liviano-Serio.html (storefront clone)
   // Svaadh orders → order.html
   if (p.order_id && p.status && !p.action && !p._action) {
     const params = Object.keys(p)
       .map(function(k) { return encodeURIComponent(k) + "=" + encodeURIComponent(p[k]); })
       .join("&");
-    const targetPage = String(p.order_id).slice(0, 2) === "IA" ? IA_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
+    const _oidPrefix = String(p.order_id).slice(0, 2).toUpperCase();
+    const targetPage = _oidPrefix === "IA" ? IA_ORDER_PAGE_URL
+                     : _oidPrefix === "LS" ? LS_ORDER_PAGE_URL
+                     : HDFC_ORDER_PAGE_URL;
     const redirectUrl = targetPage + "?" + params;
     // Sandbox-aware full-viewport click target — auto-navigation is blocked
     // inside the Apps Script HtmlService iframe in many browsers. (10_Hdfc_Gateway)
@@ -108,10 +112,11 @@ function doGet(e) {
     if (action === "reconcileMissedOrders") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(reconcileMissedOrdersLog(p.debug === "1")); } // verify/restore STILL-MISSING log entries + "recovered & written" mail (debug=1: read-only diagnosis)
     if (action === "auditAmanoraTowers") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(auditAmanoraTowers()); } // read-only: Amanora tower# → society co-occurrence from customers+orders+archives
     if (action === "seedAmanoraTowerAliases") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedAmanoraTowerAliases(p.commit === "1")); } // owner-confirmed tower→society alias rows (dry-run unless commit=1)
-    if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty})
+    if (action === "bulkQuote") { // dry-run bulk pricing (no writes) — params: plan, phone, area, lunch/dinner (JSON array of {colKey,qty}), storefront ("LS" = Liviano-Serio pricing)
       const _pj = function (s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } };
       const _wrap = function (arr) { return (Array.isArray(arr) && arr.length) ? { items: arr } : null; }; // submitBulkOrder expects {items:[…]}
       return jsonRes(submitBulkOrder({ dryRun: true, plan: p.plan, phone: p.phone,
+        storefront: String(p.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
         profile: { area: p.area || "" },
         lunch:  _wrap(_pj(p.lunch)),
         dinner: _wrap(_pj(p.dinner)) }));
@@ -338,8 +343,10 @@ function doPost(e) {
       const params = Object.keys(parsedForHdfc)
         .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(parsedForHdfc[k]))
         .join("&");
-      // IA orders (order_id starts with "IA") → intentamplify.html; Svaadh → order.html
-      const targetPage = String(parsedForHdfc.order_id).slice(0, 2) === "IA" ? IA_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
+      // IA orders (order_id starts with "IA") → intentamplify.html
+      // LS orders (order_id starts with "LS") → Liviano-Serio.html; Svaadh → order.html
+      const _pfx1 = String(parsedForHdfc.order_id).slice(0, 2).toUpperCase();
+      const targetPage = _pfx1 === "IA" ? IA_ORDER_PAGE_URL : _pfx1 === "LS" ? LS_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
       const redirectUrl = targetPage + "?" + params;
       return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
     }
@@ -353,7 +360,8 @@ function doPost(e) {
         const params = Object.keys(formParams)
           .map(k => encodeURIComponent(k) + "=" + encodeURIComponent(formParams[k]))
           .join("&");
-        const targetPage = String(formParams.order_id).slice(0, 2) === "IA" ? IA_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
+        const _pfx2 = String(formParams.order_id).slice(0, 2).toUpperCase();
+        const targetPage = _pfx2 === "IA" ? IA_ORDER_PAGE_URL : _pfx2 === "LS" ? LS_ORDER_PAGE_URL : HDFC_ORDER_PAGE_URL;
         const redirectUrl = targetPage + "?" + params;
         return HtmlService.createHtmlOutput(_hdfcReturnRedirectHtml(redirectUrl));
       }
@@ -998,11 +1006,12 @@ function getISTTimestamp() {
   return Utilities.formatDate(getISTDate(), "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
 }
 
-function generateSubmissionID() {
+function generateSubmissionID(prefix) {
   const ist = getISTDate();
   const dateStr = Utilities.formatDate(ist, "Asia/Kolkata", "yyyyMMdd");
   const rand = Math.floor(Math.random() * 9000) + 1000;
-  return `SK-${dateStr}-${rand}`;
+  // prefix "LS" → Liviano-Serio storefront rows ("LS-YYYYMMDD-XXXX"); default SK.
+  return `${prefix ? String(prefix).toUpperCase() : "SK"}-${dateStr}-${rand}`;
 }
 
 function headerIndex(ws) {

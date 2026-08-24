@@ -145,15 +145,16 @@ function _bulkPostponeContext(phone, rowId) {
   if (!phoneStr || !targetId) return { ok: false, error: "Missing phone or order id." };
 
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  const allRows = getAllRows(ws);
-  const hIdx = headerIndex(ws);
+  // Postpone must find bulk rows from EITHER storefront tab.
+  const allRows = _getAllOrdersBothTabsIfPresent(ss);
 
   const row = allRows.filter(function (r) {
     return String(r.Submission_ID || "").trim() === targetId
         && _normalizePhone(r.Phone) === phoneStr;
   })[0];
   if (!row) return { ok: false, error: "Order not found." };
+  const ws   = row._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const hIdx = headerIndex(ws);
 
   const isBulk = String(row.Source || "").trim() === "Bulk" || String(row.Batch_ID || "").trim();
   if (!isBulk) return { ok: false, error: "Only bulk orders can be postponed." };
@@ -383,6 +384,10 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
   const freeArea  = !!ctx.isFreeArea;
   const feeExempt = !!ctx.isFeeExempt;
   const isPickup  = !!ctx.isPickup;
+  // Liviano-Serio storefront: delivery is FREE while LS_FREE_DELIVERY (owner rule —
+  // one fixed drop location). MUST match submitOrder/_computeAuthoritativeTotal so
+  // charge == cart == rows.
+  const lsFree    = !!ctx.lsFree && LS_FREE_DELIVERY;
   const smallTh   = PRICING_V2 ? 53 : 50;
 
   // PASS 1 — build the day list + per-day fee/tier context, and accumulate the batch's
@@ -413,7 +418,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
 
     let dayTotalDailyFood = 0;
     meals.forEach(function (m) {
-      const delivery = (isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
+      const delivery = (lsFree || isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
       const smallFee = (isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
       m.baseFood = m.food;
       m.delivery = delivery;
@@ -515,7 +520,7 @@ function _bulkResolveName(colKey) {
 // Shared fee context for a bulk order — the customer's area allowlist drives free
 // delivery / fee exemption / pickup. Used by BOTH submitBulkOrder (storage) and
 // _bulkAuthoritativeTotal (gateway charge) so the two can never diverge.
-function _bulkFeeCtx(phone, profile) {
+function _bulkFeeCtx(phone, profile, storefront) {
   profile = profile || {};
   const cRow = getAllRows(getOrCreateTab(getSpreadsheet(), TAB_CUSTOMERS, CUSTOMERS_HEADERS))
                  .find(function (r) { return _normalizePhone(r.Phone) === _normalizePhone(phone); }) || null;
@@ -528,7 +533,9 @@ function _bulkFeeCtx(phone, profile) {
     ctx: {
       isFreeArea:  freeAreaNames.indexOf(area) !== -1,
       isFeeExempt: !!(cRow && (cRow.Fee_Exempt === "Yes" || cRow.Fee_Exempt === true)),
-      isPickup:    area.toLowerCase().indexOf("pickup") !== -1
+      isPickup:    area.toLowerCase().indexOf("pickup") !== -1,
+      // Liviano-Serio storefront marker → free delivery inside the pricing engine.
+      lsFree:      _lsDeliveryFree(String(storefront || "").trim().toUpperCase() === "LS" ? "LS" : "")
     }
   };
 }
@@ -537,9 +544,9 @@ function _bulkFeeCtx(phone, profile) {
 // _computeAuthoritativeTotal. hdfc_createSession charges THIS, so it must use the
 // exact same pricing + fee context submitBulkOrder writes. bulkEntry: { plan,
 // lunch:{items}, dinner:{items} }. Returns the rupee total (0 on any error).
-function _bulkAuthoritativeTotal(bulkEntry, phone, profile) {
+function _bulkAuthoritativeTotal(bulkEntry, phone, profile, storefront) {
   if (!bulkEntry) return 0;
-  const fc = _bulkFeeCtx(phone, profile);
+  const fc = _bulkFeeCtx(phone, profile, storefront);
   const priced = _bulkComputeBatch(bulkEntry.plan,
     bulkEntry.lunch  && bulkEntry.lunch.items,
     bulkEntry.dinner && bulkEntry.dinner.items, fc.ctx,
@@ -576,9 +583,11 @@ function submitBulkOrder(body) {
   }
 
   // Customer + fee context — SHARED with the gateway (_bulkAuthoritativeTotal) so the
-  // HDFC charge always equals what gets written here.
+  // HDFC charge always equals what gets written here. Storefront-aware: an LS bulk
+  // batch prices with free delivery and writes to LS_Orders.
+  const _sfBulk = (String(body.storefront || "").trim().toUpperCase() === "LS") ? "LS" : "";
   const profile = body.profile || {};
-  const fc   = _bulkFeeCtx(phone, profile);
+  const fc   = _bulkFeeCtx(phone, profile, _sfBulk);
   const cRow = fc.cRow, name = fc.name, area = fc.area, ctx = fc.ctx;
   const isPickup = ctx.isPickup;
   const ss = getSpreadsheet();
@@ -610,8 +619,8 @@ function submitBulkOrder(body) {
   }
   try {
 
-  // Write rows
-  const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  // Write rows (routed tab: LS storefront → LS_Orders, else SK_Orders)
+  const ordersWs = _lsOrdersWs(ss, _sfBulk);
   const hIdx = headerIndex(ordersWs);
   ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Wallet_Credit", "Bulk_Plan", "Bulk_Postponed"].forEach(function (col) {
     if (!hIdx[col]) { ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue(col); hIdx[col] = ordersWs.getLastColumn(); }
@@ -675,7 +684,7 @@ function submitBulkOrder(body) {
   const toVerify = []; // { sid, row } — confirm each actually landed
   priced.rows.forEach(function (r) {
     if (existingKeys[_fmtD(r.date) + "|" + r.meal]) return; // already written — skip (idempotent)
-    const sid = generateSubmissionID();
+    const sid = generateSubmissionID(_sfBulk === "LS" ? "LS" : undefined);
     const itemsObj = {};
     r.items.forEach(function (it) { itemsObj[_bulkResolveName(it.colKey)] = it.qty; });
 
@@ -922,7 +931,9 @@ function submitBulkDirect(body) {
 
 function _submitBulkDirectLocked(body, phone, mode, _cache, _reqId) {
   // Server-authoritative pricing + FROZEN windows (identical basis to the gateway path).
-  const fc = _bulkFeeCtx(phone, body.profile || {});
+  // Storefront-aware so an LS wallet/on-account batch is priced with free delivery.
+  const _sfDirect = (String(body.storefront || "").trim().toUpperCase() === "LS") ? "LS" : "";
+  const fc = _bulkFeeCtx(phone, body.profile || {}, _sfDirect);
   const q = _bulkComputeBatch(String(body.plan || ""),
     body.lunch && body.lunch.items, body.dinner && body.dinner.items, fc.ctx, null);
   if (q.error) return { success: false, error: q.error };
@@ -969,13 +980,20 @@ function hdfc_finalizeBulkOrder(body) {
   // just below on a COMPLETE write, so "rows exist + no stash" == done. If rows exist but
   // the stash is still here, the batch is PARTIAL: fall through so submitBulkOrder (which is
   // idempotent + self-completing + verified) writes the missing rows before we call it done.
-  const ws = getOrCreateTab(getSpreadsheet(), TAB_ORDERS, ORDERS_HEADERS);
-  const gCol = headerIndex(ws)["Gateway_Order_ID"];
-  if (gCol && !entry) {
-    const data = ws.getDataRange().getValues();
-    let n = 0;
-    for (let i = 1; i < data.length; i++) if (String(data[i][gCol - 1] || "").trim() === orderId) n++;
-    if (n > 0) return { success: true, already: true, batch_id: orderId, count: n };
+  // Scans BOTH storefront tabs (LS batches live in LS_Orders).
+  let _existingCount = 0;
+  [TAB_ORDERS, TAB_LS_ORDERS].forEach(function (_tabName) {
+    try {
+      const tWs = getSpreadsheet().getSheetByName(_tabName);
+      if (!tWs || tWs.getLastRow() < 2) return;
+      const tGwCol = headerIndex(tWs)["Gateway_Order_ID"];
+      if (!tGwCol) return;
+      const tData = tWs.getDataRange().getValues();
+      for (let i = 1; i < tData.length; i++) if (String(tData[i][tGwCol - 1] || "").trim() === orderId) _existingCount++;
+    } catch (eT) {}
+  });
+  if (!entry && _existingCount > 0) {
+    return { success: true, already: true, batch_id: orderId, count: _existingCount };
   }
 
   if (!entry || !entry.bulk) return { success: false, error: "No pending bulk order for " + orderId };
@@ -990,6 +1008,8 @@ function hdfc_finalizeBulkOrder(body) {
   const _isSplit = String(entry.payment_choice || "") === "Split";
   const res = submitBulkOrder({
     plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
+    // Storefront passthrough — LS batches write to LS_Orders (free delivery).
+    storefront: String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
     lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
     lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
     payment_method: _isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)", payment_status: "Paid",

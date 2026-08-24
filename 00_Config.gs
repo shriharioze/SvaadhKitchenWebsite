@@ -13,7 +13,7 @@ const PLACE_ID       = SP.getProperty("PLACE_ID") || "";
 const GOOGLE_PLACES_API_KEY = SP.getProperty("GOOGLE_PLACES_API_KEY") || "";
 const GA4_PROPERTY_ID       = "396771381"; // User provided Property ID
 
-const CODE_VERSION = 31.7; // DELIVERY CAP VIP EXEMPTION & ADMIN SPEED FIX. (1) VIP customers (Fee_Exempt=Yes) now count as 0 towards the delivery cap, matching their fee exemption. (2) Reverted getAdminDataUncached to compute delivery counts in a single O(N) pass over all orders instead of O(orders * dates) nested loops, fixing a massive 40s+ load time regression in the admin panel introduced in v31.6.
+const CODE_VERSION = 32.0; // LIVIANO-SERIO STOREFRONT (LS) LAUNCH + CANCELLATION CRASH HOTFIX. (1) New second consumer storefront www.svaadhkitchen.in/Liviano-Serio.html — exact replica of order.html whose orders write to the NEW LS_Orders tab (schema cloned from SK_Orders) via body.storefront="LS". LS rules: delivery caps NEVER apply and LS orders count 0 slots (single drop location); item stock never blocks LS; DELIVERY FREE while LS_FREE_DELIVERY Script Property is unset/"true" (set "false" to restore ₹11 rules); small-order fee unchanged; society pinned "Liviano Serio"; customers/wallet/loyalty SHARED across pages (loyalty streak + day totals + dup guards scan BOTH tabs); bulk plans fully supported incl. free delivery in _bulkPriceFromWindows/_bulkAuthoritativeTotal/submitBulkDirect/bulkQuote; HDFC gateway ids prefixed "LS" so doGet/doPost returns route back to Liviano-Serio.html; pending-stash entries carry storefront so webhook/reconciler self-heal writes the correct tab; markPaid/markFailed/refunds/status-ops/deleteOrder scan both tabs; missed-order safety-net stash entries carry their tab; kitchen prep counts INCLUDE LS quantities ([LS]-tagged in admin via getOrderSummary/getOrderHistory ls flag); getAdminData cap-counting excludes LS rows; getMenu units_remaining includes LS consumption; submission ids prefixed "LS-" route missed-order log restores to LS_Orders. ALL main-site paths byte-identical when storefront absent (proven by 2,000-assertion differential fuzz vs prior live code). (2) HOTFIX pre-existing crash: _deleteOrderInternal's buildRefundBreakdown() referenced remThreshold scoped inside an if-block — any wallet/UPI cancellation triggering the same-day fee clawback crashed AFTER writing the refund txn but BEFORE cancelling the row (order stayed active while money was refunded). remThreshold hoisted to function scope; no math changes.
 // 2026-08-11: LOYALTY FUTURE DATES BUG FIX: _calculateLoyaltyStreak now correctly processes future-dated orders and starts its backward walk from the latest order date (or today). This prevents double day-6 loyalty rewards from being issued when subsequent multi-date bookings overlap future dates where a reward was already claimed.
 // 2026-08-11: CUSTOM KITCHEN ROUNDING: Added _customKitchenRound rule (decimal >= 0.35 rounds up +1, <= 0.34 rounds down +0) applied to all kitchen summary counts/kg values (e.g. Varan 11.97 -> 12, Dal Fry 7.98 -> 8).
 // 2026-08-07: LOCK CONTENTION FIX. hdfc_markOrderPaid, hdfc_markOrderFailed, submitManualOrder now acquire ScriptLock before touching SK_Orders.
@@ -87,6 +87,23 @@ const HDFC_BASE_URL         = HDFC_ENV === "live"
   ? (SP.getProperty("HDFC_LIVE_URL") || "https://smartgateway.hdfcbank.com")
   : (SP.getProperty("HDFC_TEST_URL") || "https://smartgateway-uat.hdfcbank.com");
 // ─────────────────────────────────────────────────────────────
+
+// ── LIVIANO-SERIO STOREFRONT (LS) ─────────────────────────────
+// Second consumer storefront (www.svaadhkitchen.in/Liviano-Serio.html) — an exact
+// replica of order.html serving ONE fixed delivery location. Orders live in the
+// LS_Orders tab (identical schema to SK_Orders); customers + wallet + loyalty are
+// SHARED with the main site. Storefront rules:
+//   • Delivery caps: LS orders count 0 slots and are NEVER blocked by caps/stock
+//     (single drop location, unlimited orders).
+//   • Delivery fee: FREE while LS_FREE_DELIVERY is true (Script Property override
+//     "LS_FREE_DELIVERY"="false" restores normal ₹11/threshold rules later).
+//   • Kitchen prep counts INCLUDE LS quantities ([LS]-tagged in admin/kitchen UIs).
+//   • Gateway: same HDFC flow; gateway order ids carry the "LS" prefix so returns
+//     route back to Liviano-Serio.html (same trick as IA).
+const TAB_LS_ORDERS    = "LS_Orders";
+const LS_ORDER_PAGE_URL = SP.getProperty("LS_ORDER_PAGE_URL") || "https://svaadhkitchen.in/Liviano-Serio.html";
+const LS_SOCIETY_NAME   = "Liviano Serio";
+const LS_FREE_DELIVERY  = (SP.getProperty("LS_FREE_DELIVERY") !== "false"); // default ON
 
 // Sheet tab names
 const TAB_ORDERS     = "SK_Orders";

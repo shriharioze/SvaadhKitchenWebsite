@@ -131,17 +131,27 @@ function _reconcileSingleEntry(orderId, entry) {
     // exist (a blanket "any row exists → done" would strand a partial month batch forever).
     if (!entry.bulk) {
       const ss     = getSpreadsheet();
-      const ws     = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-      const data   = ws.getDataRange().getValues();
-      const headers= data[0] || [];
-      const gCol   = headers.indexOf("Gateway_Order_ID");
-      if (gCol !== -1) {
-        for (var r = 1; r < data.length; r++) {
-          if (String(data[r][gCol] || "").trim() === orderId) {
-            return { outcome: "skippedAlreadyDone", row: r + 1 };
+      // Gateway_Order_ID dedup must scan BOTH storefront tabs.
+      let _already = false;
+      [TAB_ORDERS, TAB_LS_ORDERS].forEach(function (_tabName) {
+        if (_already) return;
+        try {
+          const ws     = getOrCreateTab(ss, _tabName, ORDERS_HEADERS);
+          const data   = ws.getDataRange().getValues();
+          const headers= data[0] || [];
+          const gCol   = headers.indexOf("Gateway_Order_ID");
+          if (gCol !== -1) {
+            for (var r = 1; r < data.length; r++) {
+              if (String(data[r][gCol] || "").trim() === orderId) {
+                _already = true;
+                break;
+              }
+            }
           }
-        }
-      }
+        } catch (eTab) {}
+      });
+      // Preserve the original early-return shape (row number unknown across tabs).
+      if (_already) return { outcome: "skippedAlreadyDone" };
     }
 
     // ── Ask HDFC: is this actually CHARGED? ─────────────────────────────────
@@ -183,6 +193,9 @@ function _reconcileSingleEntry(orderId, entry) {
         plan:             entry.bulk.plan,
         phone:            entry.phone,
         profile:          entry.profile,
+        // Storefront passthrough — LS bulk batches write to LS_Orders with the
+        // same free-delivery rule the charge was computed under.
+        storefront:       String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
         lunch:            entry.bulk.lunch,
         dinner:           entry.bulk.dinner,
         lunchDates:       entry.bulk.lunchDates,   // frozen at checkout (matches the charge)
@@ -346,6 +359,9 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
       isFirstTime:        !!entry.isFirstTime
     },
     orders:           orders,
+    // Storefront passthrough — an LS checkout's self-healed rows must land in
+    // LS_Orders exactly as the live finalize path would have written them.
+    storefront:       String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
     payment_method:   isSplit ? "Split (HDFC)" : "Gateway (HDFC)",
     payment_status:   "Paid",
     wallet_credit:    walletApplied,

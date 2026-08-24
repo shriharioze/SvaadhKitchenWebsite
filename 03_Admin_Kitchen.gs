@@ -40,6 +40,13 @@ function _getAdminDataUncached() {
 
   const ordersWsAdm = getOrCreateTab(ss, TAB_ORDERS, []);
   const allOrdersAdm = getAllRows(ordersWsAdm);
+  // Liviano-Serio storefront rows join the SAME pass: they COUNT toward prep
+  // quantities below but NEVER toward delivery-cap slots (owner rule — one
+  // fixed drop location, 0 slots). Flagged _lsTab for [LS] badges downstream.
+  try {
+    const lsWsAdm = ss.getSheetByName(TAB_LS_ORDERS);
+    if (lsWsAdm) getAllRows(lsWsAdm).forEach(function(r) { r._lsTab = true; allOrdersAdm.push(r); });
+  } catch (eLS) { /* LS tab absent yet */ }
 
   // Build per-date ordered-unit counts AND delivery counts in ONE pass over
   // all orders (O(orders)). Calling count-per-date inside the loop scales
@@ -68,6 +75,8 @@ function _getAdminDataUncached() {
     const meal = String(row.Meal_Type || "").trim();
 
     // --- Delivery Cap Counting ---
+    // LS storefront rows are EXCLUDED — they count 0 delivery slots.
+    if (!row._lsTab) {
     if (!mealOrderCounts[dd]) {
       mealOrderCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
       seen[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
@@ -100,7 +109,8 @@ function _getAdminDataUncached() {
         }
       }
     }
-    // -----------------------------
+    } // end LS cap-counting exclusion
+    // ----------------------------- end LS-excluded cap counting
 
     if (!countsByDate[dd]) countsByDate[dd] = { Breakfast: {}, Lunch: {}, Dinner: {} };
     if (!countsByDate[dd][meal]) return;
@@ -817,27 +827,29 @@ function markRefunded(submissionId, forceWallet = false) {
       ws.getRange(i + 1, statusIdx + 1).setValue("Refunded (" + now + ")");
 
       // ── Update the source order row remark to reflect completed refund ──
-      // This closes the audit loop: the SK_Orders row was previously marked
+      // This closes the audit loop: the order row was previously marked
       // "Cancelled – UPI Refund Pending" (or similar); now update it.
+      // Searches BOTH storefront tabs (LS rows live in LS_Orders).
       try {
-        const ordersWs = ss.getSheetByName(TAB_ORDERS);
-        if (ordersWs) {
+        [TAB_ORDERS, TAB_LS_ORDERS].some(function (_tabName) {
+          const ordersWs = ss.getSheetByName(_tabName);
+          if (!ordersWs) return false;
           const ordersData = ordersWs.getDataRange().getValues();
           const oHeaders = ordersData[0];
           const oIdIdx = oHeaders.indexOf("Submission_ID");
           const oStatusIdx = oHeaders.indexOf("Payment_Status");
-          if (oIdIdx !== -1 && oStatusIdx !== -1) {
-            for (var j = 1; j < ordersData.length; j++) {
-              if (String(ordersData[j][oIdIdx]) === String(submissionId)) {
-                const finalRemark = mode === "wallet"
-                  ? "Cancelled \u2013 Refunded to Wallet (" + now + ")"
-                  : "Cancelled \u2013 Refunded via UPI (" + now + ")";
-                ordersWs.getRange(j + 1, oStatusIdx + 1).setValue(finalRemark);
-                break;
-              }
+          if (oIdIdx === -1 || oStatusIdx === -1) return false;
+          for (var j = 1; j < ordersData.length; j++) {
+            if (String(ordersData[j][oIdIdx]) === String(submissionId)) {
+              const finalRemark = mode === "wallet"
+                ? "Cancelled \u2013 Refunded to Wallet (" + now + ")"
+                : "Cancelled \u2013 Refunded via UPI (" + now + ")";
+              ordersWs.getRange(j + 1, oStatusIdx + 1).setValue(finalRemark);
+              return true;
             }
           }
-        }
+          return false;
+        });
       } catch(e) { /* non-fatal — refund row already updated */ }
 
       return {success: true};
@@ -888,7 +900,10 @@ function getKitchenSummary(date) {
   var ss = getSpreadsheet();
   var ws = getOrCreateTab(ss, TAB_ORDERS, []);
   // Merge IntentAmplify orders (tagged [IA], S4 address) into the same prep view.
-  var rows = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  // Liviano-Serio (LS_Orders) prep quantities are INCLUDED — the kitchen cooks them.
+  var rows = getRecentRows(ws, 1500)
+    .concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : [])
+    .concat(ls_rowsAsSK());
 
   var dayRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
@@ -1101,7 +1116,10 @@ function getDriverOrders(date) {
   var ss   = getSpreadsheet();
   var ws   = getOrCreateTab(ss, TAB_ORDERS, []);
   // Merge IntentAmplify orders (tagged [IA], S4 delivery) into the driver view.
-  var rows = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  // Liviano-Serio (LS_Orders) deliveries join too — single fixed drop location.
+  var rows = getRecentRows(ws, 1500)
+    .concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : [])
+    .concat(ls_rowsAsSK());
   var meals = {Breakfast: [], Lunch: [], Dinner: []};
 
   // Load delivery status from SK_Deliveries tab (both EnRoute_At and Delivered_At)
@@ -1812,7 +1830,8 @@ function getOrderSummary(date) {
       address:   String(r.Full_Address || r.Flat || ""),
       total:     net,
       payStatus: payStatus,
-      notes:     String(r.Special_Notes_Kitchen || "")
+      notes:     String(r.Special_Notes_Kitchen || ""),
+      ls:        !!r._lsTab  // Liviano-Serio storefront → [LS] badge in admin UI
     });
 
     totals.orders++;
@@ -1829,7 +1848,10 @@ function getLabelOrders(date, meal) {
   var ss = getSpreadsheet();
   var ws = getOrCreateTab(ss, TAB_ORDERS, []);
   // Merge IntentAmplify orders so their labels print too (name prefixed [IA]).
-  var rows = getAllRows(ws).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  // Liviano-Serio labels print from the same engine.
+  var rows = getAllRows(ws)
+    .concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : [])
+    .concat(ls_rowsAsSK());
   var COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
               "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Dal_Fry","Rice","Salad"];
 
