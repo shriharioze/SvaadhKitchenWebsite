@@ -97,6 +97,7 @@ function doGet(e) {
     if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
     if (action === "backfillBulkPlan") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillBulkPlan(p.commit === "1")); } // one-time: stamp Bulk_Plan on pre-v26 bulk rows (dry-run unless commit=1)
     if (action === "compactWalletLedger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(compactWalletLedger(p.commit === "1", p.keepDays)); } // wallet ledger compaction: dry-run unless commit=1; keepDays default 90 (min 30)
+    if (action === "lsTrimSchema") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(lsTrimSchema(p.commit === "1")); } // LS_Orders schema trim (drops Maps_Link/Landmark): dry-run unless commit=1
     if (action === "genLabels") { // regenerate a date+meal's label PDF on demand (same engine as the cutoff+5 auto-run)
       if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
       if (p.debug === "1") { // build-only: return the PDF base64 for inspection — no Drive save, no print webhook
@@ -122,15 +123,15 @@ function doGet(e) {
         dinner: _wrap(_pj(p.dinner)) }));
     }
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
-    if (action === "getCustomer") return jsonRes(getCustomer(p.phone));
+    if (action === "getCustomer") return jsonRes(getCustomer(p.phone, p.storefront === "LS" ? "LS" : ""));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(p.phone)); // returning customer restore
-    if (action === "verifyLogin") return jsonRes(verifyLogin(p.phone, p.pin));
+    if (action === "verifyLogin") return jsonRes(verifyLogin(p.phone, p.pin, p.storefront === "LS" ? "LS" : ""));
     if (action === "ackLoginNotice") return jsonRes(acknowledgeLoginNotice(p.phone)); // customer taps "I understand" on a login notice
     if (action === "seedDeliveryNotices") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedDeliveryStopNotices(p.commit === "1")); } // seed the 12 delivery-stop login notices (dry-run unless commit=1)
     if (action === "cleanDeliveryAddresses") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(cleanDeliveryStopAddresses(p.commit === "1")); } // clear the 12 affected customers' stale addresses, backed up (dry-run unless commit=1)
     if (action === "setPin") {
       const profile = { phone: p.phone, pin: p.pin };
-      _upsertCustomer(getSpreadsheet(), profile);
+  _upsertCustomer(getSpreadsheet(), profile, p.storefront === 'LS' ? 'LS' : '');
       return jsonRes({success:true});
     }
     if (action === "getWeeklyMenu") return jsonRes(getWeeklyMenu());
@@ -300,9 +301,9 @@ function doGet(e) {
     if (action === "getBreakfastItemDates") return jsonRes(getBreakfastItemDates(p.items));
     if (action === "getKitchenClosedDates") return jsonRes(getKitchenClosedDates());
     if (action === "getWeeklyMenu") return jsonRes(getWeeklyMenu());
-    if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(p.phone));
+    if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(p.phone, p.storefront === "LS" ? "LS" : ""));
     if (action === "getWalletValue") return jsonRes({wallet_balance: _calculateWalletBalance(p.phone)});
-    if (action === "getWalletTransactions") return jsonRes(getWalletTransactions(p.phone));
+    if (action === "getWalletTransactions") return jsonRes(getWalletTransactions(p.phone, p.storefront === "LS" ? "LS" : ""));
     if (action === "getDayTotalsForDates") return jsonRes(getDayTotalsForDates(p.phone, p.dates));
     if (action === "listSocieties") return jsonRes(listDistinctSocieties()); // admin audit: distinct society spellings (for SK_Society_Aliases)
 
@@ -377,10 +378,10 @@ function doPost(e) {
     if (action === "deleteOrder") return jsonRes(deleteOrder(body.phone, body.rowId, body.refundType, { isAdmin: isAdmin }));
     if (action === "postponeBulkOrder") return jsonRes(postponeBulkOrder(body)); // reschedule a bulk day (15-day/month); phone-verified + capped inside
     if (action === "previewCancellation") return jsonRes(_deleteOrderInternal(body.phone, body.rowId, body.refundType || "wallet", { dryRun: true }));
-    if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone));
+    if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone, _lsStorefront(body)));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(body.phone));
-    if (action === "requestPinResetOtp") return jsonRes(requestPinResetOtp(body.phone)); // Forgot PIN: email a 6-digit OTP to the on-file address
-    if (action === "verifyPinResetOtp") return jsonRes(verifyPinResetOtp(body.phone, body.otp, body.newPin)); // Forgot PIN: verify OTP + set the new PIN (POST — newPin never in a URL)
+    if (action === "requestPinResetOtp") return jsonRes(requestPinResetOtp(body.phone, _lsStorefront(body))); // Forgot PIN: email a 6-digit OTP to the on-file address
+    if (action === "verifyPinResetOtp") return jsonRes(verifyPinResetOtp(body.phone, body.otp, body.newPin, _lsStorefront(body))); // Forgot PIN: verify OTP + set the new PIN (POST — newPin never in a URL)
     if (action === "checkDeliveryReachable") return jsonRes(checkDeliveryReachable(body));
     if (action === "verifyOrderPlaced") return jsonRes(verifyOrderPlaced(body));
     if (action === "updateProfile") {
@@ -390,7 +391,7 @@ function doPost(e) {
       // toggleFeeExempt). Strip them from the unauthenticated customer upsert so
       // nobody can self-promote a phone to pay-later On-Account by knowing it.
       delete profile.onAccount; delete profile.billingCycle;
-      _upsertCustomer(getSpreadsheet(), profile);
+  _upsertCustomer(getSpreadsheet(), profile, _lsStorefront(body));
       return jsonRes({success: true});
     }
 
@@ -645,7 +646,7 @@ function doPost(e) {
 
     if (action === "setPin") {
       const profile = { phone: body.phone, pin: body.pin };
-      _upsertCustomer(getSpreadsheet(), profile);
+  _upsertCustomer(getSpreadsheet(), profile, _lsStorefront(body));
       return jsonRes({success:true});
     }
 
@@ -670,7 +671,7 @@ function doPost(e) {
       // SECURITY: admin-only fields — strip from this unauthenticated route so a
       // phone alone can't self-promote to pay-later On-Account (set via gated markOnAccount).
       delete profile.onAccount; delete profile.billingCycle;
-      _upsertCustomer(getSpreadsheet(), profile);
+  _upsertCustomer(getSpreadsheet(), profile, _lsStorefront(body));
       return jsonRes({success:true});
     }
 

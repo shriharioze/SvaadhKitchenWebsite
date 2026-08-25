@@ -141,7 +141,7 @@ function nextNonSunday(offset) { let o = offset; while (new Date(isoAdd(o) + "T1
 const cfg = read("00_Config.gs"), code = read("Code.gs"), o02 = read("02_Orders_Menu.gs"), lsG = read("13_LivianoSerio.gs");
 
 const stubs = `
-var TAB_ORDERS = "SK_Orders", TAB_LS_ORDERS = "LS_Orders", TAB_MENU = "SK_Daily_Menu",
+var TAB_ORDERS = "SK_Orders", TAB_LS_ORDERS = "LS_Orders", TAB_LS_CUSTOMERS = "LS_Customers", TAB_LS_WALLET = "LS_Wallet", TAB_MENU = "SK_Daily_Menu",
     TAB_CUSTOMERS = "SK_Customers", TAB_WALLET = "SK_Wallet", TAB_REFUNDS = "SK_Refunds";
 var PRICING_V2 = true;
 var LS_FREE_DELIVERY = true;
@@ -150,6 +150,7 @@ var ADMIN_PIN = "0000";
 var SABJI_COMBO_GROUPS = {};
 var CAP_DELIVERY_BYPASS_MIN = ${extractConstRHS(cfg, "CAP_DELIVERY_BYPASS_MIN")};
 var DEFAULT_ORDER_CAPS = ${extractConstRHS(cfg, "DEFAULT_ORDER_CAPS")};
+var LS_DROP_COLUMNS = ["Maps_Link", "Landmark"];
 var WALLET_HEADERS = ${JSON.stringify(["Phone","Customer_Name","Txn_Type","Amount","Verified","Reference_ID","Timestamp"])};
 var CUSTOMERS_HEADERS = ["Phone","Customer_Name"];
 var ORDERS_HEADERS = ${JSON.stringify(ORDERS_HEADERS_ARR)};
@@ -199,7 +200,7 @@ const realFns = [
   "deleteOrder", "_deleteOrderInternal",
 ].map(n => extractFn(code.includes("function " + n + "(") ? code : o02, n)).join("\n\n");
 
-const lsFns = ["_lsStorefront", "_lsDeliveryFree", "_lsOrdersWs", "_lsOrderTabs", "_getAllOrdersBothTabs", "_getAllOrdersBothTabsIfPresent"]
+const lsFns = ["_lsStorefront", "_lsDeliveryFree", "_lsOrdersWs", "_lsOrderTabs", "_getAllOrdersBothTabs", "_getAllOrdersBothTabsIfPresent", "_customersTabFor", "_walletTabFor"]
   .map(n => extractFn(lsG, n)).join("\n\n");
 
 // mini-real cap/delivery counters (mirror documented rules; unchanged legacy logic)
@@ -288,7 +289,7 @@ resetWorld();
   T("success", res.success === true, JSON.stringify(res));
   const lsW = ss.getSheetByName("LS_Orders");
   T("LS_Orders tab auto-created", !!lsW);
-  T("schema cloned from SK_Orders (" + skWs.headers.length + " cols)", lsW && lsW.headers.length === skWs.headers.length && lsW.headers[0] === "Submission_ID");
+  T("schema = SK minus Maps_Link/Landmark (60 cols)", lsW && lsW.headers.length === 60 && lsW.headers.indexOf("Maps_Link") === -1 && lsW.headers.indexOf("Landmark") === -1, lsW ? ("cols=" + lsW.headers.length) : "no tab");
   T("one row in LS_Orders, ZERO in SK_Orders", lsW && lsW.rows.length === 1 && skWs.rows.length === 0);
   const r = getRows(lsW)[0];
   T("Source=LS", String(r.Source) === "LS");
@@ -328,10 +329,11 @@ resetWorld();
   T("LS ignores stock (unlimited)", lsRes.success === true, JSON.stringify(lsRes).slice(0, 140));
 }
 
-console.log("\n[5] Shared wallet: recharge once, spend on LS, balance consistent");
+console.log("\n[5] Separate wallet: recharge in LS_Wallet, spend on LS, SK_Wallet untouched");
 resetWorld();
 {
-  walWs.appendRow(["9999999999", "Test Customer", "Recharge", 1000, "TRUE", "R1", "t"]);
+  const lsWal = ss.getSheetByName("LS_Wallet") || mkTab("LS_Wallet", ["Phone", "Customer_Name", "Txn_Type", "Amount", "Verified", "Reference_ID", "Timestamp"]);
+  lsWal.appendRow(["9999999999", "Test Customer", "Recharge", 1000, "TRUE", "R1", "t"]);
   const d = nextNonSunday(1);
   const res = API.submitOrder({ profile: { ...PROFILE, society: "Soc" }, storefront: "LS", payment_method: "Wallet",
     orders: [{ date: d, meals: [{ type: "Dinner", items: [{ colKey: "Dal [200ml]", qty: 1 }], subtotal: 24, area: "Normal Area" }] }] });
@@ -339,7 +341,8 @@ resetWorld();
   const r = getRows(ss.getSheetByName("LS_Orders"))[0];
   T("status Wallet Paid", String(r.Payment_Status) === "Wallet Paid", String(r.Payment_Status));
   T("Wallet_Credit=35 recorded", Number(r.Wallet_Credit) === 35, String(r.Wallet_Credit));
-  const balRows = getRows(walWs);
+  const balRows = getRows(ss.getSheetByName("LS_Wallet"));
+  T("SK_Wallet has ZERO rows (separate books)", walWs.rows.length === 0);
   const bal = balRows.reduce((s, x) => {
     const t = String(x.Txn_Type || "").toLowerCase();
     const amt = Number(x.Amount) || 0;
@@ -373,10 +376,10 @@ resetWorld();
   const r2 = API.submitOrder({ profile: { ...PROFILE, society: "Soc" }, storefront: "LS", request_id: "x_" + Date.now(),
     orders: [{ date: d, meals: meals.map(m => ({ ...m })) }] });
   T("first (SK) ok", r1.success);
-  // Design: a ≤5-min-old identical order from the OTHER page is silently deduped
-  // onto the ORIGINAL row (same rule as browser retries) — never double-writes.
-  T("LS twin deduped onto original SK row (no 2nd write)", r2.success && r2.submissionId === r1.submissionId && r2.rows_written === 0, JSON.stringify(r2).slice(0, 180));
-  T("exactly ONE row total across BOTH tabs", skWs.rows.length === 1 && (ss.getSheetByName("LS_Orders") ? ss.getSheetByName("LS_Orders").rows.length : 0) === 0);
+  // SEPARATE BASES: the same phone on the other page is an independent account —
+  // the twin order is legitimate and writes to LS_Orders (no cross-page dedupe).
+  T("LS twin is a valid separate order", r2.success === true, JSON.stringify(r2).slice(0, 180));
+  T("one row in EACH tab (no cross-tab dedupe)", skWs.rows.length === 1 && ss.getSheetByName("LS_Orders").rows.length === 1);
 }
 
 console.log("\n[8] Loyalty streak spans BOTH tabs (5 seeded days split SK/LS → 6th-day reward)");
@@ -390,7 +393,7 @@ resetWorld();
     days.unshift(iso);
   }
   days.forEach((iso, i) => {
-    const ws = i % 2 === 0 ? skWs : (ss.getSheetByName("LS_Orders") || mkTab("LS_Orders", ORDERS_HEADERS_ARR));
+    const ws = ss.getSheetByName("LS_Orders") || mkTab("LS_Orders", ORDERS_HEADERS_ARR);
     addRawRow(ws, { Submission_ID: (i % 2 === 0 ? "SK-H" : "LS-H") + i, Submitted_At: iso + " 10:00:00", Order_Date: iso,
       Meal_Type: "Dinner", Customer_Name: "Test Customer", Phone: "9999999999", Area: "Normal Area",
       Payment_Status: "Paid", Food_Subtotal: 100, Inflation_Surcharge: 5, Loyalty_Discount: "No" });
@@ -415,30 +418,39 @@ resetWorld();
   T("verify ran", Array.isArray(calls.verifies) === true);
 }
 
-console.log("\n[10] RISK 6.1 — cross-tab cancel: SK order cancelled, LS same-day row clawed back");
+console.log("\n[10] SEPARATE BASES — same-day cancel: SK sibling clawed back, LS customer untouched");
 resetWorld();
 {
   const d = nextNonSunday(1);
-  // Day total = 300 + 60 = 360 ≥ 325 → both rows carry the 5% tier discount.
+  // Same customer, same day, TWO SK rows (day total 360 ≥ 325 → 5% tier on both).
   addRawRow(skWs, { Submission_ID: "SK-DAY-A", Order_Date: d, Meal_Type: "Lunch",
     Customer_Name: "Test Customer", Phone: "9999999999", Area: "Normal Area", Society: "Soc",
     Payment_Status: "Paid", Payment_Method: "UPI", Food_Subtotal: 300, Discount_Amount: 15, Net_Total: 285 });
-  const lsW = ss.getSheetByName("LS_Orders") || mkTab("LS_Orders", ORDERS_HEADERS_ARR);
-  addRawRow(lsW, { Submission_ID: "LS-DAY-B", Order_Date: d, Meal_Type: "Dinner",
-    Customer_Name: "Test Customer", Phone: "9999999999", Area: "Normal Area", Society: "Liviano Serio",
+  addRawRow(skWs, { Submission_ID: "SK-DAY-B", Order_Date: d, Meal_Type: "Dinner",
+    Customer_Name: "Test Customer", Phone: "9999999999", Area: "Normal Area", Society: "Soc",
     Payment_Status: "Paid", Payment_Method: "UPI", Food_Subtotal: 60, Discount_Amount: 3, Net_Total: 57 });
+  // A DIFFERENT customer's LS order on the same day — must NEVER be touched.
+  const lsW = ss.getSheetByName("LS_Orders") || mkTab("LS_Orders", ORDERS_HEADERS_ARR);
+  addRawRow(lsW, { Submission_ID: "LS-DAY-C", Order_Date: d, Meal_Type: "Dinner",
+    Customer_Name: "LS Person", Phone: "8888888888", Area: "Kharadi", Society: "Serio",
+    Payment_Status: "Paid", Payment_Method: "UPI", Food_Subtotal: 60, Discount_Amount: 3, Net_Total: 57 });
+
   const res = API.deleteOrder("9999999999", "SK-DAY-A", "wallet");
   T("cancel succeeded", res && res.success === true, JSON.stringify(res).slice(0, 200));
-  const skRow = getRows(skWs).find(r => r.Submission_ID === "SK-DAY-A");
-  const lsRow = getRows(ss.getSheetByName("LS_Orders")).find(r => r.Submission_ID === "LS-DAY-B");
-  T("SK row marked Cancelled – Refunded to Wallet", /cancelled/i.test(String(skRow.Payment_Status)) && /wallet/i.test(String(skRow.Payment_Status)), String(skRow.Payment_Status));
-  // Cross-tab clawback: LS row's discount zeroed and fee clawback applied IN LS_ORDERS.
-  // Day drops below threshold → LS delivery row owes ₹11 (net 57+11=68).
-  T("LS row (other tab!) discount clawed back to 0", Number(lsRow.Discount_Amount) === 0, String(lsRow.Discount_Amount));
-  T("LS row Net_Total = 57 + ₹11 delivery clawback = 68", Number(lsRow.Net_Total) === 68, String(lsRow.Net_Total));
-  // Refund = cancelled net 285 − overDiscount 3 − deliveryOwed 11 = 271 to wallet
+  const skA = getRows(skWs).find(r => r.Submission_ID === "SK-DAY-A");
+  const skB = getRows(skWs).find(r => r.Submission_ID === "SK-DAY-B");
+  const lsC = getRows(ss.getSheetByName("LS_Orders")).find(r => r.Submission_ID === "LS-DAY-C");
+  T("cancelled row marked Cancelled – Refunded to Wallet", /cancelled/i.test(String(skA.Payment_Status)) && /wallet/i.test(String(skA.Payment_Status)), String(skA.Payment_Status));
+  // Clawback applies to the SAME customer's SK sibling only:
+  // day drops below threshold → sibling owes ₹11 delivery; discount zeroed.
+  T("SK sibling discount clawed back to 0", Number(skB.Discount_Amount) === 0, String(skB.Discount_Amount));
+  T("SK sibling Net = 57 + 3 + 11 = 71", Number(skB.Net_Total) === 71, String(skB.Net_Total));
+  // The LS customer's row is a DIFFERENT account — completely untouched.
+  T("LS row (different customer) untouched", Number(lsC.Discount_Amount) === 3 && Number(lsC.Net_Total) === 57,
+    JSON.stringify({ disc: String(lsC.Discount_Amount), net: String(lsC.Net_Total) }));
+  // Refund = 285 − overDiscount 3 − deliveryOwed 11 = 271 → SK wallet (main site)
   const refundTxn = getRows(walWs).find(x => /cancellation refund/i.test(String(x.Txn_Type)));
-  T("wallet refund txn ₹271", refundTxn && Number(refundTxn.Amount) === 271, refundTxn && JSON.stringify(refundTxn));
+  T("wallet refund txn ₹271 into SK_Wallet", refundTxn && Number(refundTxn.Amount) === 271, refundTxn && JSON.stringify(refundTxn));
 }
 
 console.log("\n════════════════════════════════");

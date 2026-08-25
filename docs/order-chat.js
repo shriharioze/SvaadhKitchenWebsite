@@ -24,6 +24,15 @@
   var HISTORY_KEY = "svaadhOrderChatHistory";
   var WA = "+91 93222 46765";
 
+  // ── Storefront detection ─────────────────────────────────────
+  // The Liviano-Serio page (docs/Liviano-Serio.html) embeds this same widget.
+  // When loaded there, chips/greeting/answers switch to LS-specific facts:
+  // Lunch & Dinner only · always-free delivery · self pickup now (G2 804,
+  // Ganga Serio, Kharadi) · doorstep delivery launching soon · wings A–G2
+  // (A–D = Liviano, E1–G2 = Serio). The main order page path is unchanged.
+  var IS_LS = (window.STOREFRONT === "LS") || /liviano-serio/i.test(location.pathname || "");
+  var LS_CONTEXT = "[You are answering on the Svaadh Kitchen page exclusively for Ganga Serio residents, Kharadi. Facts: Lunch & Dinner ONLY (no breakfast). Delivery is ALWAYS FREE here; doorstep delivery is launching soon — Self Pickup from G2 804, Ganga Serio is available now. Wings A,B,C,D = Liviano; E1,E2,F1,F2,G1,G2 = Serio. Cutoffs: Lunch 9:00 AM, Dinner 4:30 PM; closed Sundays. Wallet & loyalty are shared with the main svaadhkitchen.in site. Discounts: 5% ≥₹325/day, 7.5% ≥₹485, 10% ≥₹750.]\n\n";
+
   function init() {
     var widget = document.getElementById("sk-chat-widget");
     if (!widget || widget.dataset.mounted === "1") return;
@@ -63,7 +72,22 @@
     // instantly with NO Gemini call, saving API tokens/quota on the most common taps.
     // Typing a question still goes to Gemini. NOTE: these mirror the same facts as
     // BUSINESS_CONTEXT / the FAQ — keep them in sync when prices or policies change.
-    var CHIPS = [
+    var CHIPS = IS_LS ? [
+      { label: "🚚 Delivery & pickup", msg: "How does delivery work here and what does it cost?",
+        answer: "**Good news — delivery on this page is always FREE.** 🎉\n\n• **Doorstep delivery** to Ganga Serio is **launching soon** — we'll notify you the moment it starts.\n• Until then, **📦 Self Pickup** is available from **G2 804, Ganga Serio, Kharadi**.\n• No delivery charges, no minimum order — ever. 💛" },
+      { label: "💰 How pricing works", msg: "How does your pricing work — how do I build a meal and what does it cost?",
+        answer: "You build your own meal — no fixed thali, pick exactly what you want (Lunch & Dinner):\n\n**Breads:** Chapati ₹10 · Without-oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar/Bajra Bhakri ₹22\n**Sabji:** Mini 100ml ₹24 · Full 250ml ₹48 (dry or curry)\n**Basics:** Dal ₹24 · Dal Fry ₹40 · Rice ₹13 · Salad ₹8 · Curd ₹13\n\nA typical meal — 2 Chapati + Full Sabji + Dal + Rice — is about ₹105 before discounts. 💛" },
+      { label: "🎁 Discounts & loyalty", msg: "How do the discounts and the loyalty programme work?",
+        answer: "**Automatic day discounts** (on your whole day's food total):\n• 5% off at ₹325+\n• 7.5% off at ₹485+\n• 10% off at ₹750+\n\n**Loyalty:** order 6 days in a row and on day 6 you get 5% of your 6-day food total back. Sundays (closed) don't break the streak.\n\n**Review reward:** leave a 5-star Google review and get 10% off your next order. 🌟" },
+      { label: "⚡ Bulk meal plans", msg: "Tell me about your weekly, 15-day and monthly bulk meal plans.",
+        answer: "Order in advance and save more:\n• **Weekly** — 6 days, 5% off\n• **15-Day** — 13 days, 7.5% off\n• **Monthly** — 26 days, 10% off\n\nYou can **postpone** days if plans change (15-Day: 2 lunch + 2 dinner; Monthly: 4 + 4) instead of cancelling. Cancelling a day forfeits that meal's bulk discount. Sundays are off." },
+      { label: "⏰ Order timings", msg: "What are your order cut-off timings?",
+        answer: "Same-day order cut-offs:\n• ☀️ **Lunch** — by 9:00 AM\n• 🌙 **Dinner** — by 4:30 PM\n\nYou can order for **future dates anytime**. We're closed on **Sundays**. (Cut-offs can shift slightly on special days — the order page always shows the live time.)" },
+      { label: "👛 Svaadh Wallet", msg: "What is the Svaadh Wallet and how do refunds work?",
+        answer: "Your **Svaadh Wallet** is your prepaid balance with us.\n• Recharge any time and pay in a tap at checkout.\n• Any **refund** (e.g. a cancelled meal) goes back to your wallet **instantly** — no waiting.\n• Cancel before that meal's cut-off from '📋 Manage Orders'.\n\nSee every wallet transaction under '👛 Wallet' on the order page." },
+      { label: "🏢 Who is this page for?", msg: "Which building and wings does this page serve?",
+        answer: "This page is **exclusively for Ganga Serio residents, Kharadi**.\n\n• Wings **A, B, C, D** → Liviano\n• Wings **E1, E2, F1, F2, G1, G2** → Serio\n\nSelect your Wing and your Society fills in automatically. Live outside Ganga Serio? Please order from **svaadhkitchen.in/order.html**. 😊" }
+    ] : [
       { label: "💰 How pricing works", msg: "How does your pricing work — how do I build a meal and what does it cost?",
         answer: "You build your own meal — no fixed thali, pick exactly what you want:\n\n**Breads:** Chapati ₹10 · Without-oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar/Bajra Bhakri ₹22\n**Sabji:** Mini 100ml ₹24 · Full 250ml ₹48 (dry or curry)\n**Basics:** Dal ₹24 · Rice ₹13 · Salad ₹8 · Curd ₹13\n**Breakfast:** rotates daily, ₹35–₹70.\n\nA typical meal — 2 Chapati + Full Sabji + Dal + Rice — is about ₹105 before discounts. 💛" },
       { label: "🚚 Delivery & charges", msg: "What are your delivery charges and when is delivery free?",
@@ -172,7 +196,7 @@
       try {
         var res = await fetch(APPS_SCRIPT_URL, {
           method: "POST",
-          body: JSON.stringify({ _action: "chat", message: text, history: historyForApi(), page: "order" })
+          body: JSON.stringify({ _action: "chat", message: IS_LS ? (LS_CONTEXT + text) : text, history: historyForApi(), page: IS_LS ? "liviano_serio" : "order" })
         });
         var data = await res.json();
         typing.remove();
@@ -186,6 +210,10 @@
     }
 
     function greet() {
+      if (IS_LS) {
+        append("Hi! 👋 Welcome to Svaadh Kitchen for Ganga Serio! Ask me anything — Lunch & Dinner menu, pricing, free delivery, bulk plans or how to order. 🏢", "bot", false);
+        return;
+      }
       append("Hi! 👋 I'm the Svaadh Kitchen assistant. Ask me anything about the menu, pricing, delivery, discounts, bulk plans or how to order — no need to dig through the guides.", "bot", false);
     }
 

@@ -118,7 +118,9 @@ function _reconcileSingleEntry(orderId, entry) {
 
   try {
     // ── Wallet recharge? Route to recharge finalizer ────────────────────────
-    if (/^SK\d{6}W/.test(orderId)) {
+    // "SK" = main site, "LS" = Liviano-Serio recharge (credits LS_Wallet via the
+    // pending entry's storefront).
+    if (/^(SK|LS)\d{6}W/.test(orderId)) {
       const r = hdfc_finalizeWalletRecharge(orderId);
       if (r.success && !r.already_credited) return { outcome: "reconciled", kind: "recharge" };
       if (r.success && r.already_credited)  return { outcome: "skippedAlreadyDone", kind: "recharge" };

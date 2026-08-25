@@ -33,10 +33,14 @@ function _lsDeliveryFree(storefront) {
   return storefront === "LS" && LS_FREE_DELIVERY;
 }
 
+// Columns SK_Orders carries that the LS storefront never collects (address
+// form has no maps link / landmark). Excluded from LS_Orders at creation and
+// removable from an existing tab via lsTrimSchema (dry-run default).
+const LS_DROP_COLUMNS = ["Maps_Link", "Landmark"];
+
 // The orders tab for a storefront. Lazily creates LS_Orders with the SAME
-// header row as SK_Orders (cloned at creation time so dynamic columns that
-// were self-healed onto SK_Orders over time are present from day one —
-// keeps headerIndex() consistent across both tabs for cross-tab logic).
+// header row as SK_Orders MINUS LS_DROP_COLUMNS (keeps headerIndex() honest
+// for every writer — set() simply skips columns the tab doesn't have).
 function _lsOrdersWs(ss, storefront) {
   if (storefront !== "LS") return getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   let ws = ss.getSheetByName(TAB_LS_ORDERS);
@@ -44,12 +48,41 @@ function _lsOrdersWs(ss, storefront) {
     const sk = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
     const lastCol = sk.getLastColumn();
     const headers = lastCol > 0 ? sk.getRange(1, 1, 1, lastCol).getValues()[0] : ORDERS_HEADERS;
+    const lsHeaders = headers.filter(function (h) { return LS_DROP_COLUMNS.indexOf(String(h).trim()) === -1; });
     ws = ss.insertSheet(TAB_LS_ORDERS);
-    ws.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
+    ws.getRange(1, 1, 1, lsHeaders.length).setValues([lsHeaders]).setFontWeight("bold");
     ws.setFrozenRows(1);
-    console.log("Created " + TAB_LS_ORDERS + " tab with " + headers.length + " columns (schema cloned from SK_Orders).");
+    console.log("Created " + TAB_LS_ORDERS + " tab with " + lsHeaders.length + " columns (SK schema minus LS-drop columns).");
   }
   return ws;
+}
+
+// Trim the drop-columns from an EXISTING LS_Orders tab. DRY-RUN DEFAULT:
+// call with commit=true (or ?action=lsTrimSchema&pin=…&commit=1) to execute.
+// Whole-COLUMN deletion keeps row alignment intact and per-tab headerIndex()
+// re-derives on next read, so writers/readers adapt automatically.
+function lsTrimSchema(commit) {
+  const ss = getSpreadsheet();
+  const ws = ss.getSheetByName(TAB_LS_ORDERS);
+  if (!ws) return { success: true, note: TAB_LS_ORDERS + " does not exist yet — nothing to trim (it will be created without them)." };
+  const headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0].map(String);
+  const found = [];
+  headers.forEach(function (h, i) {
+    if (LS_DROP_COLUMNS.indexOf(h.trim()) !== -1) found.push({ col: i + 1, name: h });
+  });
+  if (!found.length) return { success: true, note: "Already trimmed.", columns: headers.length };
+  if (commit !== true) {
+    return { success: true, dryRun: true, wouldDelete: found, columnsNow: headers.length,
+             note: "Dry run — pass commit=1 to delete these columns." };
+  }
+  // Delete right-to-left so indices stay valid
+  found.sort(function (a, b) { return b.col - a.col; }).forEach(function (f) {
+    ws.deleteColumn(f.col);
+  });
+  try { SpreadsheetApp.flush(); } catch (e) {}
+  const remaining = ws.getLastColumn();
+  console.log("lsTrimSchema: deleted " + found.length + " column(s); " + remaining + " remain.");
+  return { success: true, deleted: found, columnsRemaining: remaining };
 }
 
 // Both order tabs — SK first (canonical), then LS.
@@ -88,6 +121,39 @@ function _getAllOrdersBothTabsIfPresent(ss) {
     }
   } catch (e) { /* LS tab not created yet — fine */ }
   return out;
+}
+
+// ── Identity & wallet routing (separate books per storefront) ───────────────
+// Owner decision 2026-08-25: LS runs a FULLY SEPARATE customer base + wallet.
+// Same phone on both pages = two independent accounts. Every identity/wallet
+// read+write routes by storefront; main-site paths (storefront "") are
+// untouched and keep using SK_Customers / SK_Wallet.
+function _customersTabFor(ss, storefront) {
+  if (storefront === "LS") {
+    const ws = ss.getSheetByName(TAB_LS_CUSTOMERS);
+    if (ws) return ws;
+    const sk = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+    const created = ss.insertSheet(TAB_LS_CUSTOMERS);
+    created.getRange(1, 1, 1, sk.getLastColumn()).setValues([sk.getRange(1, 1, 1, sk.getLastColumn()).getValues()[0]]).setFontWeight("bold");
+    created.setFrozenRows(1);
+    console.log("Created " + TAB_LS_CUSTOMERS + " tab (schema cloned from SK_Customers).");
+    return created;
+  }
+  return getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+}
+
+function _walletTabFor(ss, storefront) {
+  if (storefront === "LS") {
+    const ws = ss.getSheetByName(TAB_LS_WALLET);
+    if (ws) return ws;
+    const sk = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+    const created = ss.insertSheet(TAB_LS_WALLET);
+    created.getRange(1, 1, 1, WALLET_HEADERS.length).setValues([WALLET_HEADERS]).setFontWeight("bold");
+    created.setFrozenRows(1);
+    console.log("Created " + TAB_LS_WALLET + " tab (canonical wallet schema).");
+    return created;
+  }
+  return getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
 }
 
 // Self-pickup label for order rows: LS storefront hands over at Ganga Serio,

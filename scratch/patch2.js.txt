@@ -1,0 +1,12 @@
+const fs = require('fs');
+let html = fs.readFileSync('docs/Admin/vault_admin.html', 'utf8');
+
+const search = 'badges.innerHTML  = `${todayBadge}${statusBadge}${sundayChip}${kitchenChip}';
+const search2 = '<button class="save-hero-btn"';
+
+const repl = 'badges.innerHTML  = `${todayBadge}${statusBadge}${sundayChip}${kitchenChip}\\n    <button class="reload-hero-btn" onclick="loadFullAdminData()">🔄 Reload</button>\\n    <button class="save-hero-btn"';
+
+html = html.replace(/badges\.innerHTML\s*=\s*`\$\{todayBadge\}\$\{statusBadge\}\$\{sundayChip\}\$\{kitchenChip\}\r?\n\s*<button class="save-hero-btn"/g, repl);
+
+fs.writeFileSync('docs/Admin/vault_admin.html', html);
+console.log('Patched');

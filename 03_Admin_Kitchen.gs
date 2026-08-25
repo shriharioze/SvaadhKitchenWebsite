@@ -818,9 +818,27 @@ function markRefunded(submissionId, forceWallet = false) {
       const name = nameIdx !== -1 ? String(row[nameIdx]) : "Customer";
       const amt = amtIdx !== -1 ? Number(row[amtIdx]) : 0;
 
+      // Route the wallet credit to the ORDER's storefront wallet (LS refunds
+      // credit LS_Wallet). Looked up BEFORE the credit so the tab is known.
+      let _rfSf = "";
+      try {
+        [TAB_ORDERS, TAB_LS_ORDERS].some(function (_tn) {
+          const ows = ss.getSheetByName(_tn);
+          if (!ows || ows.getLastRow() < 2) return false;
+          const oh = ows.getRange(1, 1, 1, ows.getLastColumn()).getValues()[0].map(String);
+          const oid2 = oh.indexOf("Submission_ID");
+          if (oid2 === -1) return false;
+          const vals = ows.getRange(2, oid2 + 1, ows.getLastRow() - 1, 1).getValues();
+          for (var q = 0; q < vals.length; q++) {
+            if (String(vals[q][0]).trim() === String(submissionId)) { _rfSf = (_tn === TAB_LS_ORDERS) ? "LS" : ""; return true; }
+          }
+          return false;
+        });
+      } catch (e) {}
+
       // Logic: If user chose Wallet refund (or we forced it), perform the ledger entry now
       if (mode === "wallet" && phone && amt > 0) {
-        _appendWalletTransaction(phone, name, "Order Cancellation Refund", amt, true, String(submissionId));
+        _appendWalletTransaction(phone, name, "Order Cancellation Refund", amt, true, String(submissionId), _rfSf);
       }
 
       // Mark the refund row as done

@@ -22,11 +22,12 @@ function _ensureLastOrderCol(ws) {
 }
 
 // Stamp a customer's Last_Order_At = now. Called after an order is placed.
-// Best-effort: never throws into the order flow.
-function updateCustomerLastOrder(phone) {
+// Best-effort: never throws into the order flow. Storefront-routed: LS orders
+// stamp LS_Customers, main-site orders stamp SK_Customers.
+function updateCustomerLastOrder(phone, storefront) {
   try {
     const ss = getSpreadsheet();
-    const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+    const ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
     const col = _ensureLastOrderCol(ws);
     const pStr = _normalizePhone(phone);
     const r = getAllRows(ws).find(function (x) { return _normalizePhone(x.Phone) === pStr; });

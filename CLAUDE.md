@@ -1,59 +1,86 @@
 # Svaadh Kitchen — AI Assistant Brief (READ FIRST)
 
-LIVE production system with REAL MONEY. Vegetarian cloud kitchen, Hadapsar Pune.
+LIVE production system with REAL MONEY. Vegetarian cloud kitchen — main site serves Hadapsar, Pune; second storefront "Liviano-Serio" serves Ganga Serio, Kharadi.
 Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkitchen.in).
 
-## File map — go straight to the right file, never explore the whole folder
-- `00_Config.gs` — constants, CODE_VERSION (changelog in its comment!), BUSINESS_CONTEXT (the chatbot's brain — NOT Backend/business.json)
-- `Code.gs` — doGet/doPost routing, stock-limit helpers, shared utils (_cachedData, getISTDate)
-- `02_Orders_Menu.gs` — getMenu, submitOrder (authoritative order write), wallet (_calculateWalletBalance), loyalty streak, society aliases, cutoffs, lost-order audit
-- `03_Admin_Kitchen.gs` — getAdminData, menu CRUD, setKitchenClosed (per-meal), refunds queue, driver/labels/packaging
-- `04_Reports_Misc.gs` — chatbot (handleChat/buildSystemPrompt/callGemini), analytics (_analyticsCore), forecast, archiver, compactWalletLedger, getOrdersInRangeWithArchive
-- `06_Bulk_Orders.gs` — bulk plans (week/15day/month), postpone, pricing parity, submitBulkOrder (locked write)
-- `07_Labels_Auto.gs` — auto label PDFs at cutoff+5 (Google Slides API absolute coordinate positioning, exact 27.7mm pitch + dividing lines to prevent thermal printer drift)
-- `10_Hdfc_Gateway.gs` — HDFC SmartGateway: sessions, webhooks, refunds, on-account settlement
-- `11/12_*.gs` — order + payout reconcilers (self-healing)
-- `docs/order.html` — THE customer app (APP_VERSION marker); `docs/Admin/vault_admin.html` — admin panel; `docs/index.html` — SEO home; `docs/chat.js` — chat widget
-- All .gs files share ONE global scope (00_Config loads first).
-
 ## Deploy workflow — git push alone does NOT deploy the backend
-- Backend: `clasp push -f` (updates HEAD, validates syntax) → bump CODE_VERSION in 00_Config.gs with a changelog comment → `clasp deploy -i AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W -d "msg"` → verify: GET `<exec>?action=version`.
-- Frontend: bump APP_VERSION (and any visible version text) in any modified HTML file (docs/order.html, docs/intentamplify.html, docs/Admin/vault_admin.html, kitchen.html, driver.html, etc.) to trigger auto-reload for clients → git commit + push (GitHub Pages serves docs/ from main).
+- Backend: `clasp push -f` (updates HEAD, validates syntax) → bump CODE_VERSION in 00_Config.gs with a changelog comment → `clasp push -f` AGAIN (the bump must be in the pushed code) → `clasp deploy -i AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W -d "msg"` → verify: GET `<exec>?action=version`.
+- ⚠️ **clasp deploy pins a VERSION SNAPSHOT.** Pushing after deploying does NOT change a live deployment — re-run `clasp deploy` after every emergency push (2026-08-24 incident: ~10 min outage).
+- ⚠️ **NEVER leave scratch .js files at repo root** — clasp pushes them and GAS executes .js globally (`require()` crash = total outage). Keep scratch in `scratch/` (gitignored + claspignored).
+- Frontend: bump APP_VERSION (and any visible version text) in any modified HTML file (docs/order.html, docs/Liviano-Serio.html, docs/Admin/vault_admin.html, kitchen.html, driver.html, etc.) → git commit + push (GitHub Pages serves docs/ from main).
 - ALWAYS commit to git after deploying (live and git must never diverge).
-- Deploys take ~10s to propagate — re-check `?action=version` before concluding a fix "didn't work".
+- Deploys take ~10s+ to propagate — re-check `?action=version` before concluding a fix "didn't work". Each deploy resets GAS caches/instances → the site is SLOW for a few minutes after every deploy (cold starts). Avoid deploying during business hours; batch changes.
+
+## File map — go straight to the right file, never explore the whole folder
+
+### Backend (.gs at repo root — ONE global scope, 00_Config loads first)
+- `00_Config.gs` — CODE_VERSION (changelog in its comment!), all constants: tab names (SK_*/LS_*), ORDERS_HEADERS (60-col canonical schema), ITEM_COL_MAP, DEFAULT_ORDER_CAPS/CUTOFFS, CAP_DELIVERY_BYPASS_MIN, LS constants (TAB_LS_ORDERS/LS_CUSTOMERS/LS_WALLET, LS_ORDER_PAGE_URL, LS_SOCIETY_NAME, LS_FREE_DELIVERY, LS_PICKUP_ADDRESS), HDFC config (Script Properties refs), BUSINESS_CONTEXT (main-site chatbot brain).
+- `Code.gs` — doGet/doPost ROUTERS (every action; LS storefront passed via `p.storefront`/`_lsStorefront(body)` into identity/wallet actions), HDFC return-redirect routing (order_id prefix: IA→intentamplify, LS→Liviano-Serio.html, else order.html), shared utils: `getSpreadsheet`, `headerIndex`, `getAllRows`, `getRecentRows`, `generateSubmissionID(prefix)` ("SK-"/"LS-"), `getISTDate/Timestamp`, `_effectiveOrderCaps`, `_stripItemSuffix`, `itemsJsonKey`, `countOrderedUnits`, `_calculateWalletBalance(phone, preloadedRows, storefront)`, `_appendWalletTransaction(..., storefront)`.
+- `02_Orders_Menu.gs` — THE ORDER ENGINE. `submitOrder`→`_submitOrderInternal` (lock, idempotency, cap/stock pre-flights, LS rules, pricing, wallet deduct, dedup layers, row write, `_missedOrderSafetyNet(..., tabName)`); `getCustomer(phone, storefront)`, `verifyLogin(phone, pin, storefront)` (LS skips SK-archive + login notices), `_upsertCustomer(ss, profile, storefront)`, `getCustomerOrders(phone, storefront)`, `verifyOrderPlaced` (storefront-routed), `getDayTotalsForDates(..., storefront)`, `_calculateLoyaltyStreak(..., storefront)`, `getWalletTransactions(phone, storefront)`, `deleteOrder`→`_deleteOrderInternal` (per-row `_wsOf/_hOf` cross-tab writes, clawbacks with cell re-read fix), PIN-reset OTP trio (storefront-routed), `markOnAccount`, cutoff/cap helpers (`_effectiveCutoffsForDate`, `_getDefaultOrderCaps`), `_kitchenClosedSet/_isMealKitchenClosed`.
+- `03_Admin_Kitchen.gs` — `getAdminData`→`_getAdminDataUncached` (LS rows merged: prep counts INCLUDE, delivery-cap slots EXCLUDE), menu CRUD (`saveMenu`, `setKitchenClosed` per-meal), `getKitchenSummary`/`getDriverOrders`/`getLabelOrders` (`.concat(ls_rowsAsSK())` IA-pattern), `markRefunded` (wallet credit routed by order's tab), `getOrderSummary` (rows carry `ls:true` → [LS] badge), areas CRUD, packaging, `saveLabels`.
+- `04_Reports_Misc.gs` — chatbot (`handleChat`, BUSINESS_CONTEXT prompt), `markOrdersStatus` (cross-tab, per-row `_wsOf/_hOf`, cell re-read fix), `getOrderHistory` (ls flag), `getCustomerList/History` (main-site customers only), `_analyticsCore`/`getAnalytics`/forecast (via `getOrdersInRangeWithArchive` which includes LS), `archiveMonth` (SK_Orders only — LS_Orders intentionally NOT archived yet), `getOrdersInRangeWithArchive` (unions LS live rows, tagged `_lsTab`), `markOrderPacked` (cross-tab).
+- `05_Customer_Archive.gs` — `updateCustomerLastOrder(phone, storefront)`, `archiveIdleCustomers` (SK_Customers only), `_findArchivedCustomer/_restoreArchivedCustomer` (SK archives; LS never archived).
+- `06_Bulk_Orders.gs` — bulk engine: `_bulkFeeCtx(phone, profile, storefront)` (ctx.lsFree), `_bulkPriceFromWindows` (LS free delivery), `_bulkComputeBatch`, `submitBulkOrder` (storefront-routed tab + wallet, LOCKED), `submitBulkDirect` (wallet/on-account), `hdfc_finalizeBulkOrder` (stash→routed write), `postponeBulkOrder`/`getBulkPostponeInfo` (cross-tab row lookup).
+- `07_Labels_Auto.gs` — auto label PDFs at cutoff+5 (Slides API, anti-drift). Reads via getLabelOrders (includes LS).
+- `10_Hdfc_Gateway.gs` — HDFC SmartGateway: `hdfc_createSession` (authoritative amount via `_computeAuthoritativeTotal(savedOrders, phone, storefront)` / `_bulkAuthoritativeTotal(..., storefront)`, split-wallet balance read routed), `hdfc_savePendingOrder` (stash carries `storefront`), `hdfc_markOrderPaid/markOrderFailed` (scan BOTH order tabs), `_hdfcAmountMismatch`, `hdfc_createWalletRechargeSession` (LS ids "LS…W", stash storefront) / `hdfc_finalizeWalletRecharge` (credits routed wallet), on-account session/settle.
+- `11_Hdfc_Reconciler.gs` — self-healing: `_reconcileSingleEntry` (per-order lock; recharge regex `/^(SK|LS)\d{6}W/`; dedup scans both tabs; `_buildSubmitBodyFromPending` passes storefront through), `hdfc_reconcileOrderFromStash`, `reconcilePendingOrders` sweep.
+- `12_Payout_Reconciler.gs` — payout reconciliation.
+- `13_LivianoSerio.gs` — **LS STOREFRONT MODULE** (read this first for LS work): `_lsStorefront(body)`, `_lsDeliveryFree(sf)`, `_lsOrdersWs(ss, sf)` (lazy LS_Orders, SK schema minus LS_DROP_COLUMNS=[Maps_Link, Landmark]), `_customersTabFor(ss, sf)` (lazy LS_Customers), `_walletTabFor(ss, sf)` (lazy LS_Wallet), `_lsPickupLabel(sf)`, `ls_rowsAsSK()`, `lsTrimSchema(commit)` (dry-run default; admin GET `?action=lsTrimSchema&pin=…&commit=1`). NOTE: `_getAllOrdersBothTabs*` helpers are LEGACY (pre-separate-bases) — identity reads are now own-tab only.
+- `IntentAmplify.gs` — corporate channel (IA_*, [IA] name prefix, manual UPI default) — separate pattern; do not confuse with LS.
+
+### Frontend (docs/ — GitHub Pages)
+- `docs/order.html` — MAIN customer app (APP_VERSION marker; Hadapsar; B/L/D; gateway+wallet). DO NOT touch for LS changes.
+- `docs/Liviano-Serio.html` — LS storefront clone. LS-specific: `STOREFRONT="LS"` injected into every POST by `apiPost`; LS-prefixed gateway ids; `_lsApplyAddressLocks`-era helpers `_lsSocietyForWing/_lsSyncSociety/_lsPinSocietyInputs` (area=Kharadi locked, wing dropdown A–G2, society auto Liviano/Serio); free-delivery UI; Breakfast removed; LS texts in guide/FAQ/JSON-LD; `&storefront=LS` on all GET identity/order/wallet calls.
+- `docs/order-chat.js` — help-chat widget (shared). `IS_LS` gates chips/greeting; Gemini messages prefixed with LS_CONTEXT; main-page behavior unchanged.
+- `docs/Admin/vault_admin.html` — admin panel ([LS] badge via `c.ls`/`o.ls`; APP_VERSION marker).
+- `docs/Admin/kitchen.html`, `docs/Admin/driver.html` — ops surfaces (LS rows included server-side).
+- `docs/intentamplify.html` + `docs/Admin/ia_admin.html` — IA corporate channel.
+- `docs/index.html` — SEO home (keep FAQ in sync with BUSINESS_CONTEXT when facts change).
+
+### Data tabs (master Google Sheet)
+SK_Orders · SK_Customers · SK_Wallet · SK_Daily_Menu · SK_Areas · SK_Refunds · SK_Webhook_Log · SK_Missed_Orders · SK_Default_Cutoffs/Caps · SK_Master_Breakfast/Sabjis · SK_Login_Notices · SK_Deliveries · IA_* · **LS_Orders** (SK schema minus Maps_Link/Landmark) · **LS_Customers** · **LS_Wallet** (all lazily created by 13_LivianoSerio.gs helpers).
+
+## SEPARATE BASES rule (owner decision 2026-08-25) — LS architecture
+- LS is a fully independent customer base: same phone on both pages = TWO independent accounts (own PIN, profile, wallet, loyalty). NO cross-page dedupe, NO cross-page streak, NO shared wallet.
+- Every identity/wallet/order read+write routes by `storefront` ("LS" | ""). Main-site behavior must stay byte-identical when absent.
+- LS order rules: delivery caps NEVER apply & LS counts 0 slots; item stock never blocks LS (but LS consumption depletes shared stock display); **delivery FREE** (`LS_FREE_DELIVERY` Script Property, default ON — set "false" to restore ₹11 rules); small-order fee ₹11 (<₹53) still applies; society auto-set from wing (A–D=Liviano, E1–G2=Serio); area locked "Kharadi"; pickup handover "G2 804, Ganga Serio, Kharadi" (`_lsPickupLabel`); gateway ids prefixed "LS" (orders AND recharges); kitchen prep counts INCLUDE LS; admin shows [LS] badge.
+- LS page: unlisted (noindex), Lunch & Dinner only, bulk plans enabled, HDFC gateway + LS_Wallet.
 
 ## Money rules — violating these has cost real money before
-1. The gateway ALWAYS recomputes the authoritative total server-side (`_computeAuthoritativeTotal`, `_bulkAuthoritativeTotal`, `_computeOnAccountDue`). NEVER trust or subtract client-sent amounts from a charge. Reconcile gaps by over-collecting + refunding to wallet.
-2. Charge == storage: what HDFC charges must equal the sum of written rows.
-3. Loyalty 6-day streak is computed in THREE engines that must agree: frontend (order.html calculateLoyaltyStreak + bill), submitOrder, gateway. The frontend's history INPUT (streak_rows, 45 rows) is part of the contract — never feed it truncated history. **Partial-close bug (fixed 2026-08-13):** the backend must check for a valid order on a day BEFORE checking if the day is closed/Sunday. If the customer ordered an open meal on a partially-closed day, that day counts toward their streak. The old code skipped the entire day on any closure, silently reducing the streak count and robbing customers of their 6th-day discount.
-4. Discount tiers (5%≥325 / 7.5%≥485 / 10%≥750) are HARDCODED in 5 places (order.html, submitOrder, gateway, bulk, reports) — change all or charge≠cart.
-5. Delivery: ₹11/meal; free at day-food ₹106 (1 meal) / ₹159 (2) / ₹190 (3); small fee ₹11 if L/D meal <₹53; free areas Bhosale Nagar + Triveni Nagar + pickup/porter. Cap bypass: meal ≥₹200 (breakfast ₹100) still delivered when slots full. **Cap Counting Rule:** Slots are counted by UNIQUE customer name per meal (e.g. 2 Lunch orders by the same person = 1 slot). VIPs (`Fee_Exempt` = Yes) count as 0 slots. Enkin/IA collapse to 1 slot per meal.
-6. Wallet: `_calculateWalletBalance` classifies by Txn_Type KEYWORDS — credit keywords (recharge/refund/credit/carry) win first; never name a debit type with them. Wallet is NEVER archived by archiveMonth; the ONLY safe shrink is `?action=compactWalletLedger` (dry-run default, commit=1; full backup tab auto-created).
-7. On-account status check: use `_isOnAccountDueStatus` only. Kitchen-closed check: use `_closedMealsObj`/`_isMealKitchenClosed` (per-meal), not raw Kitchen_Closed.
-8. Stock keys: Items_JSON names are suffix-stripped; always join via `itemsJsonKey`/`_stripItemSuffix`.
-9. HDFC refund API returns 401 "Merchant disabled for refund" until HDFC enables the MID — cancelled gateway orders queue as manual refunds; run `retryQueuedRefunds()` (editor) once enabled. Test transport anytime: `?action=hdfcRefundTransportTest`.
-10. **SK_Orders lock rule:** EVERY function that writes to SK_Orders (appendRow OR setValue) MUST hold `LockService.getScriptLock()` with try/finally release. Unlocked writers cause Google Sheets' internal buffer to silently drop concurrent `appendRow` calls — the root cause of "missing order" incidents. Currently locked writers: `submitOrder` (10s), `submitBulkOrder` (30s), `submitBulkDirect` (20s), `deleteOrder` (15s), `markOrdersStatus` (8s), `_reconcileSingleEntry` (15s), `hdfc_markOrderPaid` (10s), `hdfc_markOrderFailed` (10s), `submitManualOrder` (10s), `archiveMonth` (30m). If you add a new SK_Orders writer, wrap it in a lock or orders WILL go missing.
-11. **Bulk duplicate race condition (fixed 2026-08-17):** `submitBulkOrder` now holds a script lock around its entire write path. Without it, the browser's `hdfc_finalizeBulkOrder` and the webhook's `hdfc_reconcileOrderFromStash` could both fire within the same second, both read zero existing rows, and both write the full batch — creating exact duplicates (e.g. 52 unique meals → 80 rows). The existing idempotency check (`existingKeys`) only works when the second caller can SEE the first caller's rows, which requires the lock.
-12. **Kitchen count roundoff rule:** ALL kitchen summary counts and kg portions (Dal, Dal Fry, etc.) use `_customKitchenRound` (decimal $\ge 0.35$ rounds up $+1$, $\le 0.34$ rounds down $+0$). e.g., Varan `11.97` $\rightarrow$ `12`, Dal Fry `7.98` $\rightarrow$ `8`.
-13. **Negative Wallet Balances:** If a user's wallet has a negative balance (e.g. manual admin deduction), the system automatically forces them to pay it off on their next order (standard or bulk) by inflating the checkout/gateway total and logging a `Debt Recovery Recharge` to reset the wallet to 0.
+1. The gateway ALWAYS recomputes the authoritative total server-side (`_computeAuthoritativeTotal`, `_bulkAuthoritativeTotal`, `_computeOnAccountDue`). NEVER trust client-sent amounts. Reconcile gaps by over-collecting + refunding to wallet.
+2. Charge == storage: what HDFC charges must equal the sum of written rows. Pricing rules are mirrored in N places (frontend cart, submitOrder, `_computeAuthoritativeTotal`, bulk engines) — change ALL together.
+3. Loyalty 6-day streak engines must agree: frontend (order.html / LS page calculateLoyaltyStreak + bill), submitOrder, gateway recompute. Each storefront's streak reads ITS OWN orders tab only (separate bases). Partial-close rule: check for a valid order on a day BEFORE treating the day as closed/Sunday.
+4. Discount tiers (5%≥325 / 7.5%≥485 / 10%≥750) hardcoded in 5 places — change all or charge≠cart.
+5. Delivery: main site ₹11/meal, free at ₹106/159/190, free areas Bhosale Nagar+Triveni Nagar+pickup/porter. LS: always free. Cap bypass ≥₹200 (breakfast ₹100). **Cap Counting:** unique customer name per meal; VIPs (Fee_Exempt) = 0 slots; Enkin/IA collapse to 1; LS = 0 slots, never blocked.
+6. Wallet: `_calculateWalletBalance` classifies Txn_Type KEYWORDS (credit keywords win first; never name a debit type with them). Wallet is NEVER archived; only safe shrink is `?action=compactWalletLedger` (dry-run default). LS wallet is LS_Wallet — route by storefront, refunds credit the ORDER's wallet.
+7. On-account status: `_isOnAccountDueStatus` only. Kitchen-closed: `_closedMealsObj`/`_isMealKitchenClosed` (per-meal).
+8. Stock keys: Items_JSON names are suffix-stripped; join via `itemsJsonKey`/`_stripItemSuffix`.
+9. HDFC refund API returns 401 "Merchant disabled for refund" until HDFC enables the MID — cancelled gateway orders queue as manual refunds; run `retryQueuedRefunds()` once enabled. Test transport: `?action=hdfcRefundTransportTest`.
+10. **SK_Orders/LS_Orders lock rule:** EVERY writer to an orders tab MUST hold `LockService.getScriptLock()` (try/finally). Unlocked writers get silent appendRow drops = missing orders. Locked writers: submitOrder(10s), submitBulkOrder(30s), submitBulkDirect(20s), deleteOrder(15s), markOrdersStatus(8s), _reconcileSingleEntry(15s), hdfc_markOrderPaid(10s), hdfc_markOrderFailed(10s), submitManualOrder(10s), archiveMonth(30m), _appendWalletTransaction(10s, re-entrant).
+11. Bulk duplicate race: submitBulkOrder holds the lock across its whole write path (finalize + webhook reconcile can race).
+12. Kitchen count roundoff: `_customKitchenRound` (≥0.35 rounds up).
+13. Negative wallet → forced Debt Recovery Recharge on next order (both storefronts, own wallet).
+14. Clawback writes must RE-READ stored Net_Total before adding deltas — the over-discount and fee-clawback blocks can both fire on the same row; stale in-memory values silently drop the discount restore (fixed 2026-08-25, was a live under-refund bug).
+15. When editing any function, check its callers for NEW required params (storefront pattern) — node --check does NOT catch undefined-variable runtime throws.
 
 ## Testing rituals (these produced the quality — keep them)
-- Money/logic change in .gs: EXTRACT the real function text (regex, mind CRLF `\r?\n`) and eval it in a Node script with stubbed globals; assert realistic scenarios BEFORE deploying. Note: eval'd `const` doesn't leak — extract the RHS and assign to global.
-- Frontend change: drive the real page in a browser/preview (call the actual functions, read the DOM), not just eyeball the code.
-- Admin data ops: build dry-run-by-default endpoints (`&commit=1` to execute) and run the dry-run live first.
-- After every backend deploy: one read-only live smoke call proving the change.
+- Money/logic change in .gs: EXTRACT the real function text (brace-matched, mind CRLF) and eval in a Node script with stubbed globals (FakeSheet emulator pattern in scratch/test_ls_e2e.js) — assert realistic scenarios BEFORE deploying. eval'd `const` doesn't leak — extract RHS and assign.
+- Harnesses (scratch/, gitignored): `test_ls_e2e.js` (43+ assertions, full submitOrder/deleteOrder path on fake sheets — THE gate before any deploy), `test_ls_differential.js` (2,000 assertions: new pricing engines vs `git show HEAD` old code + independent oracle), `test_ls_storefront.js`, `test_ls_safetynet.js`.
+- Frontend change: drive the real page in a browser; verify APP_VERSION marker live.
+- Admin data ops: dry-run-by-default endpoints (`&commit=1`), run dry-run live first.
+- After every backend deploy: `?action=version` + `?action=health` + read-only smoke (getMenu/getConfig/getAreas/getRateCard/getBulkWindow).
 
 ## Admin GET diagnostics (append &pin=<ADMIN PIN — ask the owner, never commit it>)
-`version` · `getPendingRefunds` · `listRecentRefunds&n=20` · `hdfcRefundTransportTest` · `auditOnAccountDrift` · `listSocieties` · `auditAmanoraTowers` · `backfillBulkPlan` · `seedAmanoraTowerAliases` · `compactWalletLedger` · `getForecastedMonthlySales` · `getDefaultCutoffs` · `getDefaultOrderCaps`
+`version` · `health` · `getPendingRefunds` · `listRecentRefunds&n=20` · `hdfcRefundTransportTest` · `auditOnAccountDrift` · `listSocieties` · `auditAmanoraTowers` · `backfillBulkPlan` · `seedAmanoraTowerAliases` · `compactWalletLedger` · `lsTrimSchema` (dry-run; `&commit=1` executes) · `getForecastedMonthlySales` · `getDefaultCutoffs` · `getDefaultOrderCaps`
 Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec`
 
 ## Facts that get answered wrong from stale data
-- PRICING_V2 is LIVE: Chapati 10, WO-Chapati 9, Phulka 8, Ghee Phulka 11, Bhakri 22, Sabji Mini 24/Full 48, Dal 24, Rice 13, Salad 8, Curd 13. No market surcharge (Inflation_Surcharge column = loyalty accrual only).
-- Cutoffs (admin-editable defaults, verify live): B 7:00 / L 9:00 / D 16:30. Sundays closed. Delivery Caps (admin-editable defaults via SK_Default_Caps): B 11 / L 24 / D 23.
+- PRICING_V2 LIVE: Chapati 10, WO-Chapati 9, Phulka 8, Ghee Phulka 11, Bhakri 22, Sabji Mini 24/Full 48, Dal 24, Dal Fry 40, Rice 13, Salad 8, Curd 13. No market surcharge (Inflation_Surcharge = loyalty accrual only).
+- Cutoffs (verify live): B 7:00 / L 9:00 / D 16:30. Sundays closed. Caps: B 11 / L 24 / D 23.
 - Bulk plans PUBLIC: Week 6d 5% / 15-Day 13d 7.5% / Month 26d 10%; postpone 2+2 / 4+4 within 30 days; cancel forfeits that meal's bulk discount.
+- LS storefront: Ganga Serio Kharadi, wings A–G2 (A–D=Liviano, E1–G2=Serio), Lunch & Dinner only, free delivery, pickup at G2 804, unlisted page.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Where the deep documentation lives
 - `git log` — every commit message is a full incident/design writeup. Start any investigation with `git log --oneline -15`.
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
-- Claude Code auto-memory (if available) has per-feature deep dives; this file is the distilled core.

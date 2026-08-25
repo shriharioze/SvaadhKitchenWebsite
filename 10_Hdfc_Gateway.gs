@@ -1999,10 +1999,11 @@ function hdfc_createWalletRechargeSession(body) {
   if (amount < 100)   return { error: "Minimum recharge is ₹100" };
   if (amount > 50000) return { error: "Maximum recharge per request is ₹50,000" };
 
-  // Customer name from sheet
+  // Customer name from sheet (routed: LS recharges look up LS_Customers)
+  const _sfW = _lsStorefront(body);
   let name = String(body.name || "Customer").trim();
   try {
-    const cRow = _findCustomerRow(getSpreadsheet(), phone);
+    const cRow = _findCustomerRow(getSpreadsheet(), phone, _sfW);
     if (cRow && cRow.Customer_Name) name = String(cRow.Customer_Name).trim();
   } catch(_) {}
 
@@ -2012,7 +2013,7 @@ function hdfc_createWalletRechargeSession(body) {
                  + String(now.getMonth()+1).padStart(2,"0")
                  + String(now.getDate()).padStart(2,"0");
   const rand     = Utilities.getUuid().replace(/-/g,"").toUpperCase().slice(0,9);
-  const orderId  = "SK" + datePart + "W" + rand;
+  const orderId  = (_sfW === "LS" ? "LS" : "SK") + datePart + "W" + rand;
 
   // Persist a recharge-pending entry so the return/webhook flow can credit later
   try {
@@ -2024,7 +2025,7 @@ function hdfc_createWalletRechargeSession(body) {
     Object.keys(pending).forEach(function(k) {
       if (nowMs - (pending[k].ts || 0) > 30*60*1000) delete pending[k];
     });
-    pending[orderId] = { ts: nowMs, phone: phone, name: name, amount: amount };
+    pending[orderId] = { ts: nowMs, phone: phone, name: name, amount: amount, storefront: _sfW };
     props.setProperty("HDFC_PENDING_RECHARGES", JSON.stringify(pending));
   } catch(e) { /* non-fatal */ }
 
@@ -2109,7 +2110,7 @@ function hdfc_finalizeWalletRecharge(orderId) {
 
   try {
     // Idempotency: check if already credited (column is "Reference_ID", not "Ref_Code")
-    const wsAll = getOrCreateTab(getSpreadsheet(), TAB_WALLET, WALLET_HEADERS).getDataRange().getValues();
+    const wsAll = _walletTabFor(getSpreadsheet(), pendingEntryStorefront(oid)).getDataRange().getValues();
     const headerRow = wsAll[0] || [];
     const refCol = headerRow.indexOf("Reference_ID");
     if (refCol !== -1) {
@@ -2131,19 +2132,25 @@ function hdfc_finalizeWalletRecharge(orderId) {
       return { error: "Gateway reports zero charged amount." };
     }
 
-    // Look up phone/name from pending entry
-    let phone = "", name = "Customer";
+    let phone = "", name = "Customer", _sfFinal = "";
+    function pendingEntryStorefront(oid2) {
+      try {
+        const pending2 = JSON.parse(PropertiesService.getScriptProperties().getProperty("HDFC_PENDING_RECHARGES") || "{}");
+        const e2 = pending2[oid2];
+        return (e2 && String(e2.storefront || "").toUpperCase() === "LS") ? "LS" : "";
+      } catch (_) { return ""; }
+    }
     try {
       const pending = JSON.parse(PropertiesService.getScriptProperties().getProperty("HDFC_PENDING_RECHARGES") || "{}");
       const entry = pending[oid];
-      if (entry) { phone = entry.phone || ""; name = entry.name || "Customer"; }
+      if (entry) { phone = entry.phone || ""; name = entry.name || "Customer"; _sfFinal = (String(entry.storefront || "").toUpperCase() === "LS") ? "LS" : ""; }
     } catch(_) {}
     if (!phone) {
       return { error: "Could not identify customer for recharge " + oid };
     }
 
     // Credit exactly the gateway-confirmed amount. Verified=true (gateway is trusted).
-    _appendWalletTransaction(phone, name, "Recharge (HDFC Gateway)", chargedAmount, true, oid);
+    _appendWalletTransaction(phone, name, "Recharge (HDFC Gateway)", chargedAmount, true, oid, _sfFinal);
     SpreadsheetApp.flush(); // ensure write is committed before lock release
     console.log("hdfc_finalizeWalletRecharge: credited ₹" + chargedAmount + " to " + phone + " (order " + oid + ")");
 

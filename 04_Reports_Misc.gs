@@ -968,7 +968,11 @@ function markOrdersStatus(body) {
             if (xH2["Small_Order_Fee"]) xWs2.getRange(x._row, xH2["Small_Order_Fee"]).setValue(11);
           }
           if (scNetDelta > 0 && xH2["Net_Total"]) {
-            xWs2.getRange(x._row, xH2["Net_Total"]).setValue((Number(x.Net_Total) || 0) + scNetDelta);
+            // FIX (stale-read): re-read stored Net_Total — the scOverDiscount block
+            // above may have already rewritten it; using the snapshot dropped the
+            // discount restore when both clawbacks fired on the same row.
+            const _curNet = Number(xWs2.getRange(x._row, xH2["Net_Total"]).getValue()) || 0;
+            xWs2.getRange(x._row, xH2["Net_Total"]).setValue(_curNet + scNetDelta);
           }
         });
       }
@@ -989,10 +993,10 @@ function markOrdersStatus(body) {
         // Wallet portion was already deducted at order time, UPI portion was paid by customer.
         // Both come back to wallet in full.
         if (amt > 0) {
-          _appendWalletTransaction(phone, custName, "Order Cancellation Refund", amt, true, String(r.Submission_ID));
+          _appendWalletTransaction(phone, custName, "Order Cancellation Refund", amt, true, String(r.Submission_ID), r._lsTab ? "LS" : "");
         }
       } else if (pref === "wallet" && amt > 0) {
-        _appendWalletTransaction(phone, custName, "Order Cancellation Refund", amt, true, String(r.Submission_ID));
+        _appendWalletTransaction(phone, custName, "Order Cancellation Refund", amt, true, String(r.Submission_ID), r._lsTab ? "LS" : "");
       } else if (pref === "manual_upi" && amt > 0 && !alreadyExists) {
         refWs.appendRow([r.Submission_ID, phone, custName, amt, r.Meal_Type, date, "Pending", now, "Verified Soft Cancellation", "upi"]);
       }

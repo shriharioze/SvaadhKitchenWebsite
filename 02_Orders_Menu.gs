@@ -37,7 +37,7 @@ function auditOnAccountStatusDrift() {
       onAcctPhones[_normalizePhone(r.Phone)] = r.Customer_Name || "";
     }
   });
-  const orderRows = _getAllOrdersBothTabsIfPresent(ss); // on-account drift check spans both storefronts
+  const orderRows = getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
   const flagged = [];
   orderRows.forEach(function (r) {
     const p = _normalizePhone(r.Phone);
@@ -62,10 +62,10 @@ function auditOnAccountStatusDrift() {
 }
 
 // ── GET CUSTOMER ─────────────────────────────────────────────
-function getCustomer(phone) {
+function getCustomer(phone, storefront) {
   if (!phone) return {found: false};
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  const ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   const rows = getAllRows(ws);
   const pStr = _normalizePhone(phone);
   const r = rows.find(x => _normalizePhone(x.Phone) === pStr);
@@ -74,7 +74,8 @@ function getCustomer(phone) {
     // (read-only, cold path) so the frontend shows "enter your PIN" instead of
     // forcing a fresh registration. The actual restore happens in verifyLogin once
     // the PIN is confirmed. Name is intentionally withheld (matches the hasPin path).
-    if (typeof _findArchivedCustomer === "function") {
+    // LS storefront: no SK archive integration — LS customers are a separate base.
+    if (storefront !== "LS" && typeof _findArchivedCustomer === "function") {
       const arc = _findArchivedCustomer(pStr);
       // Recognize an archived returning customer either way:
       //  • has a PIN  → hasPin:true → "enter your PIN" (verifyLogin restores on match).
@@ -115,7 +116,7 @@ function getCustomer(phone) {
       var num = Number(v);
       return isNaN(num) ? v : num;
     })(r.Review_Promo_Count),
-    wallet_balance:     _calculateWalletBalance(phone),
+    wallet_balance:     _calculateWalletBalance(phone, undefined, storefront),
     feeExempt:          (r.Fee_Exempt === "Yes" || r.Fee_Exempt === true),
     onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
     billingCycle:       r.Billing_Cycle || "Daily"
@@ -123,19 +124,21 @@ function getCustomer(phone) {
 }
 
 // ── VERIFY LOGIN ─────────────────────────────────────────────
-function verifyLogin(phone, pin) {
+function verifyLogin(phone, pin, storefront) {
   if (!phone || !pin) return {success: false, error: "Missing Phone or PIN."};
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  // SEPARATE BASES: LS customers authenticate against LS_Customers only.
+  const ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   const rows = getAllRows(ws);
   const pStr = _normalizePhone(phone);
   let r = rows.find(x => _normalizePhone(x.Phone) === pStr);
 
   if (!r) {
-    // Archived returning customer: verify against the archived PIN and, if it
-    // matches, restore the FULL record (PIN + address) into SK_Customers so they
+    // Archived returning customer (MAIN SITE only): verify against the archived
+    // PIN and, if it matches, restore the FULL record into SK_Customers so they
     // log in normally — no PIN reset, address pre-filled. (Cold path only.)
-    if (typeof _findArchivedCustomer === "function") {
+    // LS storefront: separate base, no SK archive integration.
+    if (storefront !== "LS" && typeof _findArchivedCustomer === "function") {
       const arc = _findArchivedCustomer(pStr);
       if (arc && arc.pin !== "") {
         if (arc.pin !== String(pin).trim()) return { success: false, error: "Incorrect PIN." };
@@ -152,8 +155,8 @@ function verifyLogin(phone, pin) {
   const isOnAccount = String(_get(r, "On_Account") || "").trim().toLowerCase() === "yes";
   
   if (isOnAccount) {
-    // On-account dues are shared identity — scan BOTH storefront tabs.
-    const orderRows = _getAllOrdersBothTabsIfPresent(ss);
+    // On-account dues live on the customer's OWN storefront tab.
+    const orderRows = (typeof _lsOrdersWs === "function") ? getAllRows(_lsOrdersWs(ss, storefront)) : getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
     for (const ord of orderRows) {
       if (_normalizePhone(_get(ord, "Phone")) === pStr) {
         if (_isOnAccountDueStatus(_get(ord, "Payment_Status"))) {
@@ -165,7 +168,8 @@ function verifyLogin(phone, pin) {
 
   return {
     success: true,
-    notice: _getLoginNotice(phone, r.Customer_Name), // "" unless this phone has an active, un-acked login notice
+    // Login notices are Hadapsar delivery-stop messages — not applicable to LS.
+    notice: storefront === "LS" ? "" : _getLoginNotice(phone, r.Customer_Name), // "" unless this phone has an active, un-acked login notice
     profile: {
       name:               r.Customer_Name || "",
       area:               r.Area || "",
@@ -183,7 +187,7 @@ function verifyLogin(phone, pin) {
         var num = Number(v);
         return isNaN(num) ? v : num;
       })(r.Review_Promo_Count),
-      wallet_balance:     _calculateWalletBalance(phone),
+      wallet_balance:     _calculateWalletBalance(phone, undefined, storefront),
       feeExempt:          (r.Fee_Exempt === "Yes" || r.Fee_Exempt === true),
       onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
       billingCycle:       r.Billing_Cycle || "Daily",
@@ -285,7 +289,7 @@ function requestPinResetOtp(phone) {
 }
 
 // STEP 2 — verify the code and set the new PIN. { ok } or a reason (+ attemptsLeft).
-function verifyPinResetOtp(phone, otp, newPin) {
+function verifyPinResetOtp(phone, otp, newPin, storefront) {
   var pStr = _normalizePhone(phone);
   var code = String(otp || "").trim();
   var pin  = String(newPin || "").trim();
@@ -309,7 +313,7 @@ function verifyPinResetOtp(phone, otp, newPin) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { return { ok: false, reason: "busy" }; }
   try {
-    if (!_setPinAfterOtp(pStr, pin)) return { ok: false, reason: "not_found" };
+    if (!_setPinAfterOtp(pStr, pin, storefront)) return { ok: false, reason: "not_found" };
     cache.remove(key);
     cache.remove("pinotp_rl_" + pStr); // clear the rate-limit once they're through
     return { ok: true };
@@ -330,7 +334,7 @@ function _autoSettlePendingOrders(phone) {
     return { settled: 0, msg: "" };
   }
 
-  const rows = _getAllOrdersBothTabsIfPresent(ss); // on-account dues span both storefronts
+  const rows = getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
 
   // Rule 2: Only target "on account" orders (ignore normal Pending/UPI)
   const pendingOrders = rows.filter(r => {
@@ -401,10 +405,10 @@ function _autoSettlePendingOrders(phone) {
 }
 
 // ── WALLET HELPER ──────────────────────────────────────────
-function _calculateWalletBalance(phone, preloadedRows) {
+function _calculateWalletBalance(phone, preloadedRows, storefront) {
   if (!phone) return 0;
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+  const ws = (typeof _walletTabFor === "function") ? _walletTabFor(ss, storefront) : getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
   const rows = Array.isArray(preloadedRows) ? preloadedRows : getAllRows(ws);
 
   let balance = 0;
@@ -1195,16 +1199,16 @@ function getWeeklyMenu() {
  * @param {boolean} isVerified TRUE = immediately counted in balance, FALSE = pending admin approval
  * @param {string} [refId]    Reference ID: Submission_ID for orders/refunds, or a recharge txn ref
  */
-function _appendWalletTransaction(phone, name, txnType, amount, isVerified, refId) {
+function _appendWalletTransaction(phone, name, txnType, amount, isVerified, refId, storefront) {
   // Serialize wallet writes. Apps Script LockService is re-entrant within the
   // same execution, so this also works when the caller (e.g. submitOrder) is
-  // already holding the script lock.
+  // already holding the script lock. Storefront-routed: LS → LS_Wallet.
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); }
   catch(e) { throw new Error("Wallet busy — please retry in a few seconds."); }
   try {
     const ss = getSpreadsheet();
-    const ws = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+    const ws = (typeof _walletTabFor === "function") ? _walletTabFor(ss, storefront) : getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
     const hIdx = headerIndex(ws);
 
     const totalCols = ws.getLastColumn();
@@ -1967,12 +1971,12 @@ function _submitOrderInternal(body) {
   // ── ONE-SHOT ROW FETCHES ────────────────────────────────────
   // Fetch once, share everywhere. Previously these tabs were re-read 5+ times
   // per submitOrder (day totals, loyalty, duplicate check, stock check, wallet).
-  // Identity (wallet/loyalty/day-totals/duplicates) is SHARED across storefronts,
-  // so this snapshot unions SK_Orders + LS_Orders. Cap counting below uses the
-  // SK-only slice — LS orders count 0 delivery slots (owner rule).
-  const allOrderRows  = _isLS ? _getAllOrdersBothTabs(ss) : _getAllOrdersBothTabsIfPresent(ss);
-  const skOnlyRows    = allOrderRows.filter(function (r) { return !r._lsTab; });
-  const walletWsRef   = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+  // SEPARATE BASES (owner decision 2026-08-25): each storefront reads ONLY its
+  // own orders tab — identity, loyalty, day-totals and dup-guards never cross
+  // pages. LS orders consume 0 delivery slots, so cap counting on the SK path
+  // is unaffected (LS path skips caps entirely below).
+  const allOrderRows  = getAllRows(ordersWs);
+  const walletWsRef   = _walletTabFor(ss, _sf);   // LS orders draw from LS_Wallet
   const allWalletRows = getAllRows(walletWsRef);
   // Menu rows read once here — reused by stock check below (avoids duplicate sheet fetch)
   const menuWsOnce  = getOrCreateTab(ss, TAB_MENU, []);
@@ -1982,8 +1986,8 @@ function _submitOrderInternal(body) {
   const submissionDates = orders.map(o => o.date);
   const existingDayTotals = getDayTotalsForDates(profile.phone, submissionDates.join(','), allOrderRows).dayTotals || {};
 
-  // Fetch current promo state
-  const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  // Fetch current promo state (routed customers tab — LS customers live in LS_Customers)
+  const custWs = _customersTabFor(ss, _sf);
   const cIdx   = headerIndex(custWs);
   const cRows  = getAllRows(custWs);
   const phoneStr = _normalizePhone(profile.phone);
@@ -2141,8 +2145,8 @@ function _submitOrderInternal(body) {
       _orderCapW = _effectiveOrderCaps(_orderCapW);
       let _capAltW = {};   // per-meal: offer Self Pickup / Porter when full? default ON
       try { if (_menuRowW && _menuRowW.Cap_Alt_JSON) _capAltW = JSON.parse(_menuRowW.Cap_Alt_JSON); } catch(e) {}
-      const _capCountsW   = _isLS ? null : _countActiveMealOrders(skOnlyRows, _d);
-      const _delIdxW = _isLS ? null : _activeDeliveryIndex(skOnlyRows, _d);
+      const _capCountsW   = _isLS ? null : _countActiveMealOrders(allOrderRows, _d);
+      const _delIdxW = _isLS ? null : _activeDeliveryIndex(allOrderRows, _d);
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
@@ -2801,14 +2805,14 @@ function _submitOrderInternal(body) {
       if (isDebtRecovery && splitWalletBudget < 0) {
         // Collect the entire debt on this first meal
         walletCreditUsed = splitWalletBudget;
-        _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Debt Recovery Recharge", Math.abs(splitWalletBudget), true, sid);
+        _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Debt Recovery Recharge", Math.abs(splitWalletBudget), true, sid, _sf);
         allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Debt Recovery Recharge", Amount: Math.abs(splitWalletBudget), Verified: "TRUE" });
         splitWalletBudget = 0; // Collected, don't collect on subsequent meals
       } else if (payMethod === "Wallet") {
         let currentBalance = _calculateWalletBalance(profile.phone, allWalletRows);
 
         if (currentBalance >= netTotal) {
-          _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Order Deduction", netTotal, true, sid);
+          _appendWalletTransaction(profile.phone || "", profile.name || "Customer", "Order Deduction", netTotal, true, sid, _sf);
           // Reflect the new debit in our in-memory wallet cache so subsequent
           // meals in the same submission see the updated balance.
           allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Order Deduction", Amount: netTotal, Verified: "TRUE" });
@@ -2831,7 +2835,7 @@ function _submitOrderInternal(body) {
             const _txnLabel = payMethod === "Split (HDFC)"
               ? "Order Deduction (Wallet Part — Gateway Split)"
               : "Order Deduction (Wallet Part)";
-            _appendWalletTransaction(profile.phone || "", profile.name || "Customer", _txnLabel, deduct, true, sid);
+            _appendWalletTransaction(profile.phone || "", profile.name || "Customer", _txnLabel, deduct, true, sid, _sf);
             allWalletRows.push({ Phone: _normalizePhone(profile.phone), Txn_Type: "Order Deduction", Amount: deduct, Verified: "TRUE" });
             walletCreditUsed = deduct;
             splitWalletBudget -= deduct;
@@ -2896,10 +2900,10 @@ function _submitOrderInternal(body) {
   _verifyAndAlertMissedOrders(ss, submissionIds);
 
   // Upsert customer record
-  _upsertCustomer(ss, profile);
+  _upsertCustomer(ss, profile, _sf);
   // Stamp Last_Order_At so the idle-customer archiver (05_Customer_Archive.gs)
   // never archives someone who just ordered.
-  if (typeof updateCustomerLastOrder === "function") updateCustomerLastOrder(profile.phone);
+  if (typeof updateCustomerLastOrder === "function") updateCustomerLastOrder(profile.phone, _sf);
 
   // If user requested to settle ALL pending dues in this same transaction
   if (body.settle_all && payMethod === "Wallet") {
@@ -2925,10 +2929,10 @@ function _submitOrderInternal(body) {
   // credits exceeding a small top-up), credit the surplus to wallet (server-computed)
   if (loyaltyExcessCredit > 0) {
     try {
-      _appendWalletTransaction(
-        profile.phone || "", profile.name || "Customer",
-        "Bill Surplus Credit (discount/credit exceeded order value)",
-        loyaltyExcessCredit, true, submissionIds[0] || ""
+    _appendWalletTransaction(
+      profile.phone || "", profile.name || "Customer",
+      "Bill Surplus Credit (discount/credit exceeded order value)",
+      loyaltyExcessCredit, true, submissionIds[0] || "", _sf
       );
     } catch(e) { /* non-fatal */ }
   }
@@ -2971,9 +2975,10 @@ function _sanitizeMapsLink(v) {
   return /^(https?:\/\/)?(www\.)?(maps\.app\.goo\.gl\/|goo\.gl\/maps\/|maps\.google\.(com|co\.[a-z]{2}|[a-z]{2})(\/|\?|$)|google\.(com|co\.[a-z]{2}|[a-z]{2})\/maps)/i.test(v) ? v : "";
 }
 
-function _upsertCustomer(ss, profile) {
-  // Ensure tab exists and headers are correct before doing anything
-  const ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+function _upsertCustomer(ss, profile, storefront) {
+  // Ensure tab exists and headers are correct before doing anything.
+  // Storefront routing: LS customers live in LS_Customers (separate base).
+  const ws = _customersTabFor(ss, storefront);
   SpreadsheetApp.flush(); // Lock in the headers before indexing
 
   // Sanitize maps links up front — the profile's own link and each per-meal one.
@@ -3135,14 +3140,14 @@ function markOnAccount(phone, cycle, status) {
 // ── GET DAY TOTALS FOR DATES (used to compute combined-day fees) ─
 // Returns existing meal subtotals per date for the given phone,
 // excluding the current cart being built (which is not yet placed).
-function getDayTotalsForDates(phone, datesParam, preloadedRows) {
+function getDayTotalsForDates(phone, datesParam, preloadedRows, storefront) {
   if (!phone || !datesParam) return { dayTotals: {} };
   const dates = String(datesParam).split(',').map(d => d.trim()).filter(Boolean);
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  // SEPARATE BASES: default read is the storefront's OWN orders tab only.
+  const ws = (typeof _lsOrdersWs === "function") ? _lsOrdersWs(ss, storefront) : getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   // Allow caller to pass pre-fetched rows (submitOrder) so we don't re-hit the sheet.
-  // Default read unions BOTH storefronts — day totals are shared identity.
-  const rows = Array.isArray(preloadedRows) ? preloadedRows : _getAllOrdersBothTabsIfPresent(ss);
+  const rows = Array.isArray(preloadedRows) ? preloadedRows : getAllRows(ws);
 
   const result = {};
   dates.forEach(d => { result[d] = {}; });
@@ -3340,13 +3345,13 @@ function _kitchenClosedMealSet() {
   return data.map || {};
 }
 
-function _calculateLoyaltyStreak(phone, preloadedRows) {
+function _calculateLoyaltyStreak(phone, preloadedRows, storefront) {
   if (!phone) return { streak: 0, pastSurcharge: 0 };
   const ss = getSpreadsheet();
-  const ws = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-  // Streak history is SHARED across storefronts — a customer's LS orders count
-  // toward the same 6-day cycle. Default read unions SK_Orders + LS_Orders.
-  const rows = Array.isArray(preloadedRows) ? preloadedRows : _getAllOrdersBothTabsIfPresent(ss);
+  // SEPARATE BASES: streak history comes from the storefront's OWN orders tab
+  // only — an LS customer's cycle never mixes with main-site orders.
+  const ws = (typeof _lsOrdersWs === "function") ? _lsOrdersWs(ss, storefront) : getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  const rows = Array.isArray(preloadedRows) ? preloadedRows : getAllRows(ws);
   const phoneStr = _normalizePhone(phone);
   const todayISO = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
 
@@ -3475,8 +3480,8 @@ function verifyOrderPlaced(body) {
   if (!cartEntries.length) return { found: false };
 
   const ss  = getSpreadsheet();
-  // Timeout recovery must see rows written from EITHER storefront.
-  const rows = _getAllOrdersBothTabsIfPresent(ss);
+  // SEPARATE BASES: timeout recovery checks the storefront's OWN tab only.
+  const rows = (typeof _lsOrdersWs === "function") ? getAllRows(_lsOrdersWs(ss, _lsStorefront(body))) : getAllRows(getOrCreateTab(ss, TAB_ORDERS, []));
 
   const nowMs     = Date.now();
   const TEN_MIN   = 10 * 60 * 1000;
@@ -3508,11 +3513,11 @@ function verifyOrderPlaced(body) {
   return firstId ? { found: true, submissionId: firstId } : { found: false };
 }
 
-function getCustomerOrders(phone) {
+function getCustomerOrders(phone, storefront) {
   if (!phone) return {orders:[], past_orders:[], wallet_balance: 0};
   const ss = getSpreadsheet();
-  // Customer order history is SHARED across storefronts — show LS rows too.
-  const rows = _getAllOrdersBothTabsIfPresent(ss);
+  // SEPARATE BASES: a customer sees the orders of the storefront they're on.
+  const rows = (typeof _lsOrdersWs === "function") ? getAllRows(_lsOrdersWs(ss, storefront)) : getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
   const today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
 
   const fmtD = function(r) {
@@ -3635,7 +3640,7 @@ function getCustomerOrders(phone) {
     orders: upcoming,
     past_orders: past,
     streak_rows: streakRows,
-    wallet_balance: _calculateWalletBalance(phone),
+    wallet_balance: _calculateWalletBalance(phone, undefined, storefront),
     on_account_balance: onAccountBalance,
     // Today's effective (override-aware) cutoff hours so Manage Orders can
     // disable the Cancel button once a meal's cutoff has passed.
@@ -3806,7 +3811,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   // Cancellations must find orders from EITHER storefront (shared identity).
   // Each row carries _ws (its source sheet); ALL writes go through _wsOf/_hOf
   // so an LS row is updated in LS_Orders, never by SK row-index accident.
-  const rows = _getAllOrdersBothTabsIfPresent(ss);
+  const rows = getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
   const _wsOf = (x) => x._ws || ws;
   const _hOf  = (x) => headerIndex(_wsOf(x));
   const now = getISTDate();
@@ -4071,10 +4076,16 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
             if (smallIdx && !opts.dryRun) xWs.getRange(x._row, smallIdx).setValue(11);
           }
 
-          // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback)
+          // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback).
+          // FIX (stale-read): RE-READ the stored Net_Total instead of trusting the
+          // in-memory snapshot — the over-discount block above may have already
+          // rewritten it (discount zeroed). Using the stale value silently dropped
+          // the discount restore whenever BOTH clawbacks fired on the same row
+          // (net stored 68 instead of 71 → a later cancel of that row under-refunds ₹3).
           const netIdx2 = xH["Net_Total"];
           if (netDelta > 0 && netIdx2 && !opts.dryRun) {
-            xWs.getRange(x._row, netIdx2).setValue((Number(x.Net_Total) || 0) + netDelta);
+            const _curNet = Number(xWs.getRange(x._row, netIdx2).getValue()) || 0;
+            xWs.getRange(x._row, netIdx2).setValue(_curNet + netDelta);
           }
         });
       }
@@ -4215,7 +4226,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     } else if (currentWasSplit) {
       // Split orders: entire refund always goes to Wallet — wallet + UPI portions both back to wallet.
       if (refundAmt > 0) {
-        _appendWalletTransaction(phone, custName, "Order Cancellation Refund", refundAmt, true, String(rowId));
+        _appendWalletTransaction(phone, custName, "Order Cancellation Refund", refundAmt, true, String(rowId), r._lsTab ? "LS" : "");
       }
       msg = buildRefundBreakdown() + `\n\n₹${refundAmt} refunded to your Wallet.`;
       finalType = "__split_handled__"; // skip normal logic below
@@ -4235,12 +4246,12 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
       // customer instead of recovering the deficit).
       _appendWalletTransaction(phone, custName,
         `Order Cancellation Charge (streak reward reversal — the ₹${loyaltyClawback} reward earned via this order is reversed since cancelling it breaks your streak, so ₹${cancellationCharge} is recovered here.)`,
-        cancellationCharge, true, String(rowId));
+        cancellationCharge, true, String(rowId), r._lsTab ? "LS" : "");
     }
 
     if (finalType === "wallet") {
       if (refundAmt > 0) {
-        _appendWalletTransaction(phone, custName, "Order Cancellation Refund", refundAmt, true, String(rowId));
+        _appendWalletTransaction(phone, custName, "Order Cancellation Refund", refundAmt, true, String(rowId), r._lsTab ? "LS" : "");
       }
       const walletLine = cancellationCharge > 0
         ? `₹0 refunded — ₹${cancellationCharge} charged to your Wallet (will be collected on your next order).`
@@ -4348,7 +4359,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         const walletCredit = Number(r.Wallet_Credit) || 0;
         const upiDue = Math.max(0, (Number(r.Net_Total) || 0) - walletCredit);
         if (walletCredit > 0) {
-          _appendWalletTransaction(phone, r.Customer_Name || "Customer", "Order Cancellation Refund (Wallet Part)", walletCredit, true, String(rowId));
+          _appendWalletTransaction(phone, r.Customer_Name || "Customer", "Order Cancellation Refund (Wallet Part)", walletCredit, true, String(rowId), r._lsTab ? "LS" : "");
         }
         softCancelMsg = upiDue > 0
           ? `₹${walletCredit} has been refunded to your Wallet instantly. ` +

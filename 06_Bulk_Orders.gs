@@ -733,7 +733,7 @@ function submitBulkOrder(body) {
         const _bal = _calculateWalletBalance(phone, _walletRows);
         const _deduct = Math.min(_want, _bal);
         if (_deduct > 0) {
-          _appendWalletTransaction(phone, name, "Bulk Order Deduction (Wallet Part — Gateway Split)", _deduct, true, sid);
+          _appendWalletTransaction(phone, name, "Bulk Order Deduction (Wallet Part — Gateway Split)", _deduct, true, sid, _sfBulk);
           _walletRows.push({ Phone: _normalizePhone(phone), Txn_Type: "Order Deduction", Amount: _deduct, Verified: "TRUE" });
           _rowWalletCredit = _deduct; _splitBudget -= _deduct;
         }
