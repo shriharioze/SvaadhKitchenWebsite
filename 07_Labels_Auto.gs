@@ -37,7 +37,17 @@ var LBL_EN = {
   Curry_Sabji_Mini: "C100", Curry_Sabji_Full: "C250",
   Dal: "DAL", Dal_Fry: "DF", Rice: "R", Salad: "S", Curd: "CU",
   "Kanda Poha": "KP", "Ghee Upma": "GU", "Thalipeeth": "TP",
-  "Paneer Paratha": "PP", "Methi Thepla": "MT", "Sabudana Khichdi": "SK"
+  "Paneer Paratha": "PP", "Methi Thepla": "MT", "Sabudana Khichdi": "SK",
+"Ghee Sheera": "GS",
+  "Aloo Paratha": "AP",
+  "Tikhi Puri": "TPU",
+  "Idli": "ID",
+  "Chutney": "CCT",
+  "Dadpe Pohe": "DP"
+,
+  "Ghee Sheera": "GS", "Sheera": "SH", "Aloo Paratha": "AP", "Tikhi Puri": "TPU", "Tikhi Pudi": "TPD",
+  "Idli": "ID", "Coconut Chutney": "CCT", "Chutney": "CCT", "Dadpe Pohe": "DP", "Masala Dosa": "MD",
+  "Upma": "UP", "Poha": "PO"
 };
 var LBL_MR = {
   Chapati: "च", Without_Oil_Chapati: "च बिनतेल", Phulka: "फु", Ghee_Phulka: "घी फु",
@@ -47,44 +57,49 @@ var LBL_MR = {
   Dal: "दाल", Dal_Fry: "डा.फ्रा.", Rice: "भात", Salad: "स", Curd: "दही",
   "Kanda Poha": "कांपो", "Ghee Upma": "घीऊ", "Thalipeeth": "था",
   "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु"
+,
+  "Ghee Sheera": "घी शिरा", "Sheera": "शिरा", "Aloo Paratha": "आलू पराठा", "Tikhi Puri": "तिखी पुरी", "Tikhi Pudi": "तिखी पुडी",
+  "Idli": "इडली", "Coconut Chutney": "खोबरेल चटणी", "Chutney": "चटणी", "Dadpe Pohe": "दापपे पोहे", "Masala Dosa": "मसाला डोसा",
+  "Upma": "उपमा", "Poha": "पोहे"
 };
 var LBL_LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "Jowar_Bhakri", "Bajra_Bhakri",
   "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"];
 
 // Per-order item summary — direct port of kitchen.html getBulkItemSummary().
 function _lblItemSummary(order, meal, lang) {
+  // Items_JSON-FIRST summary (fix 2026-08-25): Items_JSON is written from the
+  // actual cart regardless of Meal_Type, so it is the source of truth.
+  // Fixes: (1) breakfast+Curd labels dropping items when BF slots are blank;
+  // (2) owner-flipped Meal_Type (Breakfast items under Lunch/Dinner) rendering
+  // empty. BF slots / L/D columns / Curd column remain as fallbacks for legacy
+  // rows. Sources are MIRRORS of one cart — first source wins per item, never summed.
   var lbl = (lang === "Devanagari") ? LBL_MR : LBL_EN;
-  var parts = [];
-  if (meal === "Breakfast") {
-    var bfMap = {};
-    for (var n = 1; n <= 4; n++) {
-      var it = String(order["BF_Item_" + n] || "").trim();
-      var q = Number(order["BF_Qty_" + n]) || 0;
-      if (it && q > 0) bfMap[it] = (bfMap[it] || 0) + q;
-    }
-    if (order.Items_JSON) {
-      try {
-        var parsed = JSON.parse(order.Items_JSON);
-        Object.keys(parsed).forEach(function (k) {
-          var qty = Number(parsed[k]) || 0;
-          if (qty <= 0) return;
-          var name = (k === "Breakfast Curd") ? "Curd" : k;
-          if (!bfMap[name]) bfMap[name] = qty;
-        });
-      } catch (e) {}
-    }
-    if (!bfMap["Curd"] && Number(order.Curd) > 0) bfMap["Curd"] = Number(order.Curd);
-    Object.keys(bfMap).forEach(function (name) {
-      var a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
-      parts.push(bfMap[name] + "x" + a);
-    });
-  } else {
-    LBL_LD_COLS.forEach(function (col) {
-      var q = Number(order[col]) || 0;
-      if (q > 0) parts.push(q + "x" + (lbl[col] || col));
-    });
+  var norm = function (n) {
+    n = String(n || "").trim();
+    if (n === "Breakfast Curd") n = "Curd";
+    return n.replace(/\s*\[.*?\]\s*/g, "").replace(/\s*\(.*?\)\s*/g, "").trim();
+  };
+  var items = {};
+  var names = [];
+  var add = function (rawName, qty) {
+    if (!rawName || !(qty > 0)) return;
+    var n = norm(rawName);
+    if (!n) return;
+    if (items[n] === undefined) { items[n] = qty; names.push(n); }
+  };
+  if (order.Items_JSON) {
+    try {
+      var parsed = JSON.parse(order.Items_JSON);
+      Object.keys(parsed).forEach(function (k) { add(k === "Breakfast Curd" ? "Curd" : k, Number(parsed[k]) || 0); });
+    } catch (e) {}
   }
-  return parts.join(", ");
+  for (var n = 1; n <= 4; n++) add(order["BF_Item_" + n], Number(order["BF_Qty_" + n]) || 0);
+  LBL_LD_COLS.forEach(function (col) { add(col, Number(order[col]) || 0); });
+  add("Curd", Number(order.Curd) || 0);
+  return names.map(function (name) {
+    var a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
+    return items[name] + "x" + a;
+  }).join(", ");
 }
 
 // ── PDF builder: one long 50mm-wide strip, one 25mm block per label ─────────

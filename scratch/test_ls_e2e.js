@@ -387,7 +387,7 @@ resetWorld();
 {
   // pick 5 most-recent past days, skipping Sundays, ending yesterday
   const days = [];
-  for (let off = 1; days.length < 5 && off < 15; off++) {
+  for (let off = 0; days.length < 5 && off < 15; off++) {
     const iso = isoAdd(-off);
     if (new Date(iso + "T12:00:00").getDay() === 0) continue;
     days.unshift(iso);
@@ -398,7 +398,7 @@ resetWorld();
       Meal_Type: "Dinner", Customer_Name: "Test Customer", Phone: "9999999999", Area: "Normal Area",
       Payment_Status: "Paid", Food_Subtotal: 100, Inflation_Surcharge: 5, Loyalty_Discount: "No" });
   });
-  const today = isoAdd(0);
+  const today = nextNonSunday(1); // future date — immune to tonight’s real cutoffs
   const res = API.submitOrder({ profile: { ...PROFILE, society: "Soc" }, storefront: "LS",
     orders: [{ date: today, meals: [{ type: "Dinner", items: [{ colKey: "Dal [200ml]", qty: 1 }], subtotal: 24, area: "Normal Area" }] }] });
   T("order placed", res.success === true, JSON.stringify(res).slice(0, 140));

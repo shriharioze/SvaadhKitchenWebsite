@@ -1,0 +1,14 @@
+var LBL_MR = {
+  Chapati: "च", Without_Oil_Chapati: "च बिनतेल", Phulka: "फु", Ghee_Phulka: "घी फु",
+  Jowar_Bhakri: "जो", Bajra_Bhakri: "बाज",
+  Dry_Sabji_Mini: "सु १००", Dry_Sabji_Full: "सु २५०",
+  Curry_Sabji_Mini: "र १००", Curry_Sabji_Full: "र २५०",
+  Dal: "दाल", Dal_Fry: "डा.फ्रा.", Rice: "भात", Salad: "स", Curd: "दही",
+  "Kanda Poha": "कांपो", "Ghee Upma": "घीऊ", "Thalipeeth": "था",
+  "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु"
+};
+var LBL_LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "Jowar_Bhakri", "Bajra_Bhakri",
+  "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"];
+
+// Per-order item summary — direct port of kitchen.html getBulkItemSummary().
+function _lblIt

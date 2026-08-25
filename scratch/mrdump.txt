@@ -1,0 +1,36 @@
+    // ── Marathi display names ──
+    const MR = {
+      // Rotis
+      "Chapati": "चपाती", "Without Oil Chapati": "विना तेल चपाती", "Without_Oil_Chapati": "विना तेल चपाती",
+      "Phulka": "फुलका", "Ghee Phulka": "तूप फुलका", "Ghee_Phulka": "तूप फुलका",
+      "Jowar Bhakri": "ज्वारी भाकरी", "Jowar_Bhakri": "ज्वारी भाकरी", "Bajra Bhakri": "बाजरी भाकरी", "Bajra_Bhakri": "बाजरी भाकरी",
+      "Dry Sabji": "सुकी भाजी", "Curry Sabji": "रस्सा भाजी",
+      "Sabji (Dry)": "सुकी भाजी", "Sabji (Curry)": "रस्सा भाजी",
+      "Dal": "वरण", "Dal Fry": "दाल फ्राय", "Dal_Fry": "दाल फ्राय", "Dal [200ml]": "वरण (२००ml)", "Dal Fry [200ml]": "दाल फ्राय (२००ml)", "Rice": "भात", "Rice [100g]": "भात (१००g)", "Salad": "सलाड", "Salad [40g]": "सलाड (४०g)", "Curd": "दही", "Curd [50g]": "दही (५०g)", 
+      "Kanda Poha": "कांदा पोहे", "Kanda Poha [175g]": "कांदा पोहे [१७५g]", 
+      "Sabudana Khichdi": "साबुदाणा खिचडी", "Sabudana Khichdi [200g]": "साबुदाणा खिचडी [२००g]",
+      "Ghee Upma": "तुपातील उपमा", "Ghee Upma [200g]": "तुपातील उपमा [२००g]",
+      "Upma": "उपमा", "Poha": "पोहे",
+      "Thalipeeth": "थालीपीठ", "Aloo Paratha": "आलू पराठा", "Tikhi Puri": "तिखी पुरी", 
+      "5 x Tikhi Pudi with 100 ml coriander chutney": "५ x तििख पुरी आणि १००ml चटणी",
+      "Paneer Paratha": "पनीर पराठा",
+      "Ghee Sheera": "घी शिरा", "Ghee Sheera [200g]": "घी शिरा [२००g]",
+      "Palak Paratha (2 peices)": "पालक पराठा (२ पीसेस)", "Methi Paratha (2 pieces)": "मेथी पराठा (२ पीसेस)",
+      "4 x Idli & 100ml Chutney": "४ x इडली आणि १००ml चटणी",
+      "4 x Idli and 100ml Chutney": "४ x इडली आणि १००ml चटणी", "Chutney": "चटणी",
+      "orders": "ऑर्डर",
+      // Specific Sabjis
+      "Cauliflower": "फ्लॉवर", "flower": "फ्लॉवर", "French Beans": "फरसबी", "Cabbage": "कोबी", "Bhindi": "भेंडी",
+      "Bhendi Fry": "भेंडी", "Potato": "बटाटा", "Aloo": "बटाटा", "Matki": "मटकी", "bata": "बटाटा",
+      "Mataki": "मटकी", "Matki (Dry)": "मटकी सुकी", "Matki (Curry)": "मटकी रस्सा", "Matki masala": "मटकी मसाला",
+      "Soyabean": "सोयाबीन", "soyabean": "सोयाबीन", "Gavari": "गवार", "gavar": "गवार", "Pithla": "पिठलं", "Akha Masoor": "अख्खा मसूर",
+      "Dal kanda": "डाळ कांदा", "Dal Kanda": "डाळ कांदा", "Sev tomato": "शेव टोमॅटो", "Shev tomato": "शेव टोमॅटो",
+      "Shimla Besan": "ढोबळी बेसन", "Shimla besan": "ढोबळी बेसन", "Palak corn": "पालक कॉर्न", "Green moong": "हिरवा मूग",
+      "Green Moong": "हिरवा मूग", "hirva moong": "हिरवा मूग", "Kofta": "कोफ्ता", "kofta": "कोफ्ता", "Methi": "मेथी", "Aloo Matar": "बटाटा मटार",
+      "Batata": "बटाटा", "Shepu": "शेपू", "Tondli": "तोंडली", "Vatana": "वटाणा",
+      "Mix Veg": "मिक्सव्हेज", "Mix veg": "मिक्सव्हेज", "Paneer": "पनीर", "Chavali": "चवळी", "Chowli": "चवळी", "Ghee": "तूप", "Kanda besan": "कांदा बेसन",
+      "Kala chana": "काळा चणा", "Kala Chana": "काळा चणा",
+      // Items for summary
+      "Standard Tiffin": "साधी थाळी",
+      "No ring the bell": "बेल वाजवू नका",
+      "None": "-", "-": "-", "": "-"

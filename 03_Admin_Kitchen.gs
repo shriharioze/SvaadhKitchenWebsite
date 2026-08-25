@@ -1050,6 +1050,9 @@ function getKitchenSummary(date) {
       // Cross-meal: backend admin sometimes places breakfast items in a
       // Lunch/Dinner order (e.g. Poha/Upma) or writes Chapati via BF_Item
       // slots. Surface them under m.extras so the kitchen UI can show them.
+      // GUARD (fix 2026-08-25): skip items the named columns ALREADY counted —
+      // submitOrder writes Curd to BOTH the Curd column and a BF slot, so an
+      // owner-flipped breakfast row used to double-count Curd (and rotis).
       if (!m.extras) m.extras = {};
       for (var bn = 1; bn <= 4; bn++) {
         var bItem = String(r["BF_Item_"+bn] || "").trim();
@@ -1058,11 +1061,13 @@ function getKitchenSummary(date) {
         // If it matches a roti column name, fold into roti aggregation.
         if (ROTI_COLS.indexOf(bItem) >= 0 || ROTI_COLS.indexOf(bItem.replace(/ /g,"_")) >= 0) {
           var rotiCol = (ROTI_COLS.indexOf(bItem) >= 0) ? bItem : bItem.replace(/ /g,"_");
+          if ((Number(r[rotiCol]) || 0) > 0) continue; // column already counted it
           m.rotis[rotiCol] = (m.rotis[rotiCol] || 0) + bQty;
           var packsX = calculatePackets(bQty, ROTI_LIMITS[rotiCol]);
           packsX.forEach(function(p) { m.rotiMatrix[rotiCol][p] = (m.rotiMatrix[rotiCol][p] || 0) + 1; });
           summaryParts.push(bQty + " " + rotiCol.replace(/_/g," "));
         } else if (bItem === "Curd") {
+          if ((Number(r.Curd) || 0) > 0) continue; // Curd column already counted it
           m.other.Curd.count += bQty;
           var cPacksX = calculatePackets(bQty, 2);
           cPacksX.forEach(function(p) { m.curdMatrix[p] = (m.curdMatrix[p] || 0) + 1; });
@@ -1073,8 +1078,58 @@ function getKitchenSummary(date) {
           summaryParts.push(bQty + " " + bItem);
         }
       }
+
     }
 
+      // ── Items_JSON merge (fix 2026-08-25) ────────────────────────────────
+      // Items_JSON is written from the actual cart regardless of Meal_Type, so
+      // merge anything the type-specific columns above didn't already capture.
+      // Covers: owner-flipped Meal_Types (breakfast items under Lunch/Dinner,
+      // e.g. Thalipeeth must show in prep counts + labels) and rows with blank
+      // BF slots. Already-captured items are skipped (sources are mirrors, never
+      // summed twice).
+      try {
+        var ijRaw = JSON.parse(r.Items_JSON || "{}");
+        var already = {};
+        if (meal === "Breakfast") {
+          for (var qn = 1; qn <= 4; qn++) {
+            var nmQ = String(r["BF_Item_" + qn] || "").trim();
+            if (nmQ) already[nmQ] = true;
+          }
+          if ((Number(r.Curd) || 0) > 0) already["Curd"] = true;
+        } else {
+          ROTI_COLS.forEach(function (cc) { if ((Number(r[cc]) || 0) > 0) { already[cc] = true; already[cc.replace(/_/g, " ")] = true; } });
+          ["Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"].forEach(function (cc) { if ((Number(r[cc]) || 0) > 0) already[cc] = true; });
+          for (var qn2 = 1; qn2 <= 4; qn2++) { var nmQ2 = String(r["BF_Item_" + qn2] || "").trim(); if (nmQ2) already[nmQ2] = true; }
+        }
+        Object.keys(ijRaw).forEach(function (kRaw) {
+          var qtyJ = Number(ijRaw[kRaw]) || 0;
+          if (qtyJ <= 0) return;
+          var nmJ = String(kRaw).replace(/\s*\[.*?\]\s*/g, "").replace(/\s*\(.*?\)\s*/g, "").trim();
+          if (nmJ === "Breakfast Curd") nmJ = "Curd";
+          if (already[nmJ] || already[nmJ.replace(/ /g, "_")]) return;
+          already[nmJ] = true;
+          if (meal !== "Breakfast") {
+            if (ROTI_COLS.indexOf(nmJ) >= 0 || ROTI_COLS.indexOf(nmJ.replace(/ /g, "_")) >= 0) {
+              var rc = (ROTI_COLS.indexOf(nmJ) >= 0) ? nmJ : nmJ.replace(/ /g, "_");
+              m.rotis[rc] = (m.rotis[rc] || 0) + qtyJ;
+              calculatePackets(qtyJ, ROTI_LIMITS[rc]).forEach(function (p) { m.rotiMatrix[rc][p] = (m.rotiMatrix[rc][p] || 0) + 1; });
+              summaryParts.push(qtyJ + " " + rc.replace(/_/g, " "));
+            } else if (nmJ === "Curd") {
+              m.other.Curd.count += qtyJ;
+              calculatePackets(qtyJ, 2).forEach(function (p) { m.curdMatrix[p] = (m.curdMatrix[p] || 0) + 1; });
+              summaryParts.push(qtyJ + " Curd");
+            } else {
+              if (!m.extras) m.extras = {};
+              m.extras[nmJ] = (m.extras[nmJ] || 0) + qtyJ;
+              summaryParts.push(qtyJ + " " + nmJ);
+            }
+          } else {
+            m.items[nmJ] = (m.items[nmJ] || 0) + qtyJ;
+            summaryParts.push(qtyJ + " " + nmJ);
+          }
+        });
+      } catch (eIJ) { /* malformed Items_JSON — column logic above already ran */ }
     orders.push({
       Submission_ID: String(r.Submission_ID || ""),
       Customer_Name: String(r.Customer_Name || ""),
@@ -1881,21 +1936,23 @@ function getLabelOrders(date, meal) {
       return d === date && String(r.Meal_Type) === meal && !_isOrderCancelled(r.Payment_Status);
     })
     .map(function(r) {
+      // Type-agnostic fields (fix 2026-08-25): include EVERYTHING for every row —
+      // the summary builders render from Items_JSON first and use columns as
+      // fallbacks, so owner-flipped Meal_Types (breakfast items under Lunch/Dinner)
+      // and blank BF slots both render correctly.
+      // Also fixed: notes read Special_Notes_Kitchen (Special_Notes was always empty).
       var obj = {
         name:  String(r.Customer_Name || ""),
         area:  String(r.Area || ""),
-        notes: String(r.Special_Notes || ""),
+        notes: "", // kitchen notes intentionally NOT printed on labels (owner 2026-08-25)
         Curd:  Number(r.Curd) || 0,
         Items_JSON: String(r.Items_JSON || "")
       };
-      if (meal === "Breakfast") {
-        for (var n = 1; n <= 4; n++) {
-          obj["BF_Item_"+n] = String(r["BF_Item_"+n] || "");
-          obj["BF_Qty_"+n]  = Number(r["BF_Qty_"+n])  || 0;
-        }
-      } else {
-        COLS.forEach(function(col) { obj[col] = Number(r[col]) || 0; });
+      for (var n = 1; n <= 4; n++) {
+        obj["BF_Item_"+n] = String(r["BF_Item_"+n] || "");
+        obj["BF_Qty_"+n]  = Number(r["BF_Qty_"+n])  || 0;
       }
+      COLS.forEach(function(col) { obj[col] = Number(r[col]) || 0; });
       return obj;
     });
 

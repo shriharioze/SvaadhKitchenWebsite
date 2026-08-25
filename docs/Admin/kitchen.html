@@ -2253,6 +2253,9 @@
       Dal: "DAL", Dal_Fry: "DF", Rice: "R", Salad: "S", Curd: "CU",
       "Kanda Poha": "KP", "Ghee Upma": "GU", "Thalipeeth": "TP",
       "Paneer Paratha": "PP", "Methi Thepla": "MT", "Sabudana Khichdi": "SK",
+            "Ghee Sheera": "GS", "Sheera": "SH", "Aloo Paratha": "AP", "Tikhi Puri": "TPU", "Tikhi Pudi": "TPD",
+      "Idli": "ID", "Coconut Chutney": "CCT", "Chutney": "CCT", "Dadpe Pohe": "DP", "Masala Dosa": "MD",
+      "Upma": "UP", "Poha": "PO",
     };
     const LABEL_MR = {
       Chapati: "च", Without_Oil_Chapati: "च बिनतेल", Phulka: "फु", Ghee_Phulka: "घी फु",
@@ -2262,6 +2265,9 @@
       Dal: "दाल", Dal_Fry: "डा.फ्रा.", Rice: "भात", Salad: "स", Curd: "दही",
       "Kanda Poha": "कांपो", "Ghee Upma": "घीऊ", "Thalipeeth": "था",
       "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु",
+            "Ghee Sheera": "घी शिरा", "Sheera": "शिरा", "Aloo Paratha": "आलू पराठा", "Tikhi Puri": "तिखी पुरी", "Tikhi Pudi": "तिखी पुडी",
+      "Idli": "इडली", "Coconut Chutney": "खोबरेल चटणी", "Chutney": "चटणी", "Dadpe Pohe": "दापपे पोहे", "Masala Dosa": "मसाला डोसा",
+      "Upma": "उपमा", "Poha": "पोहे",
     };
     const LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "Jowar_Bhakri", "Bajra_Bhakri",
       "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"];
@@ -2363,39 +2369,35 @@
     }
 
     function getBulkItemSummary(order, meal, lang) {
+      // Items_JSON-FIRST summary — mirrors backend _lblItemSummary (fix 2026-08-25).
       const lbl = lang === "Devanagari" ? LABEL_MR : LABEL_EN;
-      const parts = [];
-      if (meal === "Breakfast") {
-        const bfMap = {};
-        for (let n = 1; n <= 4; n++) {
-          const it = String(order["BF_Item_" + n] || "").trim();
-          const q  = Number(order["BF_Qty_" + n]) || 0;
-          if (it && q > 0) bfMap[it] = (bfMap[it] || 0) + q;
-        }
-        if (order.Items_JSON) {
-          try {
-            const parsed = JSON.parse(order.Items_JSON);
-            Object.entries(parsed).forEach(([k, q]) => {
-              const qty = Number(q) || 0;
-              if (qty <= 0) return;
-              const name = (k === "Breakfast Curd") ? "Curd" : k;
-              if (!bfMap[name]) bfMap[name] = qty;
-            });
-          } catch(e) {}
-        }
-        if (!bfMap["Curd"] && Number(order.Curd) > 0) bfMap["Curd"] = Number(order.Curd);
-        Object.entries(bfMap).forEach(([name, qty]) => {
-          const a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
-          parts.push(qty + "x" + a);
-        });
-      } else {
-        LD_COLS.forEach(col => {
-          const q = Number(order[col]) || 0;
-          if (q > 0) parts.push(q + "x" + (lbl[col] || col));
-        });
+      const norm = (n) => {
+        n = String(n || "").trim();
+        if (n === "Breakfast Curd") n = "Curd";
+        return n.replace(/\s*\[.*?\]\s*/g, "").replace(/\s*\(.*?\)\s*/g, "").trim();
+      };
+      const items = {};
+      const names = [];
+      const add = (rawName, qty) => {
+        if (!rawName || !(qty > 0)) return;
+        const n = norm(rawName);
+        if (!n) return;
+        if (items[n] === undefined) { items[n] = qty; names.push(n); }
+      };
+      if (order.Items_JSON) {
+        try {
+          const parsed = JSON.parse(order.Items_JSON);
+          Object.entries(parsed).forEach(([k, q]) => add(k === "Breakfast Curd" ? "Curd" : k, Number(q) || 0));
+        } catch (e) {}
       }
-      return parts.join(", ");
-    }
+      for (let n = 1; n <= 4; n++) add(order["BF_Item_" + n], Number(order["BF_Qty_" + n]) || 0);
+      LD_COLS.forEach(col => add(col, Number(order[col]) || 0));
+      add("Curd", Number(order.Curd) || 0);
+      return names.map(name => {
+        const a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
+        return items[name] + "x" + a;
+      }).join(", ");
+}
 
     async function saveBulkLabelsToDrive() {
       const date = document.getElementById("bulkLabelDate").value;
