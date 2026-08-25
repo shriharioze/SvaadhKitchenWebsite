@@ -98,6 +98,7 @@ function doGet(e) {
     if (action === "backfillBulkPlan") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillBulkPlan(p.commit === "1")); } // one-time: stamp Bulk_Plan on pre-v26 bulk rows (dry-run unless commit=1)
     if (action === "compactWalletLedger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(compactWalletLedger(p.commit === "1", p.keepDays)); } // wallet ledger compaction: dry-run unless commit=1; keepDays default 90 (min 30)
     if (action === "lsTrimSchema") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(lsTrimSchema(p.commit === "1")); } // LS_Orders schema trim (drops Maps_Link/Landmark): dry-run unless commit=1
+    if (action === "archiveDueDryRun") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(archiveDueOrders(true, p.today || "")); } // due-slice archive preview: shows exactly which rows the next run would archive (no writes)
     if (action === "genLabels") { // regenerate a date+meal's label PDF on demand (same engine as the cutoff+5 auto-run)
       if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
       if (p.debug === "1") { // build-only: return the PDF base64 for inspection — no Drive save, no print webhook
