@@ -1709,6 +1709,8 @@ function liveLostOrderAudit() {
   // Close the loop on earlier "STILL MISSING" alerts: verify/restore + "✅ recovered
   // & written" mail (see reconcileMissedOrdersLog). Piggybacks this 10-min trigger.
   try { reconcileMissedOrdersLog(); } catch (e) { Logger.log("reconcileMissedOrdersLog: " + (e && e.message)); }
+  // Auto-recover dropped charged orders from SK_Order_Log stash (10-60 min window)
+  try { recoverFromOrderLog(); } catch (e) { Logger.log("recoverFromOrderLog: " + (e && e.message)); }
   return res;
 }
 

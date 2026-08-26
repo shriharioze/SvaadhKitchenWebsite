@@ -2189,7 +2189,8 @@ function recoverFromOrderLog() {
           "Recovered from Order Log:\n\n" + recoveredDetails.join("\n") + "\n\nPlease verify in admin panel.");
       } catch (e) {}
     }
-  } catch (e) { Logger.log("recoverFromOrderLog error: " + e.message); }
+      return { success: true, recovered: recovered, details: recoveredDetails };
+  } catch (e) { Logger.log("recoverFromOrderLog error: " + e.message); return { success: false, error: e.message }; }
 }
 
 function archiveDueOrders(dryRun, todayISO) {

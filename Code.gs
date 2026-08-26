@@ -103,7 +103,9 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
     if (action === "archiveRunNow") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(archiveDueOrders(false)); } // manual archive run — archives all due rows now
     if (action === "archiveDueDryRun") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(archiveDueOrders(true, p.today || "")); } // due-slice archive preview: shows exactly which rows the next run would archive (no writes)
     if (action === "cleanupOrderLog") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(cleanupOrderLog()); } // manual cleanup of SK_Order_Log: deletes yesterday and older entries
-    if (action === "setupMonthlyArchiveTrigger" || action === "setupArchiveTrigger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes({ success: true, message: setupMonthlyArchiveTrigger() }); } // installs daily 22:30 IST trigger for archive + cleanup
+    if (action === "recoverFromOrderLog") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(recoverFromOrderLog()); } // manual run of SK_Order_Log recovery sweep
+    if (action === "setupMonthlyArchiveTrigger" || action === "setupArchiveTrigger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes({ success: true, message: setupMonthlyArchiveTrigger() }); }
+    if (action === "setupLostOrderAuditTrigger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes({ success: true, message: setupLostOrderAuditTrigger() }); } // installs daily 22:30 IST trigger for archive + cleanup
     if (action === "genLabels") { // regenerate a date+meal's label PDF on demand (same engine as the cutoff+5 auto-run)
       if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
       if (p.debug === "1") { // build-only: return the PDF base64 for inspection — no Drive save, no print webhook
