@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.26.01">
+  <meta name="app-version" content="v26.08.26.02">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -959,7 +959,7 @@
 
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-    const APP_VERSION = "v26.08.26.01";
+    const APP_VERSION = "v26.08.26.02";
     (function() {
       const savedVer = localStorage.getItem("sk_admin_ver");
       if (savedVer !== APP_VERSION) {
@@ -1950,7 +1950,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.08.26.01";
+    const KITCHEN_VERSION = "v26.08.26.02";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
@@ -2017,8 +2017,8 @@
       function scheduleNext() {
         _nextRefresh = new Date(Date.now() + REFRESH_SECS * 1000);
       }
-
       function doRefresh() {
+        scheduleNext();
         loadKitchen();
       }
 
@@ -2066,16 +2066,11 @@
       document.addEventListener('click', () => {
         if (!wakeLock) requestWakeLock();
       }, { once: true });
-
-      // Pause when tab hidden, resume when visible
+      // Tab visibility: re-acquire wake lock when visible, DO NOT trigger data fetch
       document.removeEventListener("visibilitychange", window._visHandler);
       window._visHandler = () => {
-        if (document.hidden) {
-          if (window._rt) { clearInterval(window._rt); window._rt = null; }
-        } else {
-          doRefresh();
-          window._rt = setInterval(doRefresh, REFRESH_SECS * 1000);
-          requestWakeLock(); // Re-acquire wake lock
+        if (!document.hidden) {
+          requestWakeLock(); // Re-acquire wake lock on return
         }
       };
       document.addEventListener("visibilitychange", window._visHandler);
