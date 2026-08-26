@@ -695,7 +695,7 @@ function submitBulkOrder(body) {
     set("Submitted_At", submittedAt);
     set("Order_Date", r.date);
     set("Meal_Type", r.meal);
-    set("Customer_Name", name);
+    set("Customer_Name", _sfBulk === "LS" ? "[LS] " + name : name);
     set("Phone", phone);
     set("Area", isPickup ? "Self Pickup" : area);
     set("Wing", wing); set("Flat", flat); set("Floor", floor); set("Society", society);

@@ -1,0 +1,3 @@
+set("Customer_Name", name);
+    set("Txn_Type",      txnType);
+    set("Amount",        amount);

@@ -338,7 +338,7 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
 
   return {
     profile: {
-      name:               profile.name    || "Customer",
+      name:               (String(entry.storefront || "").trim().toUpperCase() === "LS" ? "[LS] " : "") + (profile.name || "Customer"),
       phone:              entry.phone     || profile.phone || "",
       address:            (function() {
         const parts = [];

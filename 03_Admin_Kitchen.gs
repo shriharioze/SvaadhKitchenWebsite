@@ -1140,7 +1140,7 @@ function getKitchenSummary(date) {
       } catch (eIJ) { /* malformed Items_JSON — column logic above already ran */ }
     orders.push({
       Submission_ID: String(r.Submission_ID || ""),
-      Customer_Name: String(r.Customer_Name || ""),
+      Customer_Name: (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
       Meal_Type: meal,
       summary: summaryParts.join(", "),
       items: {
@@ -1245,7 +1245,7 @@ function getDriverOrders(date) {
     var normP = _normalizePhone(r.Phone);
     meals[meal].push({
       submissionId:  sid,
-      name:          String(r.Customer_Name || ""),
+      name:          (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
       phone:         String(r.Phone || ""),
       area:          area,
       society:       String(r.Society || ""),
@@ -1904,7 +1904,7 @@ function getOrderSummary(date) {
     if (payStatus === "Paid" || payStatus === "Wallet Paid" || payStatus === "Collected") m.paid += net; else m.pending += net;
     m.customers.push({
       id:        String(r.Submission_ID || ""),
-      name:      String(r.Customer_Name || ""),
+      name:      (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
       phone:     String(r.Phone || ""),
       items:     items,
       area:      String(r.Area || ""),
@@ -1950,7 +1950,7 @@ function getLabelOrders(date, meal) {
       // and blank BF slots both render correctly.
       // Also fixed: notes read Special_Notes_Kitchen (Special_Notes was always empty).
       var obj = {
-        name:  String(r.Customer_Name || ""),
+        name:  (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
         area:  String(r.Area || ""),
         notes: "", // kitchen notes intentionally NOT printed on labels (owner 2026-08-25)
         Curd:  Number(r.Curd) || 0,

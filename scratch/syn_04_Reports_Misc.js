@@ -561,7 +561,7 @@ function getOrderHistory(p) {
       id:             r.Submission_ID,
       date:           fmtDate(r.Order_Date),
       meal:           r.Meal_Type,
-      name:           r.Customer_Name,
+      name:           (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
       phone:          r.Phone,
       area:           r.Area || "",
       wing:           r.Wing || "",
