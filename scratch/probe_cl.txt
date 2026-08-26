@@ -1,0 +1,17 @@
+function getCustomerList() {
+  var ss   = getSpreadsheet();
+  var ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  // Include archived orders so lifetime stats (order_count, total_spent)
+  // don't reset every month after archiving. Live + archived merged.
+  var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  var ordRows = getOrdersInRangeWithArchive("2024-01-01", today);
+
+  var custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var custRows = getAllRows(custWs);
+  var cMap = {};
+  custRows.forEach(function(c) {
+    var p = _normalizePhone(c.Phone);
+    if (p) {
+      cMap[p] = {
+        count: Number(c.Review_Promo_Count) || 0,
+        claimed: (String(c.Review_Reward_Claimed) === "TRUE" || String(c.Review_Reward_Claimed)

@@ -1,0 +1,126 @@
+function getCustomerList() {
+  var ss   = getSpreadsheet();
+  var ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  // Include archived orders so lifetime stats (order_count, total_spent)
+  // don't reset every month after archiving. Live + archived merged.
+  var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  var ordRows = getOrdersInRangeWithArchive("2024-01-01", today);
+
+  var custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var custRows = getAllRows(custWs);
+  var cMap = {};
+  custRows.forEach(function(c) {
+    var p = _normalizePhone(c.Phone);
+    if (p) {
+      cMap[p] = {
+        count: Number(c.Review_Promo_Count) || 0,
+        claimed: (String(c.Review_Reward_Claimed) === "TRUE" || String(c.Review_Reward_Claimed) === "true"),
+        standardOrder: c.Standard_Order || "",
+        feeExempt: (String(c.Fee_Exempt).trim() === "Yes") ? "Yes" : "No",
+        onAccount: (String(c.On_Account).trim() === "Yes") ? "Yes" : "No",
+        billingCycle: c.Billing_Cycle || "Daily",
+        // Address profiles
+        wing:    c.Wing || "",
+        flat:    c.Flat || "",
+        floor:   c.Floor || "",
+        society: c.Society || "",
+        maps:    c.Maps_Link || "",
+        landmark: c.Landmark || "",
+        delivery_point: c.Delivery_Point || ""
+      };
+    }
+  });
+
+  var fmtDate = function(v) {
+    return v instanceof Date ? Utilities.formatDate(v,"Asia/Kolkata","yyyy-MM-dd") : String(v).trim();
+  };
+
+  var map = {};
+  ordRows.forEach(function(r) {
+    if (_isOrderCancelled(r.Payment_Status)) return;
+    var phone = String(r.Phone||"").trim();
+    if (!phone) return;
+    var normP = _normalizePhone(phone);
+    var d = fmtDate(r.Order_Date);
+    if (!map[phone]) {
+      map[phone] = {
+        phone:phone, 
+        name:String(r.Customer_Name||"").trim(),
+        area:String(r.Area||"").trim(), 
+        payFreq:String(r.Payment_Freq||"").trim(),
+        orderCount:0, 
+        totalSpent:0, 
+        pendingAmt:0, 
+        lastDate:"",
+        promoCount: cMap[normP] ? cMap[normP].count : 0,
+        reviewClaimed: cMap[normP] ? cMap[normP].claimed : false,
+        standardOrder: cMap[normP] ? cMap[normP].standardOrder : "",
+        Fee_Exempt:    cMap[normP] ? cMap[normP].feeExempt : "No",
+        onAccount:     cMap[normP] ? cMap[normP].onAccount : "No",
+        billingCycle:  cMap[normP] ? cMap[normP].billingCycle : "Daily",
+        wing:    cMap[normP] ? cMap[normP].wing : "",
+        flat:    cMap[normP] ? cMap[normP].flat : "",
+        floor:   cMap[normP] ? cMap[normP].floor : "",
+        society: cMap[normP] ? cMap[normP].society : "",
+        maps:    cMap[normP] ? cMap[normP].maps : "",
+        landmark: cMap[normP] ? cMap[normP].landmark : "",
+        delivery_point: cMap[normP] ? cMap[normP].delivery_point : ""
+      };
+    }
+    map[phone].orderCount++;
+    map[phone].totalSpent += Number(r.Net_Total)||0;
+    const ps = String(r.Payment_Status || "").trim();
+    if (ps !== "Paid" && ps !== "Wallet Paid" && ps !== "Collected") map[phone].pendingAmt += Number(r.Net_Total)||0;
+    if (d > map[phone].lastDate) {
+      map[phone].lastDate = d;
+      map[phone].name = String(r.Customer_Name||map[phone].name).trim();
+    }
+  });
+
+  // Also include SK_Customers entries that have never placed an order (e.g. pre-registered VIPs)
+  custRows.forEach(function(c) {
+    var p = String(c.Phone || "").trim();
+    if (!p) return;
+    var normP = _normalizePhone(p);
+    if (map[p]) return; // already in map from orders
+    // Only surface pre-registered VIPs (Fee_Exempt = Yes) to keep the list clean
+    if (String(c.Fee_Exempt).trim() !== "Yes") return;
+    map[p] = {
+      phone: p,
+      name: String(c.Customer_Name || "").trim(),
+      area: String(c.Area || "").trim(),
+      payFreq: String(c.Payment_Freq || "").trim(),
+      orderCount: 0,
+      totalSpent: 0,
+      pendingAmt: 0,
+      lastDate: String(c.Created_At instanceof Date
+        ? Utilities.formatDate(c.Created_At, "Asia/Kolkata", "yyyy-MM-dd")
+        : (c.Created_At || "")).slice(0, 10),
+      promoCount: 0,
+      reviewClaimed: false,
+      standardOrder: "",
+      Fee_Exempt: "Yes",
+      onAccount: String(c.On_Account).trim() === "Yes" ? "Yes" : "No",
+      billingCycle: c.Billing_Cycle || "Daily"
+    };
+  });
+
+  // Load wallet rows ONCE — avoids N API calls inside the map loop
+  var walletWs = getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+  var walletRows = getAllRows(walletWs);
+
+  var customers = Object.values(map)
+    .map(function(c){
+      const wb = _calculateWalletBalance(c.phone, walletRows);
+      const net = Math.round(c.pendingAmt - wb);
+      return Object.assign({}, c, {
+        totalSpent: Math.round(c.totalSpent),
+        pendingAmt: net,
+        walletBalance: Math.round(wb)
+      });
+    })
+    .sort(function(a,b){return b.lastDate.localeCompare(a.lastDate);});
+
+  return {success:true, customers:customers};
+}
+
