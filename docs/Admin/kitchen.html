@@ -2412,8 +2412,7 @@
         const a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
         return items[name] + "x" + a;
       }).join(", ");
-}).join(", ");
-}
+    }
 
     async function saveBulkLabelsToDrive() {
       const date = document.getElementById("bulkLabelDate").value;
