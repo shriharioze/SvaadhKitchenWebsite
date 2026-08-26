@@ -2062,6 +2062,52 @@ function _archiveSliceDueDate(orderDateISO) {
 
 
 
+// ── ORDER LOG CLEANUP: delete yesterday's and all previous days' records ──
+// SK_Order_Log stores a temporary audit trail when a user clicks Pay Now.
+// During the daily ~22:30 IST run (runScheduledArchive), deletes all entries
+// from yesterday or earlier (keeps only records created today in IST).
+function cleanupOrderLog() {
+  try {
+    var ss = getSpreadsheet();
+    var ws = ss.getSheetByName("SK_Order_Log");
+    if (!ws || ws.getLastRow() < 2) return { success: true, deleted: 0, message: "No data in SK_Order_Log" };
+    var todayISO = Utilities.formatDate(getISTDate(), "Asia/Kolkata", "yyyy-MM-dd");
+    var data = ws.getDataRange().getValues();
+    var headers = data[0];
+    var keep = [headers];
+    var deleted = 0;
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (row.join("").trim() === "") continue;
+      var ts = row[0]; // Timestamp column
+      var rowDateISO = "";
+      if (ts instanceof Date) {
+        rowDateISO = Utilities.formatDate(ts, "Asia/Kolkata", "yyyy-MM-dd");
+      } else if (typeof ts === "string" && ts.trim().length >= 10) {
+        rowDateISO = ts.trim().slice(0, 10);
+      }
+      // If the row's date is before today in IST (< todayISO), it's yesterday or older -> delete
+      if (rowDateISO && rowDateISO < todayISO) {
+        deleted++;
+      } else {
+        keep.push(row);
+      }
+    }
+    if (deleted > 0) {
+      ws.clearContents();
+      ws.getRange(1, 1, keep.length, headers.length).setValues(keep);
+      ws.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+      ws.setFrozenRows(1);
+      SpreadsheetApp.flush();
+    }
+    Logger.log("cleanupOrderLog: deleted " + deleted + " entries older than " + todayISO + ", kept " + (keep.length - 1));
+    return { success: true, deleted: deleted, kept: keep.length - 1, today: todayISO };
+  } catch (e) {
+    Logger.log("cleanupOrderLog error: " + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
 // ── ORDER LOG RECOVERY: last-resort recovery for dropped orders ──
 // Scans SK_Order_Log for "pending" entries where the gateway_order_id is NOT
 // in SK_Orders or LS_Orders (order was dropped). If the payment was CHARGED,
