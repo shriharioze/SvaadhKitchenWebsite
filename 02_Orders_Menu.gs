@@ -2668,7 +2668,7 @@ function _submitOrderInternal(body) {
       set("Submitted_At",        submittedAt);
       set("Order_Date",          orderDate);
       set("Meal_Type",           mealType);
-      set("Customer_Name",       profile.name     || "");
+      set("Customer_Name",       _isLS ? "[LS] " + (profile.name || "") : (profile.name || ""));
       set("Phone",               _normalizePhone(profile.phone));
       set("Area",                area);
       set("Wing",                wing);
