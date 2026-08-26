@@ -1,0 +1,44 @@
+=== S.profile.society = @ 293746 ===
+.floor = _fld("floorInput", S.profile.floor);
+      // LS storefront: society pinned to the single drop location.
+      S.profile.society = LS_SOCIETY_NAME;
+      S.profile.delivery_point = $("deliveryPointSelection").value;
+      S.profile.maps = _fld("mapsInput", S.profile.maps
+
+=== society: $( === NOT FOUND
+
+=== _societyInput @ 102067 ===
+up"><label data-i18n="label_society">Society / Building / Office Park</label><input
+                  type="text" id="bf_societyInput" placeholder="e.g. Pentagon 1, Magarpatta"></div>
+              <div class="form-group">
+                <label data-i18n="label_delpoint_simple">
+
+=== _societyInput @ 107027 ===
+oup"><label data-i18n="label_society">Society / Building / Office Park</label><input
+                  type="text" id="l_societyInput" placeholder="e.g. Magarpatta"></div>
+              <div class="form-group">
+                <label data-i18n="label_delpoint_simple">Handover ins
+
+=== _societyInput @ 111955 ===
+oup"><label data-i18n="label_society">Society / Building / Office Park</label><input
+                  type="text" id="d_societyInput" placeholder="e.g. Pentagon 1, Magarpatta"></div>
+              <div class="form-group">
+                <label data-i18n="label_delpoint_simple">
+
+=== _societyInput @ 284226 ===
+"";
+              if ($(`${pfx}_floorInput`)) $(`${pfx}_floorInput`).value = ad.floor || "";
+              if ($(`${pfx}_societyInput`)) $(`${pfx}_societyInput`).value = ad.society || "";
+              if ($(`${pfx}_deliveryPointSelection`)) $(`${pfx}_deliveryPointSelection`).val
+
+=== _societyInput @ 284252 ===
+{pfx}_floorInput`)) $(`${pfx}_floorInput`).value = ad.floor || "";
+              if ($(`${pfx}_societyInput`)) $(`${pfx}_societyInput`).value = ad.society || "";
+              if ($(`${pfx}_deliveryPointSelection`)) $(`${pfx}_deliveryPointSelection`).value = ad.delivery_point || 
+
+=== _societyInput @ 291997 ===
+eaSelect"), w = $(pfx + "_wingInput"), f = $(pfx + "_flatInput"),
+            fl = $(pfx + "_floorInput"), s = $(pfx + "_societyInput"),
+            dp = $(pfx + "_deliveryPointSelection"),
+            m = $(pfx + "_mapsInput"), lm = $(pfx + "_landmarkInput");
+          if (a && 

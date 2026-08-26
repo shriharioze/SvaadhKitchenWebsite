@@ -419,7 +419,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     let dayTotalDailyFood = 0;
     meals.forEach(function (m) {
       const delivery = (lsFree || isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
-      const smallFee = (isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
+      const smallFee = (lsFree || isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
       m.baseFood = m.food;
       m.delivery = delivery;
       m.smallFee = smallFee;

@@ -295,8 +295,8 @@ resetWorld();
   T("Source=LS", String(r.Source) === "LS");
   T("sid LS- prefixed", /^LS-/.test(String(r.Submission_ID)));
   T("Delivery_Charge=0 (FREE)", Number(r.Delivery_Charge) === 0, String(r.Delivery_Charge));
-  T("small-order fee STILL applies (owner rule)", Number(r.Small_Order_Fee) === 11);
-  T("Net_Total = 24+11 = 35", Number(r.Net_Total) === 35, String(r.Net_Total));
+  T("NO small-order fee on LS (owner rule 2026-08-26)", Number(r.Small_Order_Fee) === 0, String(r.Small_Order_Fee));
+  T("Net_Total = 24 (food only, zero fees)", Number(r.Net_Total) === 24, String(r.Net_Total));
   T("society defaulted to Liviano Serio", String(r.Society) === "Liviano Serio", String(r.Society));
   T("stash entry tabbed LS_Orders", JSON.parse(propStore.PENDING_ORDER_ROWS)[String(r.Submission_ID)].tab === "LS_Orders");
 }
@@ -340,7 +340,7 @@ resetWorld();
   T("Wallet Paid success", res.success && skWs.rows.length === 0);
   const r = getRows(ss.getSheetByName("LS_Orders"))[0];
   T("status Wallet Paid", String(r.Payment_Status) === "Wallet Paid", String(r.Payment_Status));
-  T("Wallet_Credit=35 recorded", Number(r.Wallet_Credit) === 35, String(r.Wallet_Credit));
+  T("Wallet_Credit=24 recorded", Number(r.Wallet_Credit) === 24, String(r.Wallet_Credit));
   const balRows = getRows(ss.getSheetByName("LS_Wallet"));
   T("SK_Wallet has ZERO rows (separate books)", walWs.rows.length === 0);
   const bal = balRows.reduce((s, x) => {
@@ -350,7 +350,7 @@ resetWorld();
     if (/deduction/.test(t)) return s - amt;
     return s;
   }, 0);
-  T("wallet balance 1000−35=965", bal === 965, String(bal));
+  T("wallet balance 1000−24=976", bal === 976, String(bal));
 }
 
 console.log("\n[6] Idempotent replay (request_id)");
@@ -404,8 +404,8 @@ resetWorld();
   T("order placed", res.success === true, JSON.stringify(res).slice(0, 140));
   const r = getRows(ss.getSheetByName("LS_Orders")).find(x => String(x.Order_Date) === today);
   T("6th-day reward fired (Loyalty_Discount=Yes)", r && String(r.Loyalty_Discount) === "Yes", r && JSON.stringify({ disc: r.Discount_Amount, net: r.Net_Total }));
-  // waiver = 5×₹5 accrued + ₹1 today = ₹26 → net = 24 food + 11 small fee − 26 = 9
-  T("waiver math exact: Net_Total = 24+11−26 = 9", r && Number(r.Net_Total) === 9 && Number(r.Discount_Amount) === 26, r && JSON.stringify({ disc: String(r.Discount_Amount), net: String(r.Net_Total) }));
+  // waiver = 5×₹5 accrued + ₹1 today = ₹26 → net clamped at 0, surplus ₹2 to wallet
+  T("waiver math: Net clamped to 0, discount 26", r && Number(r.Net_Total) === 0 && Number(r.Discount_Amount) === 26, r && JSON.stringify({ disc: String(r.Discount_Amount), net: String(r.Net_Total) }));
 }
 
 console.log("\n[9] Safety-net verify pass: rows present → no alert mails");

@@ -2369,7 +2369,8 @@
     }
 
     function getBulkItemSummary(order, meal, lang) {
-      // Items_JSON-FIRST summary — mirrors backend _lblItemSummary (fix 2026-08-25).
+      // Items_JSON-ONLY when present (fix 2026-08-26 double-count regression).
+      // Mirrors backend _lblItemSummary — see comment there.
       const lbl = lang === "Devanagari" ? LABEL_MR : LABEL_EN;
       const norm = (n) => {
         n = String(n || "").trim();
@@ -2378,25 +2379,40 @@
       };
       const items = {};
       const names = [];
-      const add = (rawName, qty) => {
-        if (!rawName || !(qty > 0)) return;
-        const n = norm(rawName);
-        if (!n) return;
-        if (items[n] === undefined) { items[n] = qty; names.push(n); }
-      };
+      let hasJson = false;
       if (order.Items_JSON) {
         try {
           const parsed = JSON.parse(order.Items_JSON);
-          Object.entries(parsed).forEach(([k, q]) => add(k === "Breakfast Curd" ? "Curd" : k, Number(q) || 0));
+          Object.entries(parsed).forEach(([k, q]) => {
+            const qty = Number(q) || 0;
+            if (qty <= 0) return;
+            const n = norm(k === "Breakfast Curd" ? "Curd" : k);
+            if (!n) return;
+            if (items[n] === undefined) { items[n] = qty; names.push(n); }
+            hasJson = true;
+          });
         } catch (e) {}
       }
-      for (let n = 1; n <= 4; n++) add(order["BF_Item_" + n], Number(order["BF_Qty_" + n]) || 0);
-      LD_COLS.forEach(col => add(col, Number(order[col]) || 0));
-      add("Curd", Number(order.Curd) || 0);
+      if (!hasJson) {
+        for (let n = 1; n <= 4; n++) {
+          const it = String(order["BF_Item_" + n] || "").trim();
+          const q = Number(order["BF_Qty_" + n]) || 0;
+          if (!it || q <= 0) continue;
+          const nn = norm(it);
+          if (items[nn] === undefined) { items[nn] = q; names.push(nn); }
+        }
+        LD_COLS.forEach(col => {
+          const qc = Number(order[col]) || 0;
+          if (qc <= 0) return;
+          if (items[col] === undefined) { items[col] = qc; names.push(col); }
+        });
+        if (!items["Curd"] && Number(order.Curd) > 0) { items["Curd"] = Number(order.Curd); names.push("Curd"); }
+      }
       return names.map(name => {
         const a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
         return items[name] + "x" + a;
       }).join(", ");
+}).join(", ");
 }
 
     async function saveBulkLabelsToDrive() {

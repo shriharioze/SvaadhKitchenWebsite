@@ -957,12 +957,14 @@ function markOrdersStatus(body) {
           const xMeal = String(x.Meal_Type).trim();
           let scNetDelta = 0;
           const xH2 = _hOf(x), xWs2 = _wsOf(x);
+          // LS storefront rows: delivery always free, no small-order fee — never claw back.
+          const xIsLS = !!x._lsTab;
           // Delivery is ₹11 everywhere — refund deduction and stored charge must match.
-          if (xSub > 0 && scIsNonFree(x.Area || "") && (Number(x.Delivery_Charge) || 0) === 0) {
+          if (!xIsLS && xSub > 0 && scIsNonFree(x.Area || "") && (Number(x.Delivery_Charge) || 0) === 0) {
             scDeliveryOwed += 11; scNetDelta += 11;
             if (xH2["Delivery_Charge"]) xWs2.getRange(x._row, xH2["Delivery_Charge"]).setValue(11);
           }
-          if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
+          if (!xIsLS && (xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
               && (Number(x.Small_Order_Fee) || 0) === 0) {
             scSmallFeeOwed += 11; scNetDelta += 11;
             if (xH2["Small_Order_Fee"]) xWs2.getRange(x._row, xH2["Small_Order_Fee"]).setValue(11);

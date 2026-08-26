@@ -2580,7 +2580,8 @@ function _submitOrderInternal(body) {
         delCharge = DELIVERY;
       }
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
+      // LS storefront: NO fees at all (owner 2026-08-25 — free delivery AND no small-order fee)
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !_lsDeliveryFree(_sf) && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
         smallOrderFee = 11;
       }
 
@@ -4057,9 +4058,12 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
           const xSub  = Number(x.Food_Subtotal) || 0;
           let netDelta = 0;
           const xH = _hOf(x), xWs = _wsOf(x);
+          // LS storefront rows: delivery is ALWAYS free and no small-order fee —
+          // never claw fees back onto them (fix 2026-08-26).
+          const xIsLS = !!x._lsTab;
 
           // 1. Delivery Clawback: order was in non-free area but charged ₹0 due to threshold
-          if (xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
+          if (!xIsLS && xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
             deliveryOwed += 11;
             netDelta += 11;
             const delivIdx = xH["Delivery_Charge"];
@@ -4068,7 +4072,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
 
           // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹53 was waived due to threshold
           const xMeal = String(x.Meal_Type).trim();
-          if ((xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
+          if (!xIsLS && (xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
               && (Number(x.Small_Order_Fee) || 0) === 0) {
             smallFeeOwed += 11;
             netDelta += 11;

@@ -1,0 +1,2 @@
+IDX:134008
+"let smallOrderFee = 0;\r\n      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === \"Lunch\" || mealType === \"Dinner\") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {\r\n        smallOrderFee = 11;\r\n      }\r\n\r\n      // Calculation of credits for previously paid fees on the same day (Retroactive waiver)"

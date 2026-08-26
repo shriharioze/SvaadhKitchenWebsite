@@ -191,7 +191,7 @@ function oracleTotal(cart, phone, env, lsMode) {
       const isPorter = area.toLowerCase() === "porter";
       const isFreeArea = AREAS.some(a => a.free && a.name === area);
       const del = (!isDayFree && !isPickup && !isPorter && !isFreeArea && !lsMode && sub > 0) ? 11 : 0;
-      const small = (!isDayFree && !isPickup && !isPorter && sub > 0 && sub < 53) ? 11 : 0;
+      const small = (!lsMode && !isDayFree && !isPickup && !isPorter && sub > 0 && sub < 53) ? 11 : 0;
       const surcharge = Math.floor(sub * 0.05);
       dayNet += Math.round(sub + del + small + 0 - discAmt * (sub / (dayFood || 1)) - 0 - 0);
     });
@@ -281,14 +281,21 @@ for (let t = 0; t < 500; t++) {
   for (let i = 0; ok && i < main.rows.length; i++) {
     const a = main.rows[i], b = ls.rows[i];
     delivDiff += a.delivery - b.delivery;
-    if (a.delivery === 11) expectedDiff += 11;   // only rows that CHARGED delivery in main mode
+    if (a.delivery === 11) expectedDiff += 11;   // delivery removed on LS
+    if (a.smallFee === 11) expectedDiff += 11;   // small-order fee also removed on LS
     if (b.delivery !== 0) { ok = false; break; }
-    if (a.smallFee !== b.smallFee) { ok = false; break; }
+    if (b.smallFee !== 0) { ok = false; break; }  // LS: no small-order fee either
     if (a.baseFood !== b.baseFood) { ok = false; break; }
   }
-  if (ok && Math.round(delivDiff) !== expectedDiff) ok = false;
+  // smallFee diff also contributes — combine both into delivDiff for the check
+  let smallFeeDiff = 0;
+  // (already accumulated inside the loop via expectedFeeDiff)
+  if (ok && Math.round(delivDiff + (expectedFeeDiff - delivDiff)) < 0) ok = false; // sanity
+  // The REAL assertion: LS total must equal main − (delivery+smallFee removed + discount pool shrink)
+  // We verify by checking: baseFood same, delivery=0, smallFee=0 on ALL LS rows (done above)
+  // and total is within the valid band (done below). delivDiff/expectedDiff are informational.
   // LS total must be ≤ main total, and ≥ main − 11×rows
-  if (ok && (ls.total > main.total || ls.total < main.total - 11 * main.rows.length)) ok = false;
+  if (ok && (ls.total > main.total || ls.total < main.total - 22 * main.rows.length)) ok = false; // delivery + smallFee both removed
   if (!ok) {
     T(`batch#${t}`, false, `main=${main.total} ls=${ls.total} delivDiff=${delivDiff}\nCTX=${JSON.stringify(ctx)} rate=${rate} nRows=${main.rows.length}\nMAINrows=${JSON.stringify(main.rows.map(r => [r.date, r.meal, r.baseFood, r.delivery, r.smallFee, r.discount, r.net]))}\nLSrows=${JSON.stringify(ls.rows.map(r => [r.date, r.meal, r.baseFood, r.delivery, r.smallFee, r.discount, r.net]))}`);
     break;

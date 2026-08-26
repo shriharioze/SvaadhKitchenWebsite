@@ -1,0 +1,17 @@
+); return false; }
+          const isPickup = (area === "Self Pickup");
+          // LS storefront: society pinned to the single drop location.
+          const society = LS_SOCIETY_NAME;
+          const wing = $("wingInput").value.trim();
+          const flat = $("flatInput").value.trim();
+          const floor = $("floorInput").value.trim();
+          const landmark = $("landmarkInput").value.trim();
+          const mapsVal = $("mapsInput").value.trim();
+
+          if (!isPickup) {
+            if (!society) { toast(t('toast_society')); return false; }
+            
+            const isPG = /\bpg\b/i.test(`${society} ${wing} ${flat} ${floor} ${landmark}`);
+            if (isPG && !mapsVal) {
+              $("mapsInput").style.borderColor = "#e74c3c";
+              $("mapsInput").style.backg

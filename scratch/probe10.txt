@@ -1,0 +1,56 @@
+st","Lunch","Dinner"].filter(m=>(_do[m]?.subtotal>0)||(_ex[m]?.subtotal>0)).length;
+          const _dynTh = _freeTh(_totalM);
+          const _isFD = (_cdt >= _dynTh) || S.profile.feeExempt;
+          let _tdel=0, _tsm=0, _tsu=0, _trev=0, _tcred=0;
+          if (_isFD && _exft > 0) {
+            ["Breakfast","Lunch","Dinner"].forEach(m => {
+              _tcred += (_ex[m]?.delivery_charged||0) + (_ex[m]?.small_fee_charged||0);
+            });
+          }
+          ["Breakfast","Lunch","Dinner"].forEach(meal => {
+            const _ms = _do[meal]; const _sub = _ms?.subtotal||0; if (_sub<=0) return;
+            if (_ppt>0) { _trev += Math.round(_sub*0.10); _ppt--; }
+            const _mAddr = getMealAddr(meal);
+            const _isP = _mAddr.area==="Self Pickup" || _mAddr.area==="Porter";  // Porter = customer-booked courier, no delivery fee from us (same as pickup)
+            const _isFA = FREE_AREAS.includes(_mAddr.area);
+            const _cms = _sub+(_ex[meal]?.subtotal||0);
+            if (!S.profile.feeExempt&&!_isFD&&!_isP&&!LS_FREE_DELIVERY&&(meal==="Lunch"||meal==="Dinner")&&_sub>0&&_cms<_smallFeeTh) _tsm+=11; // LS: no small fee
+            if (!S.profile.feeExempt&&!_isFD&&!_isP&&!_isFA&&!LS_FREE_DELIVERY&&_sub>0) _tdel+=DELIVERY_CHARGE;
+            _tsu += _chgF(_sub); // V1: surcharge charged (loyalty covers it day 6). V2: 0.
+          });
+          const _net = _dft - _da + _tdel + _tsm + _tsu - _tcred - _trev;
+          _dayNets[_d] = { net: _net, is6: _is6 };
+          // Same streak-state guard as the main loop — don't increment
+          // for dates that already had existing orders (already counted).
+          if (_hasExisting) { /* no streak state change */ }
+          else if (_is6)    { _psc = 0; _pps = 0; }
+          else              { _psc++; _pps += _msu; }
+          _prevDate = _d;
+        }
+        // Find streak day surplus and carry backwards
+        let _surplus = 0;
+        for (const _d of _dateOrder) {
+          if (_dayNets[_d].is6 && _dayNets[_d].net < 0) {
+            _surplus = Math.abs(_dayNets[_d].net);
+            break;
+          }
+        }
+        if (_surplus > 0) {
+          for (let _i = _dateOrder.length - 1; _i >= 0 && _surplus > 0; _i--) {
+            const _d = _dateOrder[_i];
+            if (_dayNets[_d].is6) continue; // skip streak day itself
+            const _absorb = Math.min(_surplus, Math.max(0, _dayNets[_d].net));
+            if (_absorb > 0) { carryBack[_d] = (carryBack[_d] || 0) + _absorb; _surplus -= _absorb; }
+          }
+        }
+      }
+      // ── End pre-compute pass ──
+
+      let daySurplusToWallet = 0; // per-day clamp surplus — credited to wallet on place (mirrors backend)
+      let prevStreakDate = S.loyaltyInfo?.end || null; // last ordered day (past or earlier cart date) — for gap detection
+      for (const date of S.selectedDates) {
+        const dayOrders = S.orders[date] || {};
+        let dayFoodTotal = 0;
+        ["Breakfast", "Lunch", "Dinner"].forEach(m => { dayFoodTotal += dayOrders[m]?.subtotal || 0; });
+        if (dayFoodTotal === 0) continue;
+        // Per-

@@ -1,0 +1,4 @@
+=== @361250 ===
+ynamicThreshold - combinedDayTotal;
+          html += `<div style="font-size:0.72rem;color:#27ae60;background:#e8f5e9;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #c8e6c9;">
+            🚚 Add <strong>₹${diff}</strong> more to this day's order for <strong>Free Delivery</strong> (Current threshold: ₹${dynamicThreshold} for ${totalMealsOnDate} meal${totalMealsOnDate > 1 ? 's' : 

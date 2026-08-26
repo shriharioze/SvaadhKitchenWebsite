@@ -1,0 +1,50 @@
+=== Small Order Fee @167374 ===
+x;border-left:4px solid #e67e22;">
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🛒 Small Order Fee</div>
+            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
+              <b>No small-order fee, no delivery charge, no hidden costs on this page.</b> You pay only fo
+
+=== Small Order Fee @226370 ===
+ery_label').replace('🚚 ', '')}</strong>: Free in Bhosale Nagar · ₹11/meal elsewhere (Waived if Self Pickup)<br>
+      <strong>📦 Small Order Fee:</strong> ₹11 for Lunch/Dinner if bill &lt; ₹53 (Waived if Self Pickup)<br>
+      <strong>🔥 Loyalty Reward:</strong> Order 6 days in a row → 5% of your 6-day total back on day 6<br>
+ 
+
+=== Small Order Fee @364823 ===
+|| 0);
+
+          let mealExtras = [];
+
+          // 1 & 2. Credits (Moved to date-level adjustments at bottom)
+
+
+          // 3. Small Order Fee (current)
+          // Waived if isDayFree or Pickup or VIP. Else applies if Lunch/Dinner and meal total < 50
+          if (!S.profile.feeExempt && !isDayFree && !isPickup && (meal ===
+
+=== Small Order Fee @365178 ===
+ner") && sub > 0 && combinedMealSub < _smallFeeTh) {
+            const fee = 11;
+            mealExtras.push({ icon: "📦", name: "Small Order Fee", val: fee, desc: "A small flat fee applied to orders below ₹53 to help cover baseline packaging & logistics overheads." });
+            totalSmallOrderFee += fee;
+          }
+
+       
+
+=== upsertProfile @254586 ===
+sses: JSON.stringify(S.mealAddrs),
+          email: ($("emailInput")?.value || S.profile.email || "").trim(),
+          _action: "upsertProfile", storefront: STOREFRONT
+        };
+        fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(profile) });
+      }
+      if (S.step === 2) {
+        if (!S.selectedDates.leng
+
+=== upsertProfile @578064 ===
+.textContent = "Saving…";
+        try {
+          await fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify({ _action: "upsertProfile", storefront: STOREFRONT, phone: phone, email: em }) });
+        } catch (e) {}
+        if (S.profile) S.profile.email = em;
+        if ($("emailInput")) { $("emailInput").value = em; tr

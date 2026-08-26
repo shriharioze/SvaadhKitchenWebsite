@@ -1,0 +1,86 @@
+=== for Free Delivery @359401 ===
+ mealsToday.length;
+        const dynamicThreshold = _freeTh(totalMealsOnDate);
+        const isDayFree = (combinedDayTotal >= dynamicThreshold) || S.profile.feeExempt;
+
+        // Suppress "Add more for Free Delivery" banner if all ordered meals are Self Pickup
+        const allPickup = ["Breakfast","Lunch","Dinner"].every(m => {
+          const mObj = dayOrders[m];
+          if (!mObj || (mObj.subtotal || 0) <= 0) return true; // not ordered
+  
+
+=== _freeTh @348470 ===
+             // surcharge CHARGED in the bill
+      const _smallFeeTh = _v2 ? 53 : 50;
+      // Free-delivery threshold by number of delivery meals that day: 1 → ₹106, 2 → ₹159, 3 → ₹190.
+      const _freeTh = (meals) => meals <= 1 ? (_v2 ? 106 : 100) : meals === 2 ? (_v2 ? 159 : 150) : (_v2 ? 190 : 180);
+
+      // ── Pre-compute pass: figure out carry-back credits from streak surplus ──
+      // We need to know how much surplus the streak day ge
+
+=== _freeTh @351371 ===
+th.max(0, Math.round(_cdt*_dr) - _exDisc));
+          }
+          const _totalM = ["Breakfast","Lunch","Dinner"].filter(m=>(_do[m]?.subtotal>0)||(_ex[m]?.subtotal>0)).length;
+          const _dynTh = _freeTh(_totalM);
+          const _isFD = (_cdt >= _dynTh) || S.profile.feeExempt;
+          let _tdel=0, _tsm=0, _tsu=0, _trev=0, _tcred=0;
+          if (_isFD && _exft > 0) {
+            ["Breakfast","Lunch","Dinner"].forEach(m => {
+              _
+
+=== _freeTh @359254 ===
+Today = ["Breakfast", "Lunch", "Dinner"].filter(m => (dayOrders[m]?.subtotal > 0) || (existDay[m]?.subtotal > 0));
+        const totalMealsOnDate = mealsToday.length;
+        const dynamicThreshold = _freeTh(totalMealsOnDate);
+        const isDayFree = (combinedDayTotal >= dynamicThreshold) || S.profile.feeExempt;
+
+        // Suppress "Add more for Free Delivery" banner if all ordered meals are Self Pickup
+        const allPickup = ["Breakfast","
+
+=== dynamicThreshold @359235 ===
+        const mealsToday = ["Breakfast", "Lunch", "Dinner"].filter(m => (dayOrders[m]?.subtotal > 0) || (existDay[m]?.subtotal > 0));
+        const totalMealsOnDate = mealsToday.length;
+        const dynamicThreshold = _freeTh(totalMealsOnDate);
+        const isDayFree = (combinedDayTotal >= dynamicThreshold) || S.profile.feeExempt;
+
+        // Suppress "Add more for Free Delivery" banner if all ordered meals are Self Pickup
+        const allPick
+
+=== dynamicThreshold @359328 ===
+al > 0) || (existDay[m]?.subtotal > 0));
+        const totalMealsOnDate = mealsToday.length;
+        const dynamicThreshold = _freeTh(totalMealsOnDate);
+        const isDayFree = (combinedDayTotal >= dynamicThreshold) || S.profile.feeExempt;
+
+        // Suppress "Add more for Free Delivery" banner if all ordered meals are Self Pickup
+        const allPickup = ["Breakfast","Lunch","Dinner"].every(m => {
+          const mObj = dayOrders[m];
+       
+
+=== dynamicThreshold @360882 ===
+od bill, back in your pocket"}. You've earned it! Total reward: <strong>₹${loyaltyWaiverTotal}</strong></span>
+          </div>`;
+        } else if (!isDayFree && !allPickup) {
+          const diff = dynamicThreshold - combinedDayTotal;
+          html += `<div style="font-size:0.72rem;color:#27ae60;background:#e8f5e9;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #c8e6c9;">
+            🚚 Add <strong>₹${diff
+
+=== dynamicThreshold @361226 ===
+adius:6px;margin-bottom:8px;font-weight:500;border:1px solid #c8e6c9;">
+            🚚 Add <strong>₹${diff}</strong> more to this day's order for <strong>Free Delivery</strong> (Current threshold: ₹${dynamicThreshold} for ${totalMealsOnDate} meal${totalMealsOnDate > 1 ? 's' : ''})!
+          </div>`;
+        }
+
+        if (combinedDayTotal < DISC_T1.min) {
+          const diff = DISC_T1.min - combinedDayTotal;
+          html += `<div style="font-
+
+=== dynamicThreshold @371353 ===
+      let creditDesc = creditParts.join(' and ');
+
+          html += `<div class="bill-line discount" style="cursor:pointer; margin-bottom:4px;" onclick="toast('Since your daily food total reached ₹${dynamicThreshold}, we have credited back the ${creditDesc} paid for earlier orders today!', 7000)">
+        <span>🏷️ Combined Day Fee Credits (Refund)</span><span>−₹${totalCredits}</span></div>`;
+        }
+        if (discAmt > 0) {
+          html +

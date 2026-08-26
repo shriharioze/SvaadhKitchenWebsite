@@ -1,0 +1,16 @@
+function readPerMealAddr(pfx) {
+      return {
+        area: $(pfx + "_areaSelect")?.value || "",
+        wing: $(pfx + "_wingInput")?.value.trim() || "",
+        flat: $(pfx + "_flatInput")?.value.trim() || "",
+        floor: $(pfx + "_floorInput")?.value.trim() || "",
+        // LS storefront: society pinned to the single drop location.
+        society: LS_SOCIETY_NAME,
+        delivery_point: $(pfx + "_deliveryPointSelection")?.value || "door",
+        maps: $(pfx + "_mapsInput")?.value.trim() || "",
+        landmark: $(pfx + "_landmarkInput")?.value.trim() || "",
+      };
+    }
+
+    // ══ LS STOREFRONT: fixed-address logic ══════════════════════════════════
+    // Area locked to Kharadi;

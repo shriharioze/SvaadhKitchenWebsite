@@ -1,0 +1,26 @@
+=== toast_area ===
+     }
+        const name = `${firstName} ${lastName}`;
+        if (S.sameAddr) {
+          const area = $("areaSelect").value;
+          if (!area) { toast(t('toast_area')); return false; }
+          const isPickup = (area === "Self Pickup");
+          // LS storefront: society pinned to the single drop location.
+    
+
+=== _fld( ===
+  const _fld = function (id, cur) {
+        const v = $(id).value.trim();
+        return (_keepStored && !v) ? (cur || "") : v;
+      };
+      S.profile.wing = _fld("wingInput", S.profile.wing);
+      S.profile.flat = _fld("flatInput", S.profile.flat);
+      S.profile.floor = _fld("floorInput", S.profile.floor);
+      
+
+=== societyInput ===
+        <label>Society</label>
+              <!-- LS storefront: auto-set from wing — A/B/C/D → Liviano, E1–G2 → Serio -->
+              <input type="text" id="societyInput" placeholder="" readonly style="background:#f4f4f2;color:#555;" oninput="syncSingleAddr()">
+            </div>
+            <div class="form-group">

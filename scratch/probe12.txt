@@ -1,0 +1,2 @@
+@361287:           🚚 Add <strong>₹${diff}</strong> more to this day's order for <strong>Free Delivery</strong> (Current threshold: ₹${dynamicThreshold} for ${totalMealsOnDate} meal${totalMealsOnDate > 1 ? 's' : ''})! |           <
+@346557:                 ${remaining} more consecutive day${remaining > 1 ? 's' : ''} to unlock your loyalty reward! |                 </div> |                 <div style="font-size:0.75rem;color:#059669;font-weight:600;"> |           

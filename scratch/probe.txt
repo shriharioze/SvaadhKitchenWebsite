@@ -1,0 +1,9 @@
+"hen to your address and pay the courier directly:<br><br><b>Pickup from:</b> ${PICKUP_ADDRESS}<br><br><b>Ready for pickup —</b><br>${times}<br><br>Please review your updated bill and tap <b>"
+
+"nt-size:0.78rem;color:#444;line-height:1.7;\">\n              Pickup from: <b>G2 804, Ganga Serio, Kharadi</b><br>\n              Select \"Self Pickup\" as your area when ordering — no delivery c"
+
+"ne tap, done.\",\n      \"Each meal (Breakfast, Lunch, Dinner) can go to a different address — breakfast at home, lunch at the office.\",\n      \"Tap a date again on the calendar to deselect it.\""
+
+"sh order.\",\n      // ⏰ Cutoff Times\n      \"Breakfast orders close at 7:00 AM — order the night before to be safe.\",\n      \"Lunch orders close at 9:00 AM — order the night before to be safe.\""
+
+"eparation — it changes daily.\",\n      \"Breakfast items have fixed prices — mix and match Poha, Upma, Idli, and more.\",\n      \"Some items may be marked Out of Stock by the kitchen on high-dem"

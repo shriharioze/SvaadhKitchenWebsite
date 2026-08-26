@@ -1,0 +1,4 @@
+st","Lunch","Dinner"].filter(m=>(_do[m]?.subtotal>0)||(_ex[m]?.subtotal>0)).length;
+          const _dynTh = _freeTh(_totalM);
+          const _isFD = (_cdt >= _dynTh) || S.profile.feeExempt;
+       

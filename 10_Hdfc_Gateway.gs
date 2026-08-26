@@ -576,7 +576,7 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
       }
 
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !_lsFreeDel && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
         smallOrderFee = 11;
       }
 

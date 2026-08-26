@@ -1102,6 +1102,14 @@ function getKitchenSummary(date) {
           ["Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"].forEach(function (cc) { if ((Number(r[cc]) || 0) > 0) already[cc] = true; });
           for (var qn2 = 1; qn2 <= 4; qn2++) { var nmQ2 = String(r["BF_Item_" + qn2] || "").trim(); if (nmQ2) already[nmQ2] = true; }
         }
+                var hasColData = false;
+        if (meal === "Breakfast") {
+          for (var qn3 = 1; qn3 <= 4; qn3++) { if (String(r["BF_Item_" + qn3] || "").trim() && (Number(r["BF_Qty_" + qn3]) || 0) > 0) { hasColData = true; break; } }
+          // DO NOT count Curd column as hasColData — it is a secondary capture path
+        } else {
+          LUNCH_DINNER_COLS.forEach(function (cc) { if ((Number(r[cc]) || 0) > 0) hasColData = true; });
+        }
+        if (hasColData) return; // columns already captured — Items_JSON is a mirror, skip
         Object.keys(ijRaw).forEach(function (kRaw) {
           var qtyJ = Number(ijRaw[kRaw]) || 0;
           if (qtyJ <= 0) return;

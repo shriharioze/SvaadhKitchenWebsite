@@ -67,12 +67,10 @@ var LBL_LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "J
 
 // Per-order item summary — direct port of kitchen.html getBulkItemSummary().
 function _lblItemSummary(order, meal, lang) {
-  // Items_JSON-FIRST summary (fix 2026-08-25): Items_JSON is written from the
-  // actual cart regardless of Meal_Type, so it is the source of truth.
-  // Fixes: (1) breakfast+Curd labels dropping items when BF slots are blank;
-  // (2) owner-flipped Meal_Type (Breakfast items under Lunch/Dinner) rendering
-  // empty. BF slots / L/D columns / Curd column remain as fallbacks for legacy
-  // rows. Sources are MIRRORS of one cart — first source wins per item, never summed.
+  // Items_JSON-ONLY when present (fix 2026-08-26 double-count regression).
+  // Items_JSON and the named columns are MIRRORS of the same cart — using both
+  // causes duplicates. Only fall back to BF slots / L/D columns / Curd when
+  // Items_JSON is missing, empty, or malformed (legacy rows).
   var lbl = (lang === "Devanagari") ? LBL_MR : LBL_EN;
   var norm = function (n) {
     n = String(n || "").trim();
@@ -81,21 +79,36 @@ function _lblItemSummary(order, meal, lang) {
   };
   var items = {};
   var names = [];
-  var add = function (rawName, qty) {
-    if (!rawName || !(qty > 0)) return;
-    var n = norm(rawName);
-    if (!n) return;
-    if (items[n] === undefined) { items[n] = qty; names.push(n); }
-  };
+  var hasJson = false;
   if (order.Items_JSON) {
     try {
       var parsed = JSON.parse(order.Items_JSON);
-      Object.keys(parsed).forEach(function (k) { add(k === "Breakfast Curd" ? "Curd" : k, Number(parsed[k]) || 0); });
+      Object.keys(parsed).forEach(function (k) {
+        var q = Number(parsed[k]) || 0;
+        if (q <= 0) return;
+        var n = norm(k === "Breakfast Curd" ? "Curd" : k);
+        if (!n) return;
+        if (items[n] === undefined) { items[n] = q; names.push(n); }
+        hasJson = true;
+      });
     } catch (e) {}
   }
-  for (var n = 1; n <= 4; n++) add(order["BF_Item_" + n], Number(order["BF_Qty_" + n]) || 0);
-  LBL_LD_COLS.forEach(function (col) { add(col, Number(order[col]) || 0); });
-  add("Curd", Number(order.Curd) || 0);
+  // Fallback ONLY when Items_JSON had nothing usable
+  if (!hasJson) {
+    for (var n = 1; n <= 4; n++) {
+      var it = String(order["BF_Item_" + n] || "").trim();
+      var q = Number(order["BF_Qty_" + n]) || 0;
+      if (!it || q <= 0) continue;
+      var nn = norm(it);
+      if (items[nn] === undefined) { items[nn] = q; names.push(nn); }
+    }
+    LBL_LD_COLS.forEach(function (col) {
+      var qc = Number(order[col]) || 0;
+      if (qc <= 0) return;
+      if (items[col] === undefined) { items[col] = qc; names.push(col); }
+    });
+    if (!items["Curd"] && Number(order.Curd) > 0) { items["Curd"] = Number(order.Curd); names.push("Curd"); }
+  }
   return names.map(function (name) {
     var a = lbl[name] || lbl[name.replace(/ /g, "_")] || name;
     return items[name] + "x" + a;
