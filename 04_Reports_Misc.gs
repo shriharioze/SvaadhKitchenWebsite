@@ -561,7 +561,7 @@ function getOrderHistory(p) {
       id:             r.Submission_ID,
       date:           fmtDate(r.Order_Date),
       meal:           r.Meal_Type,
-      name:           (r._lsTab && !String(r.Customer_Name || "").trim().startsWith("[LS]")) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
+      name:           r.Customer_Name,
       phone:          r.Phone,
       area:           r.Area || "",
       wing:           r.Wing || "",

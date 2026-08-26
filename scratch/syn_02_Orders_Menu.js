@@ -4459,3 +4459,27 @@ function fixCustomerPins(commit) {
   results.dryRun = !(commit === true || commit === "true");
   return results;
 }
+
+
+// ── STRIP [LS] PREFIX: remove [LS] from Customer_Name in LS_Orders ──
+// One-time cleanup for rows created before the prefix was reverted.
+function stripLSPrefix(commit) {
+  var ss = getSpreadsheet();
+  var ws = ss.getSheetByName(TAB_LS_ORDERS);
+  if (!ws || ws.getLastRow() < 2) return { success: true, note: "LS_Orders empty or missing" };
+  var data = ws.getDataRange().getValues();
+  var headers = data[0];
+  var nameIdx = headers.indexOf("Customer_Name");
+  if (nameIdx === -1) return { success: false, error: "Customer_Name column not found" };
+  var fixed = 0;
+  for (var i = 1; i < data.length; i++) {
+    var v = String(data[i][nameIdx] || "").trim();
+    if (v.indexOf("[LS] ") === 0) {
+      if (commit === true || commit === "true") {
+        ws.getRange(i + 1, nameIdx + 1).setValue(v.slice(5));
+      }
+      fixed++;
+    }
+  }
+  return { success: true, dryRun: !(commit === true || commit === "true"), stripped: fixed };
+}

@@ -561,7 +561,7 @@ function getOrderHistory(p) {
       id:             r.Submission_ID,
       date:           fmtDate(r.Order_Date),
       meal:           r.Meal_Type,
-      name:           (r._lsTab && !String(r.Customer_Name || "").trim().startsWith("[LS]")) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
+      name:           r.Customer_Name,
       phone:          r.Phone,
       area:           r.Area || "",
       wing:           r.Wing || "",
@@ -2077,7 +2077,12 @@ function archiveDueOrders(dryRun, todayISO) {
     var TERMINAL = ['cancelled', 'refunded'];
     var toArchive = [];
     var keep = [];
+    var keepSK = [];  // SK-only rows for the rebuild (LS rows are rebuilt separately)
     var plan = {};
+    var lsAll = [];   // LS live rows (for the LS rebuild)
+    var lsToArchive = [];
+    var lsKeep = [];
+    // Scan SK_Orders
     for (var i = 1; i < all.length; i++) {
       var row = all[i];
       if (row.join('').trim() === '') continue;
@@ -2092,34 +2097,118 @@ function archiveDueOrders(dryRun, todayISO) {
         plan[dueInfo.monthKey] = (plan[dueInfo.monthKey] || 0) + 1;
       } else {
         keep.push(row);
+        keepSK.push(row);
       }
     }
+    // Scan LS_Orders (if tab exists)
+    try {
+      var lsWsLive = ss.getSheetByName(TAB_LS_ORDERS);
+      if (lsWsLive && lsWsLive.getLastRow() > 1) {
+        var lsData = lsWsLive.getDataRange().getValues();
+        var lsHeaders = lsData[0];
+        var lsDateIdx = lsHeaders.indexOf('Order_Date');
+        var lsStIdx = lsHeaders.indexOf('Payment_Status');
+        for (var li = 1; li < lsData.length; li++) {
+          var lsRow = lsData[li];
+          if (lsRow.join('').trim() === '') continue;
+          var lsD = fmtDate(lsRow[lsDateIdx]);
+          var lsSt = String((lsStIdx !== -1 ? lsRow[lsStIdx] : '') || '').trim().toLowerCase();
+          var lsTerminal = TERMINAL.some(function (t) { return lsSt.indexOf(t) !== -1; });
+          var lsPaid = PAID.indexOf(lsSt) !== -1;
+          var lsArch = (lsPaid || lsTerminal) && lsD;
+          var lsDue = lsArch ? _archiveSliceDueDate(lsD) : null;
+          if (lsArch && lsDue && today >= lsDue.due) {
+            toArchive.push(lsRow);
+            lsToArchive.push(lsRow);
+            plan[lsDue.monthKey + ' (LS)'] = (plan[lsDue.monthKey + ' (LS)'] || 0) + 1;
+          } else {
+            lsKeep.push(lsRow);
+          }
+          lsAll.push(lsRow);
+        }
+      }
+    } catch (eLS) { /* LS tab absent */ }
     if (dryRun) return { success: true, dryRun: true, today: today, wouldArchive: toArchive.length, byMonth: plan,
       sids: toArchive.map(function (r) { return r[headers.indexOf('Submission_ID')]; }) };
     if (!toArchive.length) return { success: true, archived: 0, note: 'nothing due', today: today };
 
     // Append per MONTH file (find-or-create — existing files are reused, never
     // duplicated), verifying each append BEFORE the live rebuild.
-    var byMonth = {};
+    // Each archive file has 3 sheets: SK_Orders, LS_Orders, IA_Orders.
+    var byMonth = {};    // SK rows per month
+    var byMonthLS = {};  // LS rows per month
     toArchive.forEach(function (r) {
       var mk = fmtDate(r[dateIdx]).slice(0, 7);
-      (byMonth[mk] = byMonth[mk] || []).push(r);
+      var isLS = lsToArchive.some(function (lr) { return lr === r; });
+      if (isLS) { (byMonthLS[mk] = byMonthLS[mk] || []).push(r); }
+      else { (byMonth[mk] = byMonth[mk] || []).push(r); }
     });
     Object.keys(byMonth).forEach(function (mk) {
       var y = Number(mk.slice(0, 4)), m = Number(mk.slice(5, 7));
       var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       var name = 'Svaadh Kitchen Archive — ' + MONTH_NAMES[m - 1] + ' ' + y;
       var aSS = _findOrCreateOrderArchiveSS(name);
+      // SK_Orders sheet
       var aWs = aSS.getSheetByName('SK_Orders') || aSS.getSheets()[0];
+      if (aWs.getName() !== 'SK_Orders') aWs.setName('SK_Orders');
       if (aWs.getLastRow() === 0) aWs.getRange(1, 1, 1, headers.length).setValues([headers]);
       var before = aWs.getLastRow();
       aWs.getRange(before + 1, 1, byMonth[mk].length, headers.length).setValues(byMonth[mk]);
       SpreadsheetApp.flush();
       if (aWs.getLastRow() - before !== byMonth[mk].length) throw new Error('Archive append verification failed for ' + name);
+      // LS_Orders sheet (append LS rows to their own sheet in the archive file)
+      var lsRowsForMonth = byMonthLS[mk] || [];
+      if (lsRowsForMonth.length) {
+        var lsWsA = aSS.getSheetByName('LS_Orders');
+        if (!lsWsA) { lsWsA = aSS.insertSheet('LS_Orders'); lsWsA.getRange(1, 1, 1, headers.length).setValues([headers]); }
+        var lsB = lsWsA.getLastRow();
+        lsWsA.getRange(lsB + 1, 1, lsRowsForMonth.length, headers.length).setValues(lsRowsForMonth);
+        SpreadsheetApp.flush();
+        if (lsWsA.getLastRow() - lsB !== lsRowsForMonth.length) throw new Error('LS archive append verification failed for ' + name);
+      }
     });
+    // IA orders: scan + archive separately into the same month files
+    try {
+      if (typeof ia_rowsAsSK === 'function') {
+        var iaRows = ia_rowsAsSK();
+        var iaByMonth = {};
+        iaRows.forEach(function (r) {
+          if (_isOrderCancelled(r.Payment_Status)) return;
+          var st = String(r.Payment_Status || '').trim().toLowerCase();
+          if (PAID_FOR_ARCHIVE.indexOf(st) === -1) return;
+          var dISO = fmtDate(r.Order_Date);
+          if (!dISO) return;
+          var dueInfo = _archiveSliceDueDate(dISO);
+          if (today >= dueInfo.due) {
+            var mk = dISO.slice(0, 7);
+            (iaByMonth[mk] = iaByMonth[mk] || []).push(r);
+          }
+        });
+        Object.keys(iaByMonth).forEach(function (mk) {
+          var y = Number(mk.slice(0, 4)), m = Number(mk.slice(5, 7));
+          var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          var name = 'Svaadh Kitchen Archive — ' + MONTH_NAMES[m - 1] + ' ' + y;
+          var aSS = _findOrCreateOrderArchiveSS(name);
+          var IA_HEADERS = (typeof IA_ORDERS_HEADERS !== 'undefined') ? IA_ORDERS_HEADERS : null;
+          if (!IA_HEADERS) return; // IA headers not available — skip
+          var iaWs = aSS.getSheetByName('IA_Orders');
+          if (!iaWs) { iaWs = aSS.insertSheet('IA_Orders'); iaWs.getRange(1, 1, 1, IA_HEADERS.length).setValues([IA_HEADERS]); }
+          var iaBefore = iaWs.getLastRow();
+          // Convert IA row objects to arrays matching IA_HEADERS
+          var iaArrays = iaByMonth[mk].map(function (r) {
+            return IA_HEADERS.map(function (h) { return r[h] !== undefined ? r[h] : ''; });
+          });
+          iaWs.getRange(iaBefore + 1, 1, iaArrays.length, IA_HEADERS.length).setValues(iaArrays);
+          SpreadsheetApp.flush();
+          if (iaWs.getLastRow() - iaBefore !== iaArrays.length) throw new Error('IA archive append verification failed for ' + name);
+          plan[mk + ' (IA)'] = iaByMonth[mk].length;
+        });
+      }
+    } catch (eIA) {
+      Logger.log('IA archive: ' + eIA.message);
+    }
 
-    // Single rebuild of the live sheet. Date-preserving write (see the 2026-08-25
-    // archive incident: Dates must round-trip as Dates, never as strings).
+    // Single rebuild of the live SK sheet. Date-preserving write.
     var allKeep = keep.filter(function (r) { return r.join('').trim() !== ''; });
     var lastRow = ws.getLastRow(), lastCol = ws.getLastColumn();
     var maxCol = Math.max(lastCol, headers.length);
@@ -2130,7 +2219,22 @@ function archiveDueOrders(dryRun, todayISO) {
     if (totalRows > rowsNeeded) ws.deleteRows(rowsNeeded + 1, totalRows - rowsNeeded);
     SpreadsheetApp.flush();
     var nowRows = ws.getLastRow() - 1;
-    if (nowRows !== allKeep.length) return { success: false, error: 'Live rebuild verification failed', expected: allKeep.length, actual: nowRows };
+    if (nowRows !== allKeep.length) return { success: false, error: 'SK rebuild verification failed', expected: allKeep.length, actual: nowRows };
+    // Rebuild live LS sheet (remove archived LS rows)
+    if (lsToArchive.length > 0) {
+      var lsWsLive2 = ss.getSheetByName(TAB_LS_ORDERS);
+      if (lsWsLive2) {
+        var lsKeepArr = lsKeep.filter(function (r) { return r.join('').trim() !== ''; });
+        var lsLastRow = lsWsLive2.getLastRow(), lsLastCol = lsWsLive2.getLastColumn();
+        var lsMaxCol = Math.max(lsLastCol, headers.length);
+        if (lsLastRow > 1) lsWsLive2.getRange(2, 1, lsLastRow - 1, lsMaxCol).clearContent();
+        if (lsKeepArr.length > 0) lsWsLive2.getRange(2, 1, lsKeepArr.length, headers.length).setValues(lsKeepArr);
+        var lsRowsNeeded = lsKeepArr.length + 1;
+        var lsTotalRows = lsWsLive2.getMaxRows();
+        if (lsTotalRows > lsRowsNeeded) lsWsLive2.deleteRows(lsRowsNeeded + 1, lsTotalRows - lsRowsNeeded);
+        SpreadsheetApp.flush();
+      }
+    }
 
     try {
       var adminEmail = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL');
