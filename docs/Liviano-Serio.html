@@ -10878,7 +10878,7 @@
           } else if (refundType === "wallet") {
             const msg = isPending
               ? "Cancellation successful! Refund automatically initiated to your original payment method (1–3 working days)."
-              : serverMsg || "Cancellation successful! Refund added to your Svaadh Wallet.";
+              : serverMsg || "Cancellation successful! Refund added to your Svaadh Wallet.<br><br><small>💡 Most refunds are processed on the same day. It might not show immediately in your payment app, but will appear in your bank statement — you may also receive an SMS confirmation.</small>";
             await sAlert(msg, "Done", "💳");
           } else if (refundType !== "none") {
             await sAlert(serverMsg || "Cancellation successful! Refund request submitted.", "Done", "💸");

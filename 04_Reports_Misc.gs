@@ -2060,6 +2060,92 @@ function _archiveSliceDueDate(orderDateISO) {
   return { due: ny + '-' + ('0' + nm).slice(-2) + '-08', monthKey: mk };
 }
 
+
+
+// ── ORDER LOG RECOVERY: last-resort recovery for dropped orders ──
+// Scans SK_Order_Log for "pending" entries where the gateway_order_id is NOT
+// in SK_Orders or LS_Orders (order was dropped). If the payment was CHARGED,
+// reconstructs the order from the stored stash JSON, writes it, and emails admin.
+// Runs from the daily trigger. Entries 10-60 min old only.
+function recoverFromOrderLog() {
+  try {
+    var ss = getSpreadsheet();
+    var logWs = ss.getSheetByName("SK_Order_Log");
+    if (!logWs || logWs.getLastRow() < 2) return;
+    var logData = logWs.getDataRange().getValues();
+    var logHeaders = logData[0];
+    var colTs = logHeaders.indexOf("Timestamp");
+    var colGwId = logHeaders.indexOf("Gateway_Order_ID");
+    var colStash = logHeaders.indexOf("Stash_JSON");
+    var colStatus = logHeaders.indexOf("Status");
+    if (colGwId === -1 || colStash === -1 || colStatus === -1) return;
+    var existingGwIds = {};
+    [TAB_ORDERS, TAB_LS_ORDERS].forEach(function (tn) {
+      var ws = ss.getSheetByName(tn);
+      if (!ws || ws.getLastRow() < 2) return;
+      var dh = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0].map(String);
+      var gwCol = dh.indexOf("Gateway_Order_ID");
+      if (gwCol === -1) return;
+      ws.getRange(2, gwCol + 1, ws.getLastRow() - 1, 1).getValues().forEach(function (v) {
+        var gid = String(v[0] || "").trim();
+        if (gid) existingGwIds[gid] = true;
+      });
+    });
+    var now = Date.now();
+    var recovered = 0;
+    var recoveredDetails = [];
+    for (var i = 1; i < logData.length; i++) {
+      var status = String(logData[i][colStatus] || "").trim();
+      if (status !== "pending") continue;
+      var gwId = String(logData[i][colGwId] || "").trim();
+      if (!gwId) continue;
+      if (existingGwIds[gwId]) { logWs.getRange(i + 1, colStatus + 1).setValue("written"); continue; }
+      var ts = logData[i][colTs];
+      var tsMs = (ts instanceof Date) ? ts.getTime() : new Date(ts).getTime();
+      if (isNaN(tsMs)) continue;
+      var ageMin = (now - tsMs) / 60000;
+      if (ageMin < 10) continue;
+      if (ageMin > 60) { logWs.getRange(i + 1, colStatus + 1).setValue("abandoned"); continue; }
+      var stashJson = String(logData[i][colStash] || "");
+      if (!stashJson) continue;
+      var entry;
+      try { entry = JSON.parse(stashJson); } catch (e) { continue; }
+      if (!entry || (!entry.orders && !entry.bulk)) continue;
+      var charged = false;
+      try { var sc = hdfc_getOrderStatus(gwId); charged = sc.confirmed; } catch (e) {}
+      if (!charged) { try { charged = !!_checkWebhookLogForCharge(gwId, entry.amount); } catch (e) {} }
+      if (!charged) continue;
+      var result;
+      if (entry.bulk) {
+        var isSplit = String(entry.payment_choice || "") === "Split";
+        result = submitBulkOrder({ plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
+          storefront: String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
+          lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
+          lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
+          payment_method: isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)", payment_status: "Paid",
+          wallet_applied: isSplit ? Number(entry.wallet_applied || 0) : 0,
+          gateway_order_id: gwId, batch_id: gwId });
+      } else {
+        var body = _buildSubmitBodyFromPending(gwId, entry, { status: "CHARGED", confirmed: true });
+        if (body && body.orders && body.orders.length) result = submitOrder(body);
+      }
+      if (result && result.success) {
+        logWs.getRange(i + 1, colStatus + 1).setValue("recovered");
+        recovered++;
+        recoveredDetails.push(gwId + " (" + (entry.phone || "?") + ")");
+        Logger.log("recoverFromOrderLog: RECOVERED " + gwId);
+      }
+    }
+    if (recovered > 0) {
+      try {
+        var adminEmail = PropertiesService.getScriptProperties().getProperty("ADMIN_EMAIL");
+        if (adminEmail) MailApp.sendEmail(adminEmail, "\u2705 Order Log Recovery: " + recovered + " dropped order(s) recovered",
+          "Recovered from Order Log:\n\n" + recoveredDetails.join("\n") + "\n\nPlease verify in admin panel.");
+      } catch (e) {}
+    }
+  } catch (e) { Logger.log("recoverFromOrderLog error: " + e.message); }
+}
+
 function archiveDueOrders(dryRun, todayISO) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30 * 60 * 1000); } catch (e) { return { success: false, error: 'Could not acquire script lock (system busy).' }; }
@@ -2935,6 +3021,8 @@ function runScheduledArchive() {
   // replaced; archiveMonth() remains available as a manual tool.
   var result = archiveDueOrders(false);
   Logger.log("Scheduled archive result: " + JSON.stringify(result));
+  try { cleanupOrderLog(); } catch (_) {}
+  try { recoverFromOrderLog(); } catch (_) {}
   try {
     var sp = PropertiesService.getScriptProperties();
     var adminEmail = sp.getProperty("ADMIN_EMAIL");

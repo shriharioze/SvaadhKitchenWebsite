@@ -1355,11 +1355,11 @@ function hdfc_savePendingOrder(body) {
       var logWs = getSpreadsheet().getSheetByName("SK_Order_Log");
       if (!logWs) {
         logWs = getSpreadsheet().insertSheet("SK_Order_Log");
-        logWs.getRange(1, 1, 1, 6).setValues([["Timestamp", "Phone", "Name", "Gateway_Order_ID", "Cart_JSON", "Status"]]).setFontWeight("bold");
+        logWs.getRange(1, 1, 1, 6).setValues([["Timestamp", "Phone", "Name", "Gateway_Order_ID", "Stash_JSON", "Status"]]).setFontWeight("bold");
         logWs.setFrozenRows(1);
       }
-      var cartJson = pending[orderId].bulk ? JSON.stringify(pending[orderId].bulk) : JSON.stringify(pending[orderId].orders || {});
-      logWs.appendRow([getISTTimestamp(), pending[orderId].phone, pending[orderId].profile ? (pending[orderId].profile.name || "") : "", orderId, cartJson, "pending"]);
+      var fullStash = JSON.stringify(pending[orderId]);
+      logWs.appendRow([getISTTimestamp(), pending[orderId].phone, pending[orderId].profile ? (pending[orderId].profile.name || "") : "", orderId, fullStash, "pending"]);
     } catch (_logErr) { /* fire-and-forget — never block payment */ }
     return { success: true };
 

@@ -4404,7 +4404,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
     }
   }
 
-  return {success: true, message: msg};
+  return {success: true, message: msg + "\n\n💡 Most refunds are processed on the same day. It might not show immediately in your payment app, but will appear in your bank statement — you may also receive an SMS confirmation."};
 }
 
 
