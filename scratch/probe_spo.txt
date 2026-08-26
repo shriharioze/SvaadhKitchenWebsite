@@ -1,0 +1,11 @@
+ 0) - (pending[a].ts || 0); });
+      _keys.slice(80).forEach(function (k) { delete pending[k]; });
+    }
+
+    props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending));
+    console.log("hdfc_savePendingOrder: saved order " + orderId);
+    return { success: true };
+
+  } catch (err) {
+    console.error("hdfc_savePendingOrder error:", err.message);
+    return { error: err.message }

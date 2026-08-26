@@ -1350,6 +1350,17 @@ function hdfc_savePendingOrder(body) {
 
     props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending));
     console.log("hdfc_savePendingOrder: saved order " + orderId);
+    // ── ORDER LOG: fire-and-forget audit trail (zero impact on payment flow) ──
+    try {
+      var logWs = getSpreadsheet().getSheetByName("SK_Order_Log");
+      if (!logWs) {
+        logWs = getSpreadsheet().insertSheet("SK_Order_Log");
+        logWs.getRange(1, 1, 1, 6).setValues([["Timestamp", "Phone", "Name", "Gateway_Order_ID", "Cart_JSON", "Status"]]).setFontWeight("bold");
+        logWs.setFrozenRows(1);
+      }
+      var cartJson = pending[orderId].bulk ? JSON.stringify(pending[orderId].bulk) : JSON.stringify(pending[orderId].orders || {});
+      logWs.appendRow([getISTTimestamp(), pending[orderId].phone, pending[orderId].profile ? (pending[orderId].profile.name || "") : "", orderId, cartJson, "pending"]);
+    } catch (_logErr) { /* fire-and-forget — never block payment */ }
     return { success: true };
 
   } catch (err) {

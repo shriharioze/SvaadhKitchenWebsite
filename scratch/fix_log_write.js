@@ -1,0 +1,7 @@
+const fs = require("fs");
+let gw = fs.readFileSync("10_Hdfc_Gateway.gs", "utf8");
+const NL = "\r\n";
+const anchor = `    props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending));${NL}    console.log("hdfc_savePendingOrder: saved order " + orderId);${NL}    return { success: true };`;
+const replacement = `    props.setProperty("HDFC_PENDING_ORDERS", JSON.stringify(pending));${NL}    console.log("hdfc_savePendingOrder: saved order " + orderId);${NL}    // ── ORDER LOG: fire-and-forget audit trail (zero impact on payment flow) ──${NL}    try {${NL}      var logWs = getSpreadsheet().getSheetByName("SK_Order_Log");${NL}      if (!logWs) {${NL}        logWs = getSpreadsheet().insertSheet("SK_Order_Log");${NL}        logWs.getRange(1, 1, 1, 6).setValues([["Timestamp", "Phone", "Name", "Gateway_Order_ID", "Cart_JSON", "Status"]]).setFontWeight("bold");${NL}        logWs.setFrozenRows(1);${NL}      }${NL}      var cartJson = pending[orderId].bulk ? JSON.stringify(pending[orderId].bulk) : JSON.stringify(pending[orderId].orders || {});${NL}      logWs.appendRow([getISTTimestamp(), pending[orderId].phone, pending[orderId].profile ? (pending[orderId].profile.name || "") : "", orderId, cartJson, "pending"]);${NL}    } catch (_logErr) { /* fire-and-forget — never block payment */ }${NL}    return { success: true };`;
+if (gw.includes(anchor)) { gw = gw.replace(anchor, replacement); fs.writeFileSync("10_Hdfc_Gateway.gs", gw); console.log("Order_Log write ✓"); }
+else console.log("STILL MISS");
