@@ -1961,24 +1961,13 @@
         const m = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
         if (m && m[1] && m[1] !== KITCHEN_VERSION) {
           console.log("[Kitchen] Version mismatch: running=" + KITCHEN_VERSION
-                      + ", latest=" + m[1] + " — prompting hard refresh");
-          // Marathi confirm — shown ONLY on a real version mismatch. Same dialogue
-          // in Admin + Kitchen. On confirm → hard refresh to the newest build.
-          if (window.confirm(_skUpdateMsgMarathi(KITCHEN_VERSION, m[1]))) {
-            const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
-            window.location.replace(window.location.href + sep + "_v=" + Date.now());
-          }
+                      + ", latest=" + m[1] + " — auto hard reloading");
+          localStorage.setItem("sk_admin_ver", m[1]);
+          const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
+          window.location.replace(window.location.href.split("?")[0] + sep + "_v=" + Date.now());
         }
       } catch (_) { /* network blip — try again next load */ }
     })();
-    // Shared update prompt (identical wording in Admin + Kitchen), in Marathi.
-    function _skUpdateMsgMarathi(cur, latest) {
-      return "🔄 नवीन व्हर्जन उपलब्ध आहे!\n\n"
-           + "सध्याची आवृत्ती: " + cur + "\n"
-           + "नवीन आवृत्ती: " + latest + "\n\n"
-           + "लेटेस्ट व्हर्जनवर जाण्यासाठी पेज रिफ्रेश करणे आवश्यक आहे.\n"
-           + "आता रिफ्रेश करायचे?";
-    }
 
     // ── INITIAL STATE ON LOAD ──
     (function () {
