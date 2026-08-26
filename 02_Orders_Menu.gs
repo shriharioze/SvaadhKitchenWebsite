@@ -3812,7 +3812,9 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   // Cancellations must find orders from EITHER storefront (shared identity).
   // Each row carries _ws (its source sheet); ALL writes go through _wsOf/_hOf
   // so an LS row is updated in LS_Orders, never by SK row-index accident.
-  const rows = getAllRows(getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS));
+  // SEPARATE BASES note: cancellation must scan BOTH tabs (admin cancels from
+  // vault_admin which serves both storefronts; customer cancels find their own).
+  const rows = _getAllOrdersBothTabsIfPresent(ss);
   const _wsOf = (x) => x._ws || ws;
   const _hOf  = (x) => headerIndex(_wsOf(x));
   const now = getISTDate();
