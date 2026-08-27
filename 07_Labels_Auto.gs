@@ -38,15 +38,14 @@ var LBL_EN = {
   Dal: "DAL", Dal_Fry: "DF", Rice: "R", Salad: "S", Curd: "CU",
   "Kanda Poha": "KP", "Ghee Upma": "GU", "Thalipeeth": "TP",
   "Paneer Paratha": "PP", "Methi Thepla": "MT", "Sabudana Khichdi": "SK",
-"Ghee Sheera": "GS",
-  "Aloo Paratha": "AP",
-  "Tikhi Puri": "TPU",
-  "Idli": "ID",
-  "Chutney": "CCT",
-  "Dadpe Pohe": "DP"
-,
-  "Ghee Sheera": "GS", "Sheera": "SH", "Aloo Paratha": "AP", "Tikhi Puri": "TPU", "Tikhi Pudi": "TPD",
-  "Idli": "ID", "Coconut Chutney": "CCT", "Chutney": "CCT", "Dadpe Pohe": "DP", "Masala Dosa": "MD",
+  "Methi Paratha": "MP", "Methi Paratha (2 pieces)": "MP",
+  "Palak Paratha": "PAP", "Palak Paratha (2 peices)": "PAP", "Palak Paratha (2 pieces)": "PAP",
+  "Aloo Paratha": "AP", "Ghee Sheera": "GS", "Sheera": "SH",
+  "Tikhi Puri": "TPU", "Tikhi Pudi": "TPD", "5 x Tikhi Pudi with 100 ml coriander chutney": "TPU",
+  "Idli": "ID", "4 x Idli & 100ml Chutney": "ID", "4 x Idli and 100ml Chutney": "ID",
+  "Dadpe Pohe": "DP", "Masala Dosa": "MD",
+  "Sabudana Vada": "SV", "Batata Vada": "BV", "Misal Pav": "MPV",
+  "Coconut Chutney": "CCT", "Chutney": "CCT",
   "Upma": "UP", "Poha": "PO"
 };
 var LBL_MR = {
@@ -56,11 +55,16 @@ var LBL_MR = {
   Curry_Sabji_Mini: "र १००", Curry_Sabji_Full: "र २५०",
   Dal: "दाल", Dal_Fry: "डा.फ्रा.", Rice: "भात", Salad: "स", Curd: "दही",
   "Kanda Poha": "कांपो", "Ghee Upma": "घीऊ", "Thalipeeth": "था",
-  "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु"
-,
-  "Ghee Sheera": "घी शिरा", "Sheera": "शिरा", "Aloo Paratha": "आलू पराठा", "Tikhi Puri": "तिखी पुरी", "Tikhi Pudi": "तिखी पुडी",
-  "Idli": "इडली", "Coconut Chutney": "खोबरेल चटणी", "Chutney": "चटणी", "Dadpe Pohe": "दापपे पोहे", "Masala Dosa": "मसाला डोसा",
-  "Upma": "उपमा", "Poha": "पोहे"
+  "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु",
+  "Methi Paratha": "मेपरा", "Methi Paratha (2 pieces)": "मेपरा",
+  "Palak Paratha": "पालपरा", "Palak Paratha (2 peices)": "पालपरा", "Palak Paratha (2 pieces)": "पालपरा",
+  "Aloo Paratha": "आलूपरा", "Ghee Sheera": "घीशि", "Sheera": "शिरा",
+  "Tikhi Puri": "तिपु", "Tikhi Pudi": "तिपु", "5 x Tikhi Pudi with 100 ml coriander chutney": "तिपु",
+  "Idli": "इड", "4 x Idli & 100ml Chutney": "इड", "4 x Idli and 100ml Chutney": "इड",
+  "Dadpe Pohe": "दापो", "Masala Dosa": "मडो",
+  "Sabudana Vada": "साव", "Batata Vada": "बव", "Misal Pav": "मिपा",
+  "Coconut Chutney": "खोच", "Chutney": "खोच",
+  "Upma": "उप", "Poha": "पो"
 };
 var LBL_LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "Jowar_Bhakri", "Bajra_Bhakri",
   "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"];

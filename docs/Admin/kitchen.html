@@ -8,7 +8,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.27.01">
+  <meta name="app-version" content="v26.08.27.02">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -959,7 +959,7 @@
 
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-    const APP_VERSION = "v26.08.27.01";
+    const APP_VERSION = "v26.08.27.02";
     (function() {
       const savedVer = localStorage.getItem("sk_admin_ver");
       if (savedVer !== APP_VERSION) {
@@ -1954,7 +1954,7 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.08.27.01";
+    const KITCHEN_VERSION = "v26.08.27.02";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
@@ -2241,8 +2241,14 @@
       Dal: "DAL", Dal_Fry: "DF", Rice: "R", Salad: "S", Curd: "CU",
       "Kanda Poha": "KP", "Ghee Upma": "GU", "Thalipeeth": "TP",
       "Paneer Paratha": "PP", "Methi Thepla": "MT", "Sabudana Khichdi": "SK",
-            "Ghee Sheera": "GS", "Sheera": "SH", "Aloo Paratha": "AP", "Tikhi Puri": "TPU", "Tikhi Pudi": "TPD",
-      "Idli": "ID", "Coconut Chutney": "CCT", "Chutney": "CCT", "Dadpe Pohe": "DP", "Masala Dosa": "MD",
+      "Methi Paratha": "MP", "Methi Paratha (2 pieces)": "MP",
+      "Palak Paratha": "PAP", "Palak Paratha (2 peices)": "PAP", "Palak Paratha (2 pieces)": "PAP",
+      "Aloo Paratha": "AP", "Ghee Sheera": "GS", "Sheera": "SH",
+      "Tikhi Puri": "TPU", "Tikhi Pudi": "TPD", "5 x Tikhi Pudi with 100 ml coriander chutney": "TPU",
+      "Idli": "ID", "4 x Idli & 100ml Chutney": "ID", "4 x Idli and 100ml Chutney": "ID",
+      "Dadpe Pohe": "DP", "Masala Dosa": "MD",
+      "Sabudana Vada": "SV", "Batata Vada": "BV", "Misal Pav": "MPV",
+      "Coconut Chutney": "CCT", "Chutney": "CCT",
       "Upma": "UP", "Poha": "PO",
     };
     const LABEL_MR = {
@@ -2253,9 +2259,15 @@
       Dal: "दाल", Dal_Fry: "डा.फ्रा.", Rice: "भात", Salad: "स", Curd: "दही",
       "Kanda Poha": "कांपो", "Ghee Upma": "घीऊ", "Thalipeeth": "था",
       "Paneer Paratha": "पनपरा", "Methi Thepla": "मेथी", "Sabudana Khichdi": "साबु",
-            "Ghee Sheera": "घी शिरा", "Sheera": "शिरा", "Aloo Paratha": "आलू पराठा", "Tikhi Puri": "तिखी पुरी", "Tikhi Pudi": "तिखी पुडी",
-      "Idli": "इडली", "Coconut Chutney": "खोबरेल चटणी", "Chutney": "चटणी", "Dadpe Pohe": "दापपे पोहे", "Masala Dosa": "मसाला डोसा",
-      "Upma": "उपमा", "Poha": "पोहे",
+      "Methi Paratha": "मेपरा", "Methi Paratha (2 pieces)": "मेपरा",
+      "Palak Paratha": "पालपरा", "Palak Paratha (2 peices)": "पालपरा", "Palak Paratha (2 pieces)": "पालपरा",
+      "Aloo Paratha": "आलूपरा", "Ghee Sheera": "घीशि", "Sheera": "शिरा",
+      "Tikhi Puri": "तिपु", "Tikhi Pudi": "तिपु", "5 x Tikhi Pudi with 100 ml coriander chutney": "तिपु",
+      "Idli": "इड", "4 x Idli & 100ml Chutney": "इड", "4 x Idli and 100ml Chutney": "इड",
+      "Dadpe Pohe": "दापो", "Masala Dosa": "मडो",
+      "Sabudana Vada": "साव", "Batata Vada": "बव", "Misal Pav": "मिपा",
+      "Coconut Chutney": "खोच", "Chutney": "खोच",
+      "Upma": "उप", "Poha": "पो",
     };
     const LD_COLS = ["Chapati", "Without_Oil_Chapati", "Phulka", "Ghee_Phulka", "Jowar_Bhakri", "Bajra_Bhakri",
       "Dry_Sabji_Mini", "Dry_Sabji_Full", "Curry_Sabji_Mini", "Curry_Sabji_Full", "Dal", "Dal_Fry", "Rice", "Salad", "Curd"];

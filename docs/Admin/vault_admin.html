@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.08.27.05">
+  <meta name="app-version" content="v26.08.27.06">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -886,7 +886,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
     </div>
     <div class="login-err" id="loginErr"></div>
     <div style="margin-top:16px;text-align:center;">
-      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.08.27.05</span>
+      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.08.27.06</span>
     </div>
   </div>
 </div>
@@ -897,7 +897,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
   <div class="topbar">
     <div class="topbar-brand">
       Svaadh Kitchen <span>ADMIN</span>
-      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.08.27.05</span>
+      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.08.27.06</span>
     </div>
     <div class="topbar-nav">
       <button class="topbar-btn active" id="navMenu" onclick="switchPage('menu')">📅 Daily Menu</button>
@@ -2145,7 +2145,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.08.27.05";
+const APP_VERSION = "v26.08.27.06";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2325,7 +2325,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.08.27.05";
+    const ADMIN_VERSION = "v26.08.27.06";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -4641,6 +4641,11 @@ const ABBREV_EN = {
   "Dal":"DAL","Rice":"R","Salad":"S","Curd":"CU",
   "Kanda Poha":"KP","Ghee Upma":"GU","Thalipeeth":"TP",
   "Paneer Paratha":"PP","Methi Thepla":"MT","Sabudana Khichdi":"SK",
+  "Methi Paratha":"MP","Palak Paratha":"PAP","Aloo Paratha":"AP",
+  "Ghee Sheera":"GS","Sheera":"SH","Tikhi Puri":"TPU","Tikhi Pudi":"TPD",
+  "Idli":"ID","Dadpe Pohe":"DP","Masala Dosa":"MD",
+  "Sabudana Vada":"SV","Batata Vada":"BV","Misal Pav":"MPV",
+  "Coconut Chutney":"CCT","Chutney":"CCT","Upma":"UP","Poha":"PO",
 };
 const ABBREV_MR = {
   "Chapati":"च","Without_Oil_Chapati":"च बिनतेल","Phulka":"फु","Ghee_Phulka":"घी फु",
@@ -4650,6 +4655,11 @@ const ABBREV_MR = {
   "Dal":"दाल","Rice":"भात","Salad":"स","Curd":"दही",
   "Kanda Poha":"कांपो","Ghee Upma":"घीऊ","Thalipeeth":"था",
   "Paneer Paratha":"पनपरा","Methi Thepla":"मेथी","Sabudana Khichdi":"साबु",
+  "Methi Paratha":"मेपरा","Palak Paratha":"पालपरा","Aloo Paratha":"आलूपरा",
+  "Ghee Sheera":"घीशि","Sheera":"शिरा","Tikhi Puri":"तिपु","Tikhi Pudi":"तिपु",
+  "Idli":"इड","Dadpe Pohe":"दापो","Masala Dosa":"मडो",
+  "Sabudana Vada":"साव","Batata Vada":"बव","Misal Pav":"मिपा",
+  "Coconut Chutney":"खोच","Chutney":"खोच","Upma":"उप","Poha":"पो",
 };
 
 let _labelData = []; // stored for PDF generation
@@ -5153,6 +5163,11 @@ const LABEL_EN = {
   Dal:"DAL", Rice:"R", Salad:"S", Curd:"CU",
   "Kanda Poha":"KP", "Ghee Upma":"GU", "Thalipeeth":"TP",
   "Paneer Paratha":"PP", "Methi Thepla":"MT", "Sabudana Khichdi":"SK",
+  "Methi Paratha":"MP", "Palak Paratha":"PAP", "Aloo Paratha":"AP",
+  "Ghee Sheera":"GS", "Sheera":"SH", "Tikhi Puri":"TPU", "Tikhi Pudi":"TPD",
+  "Idli":"ID", "Dadpe Pohe":"DP", "Masala Dosa":"MD",
+  "Sabudana Vada":"SV", "Batata Vada":"BV", "Misal Pav":"MPV",
+  "Coconut Chutney":"CCT", "Chutney":"CCT", "Upma":"UP", "Poha":"PO",
 };
 const LABEL_MR = {
   Chapati:"च", Without_Oil_Chapati:"च बिनतेल", Phulka:"फु", Ghee_Phulka:"घी फु",
@@ -5162,6 +5177,11 @@ const LABEL_MR = {
   Dal:"दाल", Rice:"भात", Salad:"स", Curd:"दही",
   "Kanda Poha":"कांपो", "Ghee Upma":"घीऊ", "Thalipeeth":"था",
   "Paneer Paratha":"पनपरा", "Methi Thepla":"मेथी", "Sabudana Khichdi":"साबु",
+  "Methi Paratha":"मेपरा", "Palak Paratha":"पालपरा", "Aloo Paratha":"आलूपरा",
+  "Ghee Sheera":"घीशि", "Sheera":"शिरा", "Tikhi Puri":"तिपु", "Tikhi Pudi":"तिपु",
+  "Idli":"इड", "Dadpe Pohe":"दापो", "Masala Dosa":"मडो",
+  "Sabudana Vada":"साव", "Batata Vada":"बव", "Misal Pav":"मिपा",
+  "Coconut Chutney":"खोच", "Chutney":"खोच", "Upma":"उप", "Poha":"पो",
 };
 const LD_COLS = ["Chapati","Without_Oil_Chapati","Phulka","Ghee_Phulka","Jowar_Bhakri","Bajra_Bhakri",
                  "Dry_Sabji_Mini","Dry_Sabji_Full","Curry_Sabji_Mini","Curry_Sabji_Full","Dal","Rice","Salad","Curd"];
