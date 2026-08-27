@@ -40,3 +40,4 @@ test_ia.js
 old_order.html
 
 # Root scratch JS — GAS EXECUTES .js files globally; require() crashes every web app call (v32.0 incident)
+*.js

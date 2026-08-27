@@ -867,6 +867,25 @@ function markOrdersStatus(body) {
   var status = body.status || "Paid";
   if (!date || !phone) return {success:false, error:"date and phone required"};
 
+  // Robust phone and date normalizers
+  var _normPhone = function(p) { return String(p || "").replace(/\D/g, "").slice(-10); };
+  var _normDate = function(v) {
+    if (!v) return "";
+    if (v instanceof Date) return Utilities.formatDate(v, "Asia/Kolkata", "yyyy-MM-dd");
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    var parts = s.split(/[\/\-]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return parts[0] + "-" + parts[1].padStart(2, "0") + "-" + parts[2].padStart(2, "0");
+      if (parts[2].length === 4) return parts[2] + "-" + parts[1].padStart(2, "0") + "-" + parts[0].padStart(2, "0");
+    }
+    return s.slice(0, 10);
+  };
+
+  var targetPhone = _normPhone(phone);
+  var targetDate  = _normDate(date);
+  var targetSid   = String(sid || "").trim();
+
   // Prevent race-condition double-processing (e.g. admin double-clicks Verify & Refund)
   const lock = LockService.getScriptLock();
   try { lock.waitLock(8000); } catch(e) { return {success:false, error:"Server busy — please retry"}; }
@@ -881,9 +900,54 @@ function markOrdersStatus(body) {
   var _hOf  = function (x) { return headerIndex(_wsOf(x)); };
   
   var matches = rows.filter(function(r) {
-    const d = r.Order_Date instanceof Date ? Utilities.formatDate(r.Order_Date,"Asia/Kolkata","yyyy-MM-dd") : String(r.Order_Date).trim();
-    return d === date && String(r.Phone||"").trim() === phone && (!sid || String(r.Submission_ID) === String(sid));
+    var rSid = String(r.Submission_ID || r.Order_ID || "").trim();
+    var rPhone = _normPhone(r.Phone);
+    var rDate = _normDate(r.Order_Date);
+    if (targetSid && rSid && targetSid === rSid) return true;
+    return rDate === targetDate && rPhone === targetPhone && (!targetSid || !rSid || rSid === targetSid);
   });
+
+  // Fallback: If not found in live sheets, check archived spreadsheets
+  if (!matches.length && typeof _listArchiveFilesInRange === "function") {
+    try {
+      var archiveFiles = _listArchiveFilesInRange(targetDate, targetDate);
+      if (archiveFiles.length > 0) {
+        for (var af = 0; af < archiveFiles.length; af++) {
+          var aMeta = archiveFiles[af];
+          var aSS = SpreadsheetApp.openById(aMeta.file.getId());
+          var aTabs = ["SK_Orders", "LS_Orders"];
+          var aUpdated = 0;
+          for (var ti = 0; ti < aTabs.length; ti++) {
+            var aWs = aSS.getSheetByName(aTabs[ti]);
+            if (!aWs) continue;
+            var aRows = getAllRows(aWs);
+            var aH = headerIndex(aWs);
+            if (!aH["Payment_Status"]) continue;
+            var aMatches = aRows.filter(function(r) {
+              var rSid = String(r.Submission_ID || r.Order_ID || "").trim();
+              var rPhone = _normPhone(r.Phone);
+              var rDate = _normDate(r.Order_Date);
+              if (targetSid && rSid && targetSid === rSid) return true;
+              return rDate === targetDate && rPhone === targetPhone && (!targetSid || !rSid || rSid === targetSid);
+            });
+            if (aMatches.length > 0) {
+              aMatches.forEach(function(r) {
+                aWs.getRange(r._row, aH["Payment_Status"]).setValue(status);
+                aUpdated++;
+              });
+            }
+          }
+          if (aUpdated > 0) {
+            try { SpreadsheetApp.flush(); } catch(_) {}
+            try { CacheService.getScriptCache().remove("arch_orders_" + aMeta.file.getId()); } catch(_) {}
+            return {success: true, updatedRows: aUpdated, inArchive: true};
+          }
+        }
+      }
+    } catch(eArch) {
+      Logger.log("markOrdersStatus archive search error: " + eArch.message);
+    }
+  }
 
   if (!matches.length) return {success: false, error: "No matching orders found"};
 
