@@ -1164,6 +1164,7 @@ function _analyticsCore(dateFrom, dateTo) {
   var custSet={}, dayMap={};
   var mealStats={Breakfast:{count:0,revenue:0},Lunch:{count:0,revenue:0},Dinner:{count:0,revenue:0}};
   var itemCounts={};
+  var pendingMap={};
   rows.forEach(function(r) {
     var d=fmtDate(r.Order_Date), net=Number(r.Net_Total)||0;
     var delivery=Number(r.Delivery_Charge)||0;
@@ -1175,7 +1176,50 @@ function _analyticsCore(dateFrom, dateTo) {
     var payStatus = String(r.Payment_Status || "").trim();
     totalRev+=net;
     totalDelivery+=delivery; totalSmallFee+=smallFee;
-    if(payStatus==="Paid"||payStatus==="Wallet Paid"||payStatus==="Collected") totalPaid+=net;
+    var isPaid = (payStatus==="Paid"||payStatus==="Wallet Paid"||payStatus==="Collected");
+    if(isPaid) {
+      totalPaid+=net;
+    } else {
+      var ph = String(r.Phone||"").trim();
+      var cName = String(r.Customer_Name||"Customer").trim();
+      var sid = String(r.Submission_ID || r.Order_ID || "").trim();
+      var meal = String(r.Meal_Type||"").trim();
+      var summaryText = "";
+      try {
+        if (typeof _buildSummary === "function") {
+          summaryText = _buildSummary(r);
+        }
+      } catch(_) {}
+      if (!summaryText || summaryText === "—") {
+        if (meal === "Breakfast") {
+          var bfItems = [];
+          for (var n = 1; n <= 4; n++) {
+            var bi = String(r["BF_Item_" + n] || "").trim(), bq = Number(r["BF_Qty_" + n]) || 0;
+            if (bi && bq > 0) bfItems.push(bq + "×" + bi);
+          }
+          if (Number(r.Curd) > 0) bfItems.push(Number(r.Curd) + "×Curd");
+          summaryText = bfItems.join(", ");
+        }
+      }
+      if (!pendingMap[ph]) {
+        pendingMap[ph] = {
+          phone: ph,
+          name: cName,
+          totalPending: 0,
+          orders: []
+        };
+      }
+      pendingMap[ph].totalPending += net;
+      pendingMap[ph].orders.push({
+        sid: sid,
+        date: d,
+        meal: meal,
+        amount: net,
+        status: payStatus || "Pending",
+        summary: summaryText,
+        isLS: !!r._lsTab
+      });
+    }
     var ph=String(r.Phone||"").trim(); if(ph) custSet[ph]=true;
     var meal=String(r.Meal_Type||"");
     if(mealStats[meal]){mealStats[meal].count++;mealStats[meal].revenue+=net;}
@@ -1190,10 +1234,19 @@ function _analyticsCore(dateFrom, dateTo) {
     }
   });
   Object.keys(mealStats).forEach(function(m){mealStats[m].revenue=Math.round(mealStats[m].revenue);});
+  var pendingCustomers = Object.keys(pendingMap).map(function(ph) {
+    var c = pendingMap[ph];
+    c.totalPending = Math.round(c.totalPending);
+    c.orders.sort(function(a, b) { return b.date.localeCompare(a.date); });
+    return c;
+  }).sort(function(a, b) {
+    return b.totalPending - a.totalPending;
+  });
   return {
     rows: rows, dayMap: dayMap, custSet: custSet, mealStats: mealStats, itemCounts: itemCounts,
     totalRev: totalRev, totalPaid: totalPaid, totalDelivery: totalDelivery,
-    totalSmallFee: totalSmallFee, archivedCount: archivedCount
+    totalSmallFee: totalSmallFee, archivedCount: archivedCount,
+    pendingCustomers: pendingCustomers
   };
 }
 
@@ -1218,6 +1271,7 @@ function getAnalytics(p) {
       avgPerDay:days.length>0?Math.round(totalRev/days.length):0,
       delivery:Math.round(totalDelivery),smallFee:Math.round(totalSmallFee)},
     meals:mealStats,days:days,topItems:topItems,allItems:allItems,
+    pendingCustomers:core.pendingCustomers || [],
     // Lets the admin UI show "Including X archived orders" so they know
     // the report pulled across archive files (which is slower than live-only).
     archived:{count: archivedCount, included: archivedCount > 0}};
