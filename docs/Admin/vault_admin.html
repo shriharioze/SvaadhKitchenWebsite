@@ -885,6 +885,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
       <button class="pin-key span2" onclick="pp(0)">0</button><button class="pin-key del" onclick="pd()">⌫</button>
     </div>
     <div class="login-err" id="loginErr"></div>
+    <div style="margin-top:16px;text-align:center;">
+      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.08.27.02</span>
+    </div>
   </div>
 </div>
 
@@ -892,7 +895,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
 <div class="shell" id="shell">
   <template id="adminTemplate">
   <div class="topbar">
-    <div class="topbar-brand">Svaadh Kitchen <span>ADMIN</span></div>
+    <div class="topbar-brand">
+      Svaadh Kitchen <span>ADMIN</span>
+      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.08.27.02</span>
+    </div>
     <div class="topbar-nav">
       <button class="topbar-btn active" id="navMenu" onclick="switchPage('menu')">📅 Daily Menu</button>
       <button class="topbar-btn" id="navManage" onclick="switchPage('manage')">⚙️ Manage Lists</button>
@@ -2322,8 +2328,10 @@ function colKeyToDisplayName(k) {
     const ADMIN_VERSION = "v26.08.27.02";
     (async function _versionCheck() {
       try {
-        const badge = document.getElementById("appVerBadge");
-        if (badge) badge.textContent = ADMIN_VERSION;
+        const loginBadge = document.getElementById("loginVerBadge");
+        if (loginBadge) loginBadge.textContent = ADMIN_VERSION;
+        const badges = document.querySelectorAll(".app-ver-badge, #topbarVerBadge, #appVerBadge");
+        badges.forEach(b => { if (b) b.textContent = ADMIN_VERSION; });
         const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
         if (!res.ok) return;
         const html = await res.text();
@@ -2559,6 +2567,8 @@ async function bootApp() {
   if (tpl) {
     document.getElementById("shell").appendChild(tpl.content.cloneNode(true));
     tpl.remove();
+    const badges = document.querySelectorAll(".app-ver-badge, #topbarVerBadge, #appVerBadge");
+    badges.forEach(b => { if (b) b.textContent = ADMIN_VERSION; });
   }
   document.getElementById("shell").classList.add("on");
   _syncDarkIcon(); // set correct sun/moon icon after template is in DOM
