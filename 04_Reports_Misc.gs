@@ -2358,6 +2358,21 @@ function archiveDueOrders(dryRun, todayISO) {
     var headers = all[0];
     var dateIdx = headers.indexOf('Order_Date');
     var stIdx = headers.indexOf('Payment_Status');
+    // ── DATE ROUND-TRIP FIX (2026-08-28) ──────────────────────────────────
+    // Google Sheets getValues() returns Date objects for date-formatted cells.
+    // When we clearContent() then setValues() to rebuild the live sheet, Date
+    // objects can silently become blank (the "Order_Date-wipe" bug). Fix:
+    // stringify every Date in every row BEFORE any classification or write.
+    var _stringifyDatesInRow = function (row) {
+      for (var c = 0; c < row.length; c++) {
+        if (row[c] instanceof Date) {
+          row[c] = Utilities.formatDate(row[c], 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
+        }
+      }
+      return row;
+    };
+    for (var si = 1; si < all.length; si++) _stringifyDatesInRow(all[si]);
+    // ── end date fix ──────────────────────────────────────────────────────
     var PAID = ['paid', 'wallet paid', 'collected'];
     var TERMINAL = ['cancelled', 'refunded'];
     var toArchive = [];
@@ -2393,6 +2408,7 @@ function archiveDueOrders(dryRun, todayISO) {
         var lsHeaders = lsData[0];
         var lsDateIdx = lsHeaders.indexOf('Order_Date');
         var lsStIdx = lsHeaders.indexOf('Payment_Status');
+        for (var lsi = 1; lsi < lsData.length; lsi++) _stringifyDatesInRow(lsData[lsi]);
         for (var li = 1; li < lsData.length; li++) {
           var lsRow = lsData[li];
           if (lsRow.join('').trim() === '') continue;
@@ -3247,6 +3263,10 @@ function stopMonthlyArchiveTrigger() {
 }
 
 function runScheduledArchive() {
+  if (PropertiesService.getScriptProperties().getProperty("ARCHIVE_SUSPENDED") === "true") {
+    Logger.log("Scheduled archive suspended by admin.");
+    return { success: false, note: "Archive suspended" };
+  }
   // DUE-SLICE POLICY (owner 2026-08-25): daily late-evening trigger; archives
   // every terminal row whose 10-day slice is due (18th / 28th / next-month 8th)
   // into its own month's archive file. Runs before due-date are no-ops; missed
@@ -3263,6 +3283,10 @@ function runScheduledArchive() {
       MailApp.sendEmail(adminEmail, "📦 Scheduled archive run", JSON.stringify(result, null, 2));
     }
   } catch (e) { Logger.log("Failed to send archive email: " + e.message); }
+}
+
+function suspendArchiveManual() {
+  PropertiesService.getScriptProperties().setProperty("ARCHIVE_SUSPENDED", "true");
 }
 
 // ── CHURN REPORT ──────────────────────────────────────────────────────────────
