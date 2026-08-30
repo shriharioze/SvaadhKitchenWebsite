@@ -2301,7 +2301,7 @@ function recoverFromOrderLog() {
       if (isNaN(tsMs)) continue;
       var ageMin = (now - tsMs) / 60000;
       if (ageMin < 10) continue;
-      if (ageMin > 60) { logWs.getRange(i + 1, colStatus + 1).setValue("abandoned"); continue; }
+      if (ageMin > 360) { logWs.getRange(i + 1, colStatus + 1).setValue("abandoned"); continue; }
       var stashJson = String(logData[i][colStash] || "");
       if (!stashJson) continue;
       var entry;
@@ -3263,17 +3263,23 @@ function stopMonthlyArchiveTrigger() {
 }
 
 function runScheduledArchive() {
-  if (PropertiesService.getScriptProperties().getProperty("ARCHIVE_SUSPENDED") === "true") {
-    Logger.log("Scheduled archive suspended by admin.");
-    return { success: false, note: "Archive suspended" };
+  var suspended = PropertiesService.getScriptProperties().getProperty("ARCHIVE_SUSPENDED") === "true";
+  var result;
+  if (suspended) {
+    Logger.log("Scheduled archive suspended by admin — skipping archiveDueOrders only.");
+    result = { success: false, note: "Archive suspended" };
+  } else {
+    // DUE-SLICE POLICY (owner 2026-08-25): daily late-evening trigger; archives
+    // every terminal row whose 10-day slice is due (18th / 28th / next-month 8th)
+    // into its own month's archive file. Runs before due-date are no-ops; missed
+    // runs self-heal. Previous behavior (archive whole previous month on the 10th)
+    // replaced; archiveMonth() remains available as a manual tool.
+    result = archiveDueOrders(false);
+    Logger.log("Scheduled archive result: " + JSON.stringify(result));
   }
-  // DUE-SLICE POLICY (owner 2026-08-25): daily late-evening trigger; archives
-  // every terminal row whose 10-day slice is due (18th / 28th / next-month 8th)
-  // into its own month's archive file. Runs before due-date are no-ops; missed
-  // runs self-heal. Previous behavior (archive whole previous month on the 10th)
-  // replaced; archiveMonth() remains available as a manual tool.
-  var result = archiveDueOrders(false);
-  Logger.log("Scheduled archive result: " + JSON.stringify(result));
+  // ALWAYS run cleanup + recovery regardless of suspension — these are safety-net
+  // jobs that must never be skipped (the 2026-08-30 YASH KELEKAR incident: archive
+  // suspension blocked recoverFromOrderLog, causing a paid order to stay unwritten).
   try { cleanupOrderLog(); } catch (_) {}
   try { recoverFromOrderLog(); } catch (_) {}
   try {
