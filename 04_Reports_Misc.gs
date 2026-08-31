@@ -2287,8 +2287,41 @@ function recoverFromOrderLog() {
         if (gid) existingGwIds[gid] = true;
       });
     });
+
+    // ── THIRD CONFIRMATION SOURCE: SK_Missed_Orders ──────────────────────
+    // The 10-min auditLostGatewayOrders independently scans the HDFC webhook
+    // log and logs every charged-but-missing order here. If the audit already
+    // confirmed an order as charged, we can trust that confirmation even when
+    // the HDFC Status API is flaky and _checkWebhookLogForCharge is too strict.
+    var auditConfirmedGwIds = {};
+    try {
+      var missWs = ss.getSheetByName("SK_Missed_Orders");
+      if (missWs && missWs.getLastRow() > 1) {
+        var missData = missWs.getDataRange().getValues();
+        var missH = missData[0].map(String);
+        var missGwCol = missH.indexOf("Gateway_Order_ID");
+        var missStCol = missH.indexOf("Status");
+        if (missGwCol !== -1) {
+          for (var mi = 1; mi < missData.length; mi++) {
+            var missGw = String(missData[mi][missGwCol] || "").trim();
+            if (!missGw) continue;
+            // Any entry in SK_Missed_Orders means the audit confirmed it was
+            // charged via the webhook. The status text varies ("FOUND BY AUDIT",
+            // "AUTO-RECOVERED BY AUDIT", "✅ Recovered", etc.) — all of them
+            // mean the audit saw an ORDER_SUCCEEDED webhook with CHARGED status.
+            // The ONLY exception: if someone manually wrote "NOT CHARGED" or
+            // "REFUNDED" in the status, we should skip it.
+            var missSt = String(missStCol !== -1 ? (missData[mi][missStCol] || "") : "").toLowerCase();
+            if (missSt.indexOf("not charged") !== -1 || missSt.indexOf("refund") !== -1) continue;
+            auditConfirmedGwIds[missGw] = true;
+          }
+        }
+      }
+    } catch (e) { Logger.log("recoverFromOrderLog: SK_Missed_Orders read error: " + e.message); }
+
     var now = Date.now();
     var recovered = 0;
+    var skipped = 0;
     var recoveredDetails = [];
     for (var i = 1; i < logData.length; i++) {
       var status = String(logData[i][colStatus] || "").trim();
@@ -2307,20 +2340,60 @@ function recoverFromOrderLog() {
       var entry;
       try { entry = JSON.parse(stashJson); } catch (e) { continue; }
       if (!entry || (!entry.orders && !entry.bulk)) continue;
+
+      // ── PAYMENT CONFIRMATION: 3 independent sources ────────────────────
       var charged = false;
-      try { var sc = hdfc_getOrderStatus(gwId); charged = sc.confirmed; } catch (e) {}
-      if (!charged) { try { charged = !!_checkWebhookLogForCharge(gwId, entry.amount); } catch (e) {} }
-      if (!charged) continue;
+      var chargeSource = "";
+
+      // Source 1: HDFC Status API (direct server-to-server query)
+      try {
+        var sc = hdfc_getOrderStatus(gwId);
+        if (sc && sc.confirmed) { charged = true; chargeSource = "HDFC_API (status=" + sc.status + ")"; }
+        else { Logger.log("recoverFromOrderLog: HDFC API for " + gwId + " → NOT confirmed (status=" + (sc && sc.status) + ")"); }
+      } catch (e) { Logger.log("recoverFromOrderLog: HDFC API error for " + gwId + ": " + e.message); }
+
+      // Source 2: Webhook log (ORDER_SUCCEEDED + re-verify via API)
+      if (!charged) {
+        try {
+          var wlc = _checkWebhookLogForCharge(gwId, entry.amount);
+          if (wlc) { charged = true; chargeSource = "webhook_log (" + (wlc.source || "match") + ")"; }
+          else { Logger.log("recoverFromOrderLog: webhook log for " + gwId + " → no confirmed charge found"); }
+        } catch (e) { Logger.log("recoverFromOrderLog: webhook log error for " + gwId + ": " + e.message); }
+      }
+
+      // Source 3: SK_Missed_Orders (audit already confirmed this order was charged)
+      if (!charged) {
+        if (auditConfirmedGwIds[gwId]) {
+          charged = true;
+          chargeSource = "SK_Missed_Orders (audit-confirmed)";
+          Logger.log("recoverFromOrderLog: " + gwId + " confirmed via SK_Missed_Orders (audit already detected as charged-but-missing)");
+        } else {
+          Logger.log("recoverFromOrderLog: " + gwId + " NOT in SK_Missed_Orders either");
+        }
+      }
+
+      if (!charged) {
+        Logger.log("recoverFromOrderLog: SKIPPING " + gwId + " (phone=" + (entry.phone || "?") + ", age=" + Math.round(ageMin) + "min) — payment NOT confirmed by any source (HDFC API / webhook log / SK_Missed_Orders)");
+        skipped++;
+        continue;
+      }
+      Logger.log("recoverFromOrderLog: ATTEMPTING recovery for " + gwId + " via " + chargeSource);
+
       var result;
       if (entry.bulk) {
         var isSplit = String(entry.payment_choice || "") === "Split";
-        result = submitBulkOrder({ plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
-          storefront: String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
-          lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
-          lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
-          payment_method: isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)", payment_status: "Paid",
-          wallet_applied: isSplit ? Number(entry.wallet_applied || 0) : 0,
-          gateway_order_id: gwId, batch_id: gwId });
+        try {
+          result = submitBulkOrder({ plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
+            storefront: String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
+            lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
+            lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
+            payment_method: isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)", payment_status: "Paid",
+            wallet_applied: isSplit ? Number(entry.wallet_applied || 0) : 0,
+            gateway_order_id: gwId, batch_id: gwId });
+        } catch (err) {
+          Logger.log("recoverFromOrderLog submitBulkOrder crash for " + gwId + ": " + err.message);
+          result = { success: false, error: err.message };
+        }
       } else {
         var body = _buildSubmitBodyFromPending(gwId, entry, { status: "CHARGED", confirmed: true });
         if (body && body.orders && body.orders.length) {
@@ -2328,7 +2401,7 @@ function recoverFromOrderLog() {
             try {
               result = submitOrder(body);
             } catch (err) {
-              Logger.log("recoverFromOrderLog submitOrder crash for " + gwId + ": " + err.message);
+              Logger.log("recoverFromOrderLog submitOrder crash for " + gwId + " (attempt " + (t+1) + "): " + err.message);
               result = { success: false, error: err.message };
             }
             if (result && (result.success || result.submissionId || result.submission_id)) break;
@@ -2339,8 +2412,10 @@ function recoverFromOrderLog() {
       if (result && (result.success || result.submissionId || result.submission_id)) {
         logWs.getRange(i + 1, colStatus + 1).setValue("recovered");
         recovered++;
-        recoveredDetails.push(gwId + " (" + (entry.phone || "?") + ")");
-        Logger.log("recoverFromOrderLog: RECOVERED " + gwId);
+        recoveredDetails.push(gwId + " (" + (entry.phone || "?") + ") via " + chargeSource);
+        Logger.log("recoverFromOrderLog: RECOVERED " + gwId + " via " + chargeSource);
+      } else {
+        Logger.log("recoverFromOrderLog: FAILED to write " + gwId + " despite confirmed charge: " + JSON.stringify(result));
       }
     }
     if (recovered > 0) {
@@ -2350,9 +2425,11 @@ function recoverFromOrderLog() {
           "Recovered from Order Log:\n\n" + recoveredDetails.join("\n") + "\n\nPlease verify in admin panel.");
       } catch (e) {}
     }
-      return { success: true, recovered: recovered, details: recoveredDetails };
+    if (skipped > 0) Logger.log("recoverFromOrderLog: " + skipped + " pending order(s) skipped (payment unconfirmed)");
+      return { success: true, recovered: recovered, skipped: skipped, details: recoveredDetails };
   } catch (e) { Logger.log("recoverFromOrderLog error: " + e.message); return { success: false, error: e.message }; }
 }
+
 
 function archiveDueOrders(dryRun, todayISO) {
   var lock = LockService.getScriptLock();
