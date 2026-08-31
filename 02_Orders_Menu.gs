@@ -773,16 +773,23 @@ function _countActiveMealOrders(rows, dateStr) {
     if (soc.indexOf("shreelaxmivihar") !== -1) continue;
     const mt = String(r.Meal_Type || "").trim();
     if (c[mt] === undefined) continue;
-    if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; } // counted once below
-    if (_isIA(r.Customer_Name))    { sawIA[mt]    = true; continue; } // counted once below
-    // Unique name per meal — same customer placing 2 orders = 1 delivery slot.
-    const nameKey = String(r.Customer_Name || "").trim().toLowerCase();
-    if (!seen[mt][nameKey]) {
-      seen[mt][nameKey] = true;
+    if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; }
+    if (_isIA(r.Customer_Name))    { sawIA[mt]    = true; continue; }
+    
+    const nameKey = "name|" + String(r.Customer_Name || "").trim().toLowerCase();
+    var f = String(r.Flat || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    var w = String(r.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(r.Society) : _normSocietyBase(r.Society || "");
+    var addrKey = "";
+    if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
+
+    if (!seen[mt][nameKey] && (!addrKey || !seen[mt][addrKey])) {
       c[mt]++;
     }
+    
+    seen[mt][nameKey] = true;
+    if (addrKey) seen[mt][addrKey] = true;
   }
-  // IntentAmplify orders live in a separate IA_ tab (not in `rows`) — fold their
   // presence in as ONE slot per meal too (one corporate delivery, not n).
   try {
     if (typeof ia_rowsAsSK === "function") {

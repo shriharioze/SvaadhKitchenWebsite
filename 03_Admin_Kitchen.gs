@@ -101,11 +101,19 @@ function _getAdminDataUncached() {
         if (_isEnkin(row.Customer_Name)) { sawEnkin[dd][meal] = true; }
         else if (_isIA(row.Customer_Name)) { sawIA[dd][meal] = true; }
         else {
-          const nameKey = String(row.Customer_Name || "").trim().toLowerCase();
-          if (nameKey && !seen[dd][meal][nameKey]) {
-            seen[dd][meal][nameKey] = true;
+          const nameKey = "name|" + String(row.Customer_Name || "").trim().toLowerCase();
+          var f = String(row.Flat || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          var w = String(row.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(row.Society) : _normSocietyBase(row.Society || "");
+          var addrKey = "";
+          if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
+
+          if (!seen[dd][meal][nameKey] && (!addrKey || !seen[dd][meal][addrKey])) {
             mealOrderCounts[dd][meal]++;
           }
+          
+          seen[dd][meal][nameKey] = true;
+          if (addrKey) seen[dd][meal][addrKey] = true;
         }
       }
     }
