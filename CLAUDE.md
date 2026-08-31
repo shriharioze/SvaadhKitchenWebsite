@@ -50,10 +50,11 @@ SK_Orders · SK_Customers · SK_Wallet · SK_Daily_Menu · SK_Areas · SK_Refund
 3. **Layer 3 (10-Minute Deep Audit & Auto-Recovery)**: `liveLostOrderAudit` (10-min trigger via `setupLostOrderAuditTrigger`):
    - `auditLostGatewayOrders(0)`: Scans live webhooks against live orders.
    - `reconcileMissedOrdersLog()`: Closes loop on flagged missing orders.
-   - `recoverFromOrderLog()`: Last-resort sweep of `SK_Order_Log` stash (10–60 min window) to auto-place charged orders and alert admin.
+   - `recoverFromOrderLog()`: Last-resort sweep of `SK_Order_Log` stash (10–60 min window) to auto-place charged orders and alert admin. Uses 3 confirmation sources: HDFC API, Webhook Log, and `SK_Missed_Orders` fallback.
 4. **Layer 4 (Daily Scheduled Archiver & Log Cleanup at 22:30 IST)**: `runScheduledArchive` (daily ~22:30 IST trigger via `setupMonthlyArchiveTrigger`):
    - Executes `archiveDueOrders(false)` (due-slice archiving across `SK_Orders`, `LS_Orders`, `IA_Orders`).
    - Executes `cleanupOrderLog()` (deletes yesterday's and older `SK_Order_Log` stash rows).
+   - Executes `archiveMissedOrders()` (keeps last 7 days of `SK_Missed_Orders`, moves older into year-wise `Archive_Missed_Orders_YYYY` tabs).
 
 ## SEPARATE BASES rule (owner decision 2026-08-25) — LS architecture
 - LS is a fully independent customer base: same phone on both pages = TWO independent accounts (own PIN, profile, wallet, loyalty). NO cross-page dedupe, NO cross-page streak, NO shared wallet.
@@ -66,12 +67,12 @@ SK_Orders · SK_Customers · SK_Wallet · SK_Daily_Menu · SK_Areas · SK_Refund
 2. Charge == storage: what HDFC charges must equal the sum of written rows. Pricing rules are mirrored in N places (frontend cart, submitOrder, `_computeAuthoritativeTotal`, bulk engines) — change ALL together.
 3. Loyalty 6-day streak engines must agree: frontend (order.html / LS page calculateLoyaltyStreak + bill), submitOrder, gateway recompute. Each storefront's streak reads ITS OWN orders tab only (separate bases). Partial-close rule: check for a valid order on a day BEFORE treating the day as closed/Sunday.
 4. Discount tiers (5%≥325 / 7.5%≥485 / 10%≥750) hardcoded in 5 places — change all or charge≠cart.
-5. Delivery: main site ₹11/meal, free at ₹106/159/190, free areas Bhosale Nagar+Triveni Nagar+pickup/porter. LS: always free. Cap bypass ≥₹200 (breakfast ₹100). **Cap Counting:** unique customer name per meal; VIPs (Fee_Exempt) = 0 slots; Enkin/IA collapse to 1; LS = 0 slots, never blocked.
+5. Delivery: main site ₹11/meal, free at ₹106/159/190, free areas Bhosale Nagar+Triveni Nagar+pickup/porter. LS: always free. Cap bypass ≥₹200 (breakfast ₹100). **Cap Counting:** unique customer name OR exact identical address (wing+flat+society) per meal = 1 slot; VIPs (Fee_Exempt) = 0 slots; Enkin/IA collapse to 1; LS = 0 slots, never blocked.
 6. Wallet: `_calculateWalletBalance` classifies Txn_Type KEYWORDS (credit keywords win first; never name a debit type with them). Wallet is NEVER archived; only safe shrink is `?action=compactWalletLedger` (dry-run default). LS wallet is LS_Wallet — route by storefront, refunds credit the ORDER's wallet.
 7. On-account status: `_isOnAccountDueStatus` only. Kitchen-closed: `_closedMealsObj`/`_isMealKitchenClosed` (per-meal).
 8. Stock keys: Items_JSON names are suffix-stripped; join via `itemsJsonKey`/`_stripItemSuffix`.
 9. HDFC refund API returns 401 "Merchant disabled for refund" until HDFC enables the MID — cancelled gateway orders queue as manual refunds; run `retryQueuedRefunds()` once enabled. Test transport: `?action=hdfcRefundTransportTest`.
-10. **SK_Orders/LS_Orders lock rule:** EVERY writer to an orders tab MUST hold `LockService.getScriptLock()` (try/finally). Unlocked writers get silent appendRow drops = missing orders. Locked writers: submitOrder(10s), submitBulkOrder(30s), submitBulkDirect(20s), deleteOrder(15s), markOrdersStatus(8s), _reconcileSingleEntry(15s), hdfc_markOrderPaid(10s), hdfc_markOrderFailed(10s), submitManualOrder(10s), archiveMonth(30m), _appendWalletTransaction(10s, re-entrant).
+10. **SK_Orders/LS_Orders lock rule:** EVERY writer to an orders tab MUST hold `LockService.getScriptLock()` (try/finally). Unlocked writers get silent appendRow drops = missing orders. Locked writers: submitOrder(30s), submitBulkOrder(30s), submitBulkDirect(20s), deleteOrder(15s), markOrdersStatus(8s), _reconcileSingleEntry(15s), hdfc_markOrderPaid(10s), hdfc_markOrderFailed(10s), submitManualOrder(10s), archiveMonth(30m), _appendWalletTransaction(10s, re-entrant).
 11. Bulk duplicate race: submitBulkOrder holds the lock across its whole write path (finalize + webhook reconcile can race).
 12. Kitchen count roundoff: `_customKitchenRound` (≥0.35 rounds up).
 13. Negative wallet → forced Debt Recovery Recharge on next order (both storefronts, own wallet).
