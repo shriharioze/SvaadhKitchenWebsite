@@ -2325,7 +2325,12 @@ function recoverFromOrderLog() {
         var body = _buildSubmitBodyFromPending(gwId, entry, { status: "CHARGED", confirmed: true });
         if (body && body.orders && body.orders.length) {
           for (var t = 0; t < 3; t++) {
-            result = submitOrder(body);
+            try {
+              result = submitOrder(body);
+            } catch (err) {
+              Logger.log("recoverFromOrderLog submitOrder crash for " + gwId + ": " + err.message);
+              result = { success: false, error: err.message };
+            }
             if (result && (result.success || result.submissionId || result.submission_id)) break;
             Utilities.sleep(1500);
           }
