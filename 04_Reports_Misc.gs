@@ -2212,6 +2212,72 @@ function _archiveSliceDueDate(orderDateISO) {
 
 
 
+function archiveMissedOrders() {
+  try {
+    var ss = getSpreadsheet();
+    var missWs = ss.getSheetByName("SK_Missed_Orders");
+    if (!missWs || missWs.getLastRow() < 2) return { success: true, archived: 0 };
+    
+    var data = missWs.getDataRange().getValues();
+    var headers = data[0];
+    var colDate = headers.indexOf("Detected_At");
+    if (colDate === -1) return { success: false, error: "No Detected_At column" };
+
+    var now = Date.now();
+    var SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+    var keep = [headers];
+    var byYear = {};
+    var archivedCount = 0;
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      if (row.join("").trim() === "") continue;
+      
+      var dt = row[colDate];
+      var tsMs = (dt instanceof Date) ? dt.getTime() : new Date(dt).getTime();
+      
+      if (isNaN(tsMs) || (now - tsMs) <= SEVEN_DAYS_MS) {
+        keep.push(row);
+      } else {
+        var year = (dt instanceof Date) ? dt.getFullYear() : new Date(dt).getFullYear();
+        if (isNaN(year)) year = new Date().getFullYear();
+        
+        var yearStr = String(year);
+        if (!byYear[yearStr]) byYear[yearStr] = [];
+        byYear[yearStr].push(row);
+        archivedCount++;
+      }
+    }
+
+    if (archivedCount === 0) return { success: true, archived: 0 };
+
+    Object.keys(byYear).forEach(function (year) {
+      var archiveTabName = "Archive_Missed_Orders_" + year;
+      var archWs = ss.getSheetByName(archiveTabName);
+      if (!archWs) {
+        archWs = ss.insertSheet(archiveTabName);
+        archWs.appendRow(headers);
+        archWs.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+        archWs.setFrozenRows(1);
+      }
+      archWs.getRange(archWs.getLastRow() + 1, 1, byYear[year].length, headers.length).setValues(byYear[year]);
+    });
+
+    missWs.clearContents();
+    missWs.getRange(1, 1, keep.length, headers.length).setValues(keep);
+    missWs.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+    missWs.setFrozenRows(1);
+    SpreadsheetApp.flush();
+    
+    Logger.log("archiveMissedOrders: archived " + archivedCount + " rows");
+    return { success: true, archived: archivedCount };
+  } catch (e) {
+    Logger.log("archiveMissedOrders error: " + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
 // ── ORDER LOG CLEANUP: delete yesterday's and all previous days' records ──
 // SK_Order_Log stores a temporary audit trail when a user clicks Pay Now.
 // During the daily ~22:30 IST run (runScheduledArchive), deletes all entries
@@ -3370,6 +3436,7 @@ function runScheduledArchive() {
   // suspension blocked recoverFromOrderLog, causing a paid order to stay unwritten).
   try { cleanupOrderLog(); } catch (_) {}
   try { recoverFromOrderLog(); } catch (_) {}
+  try { archiveMissedOrders(); } catch (_) {}
   try {
     var sp = PropertiesService.getScriptProperties();
     var adminEmail = sp.getProperty("ADMIN_EMAIL");
