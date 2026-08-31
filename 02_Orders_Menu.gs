@@ -1204,7 +1204,7 @@ function _appendWalletTransaction(phone, name, txnType, amount, isVerified, refI
   // same execution, so this also works when the caller (e.g. submitOrder) is
   // already holding the script lock. Storefront-routed: LS → LS_Wallet.
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); }
+  try { lock.waitLock(30000); }
   catch(e) { throw new Error("Wallet busy — please retry in a few seconds."); }
   try {
     const ss = getSpreadsheet();
