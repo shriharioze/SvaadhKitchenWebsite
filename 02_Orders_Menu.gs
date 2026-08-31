@@ -311,7 +311,7 @@ function verifyPinResetOtp(phone, otp, newPin, storefront) {
   }
 
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (e) { return { ok: false, reason: "busy" }; }
+  try { lock.waitLock(30000); } catch (e) { return { ok: false, reason: "busy" }; }
   try {
     if (!_setPinAfterOtp(pStr, pin, storefront)) return { ok: false, reason: "not_found" };
     cache.remove(key);

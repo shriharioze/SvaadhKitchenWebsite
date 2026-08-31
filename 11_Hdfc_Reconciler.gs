@@ -298,17 +298,25 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
         .map(function(k) { return { colKey: k, qty: Number(m.items[k]) }; });
       if (!itemsArr.length) return;
 
-      const area    = String(m.area || profile.area || "").trim();
+      const mealAddr = (entry.mealAddrs && entry.mealAddrs[meal]) ? entry.mealAddrs[meal] : {};
+      const area     = String(m.area || mealAddr.area || profile.area || "").trim();
       const isPickup = area.toLowerCase().indexOf("pickup") !== -1;
+      const mWing    = isPickup ? "" : String(m.wing || mealAddr.wing || profile.wing || "");
+      const mFlat    = isPickup ? "" : String(m.flat || mealAddr.flat || profile.flat || "");
+      const mFloor   = isPickup ? "" : String(m.floor || mealAddr.floor || profile.floor || "");
+      const mSociety = isPickup ? "" : String(m.society || mealAddr.society || profile.society || "");
+      const mDelPt   = String(m.delivery_point || mealAddr.delivery_point || profile.delivery_point || "");
+      const mMaps    = isPickup ? "" : String(m.maps || mealAddr.maps || profile.maps || "");
+      const mLandmark= isPickup ? "" : String(m.landmark || mealAddr.landmark || profile.landmark || "");
 
       const buildAddr = function() {
         if (isPickup) return _lsPickupLabel(String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "");
         const parts = [];
-        if (m.wing)    parts.push("Wing " + m.wing);
-        if (m.flat)    parts.push("Flat " + m.flat);
-        if (m.floor)   parts.push(m.floor + " Floor");
-        if (m.society) parts.push(m.society);
-        if (area)      parts.push(area);
+        if (mWing)    parts.push("Wing " + mWing);
+        if (mFlat)    parts.push("Flat " + mFlat);
+        if (mFloor)   parts.push(mFloor.endsWith("Floor") || mFloor.endsWith("floor") ? mFloor : mFloor + " Floor");
+        if (mSociety) parts.push(mSociety);
+        if (area)     parts.push(area);
         return parts.join(", ");
       };
 
@@ -320,13 +328,13 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
         subtotal:       Number(m.subtotal) || 0,
         address:        buildAddr(),
         area:           isPickup ? "Self Pickup" : area,
-        wing:           isPickup ? "" : (m.wing || ""),
-        flat:           isPickup ? "" : (m.flat || ""),
-        floor:          isPickup ? "" : (m.floor || ""),
-        society:        isPickup ? "" : (m.society || ""),
-        delivery_point: m.delivery_point || "",
-        maps:           isPickup ? "" : (m.maps || ""),
-        landmark:       isPickup ? "" : (m.landmark || "")
+        wing:           mWing,
+        flat:           mFlat,
+        floor:          mFloor,
+        society:        mSociety,
+        delivery_point: mDelPt,
+        maps:           mMaps,
+        landmark:       mLandmark
       });
     });
     if (meals.length) orders.push({ date: date, meals: meals });

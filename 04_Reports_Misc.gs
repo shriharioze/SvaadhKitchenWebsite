@@ -2323,9 +2323,15 @@ function recoverFromOrderLog() {
           gateway_order_id: gwId, batch_id: gwId });
       } else {
         var body = _buildSubmitBodyFromPending(gwId, entry, { status: "CHARGED", confirmed: true });
-        if (body && body.orders && body.orders.length) result = submitOrder(body);
+        if (body && body.orders && body.orders.length) {
+          for (var t = 0; t < 3; t++) {
+            result = submitOrder(body);
+            if (result && (result.success || result.submissionId || result.submission_id)) break;
+            Utilities.sleep(1500);
+          }
+        }
       }
-      if (result && result.success) {
+      if (result && (result.success || result.submissionId || result.submission_id)) {
         logWs.getRange(i + 1, colStatus + 1).setValue("recovered");
         recovered++;
         recoveredDetails.push(gwId + " (" + (entry.phone || "?") + ")");
