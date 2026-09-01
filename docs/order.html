@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.01.02";
+    const APP_VERSION = "v26.09.01.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -13251,6 +13251,7 @@
       "Tap a date again on the calendar to deselect it.",
       "You can order several days in advance — great for planning a busy week.",
       "Ordered something wrong? Go to Manage Orders to delete upcoming orders before the cutoff and place a fresh order.",
+      "Going on a trip? You can cancel upcoming orders directly from the Manage Orders page and the money instantly refunds to your wallet.",
       // ⏰ Cutoff Times
       "Breakfast orders close at 7:00 AM — order the night before to be safe.",
       "Lunch orders close at 9:00 AM — order the night before to be safe.",
@@ -13260,29 +13261,31 @@
       // 💰 Discounts & Savings
       "Spend ₹325 or more in a day to unlock 5% off automatically — no code needed.",
       "Spend ₹485 or more in a day for 7.5% off — or ₹750+ for 10% off — applied to the whole day's order.",
-      "Delivery is free if your day's food total is ₹106+ (1 meal), ₹159+ (2 meals) or ₹190+ (3 meals) — or if you're in Bhosale Nagar.",
+      "Delivery is free if your day's food total is ₹106+ (1 meal), ₹159+ (2 meals) or ₹190+ (3 meals) — or if you're in Bhosale / Triveni Nagar.",
       "Order 6 days in a row to earn a loyalty reward — 5% of your last 6 days' total comes back as a discount on day 6!",
       "Sundays don't break your streak — Saturday + Monday still counts as consecutive days.",
-      // 💳 Wallet
+      // 💳 Wallet & Payments
       "Load your Svaadh Wallet for instant 1-tap checkout — no UPI app needed every time.",
       "Wallet orders skip the payment step — just confirm and you're done.",
       "Your wallet balance is shown on the order confirmation screen — keep it topped up!",
-      "Recharge your wallet anytime by sending the amount to our UPI.",
+      "Monthly On-Account users: You can easily clear your past month's dues using the HDFC Gateway right inside the app.",
+      "Recharge your wallet anytime by sending the amount to our UPI and messaging us on WhatsApp.",
       // 📍 Address & Delivery
       "Your address is saved automatically — you won't need to type it again on your next order.",
       "Leave a meal's address blank if you're not ordering that meal — it won't be included.",
       "Add a Google Maps pin link to help the driver find you faster on the first delivery.",
       "Use the Landmark / Directions field for tricky locations — \"blue gate on the left\" really helps.",
       "Delivery point options let you choose: doorstep, lobby, gate, \"I'll come down\", and more.",
+      "Want to receive your food at the security gate? Choose 'Gate' in delivery options and our drivers will leave it there!",
       // 👤 Account
       "Your phone number is your identity — no username or password to remember.",
-      "Your 4-digit PIN protects your wallet — keep it safe, don't share it.",
+      "Your 4-digit PIN protects your wallet and account details — keep it safe, don't share it.",
       "Coming back after a while? Your details are pre-filled — just tap Continue if nothing changed.",
       "The Manage Orders screen shows both upcoming and past orders — tap any to see full details.",
       // 📅 Menu & Planning
       "Check the \"Upcoming Menus\" popup to see what's being cooked in the next few days.",
       "The sabji shown on each meal card is today's fresh preparation — it changes daily.",
-      "Breakfast items have fixed prices — mix and match Poha, Upma, Idli, and more.",
+      "Breakfast items have fixed prices — mix and match Aloo Paratha, Poha, Upma, and more.",
       "Some items may be marked Out of Stock by the kitchen on high-demand days — order early!",
       // 📱 App Behaviour
       "The app works on any browser — no install needed. Add it to your home screen for quick access.",
@@ -13294,7 +13297,8 @@
       // 🌟 Pro Tips
       "Order for multiple days at once to more easily hit the ₹325+ daily discount threshold.",
       "The review discount (10% off next 3 orders) stacks with the daily volume discount!",
-      "Separate kitchen and driver notes — message the kitchen team and driver independently for precise instructions."
+      "Separate kitchen and driver notes — message the kitchen team and driver independently for precise instructions.",
+      "New feature: Corporate teams and bulk orders can get special flat-rate packages. Contact us on WhatsApp to set it up!"
     ];
 
     var SESSION_KEY = "sk_tips_dismissed_v1";
