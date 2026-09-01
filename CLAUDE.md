@@ -103,3 +103,4 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 ## Where the deep documentation lives
 - `git log` — every commit message is a full incident/design writeup. Start any investigation with `git log --oneline -15`.
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
+\n### Billing & On-Account\n- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 10th of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.\n
