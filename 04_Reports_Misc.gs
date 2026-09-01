@@ -5295,3 +5295,220 @@ function markOrdersPaidBulk(body) {
   
   return {success:true, updated};
 }
+
+function sendDailyEndOfDayReport() {
+  const ss = getSpreadsheet();
+  const todayDate = new Date();
+  const todayStr = Utilities.formatDate(todayDate, "Asia/Kolkata", "yyyy-MM-dd");
+  
+  // 1. Get Orders
+  let allOrders = [];
+  if (typeof getOrdersInRangeWithArchive === "function") {
+    allOrders = getOrdersInRangeWithArchive(todayStr, todayStr);
+  }
+  
+  // Variables for stats
+  let totalGross = 0;
+  let payMethods = {};
+  let totalOrders = 0;
+  let cancelled = 0;
+  let mealCounts = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  let storefrontCounts = { SK: 0, LS: 0, IA: 0 };
+  let pendingList = [];
+  let onAccountList = [];
+  
+  let itemCounts = {};
+  
+  allOrders.forEach(function(o) {
+    // Determine storefront
+    let sf = "SK";
+    if (o._lsTab) sf = "LS";
+    else if (String(o.Order_ID || "").indexOf("IA") === 0) sf = "IA";
+    else if (String(o.Customer_Name || "").indexOf("[IA]") === 0) sf = "IA";
+    
+    if (typeof _isOrderCancelled === "function" && _isOrderCancelled(o.Payment_Status)) {
+      cancelled++;
+      return; // Skip from revenue
+    }
+    
+    totalOrders++;
+    totalGross += Number(o.Net_Total) || 0;
+    
+    const pmt = String(o.Payment_Method || "Unknown");
+    payMethods[pmt] = (payMethods[pmt] || 0) + (Number(o.Net_Total) || 0);
+    
+    const meal = String(o.Meal_Type || "").trim();
+    if (mealCounts[meal] !== undefined) mealCounts[meal]++;
+    
+    storefrontCounts[sf]++;
+    
+    const status = String(o.Payment_Status || "");
+    if (status.toLowerCase().indexOf("pending") !== -1) pendingList.push(o);
+    if (typeof _isOnAccountDueStatus === "function" && _isOnAccountDueStatus(status)) onAccountList.push(o);
+    
+    // Items
+    try {
+      const items = JSON.parse(o.Items_JSON || "{}");
+      Object.keys(items).forEach(function(k) {
+        const canonical = typeof _stripItemSuffix === "function" ? _stripItemSuffix(k) : k;
+        itemCounts[canonical] = (itemCounts[canonical] || 0) + Number(items[k]);
+      });
+    } catch(e){}
+  });
+  
+  // Top Items
+  let topItems = Object.keys(itemCounts).map(function(k) { return {name: k, qty: itemCounts[k]}; });
+  topItems.sort(function(a,b) { return b.qty - a.qty; });
+  topItems = topItems.slice(0, 3);
+  
+  // 2. Wallets (SK_Wallet + LS_Wallet)
+  let totalRecharges = 0;
+  ["SK_Wallet", "LS_Wallet"].forEach(function(tabName) {
+    const ws = ss.getSheetByName(tabName);
+    if (!ws) return;
+    const rows = typeof getAllRows === "function" ? getAllRows(ws) : [];
+    rows.forEach(function(r) {
+      const d = r.Timestamp instanceof Date ? Utilities.formatDate(r.Timestamp, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Timestamp || "").slice(0,10);
+      if (d === todayStr) {
+         const type = String(r.Txn_Type || "").toLowerCase();
+         if (type.indexOf("recharge") !== -1 || type.indexOf("topup") !== -1) {
+           totalRecharges += Number(r.Credit) || 0;
+         }
+      }
+    });
+  });
+  
+  // 3. Refunds
+  let totalRefunds = 0;
+  const refundWs = ss.getSheetByName("SK_Refunds");
+  if (refundWs && typeof getAllRows === "function") {
+    getAllRows(refundWs).forEach(function(r) {
+      const d = r.Requested_At instanceof Date ? Utilities.formatDate(r.Requested_At, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Requested_At || "").slice(0,10);
+      if (d === todayStr) {
+        totalRefunds += Number(r.Refund_Amount) || 0;
+      }
+    });
+  }
+  
+  // 4. Missed Orders
+  let missedCount = 0;
+  let missedUnrecovered = 0;
+  const missedWs = ss.getSheetByName("SK_Missed_Orders");
+  if (missedWs && typeof getAllRows === "function") {
+    getAllRows(missedWs).forEach(function(r) {
+      const d = r.Timestamp instanceof Date ? Utilities.formatDate(r.Timestamp, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Timestamp || "").slice(0,10);
+      if (d === todayStr) {
+        missedCount++;
+        const rec = String(r.Recovery_Status || "");
+        if (rec.indexOf("Recovered") === -1) missedUnrecovered++;
+      }
+    });
+  }
+  
+  // 5. New Customers
+  let newCusts = 0;
+  ["SK_Customers", "LS_Customers"].forEach(function(tabName) {
+    const ws = ss.getSheetByName(tabName);
+    if (!ws) return;
+    const rows = typeof getAllRows === "function" ? getAllRows(ws) : [];
+    rows.forEach(function(r) {
+      const d = r.Created_At instanceof Date ? Utilities.formatDate(r.Created_At, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Created_At || "").slice(0,10);
+      if (d === todayStr) {
+        newCusts++;
+      }
+    });
+  });
+  
+  // BUILD EMAIL HTML
+  let html = "<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;'>";
+  html += "<h2 style='background: #2E7D32; color: #fff; padding: 15px; border-radius: 8px 8px 0 0; margin-top: 0;'>Svaadh Kitchen - End of Day Report</h2>";
+  html += "<div style='padding: 15px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px;'>";
+  
+  html += "<h3>💰 Financial & Sales Summary</h3><ul>";
+  html += "<li><b>Total Gross Revenue:</b> ₹" + totalGross.toFixed(2) + "</li>";
+  html += "<li><b>Wallet Recharges:</b> ₹" + totalRecharges.toFixed(2) + "</li>";
+  html += "<li><b>Refunds Processed:</b> ₹" + totalRefunds.toFixed(2) + "</li>";
+  html += "</ul>";
+  
+  html += "<h4>Payment Breakdown:</h4><ul>";
+  Object.keys(payMethods).forEach(function(k) {
+    html += "<li>" + k + ": ₹" + payMethods[k].toFixed(2) + "</li>";
+  });
+  html += "</ul>";
+  
+  html += "<hr style='border:0; border-top:1px solid #eee; margin:20px 0;'/>";
+  html += "<h3>📦 Order Volume & Fulfillment</h3><ul>";
+  html += "<li><b>Total Successful Orders:</b> " + totalOrders + "</li>";
+  html += "<li><b>Cancelled Orders:</b> " + cancelled + "</li>";
+  html += "</ul>";
+  html += "<h4>By Meal:</h4><ul>";
+  html += "<li>Breakfast: " + mealCounts.Breakfast + "</li>";
+  html += "<li>Lunch: " + mealCounts.Lunch + "</li>";
+  html += "<li>Dinner: " + mealCounts.Dinner + "</li>";
+  html += "</ul>";
+  html += "<h4>By Storefront:</h4><ul>";
+  html += "<li>Main (Hadapsar): " + storefrontCounts.SK + "</li>";
+  html += "<li>Liviano-Serio: " + storefrontCounts.LS + "</li>";
+  html += "<li>IntentAmplify: " + storefrontCounts.IA + "</li>";
+  html += "</ul>";
+  
+  html += "<hr style='border:0; border-top:1px solid #eee; margin:20px 0;'/>";
+  html += "<h3>👥 Customer Highlights</h3><ul>";
+  html += "<li><b>New Customers Joined Today:</b> " + newCusts + "</li>";
+  const topStr = topItems.map(function(i) { return i.name + " (" + i.qty + ")"; }).join(", ");
+  html += "<li><b>Top Items:</b> " + (topStr || "None") + "</li>";
+  html += "</ul>";
+  
+  html += "<hr style='border:0; border-top:1px solid #eee; margin:20px 0;'/>";
+  html += "<h3>🚨 Action Items & Anomalies</h3><ul>";
+  html += "<li><b>Missed Orders:</b> " + missedCount + " total (" + missedUnrecovered + " still unrecovered)</li>";
+  html += "</ul>";
+  
+  if (pendingList.length > 0) {
+    html += "<h4>Pending Orders (Gateway Drops):</h4><ul>";
+    pendingList.forEach(function(p) {
+      html += "<li>" + p.Order_ID + ": " + p.Customer_Name + " (₹" + p.Net_Total + ")</li>";
+    });
+    html += "</ul>";
+  } else {
+    html += "<p>✅ No Pending orders!</p>";
+  }
+  
+  if (onAccountList.length > 0) {
+    html += "<h4>On Account Orders (Unpaid):</h4><ul>";
+    onAccountList.forEach(function(p) {
+      html += "<li>" + p.Order_ID + ": " + p.Customer_Name + " (₹" + p.Net_Total + ")</li>";
+    });
+    html += "</ul>";
+  } else {
+    html += "<p>✅ No On Account balances pending!</p>";
+  }
+  
+  html += "</div></div>";
+  
+  // Send email to the script owner's email address
+  const recipient = Session.getEffectiveUser().getEmail();
+  MailApp.sendEmail({
+    to: recipient,
+    subject: "Svaadh EOD Report - " + todayStr,
+    htmlBody: html
+  });
+}
+
+// Run this ONCE to schedule the daily email
+function setupDailyReportTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === "sendDailyEndOfDayReport") {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  // Runs daily around 23:30 (11:30 PM) based on the script's Asia/Kolkata timezone
+  ScriptApp.newTrigger("sendDailyEndOfDayReport")
+    .timeBased()
+    .atHour(23)
+    .nearMinute(30)
+    .everyDays(1)
+    .create();
+}
+
