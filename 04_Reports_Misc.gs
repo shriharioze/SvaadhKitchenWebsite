@@ -5302,7 +5302,7 @@ function markOrdersPaidBulk(body) {
 
 function sendDailyEndOfDayReport(dateOverride) {
   const ss = getSpreadsheet();
-  const targetDate = dateOverride ? new Date(dateOverride) : new Date();
+  const targetDate = (typeof dateOverride === 'string' && dateOverride.length > 5) ? new Date(dateOverride) : new Date();
   const todayStr = Utilities.formatDate(targetDate, "Asia/Kolkata", "yyyy-MM-dd");
   
   // 1. Get Orders
