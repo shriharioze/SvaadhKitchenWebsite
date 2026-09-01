@@ -777,7 +777,12 @@ function _countActiveMealOrders(rows, dateStr) {
     if (_isIA(r.Customer_Name))    { sawIA[mt]    = true; continue; }
     
     const nameKey = "name|" + String(r.Customer_Name || "").trim().toLowerCase();
-    var f = String(r.Flat || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    
+    // Aggressively extract numeric part of Flat (so "601,P", "0601", "601 K" all become "601").
+    // This ensures typos or trailing letters in the same building don't hog extra delivery slots.
+    var fRaw = String(r.Flat || "").trim().toLowerCase();
+    var fMatch = fRaw.match(/\d+/);
+    var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
     var w = String(r.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(r.Society) : _normSocietyBase(r.Society || "");
     var addrKey = "";

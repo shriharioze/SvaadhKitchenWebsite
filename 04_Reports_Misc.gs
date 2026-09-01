@@ -5300,10 +5300,10 @@ function markOrdersPaidBulk(body) {
   return {success:true, updated};
 }
 
-function sendDailyEndOfDayReport() {
+function sendDailyEndOfDayReport(dateOverride) {
   const ss = getSpreadsheet();
-  const todayDate = new Date();
-  const todayStr = Utilities.formatDate(todayDate, "Asia/Kolkata", "yyyy-MM-dd");
+  const targetDate = dateOverride ? new Date(dateOverride) : new Date();
+  const todayStr = Utilities.formatDate(targetDate, "Asia/Kolkata", "yyyy-MM-dd");
   
   // 1. Get Orders
   let allOrders = [];
@@ -5410,7 +5410,7 @@ function sendDailyEndOfDayReport() {
   }
   
   // 5. New Customers
-  let newCusts = 0;
+  let newCustList = [];
   ["SK_Customers", "LS_Customers"].forEach(function(tabName) {
     const ws = ss.getSheetByName(tabName);
     if (!ws) return;
@@ -5418,10 +5418,11 @@ function sendDailyEndOfDayReport() {
     rows.forEach(function(r) {
       const d = r.Created_At instanceof Date ? Utilities.formatDate(r.Created_At, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Created_At || "").slice(0,10);
       if (d === todayStr) {
-        newCusts++;
+        newCustList.push(r.Customer_Name || "Unknown");
       }
     });
   });
+  let newCusts = newCustList.length;
   
   
   // BUILD EMAIL HTML
@@ -5492,6 +5493,11 @@ function sendDailyEndOfDayReport() {
   
   html += `<div style="background: #eff6ff; border-radius: 8px; padding: 12px 15px; margin-bottom: 15px;">`;
   html += `<span style="font-size: 1.2rem;">👋</span> <span style="font-weight: 700; color: #1e3a8a;">${newCusts}</span> <span style="color: #3b82f6; font-size: 0.9rem;">New customers joined today!</span>`;
+  if (newCustList.length > 0) {
+    html += `<ul style="margin: 8px 0 0 0; padding-left: 20px; color: #1e3a8a; font-size: 0.85rem;">`;
+    newCustList.forEach(function(name) { html += `<li style="margin-bottom:3px;">${name}</li>`; });
+    html += `</ul>`;
+  }
   html += `</div>`;
   
   html += `<div style="font-size: 0.85rem; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase;">🏆 Top Selling Items</div>`;
@@ -5521,7 +5527,7 @@ function sendDailyEndOfDayReport() {
   if (pendingList.length > 0) {
     html += `<div style="font-size: 0.85rem; font-weight: 700; color: #991b1b; margin-top: 15px; margin-bottom: 8px; text-transform: uppercase;">⏳ Pending Gateway Drops (${pendingList.length})</div>`;
     html += `<ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 0.9rem;">`;
-    pendingList.forEach(function(p) { html += `<li style="margin-bottom:4px;"><b>${p.Order_ID}</b> - ${p.Customer_Name} (₹${p.Net_Total})</li>`; });
+    pendingList.forEach(function(p) { html += `<li style="margin-bottom:4px;"><b>${p.Submission_ID || "NoID"}</b> - ${p.Customer_Name} (₹${p.Net_Total})</li>`; });
     html += `</ul>`;
   } else {
     html += `<div style="margin-bottom: 10px; font-size: 0.95rem; color: #334155;">✅ <b>Pending Orders:</b> None!</div>`;
@@ -5531,7 +5537,7 @@ function sendDailyEndOfDayReport() {
   if (onAccountList.length > 0) {
     html += `<div style="font-size: 0.85rem; font-weight: 700; color: #b45309; margin-top: 15px; margin-bottom: 8px; text-transform: uppercase;">📓 Unpaid On-Account (${onAccountList.length})</div>`;
     html += `<ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 0.9rem;">`;
-    onAccountList.forEach(function(p) { html += `<li style="margin-bottom:4px;"><b>${p.Order_ID}</b> - ${p.Customer_Name} (₹${p.Net_Total})</li>`; });
+    onAccountList.forEach(function(p) { html += `<li style="margin-bottom:4px;"><b>${p.Submission_ID || "NoID"}</b> - ${p.Customer_Name} (₹${p.Net_Total})</li>`; });
     html += `</ul>`;
   } else {
     html += `<div style="margin-top: 10px; font-size: 0.95rem; color: #334155;">✅ <b>On Account Dues:</b> None!</div>`;
@@ -5544,7 +5550,7 @@ function sendDailyEndOfDayReport() {
   
   html += `</div>`;
 
-  const recipient = Session.getEffectiveUser().getEmail();
+  let recipient = "svaadh.kitchen@gmail.com"; try { const r = Session.getEffectiveUser().getEmail(); if(r) recipient = r; } catch(e){}
   MailApp.sendEmail({
     to: recipient,
     subject: "Svaadh EOD Report - " + todayStr,
