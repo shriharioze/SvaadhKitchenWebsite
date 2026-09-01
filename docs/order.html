@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.01.01";
+    const APP_VERSION = "v26.09.01.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9262,10 +9262,10 @@
         if (billItem) billItem.style.display = "";
 
         // Auto-open once per browser session per billing period (skippable —
-        // we don't nag on every reload).
+        // we don't nag on every reload), UNLESS it is overdue, in which case we force it.
         const seenKey = `sk_bill_seen_${S.phone}_${data.periodLabel}`;
-        if (!sessionStorage.getItem(seenKey)) {
-          sessionStorage.setItem(seenKey, "1");
+        if (data.isOverdue || !sessionStorage.getItem(seenKey)) {
+          if (!data.isOverdue) sessionStorage.setItem(seenKey, "1");
           showOnAccountBillModal();
         }
       } catch (e) { /* non-blocking — bill is optional UX */ }
@@ -9328,7 +9328,9 @@
                + '</div>')
           ) +
           '<button id="onAccountBillPdfBtn" style="width:100%;padding:12px;border:1.5px solid #0284c7;border-radius:12px;background:#f0f9ff;color:#0369a1;font-size:0.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📄 View / Download bill (PDF)</button>' +
-          '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>' +
+          (data.isOverdue 
+             ? '<div style="text-align:center;font-size:0.8rem;color:#dc2626;font-weight:700;margin-top:10px;">Your bill is overdue. Please pay to continue ordering.</div>' 
+             : '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>') +
         '</div>';
 
       document.body.appendChild(overlay);
@@ -9344,13 +9346,16 @@
       // Gateway settlement button (only present when gateway is live).
       const _oaGwBtn = document.getElementById("onAccountBillGatewayBtn");
       if (_oaGwBtn) _oaGwBtn.addEventListener("click", function () {
-        overlay.remove();
+        // We leave the overlay up so it doesn't close on overdue bills
+        if (!data.isOverdue) overlay.remove();
         hdfc_payOnAccountViaGateway("monthly");
       });
 
       // Skippable: tapping the dim backdrop closes it too.
-      overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
-      document.getElementById("onAccountBillLaterBtn").addEventListener("click", function () { overlay.remove(); });
+      if (!data.isOverdue) {
+        overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
+        document.getElementById("onAccountBillLaterBtn").addEventListener("click", function () { overlay.remove(); });
+      }
       document.getElementById("onAccountBillPdfBtn").addEventListener("click", openOnAccountBillPdf);
     }
 

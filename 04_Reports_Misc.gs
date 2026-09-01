@@ -4661,8 +4661,12 @@ function getOnAccountBill(phone) {
       periodLabel = _startMY + ' – ' + _endMY;                                         // "December 2025 – January 2026"
     }
 
+    // If today is the 10th or later of the current month, they MUST pay before ordering
+    const isOverdue = now.getDate() >= 10;
+
     return {
       due:         true,
+      isOverdue:   isOverdue,
       phone:       phoneStr,
       name:        prof.Customer_Name || "",
       total:       Math.round(total * 100) / 100,

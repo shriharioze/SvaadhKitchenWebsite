@@ -1968,24 +1968,6 @@ function _submitOrderInternal(body) {
   const firstTime    = profile.isFirstTime ? "Yes" : "No";
   const payFreq      = profile.payment_preference || "Daily Payment";
 
-  // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
-  // If customer is On Account (Monthly) and it is >= 10th of the month
-  // with an unpaid bill from the previous month(s), completely block
-  // them from placing new orders until the bill is paid.
-  if (String(profile.onAccount || "").toLowerCase() === "yes" &&
-      String(profile.billingCycle || "").toLowerCase() === "monthly") {
-    if (typeof getOnAccountBill === "function") {
-      const billInfo = getOnAccountBill(profile.phone);
-      if (billInfo && billInfo.due && billInfo.isOverdue) {
-        return {
-          error: "Your previous month's bill is overdue. Please settle your outstanding balance of ₹" + billInfo.total + " to continue placing orders.",
-          isOverdue: true
-        };
-      }
-    }
-  }
-
-
   // Build the header→index map once
   const hIdx = headerIndex(ordersWs);
 
