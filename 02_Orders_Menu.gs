@@ -2464,7 +2464,9 @@ function _submitOrderInternal(body) {
   let prevStreakDate = initialStreakInfo.end || null;
   const _closedSetSO = _kitchenClosedSet();
   const _orderedDaysSO = new Set();
+  const _soPhone = _normalizePhone(profile.phone);
   (allOrderRows || []).forEach(function(r) {
+    if (_normalizePhone(r.Phone) !== _soPhone) return;
     if (_isOrderCancelled(r.Payment_Status)) return;
     const dd = _normDate(r.Order_Date);
     if (dd) _orderedDaysSO.add(dd);
