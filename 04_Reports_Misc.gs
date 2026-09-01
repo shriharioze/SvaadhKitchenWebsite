@@ -5320,6 +5320,8 @@ function sendDailyEndOfDayReport(dateOverride) {
   let storefrontCounts = { SK: 0, LS: 0, IA: 0 };
   let pendingList = [];
   let onAccountList = [];
+  let loyaltyRewards = [];
+  let loyaltyTotal = 0;
   
   let itemCounts = {};
   
@@ -5349,6 +5351,12 @@ function sendDailyEndOfDayReport(dateOverride) {
     const status = String(o.Payment_Status || "");
     if (status.toLowerCase().indexOf("pending") !== -1) pendingList.push(o);
     if (typeof _isOnAccountDueStatus === "function" && _isOnAccountDueStatus(status)) onAccountList.push(o);
+    
+    if (String(o.Loyalty_Discount || "").toLowerCase() === "yes") {
+      const amt = Number(o.Discount_Amount) || 0;
+      loyaltyTotal += amt;
+      loyaltyRewards.push({ name: o.Customer_Name, phone: o.Phone, amt: amt });
+    }
     
     // Items
     try {
@@ -5542,6 +5550,14 @@ function sendDailyEndOfDayReport(dateOverride) {
   } else {
     html += `<div style="margin-top: 10px; font-size: 0.95rem; color: #334155;">✅ <b>On Account Dues:</b> None!</div>`;
   }
+  
+  if (loyaltyRewards.length > 0) {
+    html += `<div style="font-size: 0.85rem; font-weight: 700; color: #1e40af; margin-top: 15px; margin-bottom: 8px; text-transform: uppercase;">🎁 Loyalty Rewards Granted (${loyaltyRewards.length} - Total Waived: ₹${loyaltyTotal})</div>`;
+    html += `<ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 0.9rem;">`;
+    loyaltyRewards.forEach(function(r) { html += `<li style="margin-bottom:4px;">${r.name} (${r.phone}) - Waived: ₹${r.amt}</li>`; });
+    html += `</ul>`;
+  }
+  
   html += `</div>`;
   
   html += `<div style="text-align: center; margin-top: 25px; font-size: 0.8rem; color: #94a3b8;">`;
