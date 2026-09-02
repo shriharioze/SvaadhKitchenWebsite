@@ -404,7 +404,7 @@ function doPost(e) {
       // SECURITY: these are admin-only fields (set via the gated markOnAccount /
       // toggleFeeExempt). Strip them from the unauthenticated customer upsert so
       // nobody can self-promote a phone to pay-later On-Account by knowing it.
-      delete profile.onAccount; delete profile.billingCycle;
+      delete profile.onAccount; delete profile.billingCycle; delete profile.isFnF;
   _upsertCustomer(getSpreadsheet(), profile, _lsStorefront(body));
       return jsonRes({success: true});
     }

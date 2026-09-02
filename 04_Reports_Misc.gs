@@ -4736,6 +4736,31 @@ function undoMarkPaid(submissionIds) {
 /**
  * VIP / Fee Exempt Logic
  */
+
+function toggleFnF(phone, status) {
+  const ss = getSpreadsheet();
+  const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  const rows = getAllRows(custWs);
+  const hIdx = headerIndex(custWs);
+  const phoneStr = _normalizePhone(phone);
+  const idx = rows.findIndex(r => _normalizePhone(r.Phone) === phoneStr);
+  
+  const val = (status === true || String(status).toLowerCase() === "yes") ? "Yes" : "No";
+  
+  if (idx !== -1) {
+    custWs.getRange(idx + 2, hIdx["Friends_Family"]).setValue(val);
+  } else {
+    if (!phone || phone.length < 10) return { success: false, error: "Invalid phone number" };
+    const row = new Array(CUSTOMERS_HEADERS.length).fill("");
+    row[hIdx["Phone"] - 1] = phone;
+    row[hIdx["Friends_Family"] - 1] = val;
+    row[hIdx["Created_At"] - 1] = getISTTimestamp();
+    row[hIdx["Customer_Name"] - 1] = "";
+    custWs.appendRow(row);
+  }
+  return { success: true, status: val };
+}
+
 function toggleFeeExempt(phone, status) {
   const ss = getSpreadsheet();
   const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
