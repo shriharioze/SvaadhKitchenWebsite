@@ -2589,28 +2589,9 @@ function _submitOrderInternal(body) {
         try { items = JSON.parse(items); } catch(e) { items = []; }
       }
       if (!Array.isArray(items)) items = [];
-      // Filter out items not on the menu for this date to prevent "dragged" items
-      let validKeys = null;
-      if (mealType === "Breakfast") {
-        validKeys = new Set(["B_CURD"]);
-        try {
-          if (_menuRowW && _menuRowW.Breakfast_JSON) {
-            const bMenu = JSON.parse(_menuRowW.Breakfast_JSON);
-            bMenu.forEach(x => validKeys.add(x.name));
-          }
-        } catch(e) {}
-      } else {
-        const _ldPrice = {
-          "Chapati": 9, "Without Oil Chapati": 8, "Phulka": 7, "Ghee Phulka": 10,
-          "Jowar Bhakri": 20, "Bajra Bhakri": 20,
-          "Dry Sabji Mini [100ml]": 22, "Dry Sabji Full [250ml]": 45,
-          "Curry Sabji Mini [100ml]": 22, "Curry Sabji Full [250ml]": 45,
-          "Dal [200ml]": 22, "Dal Fry [200ml]": 37, "Rice [100g]": 12, "Salad [40g]": 7, "Curd [50g]": 12
-        };
-        validKeys = new Set(Object.keys(_ldPrice));
-      }
+      // Filter out invalid entries and zero-quantity items
       items = items.filter(function(i) {
-        return i && i.colKey && Number(i.qty) > 0 && validKeys.has(i.colKey);
+        return i && i.colKey && Number(i.qty) > 0;
       });
 
       const nKitchen = meal.notesKitchen || "";
