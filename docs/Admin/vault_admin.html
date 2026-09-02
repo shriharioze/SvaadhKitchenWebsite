@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.02.06">
+  <meta name="app-version" content="v26.09.02.07">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2145,7 +2145,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // CONFIG & PRICING
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-const APP_VERSION = "v26.09.02.06";
+const APP_VERSION = "v26.09.02.07";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2325,7 +2325,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.09.02.06";
+    const ADMIN_VERSION = "v26.09.02.07";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -3407,7 +3407,10 @@ function renderOrdersClosedPanel() {
     { key:"Dinner",    icon:"🌙" },
   ];
   panel.innerHTML = meals.map(m => {
-    const isClosed = !!S.ordersClosed[m.key];
+    const cState = S.ordersClosed[m.key];
+    const isClosed = cState === true;
+    const isRestricted = cState === "restricted";
+    const isOpen = !isClosed && !isRestricted;
     const cap    = (S.orderCaps && S.orderCaps[m.key]) ? S.orderCaps[m.key] : "";          // per-date override (what the admin typed)
     const defCap = (S.defaultCaps && S.defaultCaps[m.key]) ? Number(S.defaultCaps[m.key]) : 0; // site-wide default (admin-editable via Default Delivery Caps panel)
     const effCap = cap ? Number(cap) : defCap;                                              // what's actually enforced today
@@ -3416,6 +3419,11 @@ function renderOrdersClosedPanel() {
     const altOn = !(S.capAlt && S.capAlt[m.key] === false);   // default ON
     return `<div style="text-align:center;">
       <div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px;">${m.icon} ${m.key}</div>
+      <select onchange="setOrdersClosedState('${m.key}', this.value)" style="margin-top:4px; font-size:0.75rem; padding:4px; border-radius:6px; border:1px solid var(--border); width:100%; max-width:140px; text-align:center; background:var(--surface); color:var(--ink);">
+        <option value="false" ${isOpen ? 'selected' : ''}>🟢 Open</option>
+        <option value="restricted" ${isRestricted ? 'selected' : ''}>🟡 Except Bhosale/Triveni</option>
+        <option value="true" ${isClosed ? 'selected' : ''}>🔴 Closed Completely</option>
+      </select>
       <button class="toggle ${isClosed ? '' : 'on'}"
               onclick="toggleOrdersClosed('${m.key}')"></button>
       <div style="font-size:.72rem;margin-top:6px;font-weight:600;color:${isClosed ? '#2D1A5E' : 'var(--green)'};">
@@ -3448,6 +3456,13 @@ function toggleCapAlt(meal) {
 
 function toggleOrdersClosed(meal) {
   S.ordersClosed[meal] = !S.ordersClosed[meal];
+  setMenuDirty(true);
+  renderOrdersClosedPanel();
+}
+function setOrdersClosedState(meal, val) {
+  if (val === "true") S.ordersClosed[meal] = true;
+  else if (val === "restricted") S.ordersClosed[meal] = "restricted";
+  else S.ordersClosed[meal] = false;
   setMenuDirty(true);
   renderOrdersClosedPanel();
 }
