@@ -101,6 +101,11 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Stop Accepting Orders - Restricted Area Toggle (CODE_VERSION 35.22 / APP_VERSION v26.09.02.06)**
+  - Added a new 3-way select dropdown in the admin dashboard under "Stop Accepting Orders".
+  - States: "Open", "Closed Completely", and "Except Bhosale/Triveni".
+  - When restricted, only customers with delivery addresses in Bhosale Nagar or Triveni Nagar (or who choose Self Pickup / Porter) are allowed to order. Everyone else sees the meal as "Not Accepting Orders".
+  - Implemented client-side filtering in `docs/order.html` and authoritative backend validation in `02_Orders_Menu.gs` (`_ordersClosedW`).
 - **Bug Fixes:**
   - Removed restrictive validKeys filter in submitOrder that caused empty Items_JSON and blank item columns for Gateway (HDFC) breakfast/lunch/dinner orders (v35.21).
   - Hid Past Dues Recovery UI for On-Account customers since they do not pay upfront.
