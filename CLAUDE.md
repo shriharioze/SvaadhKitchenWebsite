@@ -100,6 +100,15 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Archive policy: due-slice (1-10→18th, 11-20→28th, 21-end→next-month 8th), terminal rows only (Paid/Cancelled/Refunded), Pending/On-Account stay live, per-month existing files appended, daily ~22:30 IST trigger, preview `archiveDueDryRun`.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
+## Recent Changes (September 2026)
+- **Bug Fixes:**
+  - Removed restrictive validKeys filter in submitOrder that caused empty Items_JSON and blank item columns for Gateway (HDFC) breakfast/lunch/dinner orders (v35.21).
+  - Hid Past Dues Recovery UI for On-Account customers since they do not pay upfront.
+- **Features:**
+  - **Friends & Family Discount (F&F):** Added a 20% discount on food subtotal for privileged customers, controlled via an admin toggle (toggleFnF). F&F customers bypass delivery caps and do not accrue 6th-day loyalty rewards.
+  - **Billing:** Hard-blocked overdue On-Account monthly users after the 9th of the month.
+  - **Reporting:** Added daily End-Of-Day email report summarizing new customers and daily metrics.
+
 ## Where the deep documentation lives
 - `git log` — every commit message is a full incident/design writeup. Start any investigation with `git log --oneline -15`.
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
