@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.01.01">
+  <meta name="app-version" content="v26.09.02.01">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2325,7 +2325,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.09.01.01";
+    const ADMIN_VERSION = "v26.09.02.01";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
