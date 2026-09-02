@@ -2211,6 +2211,24 @@ function _submitOrderInternal(body) {
             // cutoff). Otherwise allow a "piggyback" when we already have an active
             // delivery to this customer's society for this date+meal (SAME stop, no
             // new delivery burden).
+            const _isBhosaleOrTriveniW = _mAreaW.includes("bhosale") || _mAreaW.includes("triveni");
+            
+            if (_isBhosaleOrTriveniW) {
+              // Always bypass cap for Bhosale and Triveni
+            } else if (_mt === "Breakfast") {
+              // For Breakfast, NO OTHER BYPASSES apply (no free areas except the two above, no big meals, no exempt locs)
+              const _idxMtW = _delIdxW && _delIdxW[_mt];
+              const _socW = _normSocietyKey(_m.society || profile.society || "");
+              const _socAlreadyW  = !!(_socW && _idxMtW && _idxMtW.soc[_socW]);
+              const _phW = _normalizePhone(profile.phone || "");
+              const _selfAlreadyW = !!(_phW && _idxMtW && _idxMtW.ph[_phW]);
+              if (!_socAlreadyW && !_selfAlreadyW) {
+                _wViolations.push(_altOnW
+                  ? (_mt + " delivery is full for " + _d + " — please choose Self Pickup or Porter.")
+                  : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
+                continue;
+              }
+            } else {
             const _isFreeAreaW = freeAreaNames.indexOf(_m.area || profile.area || "") !== -1;
             // Owner-approved exempt LOCATIONS (WeWork; Cybercity Magarpatta towers
             // 1–12 — customers collect at the gate) keep delivery even at the cap.
@@ -2240,6 +2258,7 @@ function _submitOrderInternal(body) {
                   : (_mt + " is sold out for " + _d + " — the daily order limit has been reached."));
                 continue;
               }
+            }
             }
             // free area OR ₹200+ meal OR WeWork/Cybercity-tower OR same-building OR own existing delivery → allowed (falls through)
           } else if (!_altOnW) {

@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.02.07";
+    const APP_VERSION = "v26.09.02.08";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -4745,6 +4745,9 @@
       if (String((S.profile && S.profile.name) || "").toLowerCase().indexOf("enkin") !== -1) return true;
       const a = String((addr && addr.area) || "").toLowerCase();
       if (a.indexOf("pickup") !== -1 || a === "porter") return true;
+      const isBhosaleOrTriveni = a.includes("bhosale") || a.includes("triveni");
+      if (isBhosaleOrTriveni) return true;
+      if (meal === "Breakfast") return false;
       if (addr && FREE_AREAS.includes(addr.area)) return true;
       if ((Number(sub) || 0) >= (CAP_BYPASS_MIN[meal] || 200)) return true;
       if (_capExemptLocation((addr && addr.society) || (S.profile && S.profile.society), (addr && addr.area) || (S.profile && S.profile.area))) return true;
@@ -8489,11 +8492,13 @@
         // Per-meal bypass tip — every meal reaching this dialog is under ITS threshold
         // (>= CAP_BYPASS_MIN[meal] meals are skipped by _soldOutDeliveryMealsInCart), so
         // show exactly how much more each needs to qualify for delivery anyway.
-        const _bypassTips = mealsList.map(x => {
-          const _sub = (S.orders[x.date] && S.orders[x.date][x.meal] && S.orders[x.date][x.meal].subtotal) || 0;
-          const _min = CAP_BYPASS_MIN[x.meal] || 200;
-          return `<b>${x.meal}</b>: add ₹${Math.max(1, _min - _sub)} more (₹${_min}+ qualifies)`;
-        }).join(" · ");
+        const _bypassTips = mealsList
+          .filter(x => x.meal !== "Breakfast")
+          .map(x => {
+            const _sub = (S.orders[x.date] && S.orders[x.date][x.meal] && S.orders[x.date][x.meal].subtotal) || 0;
+            const _min = CAP_BYPASS_MIN[x.meal] || 200;
+            return `<b>${x.meal}</b>: add ₹${Math.max(1, _min - _sub)} more (₹${_min}+ qualifies)`;
+          }).join(" · ");
         const ov = document.createElement("div");
         ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;";
         ov.innerHTML =
@@ -8502,9 +8507,10 @@
             <div style="font-weight:800;font-size:1.05rem;text-align:center;color:#c0392b;margin-bottom:8px;">Delivery is full today</div>
             <div style="font-size:.86rem;color:#333;line-height:1.55;margin-bottom:14px;">
               We've reached our delivery limit for <b>${meals.join(" & ")}</b> today, so we can't deliver this order.
+              ${_bypassTips ? `
               <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:8px 10px;font-size:.78rem;color:#065f46;margin:10px 0;">
                 💡 <b>Big enough orders still get delivery</b> even when the limit is full — ${_bypassTips} to qualify!
-              </div>
+              </div>` : ''}
               Or get your food one of these ways — please pick one:
               <ul style="margin:10px 0 0;padding-left:18px;">
                 <li style="margin-bottom:6px;"><b>📦 Self Pickup</b> — collect it yourself from our kitchen. <b>Free</b> (no delivery fee).</li>
