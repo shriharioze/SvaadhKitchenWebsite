@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.02.05";
+    const APP_VERSION = "v26.09.02.06";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5354,12 +5354,23 @@
         const ist = getIST(), h = ist.getUTCHours() + ist.getUTCMinutes() / 60;
         base = { Breakfast: h < cur.Breakfast, Lunch: h < cur.Lunch, Dinner: h < cur.Dinner };
       }
+      const checkClosed = (m) => {
+        const cState = closed[m];
+        if (cState === true) return true;
+        if (cState === "restricted") {
+           const area = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[m] && S.mealAddrs[m].area) ? S.mealAddrs[m].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
+           if (area.includes("bhosale") || area.includes("triveni") || area.includes("pickup") || area.includes("porter")) return false;
+           return true;
+        }
+        return false;
+      };
+      
       // Admin-closed meals (orders_closed) AND kitchen-closed meals (closed_meals)
       // are blocked even on future dates.
       return {
-        Breakfast: base.Breakfast && !closed.Breakfast && !kClosed.Breakfast,
-        Lunch:     base.Lunch     && !closed.Lunch     && !kClosed.Lunch,
-        Dinner:    base.Dinner    && !closed.Dinner    && !kClosed.Dinner,
+        Breakfast: base.Breakfast && !checkClosed("Breakfast") && !kClosed.Breakfast,
+        Lunch:     base.Lunch     && !checkClosed("Lunch")     && !kClosed.Lunch,
+        Dinner:    base.Dinner    && !checkClosed("Dinner")    && !kClosed.Dinner,
       };
     }
     function fmtHour(h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60), ampm = hh < 12 ? "AM" : "PM", hr = hh > 12 ? hh - 12 : (hh || 12); return `${hr}:${String(mm).padStart(2, "0")} ${ampm}`; }
@@ -6936,7 +6947,9 @@
             ? `<div class="meal-body ${(sub > 0 && !isAddrMissing) ? "open" : ""}" id="mb_${date}_${meal}">${buildMealBody(date, meal, menu)}</div>`
             : (() => {
                 const isSoldOut = !!(S.menuCache[date]?.sold_out || {})[meal];
-                const isClosed  = !!(S.menuCache[date]?.orders_closed || {})[meal];
+                const cState = (S.menuCache[date]?.orders_closed || {})[meal];
+                const areaCheck = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
+                const isClosed = cState === true || (cState === "restricted" && !(areaCheck.includes("bhosale") || areaCheck.includes("triveni") || areaCheck.includes("pickup") || areaCheck.includes("porter")));
                 const isKitchenClosed = !!(S.menuCache[date]?.closed_meals || {})[meal];
                 const msg = isKitchenClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🚫</div>
@@ -6981,7 +6994,9 @@
         const el = $(`cutdown_${date}_${meal}`);
         if (!el) return;
         if (!!(menu.closed_meals || {})[meal]) { el.textContent = 'Kitchen closed'; el.style.color = ''; return; }
-        const isClosed = !!(menu.orders_closed || {})[meal];
+        const cState2 = (menu.orders_closed || {})[meal];
+        const areaCheck2 = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
+        const isClosed = cState2 === true || (cState2 === "restricted" && !(areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter")));
         if (isClosed) { el.textContent = !!(menu.sold_out || {})[meal] ? 'Sold out for today' : 'Not accepting orders'; el.style.color = ''; return; }
 
         // For future dates, show the cutoff time as a static label — no countdown needed.

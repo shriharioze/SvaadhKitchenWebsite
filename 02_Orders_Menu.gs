@@ -2183,7 +2183,14 @@ function _submitOrderInternal(body) {
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
-        if (_ordersClosedW[_mt]) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
+        const closedState = _ordersClosedW[_mt];
+        if (closedState === true) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
+        if (closedState === "restricted") {
+          const _area = String(_m.area || profile.area || "").toLowerCase();
+          if (!(_area.includes("bhosale") || _area.includes("triveni") || _area.includes("pickup") || _area.includes("porter"))) {
+            _wViolations.push(_mt + " orders are restricted to specific areas for " + _d + "."); continue;
+          }
+        }
         const _capW = _capCountsW ? Number(_orderCapW[_mt] || 0) : 0;
         const _capExceededW = _capW > 0 && _capCountsW && (_capCountsW[_mt] || 0) >= _capW;
         if (_capExceededW) {
