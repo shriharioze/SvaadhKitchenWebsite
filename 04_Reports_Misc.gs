@@ -617,6 +617,7 @@ function getCustomerList() {
         claimed: (String(c.Review_Reward_Claimed) === "TRUE" || String(c.Review_Reward_Claimed) === "true"),
         standardOrder: c.Standard_Order || "",
         feeExempt: (String(c.Fee_Exempt).trim() === "Yes") ? "Yes" : "No",
+        friendsFamily: (String(c.Friends_Family).trim() === "Yes") ? "Yes" : "No",
         onAccount: (String(c.On_Account).trim() === "Yes") ? "Yes" : "No",
         billingCycle: c.Billing_Cycle || "Daily",
         // Address profiles
@@ -657,6 +658,7 @@ function getCustomerList() {
         reviewClaimed: cMap[normP] ? cMap[normP].claimed : false,
         standardOrder: cMap[normP] ? cMap[normP].standardOrder : "",
         Fee_Exempt:    cMap[normP] ? cMap[normP].feeExempt : "No",
+        Friends_Family: cMap[normP] ? cMap[normP].friendsFamily : "No",
         onAccount:     cMap[normP] ? cMap[normP].onAccount : "No",
         billingCycle:  cMap[normP] ? cMap[normP].billingCycle : "Daily",
         wing:    cMap[normP] ? cMap[normP].wing : "",
@@ -685,7 +687,7 @@ function getCustomerList() {
     var normP = _normalizePhone(p);
     if (map[p]) return; // already in map from orders
     // Only surface pre-registered VIPs (Fee_Exempt = Yes) to keep the list clean
-    if (String(c.Fee_Exempt).trim() !== "Yes") return;
+    if (String(c.Fee_Exempt).trim() !== "Yes" && String(c.Friends_Family).trim() !== "Yes") return;
     map[p] = {
       phone: p,
       name: String(c.Customer_Name || "").trim(),
@@ -700,7 +702,8 @@ function getCustomerList() {
       promoCount: 0,
       reviewClaimed: false,
       standardOrder: "",
-      Fee_Exempt: "Yes",
+      Fee_Exempt: (String(c.Fee_Exempt).trim() === "Yes" ? "Yes" : "No"),
+      Friends_Family: (String(c.Friends_Family).trim() === "Yes" ? "Yes" : "No"),
       onAccount: String(c.On_Account).trim() === "Yes" ? "Yes" : "No",
       billingCycle: c.Billing_Cycle || "Daily"
     };

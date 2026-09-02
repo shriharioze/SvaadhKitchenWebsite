@@ -195,7 +195,7 @@ const DEFAULT_ORDER_CAPS = { Breakfast: 11, Lunch: 24, Dinner: 23 };
 const CUSTOMERS_HEADERS = [
   "Phone","Customer_Name","Area","Wing","Flat","Floor","Society","Full_Address",
   "Maps_Link","Landmark","Payment_Freq","Created_At","Ledger_Sheet_ID","PIN","Meal_Addresses",
-  "Review_Promo_Count", "Review_Reward_Claimed", "Standard_Order", "Billing_Cycle", "Fee_Exempt", "Delivery_Point", "On_Account", "Last_Order_At",
+  "Review_Promo_Count", "Review_Reward_Claimed", "Standard_Order", "Billing_Cycle", "Fee_Exempt", "Friends_Family", "Delivery_Point", "On_Account", "Last_Order_At",
   "Email" // for self-service Forgot-PIN email OTP (added 2026-07-15; getOrCreateTab self-heals the column)
 ];
 

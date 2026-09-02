@@ -118,6 +118,7 @@ function getCustomer(phone, storefront) {
     })(r.Review_Promo_Count),
     wallet_balance:     _calculateWalletBalance(phone, undefined, storefront),
     feeExempt:          (r.Fee_Exempt === "Yes" || r.Fee_Exempt === true),
+      isFnF:              (r.Friends_Family === "Yes" || r.Friends_Family === true),
     onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
     billingCycle:       r.Billing_Cycle || "Daily"
   };
@@ -2238,7 +2239,7 @@ function _submitOrderInternal(body) {
             _wViolations.push(_mt + " is sold out for " + _d + " — the daily order limit has been reached."); continue;
           }
           // pickup/porter + alternatives ON → allowed (falls through)
-          } // end if (!_isEnkinOrderW) — Enkin always falls through (cap bypassed)
+          } // end if (!_isEnkinOrderW && !_isFnFOrderW) — Enkin always falls through (cap bypassed)
         }
         if (_effCutW && _effCutW[_mt] !== undefined && _wHour >= _effCutW[_mt]) {
           _wViolations.push("The " + _mt + " cutoff for today (" + _d + ") has already passed.");
@@ -2522,7 +2523,8 @@ function _submitOrderInternal(body) {
     // Tiers on the day's combined FOOD total: ≥₹750 → 10%, ≥₹485 → 7.5%, ≥₹325 → 5%.
     // MUST mirror the frontend (DISC_T1/T2/T3) and the gateway recompute exactly.
     let discRate = 0;
-    if (combinedDayTotal >= 750) discRate = 0.10;
+    if (profile.isFnF === true || String(profile.isFnF) === "true") discRate = 0.20;
+    else if (combinedDayTotal >= 750) discRate = 0.10;
     else if (combinedDayTotal >= 485) discRate = 0.075;
     else if (combinedDayTotal >= 325) discRate = 0.05;
     

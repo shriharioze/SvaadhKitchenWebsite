@@ -367,6 +367,7 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
   const phoneStr = _normalizePhone(phone || "");
   const cRow     = cRows.find(function(r){ return _normalizePhone(r.Phone) === phoneStr; }) || null;
   const isFeeExempt = !!(cRow && (cRow.Fee_Exempt === "Yes" || cRow.Fee_Exempt === true));
+  const isFnF = !!(cRow && (cRow.Friends_Family === "Yes" || cRow.Friends_Family === true));
   let promoCount = null;
   if (cRow) {
     const raw = cRow.Review_Promo_Count;
