@@ -524,7 +524,7 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
     // the cart. The frontend computes its waiver before resetting; this matches it.
     const _waiverPastSurcharge = virtualPastSurcharge;
     function getDisc(sub) {
-      if (is6thDay) {
+      if (is6thDay && !isFnF) {
         // 6th-day loyalty waiver: refund all 6 days' accrued surcharge (mirrors submitOrder)
         const totalWaiver = _waiverPastSurcharge + submissionDaySurcharge;
         return submissionDayFoodTotal > 0 ? Math.round(totalWaiver * (sub / submissionDayFoodTotal)) : 0;

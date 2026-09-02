@@ -7751,7 +7751,8 @@
         let discAmt = 0;
         let loyaltyWaiverTotal = 0;
 
-        if (is6thDay) {
+        let isFnF = S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true");
+        if (is6thDay && !isFnF) {
           // Loyalty Discount triggers on Day 6: waive all surcharges across 6 days
           // (per-meal surcharge sum = exactly what was charged on this day)
           loyaltyWaiverTotal = virtualPastSurcharge + dayMealSurcharge;

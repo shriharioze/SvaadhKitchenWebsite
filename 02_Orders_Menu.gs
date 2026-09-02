@@ -2550,7 +2550,8 @@ function _submitOrderInternal(body) {
     // mismatched the cart. The frontend computes its waiver before resetting; match it.
     const _waiverPastSurcharge = virtualPastSurcharge;
     const getDisc = (sub) => {
-      if (is6thDay) {
+      const isFnF = (profile.isFnF === true || String(profile.isFnF) === "true");
+      if (is6thDay && !isFnF) {
         // Loyalty Discount: Waive all 6 days of surcharge
         const totalWaiver = _waiverPastSurcharge + submissionDaySurcharge;
         return submissionDayFoodTotal > 0 ? Math.round(totalWaiver * (sub / submissionDayFoodTotal)) : 0;
