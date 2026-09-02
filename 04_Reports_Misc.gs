@@ -804,13 +804,14 @@ function getCustomerHistory(phone) {
   if (custMatch) standardOrder = custMatch.Standard_Order || "";
 
   var feeExempt = custMatch ? (String(custMatch.Fee_Exempt).trim() === "Yes" ? "Yes" : "No") : "No";
+  var isFnF = custMatch ? (String(custMatch.Friends_Family).trim() === "Yes" ? "Yes" : "No") : "No";
   var onAccount = custMatch ? (String(custMatch.On_Account).trim() === "Yes" ? "Yes" : "No") : "No";
   var billingCycle = custMatch ? (custMatch.Billing_Cycle || "Daily") : "Daily";
 
   return {
     success:true, phone:phone, name:name, area:area, payFreq:payFreq,
     orders:orders, totalSpent:totalSpent, pending:pending, orderCount:orders.length,
-    standardOrder: standardOrder, Fee_Exempt: feeExempt, On_Account: onAccount, Billing_Cycle: billingCycle,
+    standardOrder: standardOrder, Fee_Exempt: feeExempt, Friends_Family: isFnF, On_Account: onAccount, Billing_Cycle: billingCycle,
     // Add full address profile
     wing:    custMatch ? (custMatch.Wing || "") : "",
     flat:    custMatch ? (custMatch.Flat || "") : "",
