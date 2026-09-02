@@ -6842,6 +6842,12 @@
           if (src[m]) {
             if (!avail[m]) { skipped++; return; }
             const copy = JSON.parse(JSON.stringify(src[m]));
+            // Filter out items not on the menu for the target date
+            if (copy.items) {
+              Object.keys(copy.items).forEach(k => {
+                if (getPrice(k, m, d) <= 0) delete copy.items[k];
+              });
+            }
             // Preserve address from destination if it exists
             const destAddr = S.orders[d]?.[m] || {};
             S.orders[d] = S.orders[d] || {};

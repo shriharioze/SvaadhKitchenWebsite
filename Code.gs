@@ -63,7 +63,11 @@ function doGet(e) {
       try { return jsonRes(getKitchenSummary(p.date || "2026-08-19")); } catch (e) { return jsonRes({error: e.message, stack: e.stack}); }
     }
     if (action === "version") return jsonRes({version: CODE_VERSION, status:"ok"});
-    if (action === "health") {
+    if (p.action === "eod") { 
+      sendDailyEndOfDayReport(); 
+      return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON); 
+    }
+    if (p.action === "clear_test") {
       // Lightweight liveness probe — reads one cell to confirm sheet connectivity.
       // Does NOT load orders or menu. Safe to call frequently from monitors.
       try {
