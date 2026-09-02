@@ -6228,6 +6228,30 @@ async function loadCustomerDetail(phone) {
   }
 }
 
+async function toggleFnF(phone, status) {
+  const msg = status 
+    ? "Grant Friends & Family status? They will ALWAYS bypass delivery caps and get 20% off food (standard delivery/fees still apply)."
+    : "Revoke Friends & Family status? Standard pricing and delivery caps will apply again.";
+    
+  if (!(await showUIConfirm(msg, status ? "Promote to F&F" : "Revoke F&F", "🎉"))) return;
+  
+  sLoading(true, "Updating status...");
+  try {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ _action: "toggleFnF", pin: S.sessionPin, phone, status: status ? "Yes" : "No" })
+    });
+    if (!data.success) throw new Error(data.error);
+    toast(status ? "🎉 User is now Friends & Family!" : "User status reset to Standard.");
+    loadCustomerDetail(phone);
+    loadCustomers(true); 
+  } catch(e) {
+    sAlert("Error: " + e.message);
+  } finally {
+    sLoading(false);
+  }
+}
+
 async function toggleVIP(phone, status) {
   const msg = status 
     ? "Grant VIP status to this user? They will get FREE delivery and NO small cart fee on all future orders."
@@ -6624,6 +6648,19 @@ function renderCustomerDetail(data) {
        <button class="btn-set-fav" style="padding:8px 16px; font-weight:700; border-color:${data.Fee_Exempt === 'Yes' ? 'var(--red-border)' : 'var(--gold)'}; color:${data.Fee_Exempt === 'Yes' ? 'var(--red)' : 'var(--gold)'};" 
          onclick="toggleVIP('${data.phone}', ${data.Fee_Exempt !== 'Yes'})">
          ${data.Fee_Exempt === 'Yes' ? 'Remove VIP Status' : '🌟 Make VIP (Fee Exempt)'}
+       </button>
+    </div>
+
+    <div style="background:var(--bg2); padding:12px 16px; border-radius:12px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; border:1px solid var(--border);">
+       <div>
+         <div style="font-size:.65rem; color:var(--muted); font-weight:700; text-transform:uppercase; margin-bottom:4px;">Friends & Family</div>
+         <div style="font-size:.9rem; font-weight:700;">
+           ${data.Friends_Family === 'Yes' ? '<span style="color:var(--green);">🎉 F&F - 20% Off & Cap Bypass</span>' : '<span style="color:var(--muted);">Standard</span>'}
+         </div>
+       </div>
+       <button class="btn-set-fav" style="padding:8px 16px; font-weight:700; border-color:${data.Friends_Family === 'Yes' ? 'var(--red-border)' : 'var(--gold)'}; color:${data.Friends_Family === 'Yes' ? 'var(--red)' : 'var(--gold)'};" 
+         onclick="toggleFnF('${data.phone}', ${data.Friends_Family !== 'Yes'})">
+         ${data.Friends_Family === 'Yes' ? 'Remove F&F Status' : '🎉 Make Friends & Family (20% Off)'}
        </button>
     </div>
     

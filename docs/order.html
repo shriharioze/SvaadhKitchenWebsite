@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.02.01";
+    const APP_VERSION = "v26.09.02.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -7722,7 +7722,7 @@
 
         // Retroactive discount credit: if existing orders didn't get a discount but combined now qualifies
         let discRate = 0, discLabel = "";
-        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.20; discLabel = "20% Friends & Family"; }
+        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.20; discLabel = "20% Special Discount"; }
         else if (combinedDayTotal >= DISC_T3.min) { discRate = DISC_T3.rate; discLabel = `10% off (≥ ₹${DISC_T3.min})`; }
         else if (combinedDayTotal >= DISC_T2.min) { discRate = DISC_T2.rate; discLabel = `7.5% off (≥ ₹${DISC_T2.min})`; }
         else if (combinedDayTotal >= DISC_T1.min) { discRate = DISC_T1.rate; discLabel = `5% off (≥ ₹${DISC_T1.min})`; }
