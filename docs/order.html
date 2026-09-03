@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.02";
+    const APP_VERSION = "v26.09.03.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9177,6 +9177,14 @@
     // ── MYGATE PRE-APPROVAL ──────────────────────────────
     function showMyGateModal(onComplete) {
       if (document.getElementById("myGateModal")) return; // already open
+      
+      // OPTIONAL UX: Only show if the customer actually lives in a society.
+      // If they live in an independent house (no society selected), silently skip this modal.
+      const hasSociety = (S.profile && S.profile.society) || (S.mealAddrs && Object.values(S.mealAddrs).some(m => m && m.society));
+      if (!hasSociety) {
+        if (typeof onComplete === "function") onComplete();
+        return;
+      }
       const overlay = document.createElement("div");
       overlay.id = "myGateModal";
       overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:20px;";
