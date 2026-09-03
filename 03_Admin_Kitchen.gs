@@ -1254,7 +1254,8 @@ function getDriverOrders(date) {
       var ph = _normalizePhone(r.Phone);
       if (ph) {
         custMap[ph] = {
-          mealAddresses: r.Meal_Addresses || ""
+          mealAddresses: r.Meal_Addresses || "",
+          myGateCode: String(r.MyGate_Code || "")
         };
       }
     });
@@ -1274,6 +1275,7 @@ function getDriverOrders(date) {
     var sid = String(r.Submission_ID || "");
     var normP = _normalizePhone(r.Phone);
     meals[meal].push({
+      myGateCode:    (custMap[normP] || {}).myGateCode || "",
       submissionId:  sid,
       name:          (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
       phone:         String(r.Phone || ""),

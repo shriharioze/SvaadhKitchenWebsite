@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.01.01">
+  <meta name="app-version" content="v26.09.03.02">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -902,6 +902,9 @@ function renderCard(o, i, meal) {
     <div class="cust-name">${o.name || "—"}</div>
     <div class="cust-phone">${hasPhone ? "📞 "+o.phone : ""}</div>
     ${enkinBadge}
+    ${o.myGateCode ? `<div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.85rem;color:#e65100;font-weight:700;display:flex;align-items:center;">
+         🏢 MyGate Code: <span style="font-size:1.1rem;letter-spacing:1px;background:#ffe0b2;padding:2px 6px;border-radius:4px;margin-left:8px;">${o.myGateCode}</span>
+       </div>` : ""}
     <div class="address-box">
       ${isPickup 
         ? `<div style="color:#d32f2f; font-size:1.1rem; font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:4px;">🏠 SELF PICKUP</div><div style="font-size:0.8rem; color:#666;">Customer set "${displayArea}" in profile</div>`

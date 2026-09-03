@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.01";
+    const APP_VERSION = "v26.09.03.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9173,6 +9173,92 @@
     // Either way it keeps polling getCustomerOrders for ~3 min so a slow backend
     // (order lands a minute or two late) resolves itself — the customer never has
     // to re-pay or re-order. A manual "Check my orders" button is always available.
+    
+    // ── MYGATE PRE-APPROVAL ──────────────────────────────
+    function showMyGateModal(onComplete) {
+      if (document.getElementById("myGateModal")) return; // already open
+      const overlay = document.createElement("div");
+      overlay.id = "myGateModal";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:20px;";
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);">' +
+          '<div style="font-size:2.4rem;margin-bottom:8px;">🏢</div>' +
+          '<div style="font-size:1.2rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Hassle-Free Delivery</div>' +
+          '<div style="font-size:0.85rem;color:#075985;line-height:1.6;text-align:left;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:16px;">' +
+            'For a smooth, uninterrupted delivery, please provide your <b>MyGate Pre-Approval Code</b>.<br><br>' +
+            '✅ <b>Relax & save time:</b> You won\'t need to be available to approve the entry.<br>' +
+            '✅ <b>Pro Tip:</b> Give approval for the entire delivery window (e.g. 8 AM to 10 PM) if you ordered multiple meals.<br>' +
+            '🔒 <i>Rest assured, your code is safe with us and every entry is officially recorded.</i>' +
+          '</div>' +
+          '<div style="margin-bottom:16px;display:flex;gap:8px;justify-content:center;">' +
+            '<input type="text" id="mg1" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
+            '<input type="text" id="mg2" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
+            '<input type="text" id="mg3" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
+            '<input type="text" id="mg4" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
+            '<input type="text" id="mg5" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
+            '<input type="text" id="mg6" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
+          '</div>' +
+          '<button id="btnSubmitMyGate" style="width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:8px;">Submit Code</button>' +
+          '<button id="btnSkipMyGate" style="width:100%;padding:10px;border:none;background:transparent;color:#64748b;font-size:0.9rem;cursor:pointer;text-decoration:underline;">Skip for now</button>' +
+        '</div>';
+      
+      document.body.appendChild(overlay);
+
+      const inputs = [
+        document.getElementById("mg1"), document.getElementById("mg2"), document.getElementById("mg3"),
+        document.getElementById("mg4"), document.getElementById("mg5"), document.getElementById("mg6")
+      ];
+
+      inputs.forEach((inp, idx) => {
+        inp.addEventListener("input", function() {
+          this.value = this.value.replace(/[^0-9]/g, ''); 
+          if (this.value && idx < 5) inputs[idx+1].focus();
+        });
+        inp.addEventListener("keydown", function(e) {
+          if (e.key === "Backspace" && !this.value && idx > 0) {
+            inputs[idx-1].focus();
+            inputs[idx-1].value = "";
+          }
+        });
+      });
+      setTimeout(() => inputs[0].focus(), 100);
+
+      const closeAndNext = () => {
+        overlay.remove();
+        if (typeof onComplete === "function") onComplete();
+      };
+
+      document.getElementById("btnSkipMyGate").onclick = closeAndNext;
+
+      document.getElementById("btnSubmitMyGate").onclick = async function() {
+        const codeVal = inputs.map(i => i.value).join('');
+        if (codeVal.length < 6) {
+          sAlert("Please enter a valid 6-digit code.", "Invalid Code", "ℹ️");
+          return;
+        }
+        
+        const btn = document.getElementById("btnSubmitMyGate");
+        btn.textContent = "Saving...";
+        btn.disabled = true;
+
+        try {
+          const res = await post({ _action: "updateMyGateCode", phone: S.phone, code: codeVal });
+          if (res.success) {
+             toast("MyGate Code saved successfully!");
+             closeAndNext();
+          } else {
+             sAlert(res.error || "Could not save code.", "Error", "ℹ️");
+             btn.textContent = "Submit Code";
+             btn.disabled = false;
+          }
+        } catch(e) {
+          sAlert("Network error.", "Error", "ℹ️");
+          btn.textContent = "Submit Code";
+          btn.disabled = false;
+        }
+      };
+    }
+
     function showOrderVerifyModal(orders, preSubmitRowIds) {
       const recoveryMode = Array.isArray(orders) && orders.length > 0;
 
@@ -9204,7 +9290,7 @@
       document.getElementById("orderVerifyBtn").addEventListener("click", function(){
         stopped = true;
         overlay.remove();
-        showManageOrders();
+        showMyGateModal(showManageOrders);
       });
 
       // What to look for: explicit cart (recovery) or what we just placed (confirm).
