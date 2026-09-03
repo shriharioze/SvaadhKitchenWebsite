@@ -4618,7 +4618,7 @@ function updateMyGateCode(body) {
   }
   if (idx === -1) return { success: false, error: "Customer not found." };
   
-  var headers = getHeaders(ws);
+  var headers = ws.getRange(1, 1, 1, Math.max(1, ws.getLastColumn())).getValues()[0];
   var colIdx = headers.indexOf("MyGate_Code");
   if (colIdx === -1) {
     colIdx = headers.length; // Append at the very end
