@@ -4598,3 +4598,33 @@ function stripLSPrefix(commit) {
   }
   return { success: true, dryRun: !(commit === true || commit === "true"), stripped: fixed };
 }
+
+
+// ── UPDATE MYGATE CODE ───────────────────────────────────────
+function updateMyGateCode(body) {
+  var phone = body.phone;
+  var code = body.code;
+  if (!phone) return { success: false, error: "Missing Phone." };
+  
+  var ss = getSpreadsheet();
+  var ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, body.storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var rows = getAllRows(ws);
+  var pStr = _normalizePhone(phone);
+  var idx = -1;
+  for (var i = 0; i < rows.length; i++) {
+    if (_normalizePhone(rows[i].Phone) === pStr) {
+      idx = i; break;
+    }
+  }
+  if (idx === -1) return { success: false, error: "Customer not found." };
+  
+  var headers = getHeaders(ws);
+  var colIdx = headers.indexOf("MyGate_Code");
+  if (colIdx === -1) {
+    colIdx = headers.length; // Append at the very end
+    ws.getRange(1, colIdx + 1).setValue("MyGate_Code");
+  }
+  
+  ws.getRange(idx + 2, colIdx + 1).setValue(String(code).trim());
+  return { success: true };
+}
