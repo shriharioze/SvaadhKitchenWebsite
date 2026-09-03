@@ -2823,6 +2823,7 @@ function _submitOrderInternal(body) {
       set("Inflation_Surcharge", inflationSurcharge);
       set("Loyalty_Discount",    is6thDay ? "Yes" : "No");
       set("Gateway_Order_ID",    String(body.gateway_order_id || "")); // same id on each meal row of a gateway payment
+      set("MyGate_Code",         String(body.mygate_code || meal.mygate_code || ""));
       set("Delivery_Charge",     delCharge);
       set("Discount_Amount",     discAmt);
       if (hIdx["Review_Discount"]) {
@@ -4603,53 +4604,98 @@ function stripLSPrefix(commit) {
 // ── UPDATE MYGATE CODE ───────────────────────────────────────
 function updateMyGateCode(body) {
   var phone = body.phone;
-  var code = body.code;
-  var order_id = body.order_id; // from frontend
+  var code = String(body.code || "").trim();
+  var order_id = String(body.order_id || "").trim();
   if (!phone) return { success: false, error: 'Missing Phone.' };
+  if (!code) return { success: false, error: 'Missing Code.' };
   
   var ss = getSpreadsheet();
-  var successFlag = false;
-
-  // 1. Update SK_Orders if order_id is provided
+  var pStr = _normalizePhone(phone);
+  
+  // Target SK_Orders (or LS_Orders if storefront is LS)
+  var ordWs = (typeof _lsOrdersWs === 'function') ? _lsOrdersWs(ss, body.storefront) : getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  
+  // Ensure MyGate_Code header exists in row 1
+  var oHeaders = ordWs.getRange(1, 1, 1, Math.max(1, ordWs.getLastColumn())).getValues()[0];
+  var mgColIdx = oHeaders.indexOf('MyGate_Code');
+  if (mgColIdx === -1) {
+    mgColIdx = oHeaders.length;
+    ordWs.getRange(1, mgColIdx + 1).setValue('MyGate_Code');
+  }
+  
+  var ordRows = getAllRows(ordWs);
+  if (!ordRows || !ordRows.length) return { success: false, error: 'No orders found in sheet.' };
+  
+  var matchedRows = [];
+  var matchedSubmittedAt = null;
+  
+  // 1. Match by order_id (can match Submission_ID, Gateway_Order_ID, or Batch_ID)
   if (order_id) {
-    var ordWs = (typeof _lsOrdersWs === 'function') ? _lsOrdersWs(ss, body.storefront) : getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-    var oHeaders = ordWs.getRange(1, 1, 1, Math.max(1, ordWs.getLastColumn())).getValues()[0];
-    var mgColIdx = oHeaders.indexOf('MyGate_Code');
-    if (mgColIdx === -1) {
-      mgColIdx = oHeaders.length;
-      ordWs.getRange(1, mgColIdx + 1).setValue('MyGate_Code');
-    }
-    
-    var ordRows = getAllRows(ordWs);
     for (var j = 0; j < ordRows.length; j++) {
-      if (String(ordRows[j].Order_ID) === String(order_id)) {
-        ordWs.getRange(j + 2, mgColIdx + 1).setValue(String(code).trim());
-        successFlag = true;
+      var r = ordRows[j];
+      var sId = String(r.Submission_ID || "").trim();
+      var gwId = String(r.Gateway_Order_ID || "").trim();
+      var bId = String(r.Batch_ID || "").trim();
+      
+      if (sId === order_id || gwId === order_id || bId === order_id) {
+        matchedRows.push(r);
+        if (!matchedSubmittedAt && r.Submitted_At) {
+          matchedSubmittedAt = r.Submitted_At;
+        }
       }
     }
   }
-
-  // 2. Fallback: Update SK_Customers
-  var ws = (typeof _customersTabFor === 'function') ? _customersTabFor(ss, body.storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
-  var rows = getAllRows(ws);
-  var pStr = _normalizePhone(phone);
-  var idx = -1;
-  for (var i = 0; i < rows.length; i++) {
-    if (_normalizePhone(rows[i].Phone) === pStr) {
-      idx = i; break;
+  
+  // 2. Multi-meal/multi-day checkout expansion:
+  // If matched by order_id, also match any other row from the same customer submitted in the same checkout batch (within 2 mins)
+  if (matchedSubmittedAt) {
+    var matchTime = new Date(matchedSubmittedAt).getTime();
+    for (var j = 0; j < ordRows.length; j++) {
+      var r = ordRows[j];
+      if (_normalizePhone(r.Phone) === pStr && r.Submitted_At) {
+        var rowTime = new Date(r.Submitted_At).getTime();
+        if (Math.abs(rowTime - matchTime) <= 120000) { // within 2 mins
+          if (!matchedRows.some(function(m) { return m._row === r._row; })) {
+            matchedRows.push(r);
+          }
+        }
+      }
     }
-  }
-  if (idx !== -1) {
-    var headers = ws.getRange(1, 1, 1, Math.max(1, ws.getLastColumn())).getValues()[0];
-    var colIdx = headers.indexOf('MyGate_Code');
-    if (colIdx === -1) {
-      colIdx = headers.length;
-      ws.getRange(1, colIdx + 1).setValue('MyGate_Code');
-    }
-    ws.getRange(idx + 2, colIdx + 1).setValue(String(code).trim());
-    successFlag = true;
   }
   
-  if (!successFlag) return { success: false, error: 'Could not find order or customer record.' };
-  return { success: true };
+  // 3. Fallback: If no match by order_id, find the most recent orders for this phone submitted in the last 15 mins
+  if (!matchedRows.length) {
+    var nowMs = Date.now();
+    for (var j = ordRows.length - 1; j >= 0; j--) {
+      var r = ordRows[j];
+      if (_normalizePhone(r.Phone) === pStr && r.Submitted_At) {
+        var rowTime = new Date(r.Submitted_At).getTime();
+        if ((nowMs - rowTime) <= 15 * 60 * 1000) {
+          matchedRows.push(r);
+        }
+      }
+    }
+  }
+  
+  // 4. Ultimate fallback: Match the latest active order row for this phone
+  if (!matchedRows.length) {
+    for (var j = ordRows.length - 1; j >= 0; j--) {
+      var r = ordRows[j];
+      if (_normalizePhone(r.Phone) === pStr) {
+        matchedRows.push(r);
+        break;
+      }
+    }
+  }
+  
+  if (matchedRows.length > 0) {
+    matchedRows.forEach(function(r) {
+      ordWs.getRange(r._row, mgColIdx + 1).setValue(code);
+    });
+    SpreadsheetApp.flush();
+    console.log("updateMyGateCode: Saved MyGate_Code '" + code + "' to " + matchedRows.length + " rows in " + ordWs.getName());
+    return { success: true, updated_count: matchedRows.length };
+  }
+  
+  return { success: false, error: 'Could not find matching order in SK_Orders.' };
 }

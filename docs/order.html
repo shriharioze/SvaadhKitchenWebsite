@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.13";
+    const APP_VERSION = "v26.09.03.14";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9071,6 +9071,7 @@
     }
 
     function showSuccess(id, skipVerifyModal) {
+      if (id) S.lastOrderId = id;
       // Record what was just placed so Manage Orders can confirm it shows up —
       // and re-read if Google Sheets hasn't propagated the write yet. This kills
       // the "I don't see my order → place it again → duplicate warning" loop.
@@ -9368,7 +9369,7 @@
       document.getElementById("orderVerifyBtn").addEventListener("click", function(){
         stopped = true;
         overlay.remove();
-        showMyGateModal(showManageOrders, ""); // Safely fallback if order_id is unknown
+        showMyGateModal(showManageOrders, S.lastOrderId || "");
       });
 
       // What to look for: explicit cart (recovery) or what we just placed (confirm).
@@ -9393,7 +9394,7 @@
         if (body)  { body.style.background = "#f0fdf4"; body.style.borderColor = "#bbf7d0"; body.style.color = "#166534"; body.style.textAlign = "center";
           body.innerHTML = 'We found your order in your list — you\'re all set. 🎉<br><span style="font-size:0.78rem;color:#4d7c0f;">Your meal is confirmed.</span>'; }
         if (btn) { btn.textContent = "✓ Great"; btn.style.background = "linear-gradient(135deg,#16a34a,#15803d)";
-          btn.onclick = function(){ stopped = true; overlay.remove(); showMyGateModal(showManageOrders, order_id); }; }
+          btn.onclick = function(){ stopped = true; overlay.remove(); showMyGateModal(showManageOrders, order_id || S.lastOrderId || ""); }; }
       }
 
       function showManualFallback() {

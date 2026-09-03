@@ -236,7 +236,7 @@ function postponeBulkOrder(body) {
     }
 
     const dCol = ctx.hIdx["Order_Date"];
-    const pCol = ctx.hIdx["Bulk_Postponed"] ||
+    const pCol = ctx.hIdx["Bulk_Postponed", "MyGate_Code"] ||
       (function () { ctx.ws.getRange(1, ctx.ws.getLastColumn() + 1).setValue("Bulk_Postponed"); return ctx.ws.getLastColumn(); })();
     ctx.ws.getRange(ctx.row._row, dCol).setValue(newDate);
     // Mark on first move only, so quota counts DISTINCT postponed days (re-moving a
