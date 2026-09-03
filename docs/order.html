@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.02.08";
+    const APP_VERSION = "v26.09.03.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5358,6 +5358,26 @@
         base = { Breakfast: h < cur.Breakfast, Lunch: h < cur.Lunch, Dinner: h < cur.Dinner };
       }
       const checkClosed = (m) => {
+        // Evaluate Blocklist Address Match First
+        if (typeof S !== 'undefined' && S.blocklist && S.blocklist.length > 0) {
+           const pArea = (S.profile && S.profile.area) ? S.profile.area.toLowerCase() : "";
+           const pSoc = (S.profile && S.profile.society) ? S.profile.society.toLowerCase() : "";
+           const pFlat = (S.profile && S.profile.flat) ? S.profile.flat.toLowerCase() : "";
+           
+           const mArea = (S.mealAddrs && S.mealAddrs[m] && S.mealAddrs[m].area) ? S.mealAddrs[m].area.toLowerCase() : pArea;
+           const mSoc = (S.mealAddrs && S.mealAddrs[m] && S.mealAddrs[m].society) ? S.mealAddrs[m].society.toLowerCase() : pSoc;
+           const mFlat = (S.mealAddrs && S.mealAddrs[m] && S.mealAddrs[m].flat) ? S.mealAddrs[m].flat.toLowerCase() : pFlat;
+           
+           for (let b of S.blocklist) {
+             if (b.type === "address") {
+               const bval = b.value;
+               if (mArea.includes(bval) || mSoc.includes(bval) || mFlat.includes(bval) || pArea.includes(bval) || pSoc.includes(bval) || pFlat.includes(bval)) {
+                 return true; // Blocked by address
+               }
+             }
+           }
+        }
+      
         const cState = closed[m];
         if (cState === true) return true;
         if (cState === "restricted") {
@@ -11462,6 +11482,7 @@
       S.gatewayEnabled = !!(data && data.gateway_enabled);
       S.gatewayEnv     = (data && data.gateway_env) || "test";
       S.pricingV2      = !!(data && data.pricing_v2);
+      S.blocklist      = (data && data.blocklist) || [];
       // Refresh the site-wide default cutoffs (admin-editable — see the vault_admin
       // "Default Cutoff Times" panel). Falls back to the existing hardcoded CUTOFFS
       // if the field is missing (older backend) so this can never break the page.

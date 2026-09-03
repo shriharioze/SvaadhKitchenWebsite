@@ -85,7 +85,8 @@ function doGet(e) {
       // Site-wide default cutoffs (admin-editable via SK_Default_Cutoffs) — public,
       // not sensitive, and the order page needs it to show the right "Order by X"
       // time / early-extended labels without the customer having any admin PIN.
-      default_cutoffs: _getDefaultCutoffs()
+      default_cutoffs: _getDefaultCutoffs(),
+      blocklist: getBlocklist()
     });
     if (action === "getAreas") return jsonRes(getAreas());
     if (action === "getDefaultCutoffs") {

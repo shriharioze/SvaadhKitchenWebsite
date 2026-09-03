@@ -124,10 +124,28 @@ function getCustomer(phone, storefront) {
   };
 }
 
+
+// ── BLOCKLIST ──────────────────────────────────────────────
+function getBlocklist() {
+  return _cachedData("blocklist_v1", 300, function() {
+    const ss = getSpreadsheet();
+    const ws = getOrCreateTab(ss, TAB_BLOCKLIST, ["Type", "Value", "Added_On", "Notes"]);
+    const rows = getAllRows(ws);
+    return rows.map(r => ({ type: String(r[0] || "").trim().toLowerCase(), value: String(r[1] || "").trim().toLowerCase() })).filter(r => r.type && r.value);
+  });
+}
+
 // ── VERIFY LOGIN ─────────────────────────────────────────────
 function verifyLogin(phone, pin, storefront) {
   if (!phone || !pin) return {success: false, error: "Missing Phone or PIN."};
   const ss = getSpreadsheet();
+  
+  // CHECK BLOCKLIST
+  const pStr = _normalizePhone(phone);
+  const blocklist = getBlocklist();
+  if (blocklist.some(b => b.type === "phone" && _normalizePhone(b.value) === pStr)) {
+    return {success: false, error: "Your account has been temporarily restricted. Please contact support."};
+  }
   // SEPARATE BASES: LS customers authenticate against LS_Customers only.
   const ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   const rows = getAllRows(ws);
@@ -1966,7 +1984,37 @@ function _submitOrderInternal(body) {
   const _isLS     = (_sf === "LS");
   const ordersWs  = _lsOrdersWs(ss, _sf);
   const profile   = body.profile || {};
-  const orders    = body.orders  || [];   // [{date, meals:[{type,items,notes,subtotal,area}]}]
+  const orders    = body.orders  || [];
+  
+  // ── BLOCKLIST CHECK ──────────────────────────────────────────
+  const pStr = _normalizePhone(profile.phone || "");
+  const blocklist = getBlocklist();
+  
+  // 1. Check Phone Block
+  if (blocklist.some(b => b.type === "phone" && _normalizePhone(b.value) === pStr)) {
+    return { error: "Your account has been temporarily restricted. Please contact support." };
+  }
+  
+  // 2. Check Address Block (check all meal addresses + profile address)
+  for (let b of blocklist) {
+    if (b.type === "address") {
+      const bval = b.value;
+      const pAddr = String(profile.area || "").toLowerCase();
+      if (pAddr.includes(bval) || String(profile.society || "").toLowerCase().includes(bval) || String(profile.flat || "").toLowerCase().includes(bval)) {
+         return { error: "We are currently unable to accept orders for this address/account." };
+      }
+      for (let o of orders) {
+        for (let m of (o.meals || [])) {
+          const mArea = String(m.area || "").toLowerCase();
+          const mSoc = String(m.society || "").toLowerCase();
+          const mFlat = String(m.flat || "").toLowerCase();
+          if (mArea.includes(bval) || mSoc.includes(bval) || mFlat.includes(bval)) {
+            return { error: "We are currently unable to accept orders for this address/account." };
+          }
+        }
+      }
+    }
+  }   // [{date, meals:[{type,items,notes,subtotal,area}]}]
 
   const submittedAt  = getISTTimestamp();
   let   payMethod    = body.payment_method  || "UPI";
