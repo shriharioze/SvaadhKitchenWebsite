@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.11";
+    const APP_VERSION = "v26.09.03.12";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8514,11 +8514,27 @@
     // the order-level area, so profile.area (and per-meal areas) reflect it.
     function _orderFulfilmentType() {
       const areas = [];
-      try { if (S.profile && S.profile.area) areas.push(S.profile.area); } catch (_) {}
-      try { ["Breakfast", "Lunch", "Dinner"].forEach(m => { const a = (getMealAddr && getMealAddr(m) || {}).area; if (a) areas.push(a); }); } catch (_) {}
+      try {
+        let datesToCheck = S.selectedDates || [];
+        if (S.bulkActive && typeof BK !== 'undefined' && BK.cart) datesToCheck = Object.keys(BK.cart);
+        
+        datesToCheck.forEach(d => {
+          ["Breakfast", "Lunch", "Dinner"].forEach(m => {
+            let ordered = false;
+            if (S.bulkActive && BK.cart[d] && BK.cart[d][m] > 0) ordered = true;
+            else if (!S.bulkActive && S.orders[d] && S.orders[d][m] && S.orders[d][m].subtotal > 0) ordered = true;
+            
+            if (ordered) {
+              const a = (getMealAddr(m) || {}).area;
+              if (a) areas.push(a);
+            }
+          });
+        });
+      } catch (_) {}
       const norm = areas.map(a => String(a || "").toLowerCase());
       if (norm.some(a => a === "porter")) return "porter";
-      if (norm.some(a => a.indexOf("pickup") !== -1)) return "pickup";
+      if (norm.every(a => a.indexOf("pickup") !== -1)) return "pickup"; // Only return pickup if ALL are pickup!
+      if (norm.some(a => a.indexOf("pickup") !== -1)) return "delivery"; // Mixed -> treat as delivery to be safe
       return "delivery";
     }
     function _soldOutDeliveryMealsInCart() {
@@ -9214,7 +9230,16 @@
       
       // OPTIONAL UX: Only show if the customer actually lives in a society.
       // If they live in an independent house (no society selected), silently skip this modal.
-      const hasSociety = (S.profile && S.profile.society) || (S.mealAddrs && Object.values(S.mealAddrs).some(m => m && m.society));
+      let hasSociety = false;
+      try {
+        if (S.sameAddr) {
+          hasSociety = !!document.getElementById("societyInput")?.value.trim();
+        } else {
+          ["bf", "l", "d"].forEach(pfx => {
+            if (document.getElementById(pfx + "_societyInput")?.value.trim()) hasSociety = true;
+          });
+        }
+      } catch (_) {}
       if (!hasSociety) {
         if (typeof onComplete === "function") onComplete();
         return;
