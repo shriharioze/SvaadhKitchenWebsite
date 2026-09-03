@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.09";
+    const APP_VERSION = "v26.09.03.10";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9191,13 +9191,14 @@
       overlay.innerHTML =
         '<div style="background:#fff;border-radius:20px;max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.3);">' +
           '<div style="font-size:2.4rem;margin-bottom:8px;">🏢</div>' +
-          '<div style="font-size:1.2rem;font-weight:800;color:#0369a1;margin-bottom:12px;">Hassle-Free Delivery</div>' +
+          '<div style="font-size:1.2rem;font-weight:800;color:#0369a1;margin-bottom:4px;">Society Pre-Approval Code</div>' +
+          '<div style="font-size:0.8rem; color:#64748b; margin-bottom:12px; line-height:1.4;"><i>(If your society doesn\'t use an app like MyGate or NoBrokerHood, you can safely skip this step at the bottom)</i></div>' +
           '<div style="font-size:0.85rem;color:#075985;line-height:1.5;text-align:left;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:14px;margin-bottom:16px;">' +
             '<b>Why do this?</b><br>' +
-            '<span style="font-size:0.78rem;">Waiting for gate approvals often delays deliveries by 5-10 minutes. A pre-approval code solves this hassle for both of us—our delivery partner can enter smoothly, and you won\'t be bothered with calls!</span><br><br>' +
-            '<b>How to get your code:</b><br>' +
+            '<span style="font-size:0.78rem;">Gate approvals often delay deliveries by 5-10 minutes. A pre-approval code solves this hassle—our delivery partner can enter smoothly, and you won\'t be bothered with calls!</span><br><br>' +
+            '<b>How to get your code (e.g., MyGate):</b><br>' +
             '<ol style="margin-top:6px; margin-bottom:10px; padding-left:22px;">' +
-              '<li>Open the <b>MyGate</b> app and tap <b>Pre-Approve</b>.</li>' +
+              '<li>Open your society app (like <b>MyGate</b>) and tap <b>Pre-Approve</b>.</li>' +
               '<li>Select <b>Delivery</b> (Allow Once or Frequently).</li>' +
               '<li>Set the <b>Date</b> &amp; <b>Time window</b> (e.g. 8 AM to 10 PM).</li>' +
               '<li>Note the <b>6-digit code</b> and enter it below!</li>' +
@@ -9215,8 +9216,7 @@
             '<input type="text" id="mg6" maxlength="1" style="width:40px;height:48px;text-align:center;font-size:1.2rem;font-weight:800;border:2px solid #ccc;border-radius:8px;background:#fafafa;" pattern="[0-9]*" inputmode="numeric">' +
           '</div>' +
           '<button id="btnSubmitMyGate" style="width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:8px;">Submit Code</button>' +
-          '<div style="font-size:0.78rem; color:#64748b; margin-bottom:4px; line-height:1.4;"><i>(If your building doesn\'t use MyGate, you can safely skip this step)</i></div>' +
-          '<button id="btnSkipMyGate" style="width:100%;padding:10px;border:none;background:transparent;color:#64748b;font-size:0.9rem;cursor:pointer;text-decoration:underline;">Skip for now</button>' +
+                    '<button id="btnSkipMyGate" style="width:100%;padding:10px;border:none;background:transparent;color:#64748b;font-size:0.9rem;cursor:pointer;text-decoration:underline;">Skip for now</button>' +
         '</div>';
       
       document.body.appendChild(overlay);
