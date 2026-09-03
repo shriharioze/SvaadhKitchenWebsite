@@ -141,9 +141,9 @@ function verifyLogin(phone, pin, storefront) {
   const ss = getSpreadsheet();
   
   // CHECK BLOCKLIST
-  const pStr = _normalizePhone(phone);
+  const _chkPhone = _normalizePhone(phone);
   const blocklist = getBlocklist();
-  if (blocklist.some(b => b.type === "phone" && _normalizePhone(b.value) === pStr)) {
+  if (blocklist.some(b => b.type === "phone" && _normalizePhone(b.value) === _chkPhone)) {
     return {success: false, error: "Your account has been temporarily restricted. Please contact support."};
   }
   // SEPARATE BASES: LS customers authenticate against LS_Customers only.
