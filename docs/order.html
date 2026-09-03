@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.10";
+    const APP_VERSION = "v26.09.03.11";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5294,6 +5294,40 @@
           '<button id="upiInfoCloseBtn" style="width:100%;padding:12px;border:none;border-radius:12px;background:#0f766e;color:#fff;font-size:0.92rem;font-weight:700;cursor:pointer;">Done</button>' +
         '</div>';
       document.body.appendChild(overlay);
+
+      // --- DYNAMIC SUGGESTION LOGIC ---
+      try {
+        function _fmt(dStr) {
+          if (!dStr) return "";
+          var d = new Date(dStr);
+          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        }
+        let txt = "";
+        if (S.bulkActive && typeof BK !== 'undefined' && BK.cart) {
+          let dates = Object.keys(BK.cart).sort();
+          if (dates.length > 0) {
+            let f = dates[0];
+            let l = dates[dates.length - 1];
+            let mTypes = new Set();
+            dates.forEach(d => Object.keys(BK.cart[d]).forEach(m => { if(BK.cart[d][m]>0) mTypes.add(m); }));
+            let mStr = Array.from(mTypes).join(", ");
+            if (f === l) txt = "For " + _fmt(f) + " (" + mStr + ")";
+            else txt = "From " + _fmt(f) + " to " + _fmt(l) + " (" + mStr + ")";
+          }
+        } else if (S.date && S.cart) {
+          let mTypes = [];
+          ["Breakfast", "Lunch", "Dinner"].forEach(m => { if(S.cart[m]>0) mTypes.push(m); });
+          if (mTypes.length > 0) {
+            txt = "For " + _fmt(S.date) + " (" + mTypes.join(", ") + ")";
+          }
+        }
+        
+        if (txt) {
+          document.getElementById("myGateSuggestionContainer").innerHTML = '<div style="font-size:0.75rem;color:#92400e;font-weight:700;margin-bottom:8px;background:#fef3c7;padding:8px;border-radius:6px;border:1px solid #fde68a;">💡 Suggestion: Pre-approve ' + txt + '</div>';
+        }
+      } catch(e) {}
+      // --------------------------------
+
       try {
         new QRCode(document.getElementById("upiInfoQr"), { text: upiStr, width: 176, height: 176, correctLevel: QRCode.CorrectLevel.M });
       } catch (e) {}
@@ -9175,7 +9209,7 @@
     // to re-pay or re-order. A manual "Check my orders" button is always available.
     
     // ── MYGATE PRE-APPROVAL ──────────────────────────────
-    function showMyGateModal(onComplete) {
+    function showMyGateModal(onComplete, order_id) {
       if (document.getElementById("myGateModal")) return; // already open
       
       // OPTIONAL UX: Only show if the customer actually lives in a society.
@@ -9197,6 +9231,7 @@
             '<b>Why do this?</b><br>' +
             '<span style="font-size:0.78rem;">Gate approvals often delay deliveries by 5-10 minutes. A pre-approval code solves this hassle—our delivery partner can enter smoothly, and you won\'t be bothered with calls!</span><br><br>' +
             '<b>How to get your code (e.g., MyGate):</b><br>' +
+            '<div id="myGateSuggestionContainer"></div>' +
             '<ol style="margin-top:6px; margin-bottom:10px; padding-left:22px;">' +
               '<li>Open your society app (like <b>MyGate</b>) and tap <b>Pre-Approve</b>.</li>' +
               '<li>Select <b>Delivery</b> (Allow Once or Frequently).</li>' +
@@ -9259,7 +9294,7 @@
         btn.disabled = true;
 
         try {
-          const req = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ _action: 'updateMyGateCode', phone: S.phone, code: codeVal }) });
+          const req = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ _action: 'updateMyGateCode', phone: S.phone, code: codeVal, order_id: order_id || '' }) });
           const res = await req.json();
           if (res.success) {
              toast("MyGate Code saved successfully!");
@@ -9308,7 +9343,7 @@
       document.getElementById("orderVerifyBtn").addEventListener("click", function(){
         stopped = true;
         overlay.remove();
-        showMyGateModal(showManageOrders);
+        showMyGateModal(showManageOrders, placed ? placed.order_id : "");
       });
 
       // What to look for: explicit cart (recovery) or what we just placed (confirm).
