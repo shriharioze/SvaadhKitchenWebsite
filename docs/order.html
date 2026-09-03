@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.06";
+    const APP_VERSION = "v26.09.03.07";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9258,7 +9258,8 @@
         btn.disabled = true;
 
         try {
-          const res = await post({ _action: "updateMyGateCode", phone: S.phone, code: codeVal });
+          const req = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify({ _action: 'updateMyGateCode', phone: S.phone, code: codeVal }) });
+          const res = await req.json();
           if (res.success) {
              toast("MyGate Code saved successfully!");
              closeAndNext();
