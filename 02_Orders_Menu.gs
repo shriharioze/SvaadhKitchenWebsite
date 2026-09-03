@@ -4604,10 +4604,33 @@ function stripLSPrefix(commit) {
 function updateMyGateCode(body) {
   var phone = body.phone;
   var code = body.code;
-  if (!phone) return { success: false, error: "Missing Phone." };
+  var order_id = body.order_id; // from frontend
+  if (!phone) return { success: false, error: 'Missing Phone.' };
   
   var ss = getSpreadsheet();
-  var ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, body.storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var successFlag = false;
+
+  // 1. Update SK_Orders if order_id is provided
+  if (order_id) {
+    var ordWs = (typeof _lsOrdersWs === 'function') ? _lsOrdersWs(ss, body.storefront) : getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    var oHeaders = ordWs.getRange(1, 1, 1, Math.max(1, ordWs.getLastColumn())).getValues()[0];
+    var mgColIdx = oHeaders.indexOf('MyGate_Code');
+    if (mgColIdx === -1) {
+      mgColIdx = oHeaders.length;
+      ordWs.getRange(1, mgColIdx + 1).setValue('MyGate_Code');
+    }
+    
+    var ordRows = getAllRows(ordWs);
+    for (var j = 0; j < ordRows.length; j++) {
+      if (String(ordRows[j].Order_ID) === String(order_id)) {
+        ordWs.getRange(j + 2, mgColIdx + 1).setValue(String(code).trim());
+        successFlag = true;
+      }
+    }
+  }
+
+  // 2. Fallback: Update SK_Customers
+  var ws = (typeof _customersTabFor === 'function') ? _customersTabFor(ss, body.storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   var rows = getAllRows(ws);
   var pStr = _normalizePhone(phone);
   var idx = -1;
@@ -4616,15 +4639,17 @@ function updateMyGateCode(body) {
       idx = i; break;
     }
   }
-  if (idx === -1) return { success: false, error: "Customer not found." };
-  
-  var headers = ws.getRange(1, 1, 1, Math.max(1, ws.getLastColumn())).getValues()[0];
-  var colIdx = headers.indexOf("MyGate_Code");
-  if (colIdx === -1) {
-    colIdx = headers.length; // Append at the very end
-    ws.getRange(1, colIdx + 1).setValue("MyGate_Code");
+  if (idx !== -1) {
+    var headers = ws.getRange(1, 1, 1, Math.max(1, ws.getLastColumn())).getValues()[0];
+    var colIdx = headers.indexOf('MyGate_Code');
+    if (colIdx === -1) {
+      colIdx = headers.length;
+      ws.getRange(1, colIdx + 1).setValue('MyGate_Code');
+    }
+    ws.getRange(idx + 2, colIdx + 1).setValue(String(code).trim());
+    successFlag = true;
   }
   
-  ws.getRange(idx + 2, colIdx + 1).setValue(String(code).trim());
+  if (!successFlag) return { success: false, error: 'Could not find order or customer record.' };
   return { success: true };
 }

@@ -1275,7 +1275,7 @@ function getDriverOrders(date) {
     var sid = String(r.Submission_ID || "");
     var normP = _normalizePhone(r.Phone);
     meals[meal].push({
-      myGateCode:    (custMap[normP] || {}).myGateCode || "",
+      myGateCode:    String(r.MyGate_Code || "") || (custMap[normP] || {}).myGateCode || "",
       submissionId:  sid,
       name:          (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
       phone:         String(r.Phone || ""),
