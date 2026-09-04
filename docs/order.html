@@ -4716,7 +4716,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.03.14";
+    const APP_VERSION = "v26.09.04.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5295,39 +5295,7 @@
         '</div>';
       document.body.appendChild(overlay);
 
-      // --- DYNAMIC SUGGESTION LOGIC ---
-      try {
-        function _fmt(dStr) {
-          if (!dStr) return "";
-          var d = new Date(dStr);
-          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-        }
-        let txt = "";
-        if (S.bulkActive && typeof BK !== 'undefined' && BK.cart) {
-          let dates = Object.keys(BK.cart).sort();
-          if (dates.length > 0) {
-            let f = dates[0];
-            let l = dates[dates.length - 1];
-            let mTypes = new Set();
-            dates.forEach(d => Object.keys(BK.cart[d]).forEach(m => { if(BK.cart[d][m]>0) mTypes.add(m); }));
-            let mStr = Array.from(mTypes).join(", ");
-            if (f === l) txt = "For " + _fmt(f) + " (" + mStr + ")";
-            else txt = "From " + _fmt(f) + " to " + _fmt(l) + " (" + mStr + ")";
-          }
-        } else if (S.date && S.cart) {
-          let mTypes = [];
-          ["Breakfast", "Lunch", "Dinner"].forEach(m => { if(S.cart[m]>0) mTypes.push(m); });
-          if (mTypes.length > 0) {
-            txt = "For " + _fmt(S.date) + " (" + mTypes.join(", ") + ")";
-          }
-        }
-        
-        if (txt) {
-          document.getElementById("myGateSuggestionContainer").innerHTML = '<div style="font-size:0.75rem;color:#92400e;font-weight:700;margin-bottom:8px;background:#fef3c7;padding:8px;border-radius:6px;border:1px solid #fde68a;">💡 Suggestion: Pre-approve ' + txt + '</div>';
-        }
-      } catch(e) {}
-      // --------------------------------
-
+      
       try {
         new QRCode(document.getElementById("upiInfoQr"), { text: upiStr, width: 176, height: 176, correctLevel: QRCode.CorrectLevel.M });
       } catch (e) {}
@@ -9281,6 +9249,60 @@
         '</div>';
       
       document.body.appendChild(overlay);
+
+      // --- DYNAMIC SUGGESTION LOGIC ---
+      try {
+        function _fmt(dStr) {
+          if (!dStr) return "";
+          var d = new Date(dStr);
+          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        }
+        let txt = "";
+        if (S.bulkActive && typeof BK !== 'undefined' && BK.cart) {
+          let dates = Object.keys(BK.cart).sort();
+          if (dates.length > 0) {
+            let f = dates[0];
+            let l = dates[dates.length - 1];
+            let mTypes = new Set();
+            dates.forEach(d => Object.keys(BK.cart[d]).forEach(m => { if(BK.cart[d][m]>0) mTypes.add(m); }));
+            let mStr = Array.from(mTypes).join(", ");
+            if (f === l) txt = "For " + _fmt(f) + (mStr ? " (" + mStr + ")" : "");
+            else txt = "From " + _fmt(f) + " to " + _fmt(l) + (mStr ? " (" + mStr + ")" : "");
+          }
+        } else if (Array.isArray(S.justPlaced) && S.justPlaced.length > 0) {
+          let dates = Array.from(new Set(S.justPlaced.map(j => j.date))).sort();
+          let f = dates[0];
+          let l = dates[dates.length - 1];
+          let mTypes = Array.from(new Set(S.justPlaced.map(j => j.meal)));
+          let mStr = mTypes.join(", ");
+          if (f === l) txt = "For " + _fmt(f) + (mStr ? " (" + mStr + ")" : "");
+          else txt = "From " + _fmt(f) + " to " + _fmt(l) + (mStr ? " (" + mStr + ")" : "");
+        } else if (Array.isArray(S.selectedDates) && S.selectedDates.length > 0 && S.orders) {
+          let dates = S.selectedDates.slice().sort();
+          let f = dates[0];
+          let l = dates[dates.length - 1];
+          let mTypes = new Set();
+          dates.forEach(d => {
+            ["Breakfast", "Lunch", "Dinner"].forEach(m => {
+              if (S.orders[d] && S.orders[d][m] && S.orders[d][m].subtotal > 0) mTypes.add(m);
+            });
+          });
+          let mStr = Array.from(mTypes).join(", ");
+          if (f === l) txt = "For " + _fmt(f) + (mStr ? " (" + mStr + ")" : "");
+          else txt = "From " + _fmt(f) + " to " + _fmt(l) + (mStr ? " (" + mStr + ")" : "");
+        } else if (S.date) {
+          txt = "For " + _fmt(S.date);
+        }
+        
+        if (txt) {
+          const sugEl = document.getElementById("myGateSuggestionContainer");
+          if (sugEl) {
+            sugEl.innerHTML = '<div style="font-size:0.75rem;color:#92400e;font-weight:700;margin-top:6px;margin-bottom:8px;background:#fef3c7;padding:8px 10px;border-radius:6px;border:1px solid #fde68a;display:inline-block;">💡 Suggestion: Pre-approve ' + txt + '</div>';
+          }
+        }
+      } catch(e) { console.error("Error setting MyGate suggestion:", e); }
+      // --------------------------------
+
 
       const inputs = [
         document.getElementById("mg1"), document.getElementById("mg2"), document.getElementById("mg3"),
