@@ -101,12 +101,23 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Society Pre-Approval Code System (MyGate / NoBrokerHood) (CODE_VERSION 35.41 / APP_VERSION v26.09.03.14)**
+  - **Order-Bound Storage Architecture:** Added `MyGate_Code` as the **last column** in `SK_Orders` (`ORDERS_HEADERS` in `00_Config.gs`, index 60, col 61). Preserves 100% backward compatibility with existing sheet positions. PINs are strictly order-bound (not stored in `SK_Customers`) since gate approvals vary per order and validity dates.
+  - **Batch Expansion:** `updateMyGateCode` in `02_Orders_Menu.gs` maps the PIN to all rows of the checkout session (matching by `Submission_ID`, `Gateway_Order_ID`, `Batch_ID`, or sibling rows submitted within 2 minutes for the same phone).
+  - **Dynamic Time & Date Suggestions:** Pre-approval modal dynamically parses the checkout cart (`BK.cart` or `S.orders`/`S.date`) and recommends exact dates & meal intervals (e.g., *"Pre-approve From 4 Sept to 8 Sept (Breakfast, Lunch)"*).
+  - **Conditional UI:** Automatically skipped if the customer did not enter a society name or ordered Self Pickup. Prominent skip button provided at the top for non-gated society residents.
+  - **Driver Surface:** `docs/Admin/driver.html` via `getDriverOrders` in `03_Admin_Kitchen.gs` displays the order-specific `MyGate_Code` badge for delivery drivers.
+  - **Fulfillment Detection Fix:** Fixed false-positive "Self Pickup" completion states caused by stale `S.profile.area` cache when ordering delivery in multi-address mode.
 - **Stop Accepting Orders - Restricted Area Toggle (CODE_VERSION 35.22 / APP_VERSION v26.09.02.06)**
   - Added a new 3-way select dropdown in the admin dashboard under "Stop Accepting Orders".
   - States: "Open", "Closed Completely", and "Except Bhosale/Triveni".
   - When restricted, only customers with delivery addresses in Bhosale Nagar or Triveni Nagar (or who choose Self Pickup / Porter) are allowed to order. Everyone else sees the meal as "Not Accepting Orders".
   - Implemented client-side filtering in `docs/order.html` and authoritative backend validation in `02_Orders_Menu.gs` (`_ordersClosedW`).
+- **Gateway Partial Refund Over-Allocation Guard (HDFC/Juspay):**
+  - Clarified and verified cancellation refund constraints: HDFC/Juspay rejects refunds exceeding `total_charged - prior_refunds` with `400 Invalid request params`.
+  - Same-day multi-meal cancellations across shared gateway payments must respect cumulative balance caps to avoid over-refunding beyond the transaction total.
 - **Bug Fixes:**
+  - Fixed live verification modal transition where an out-of-scope variable reference prevented the completion modal from rendering.
   - Removed restrictive validKeys filter in submitOrder that caused empty Items_JSON and blank item columns for Gateway (HDFC) breakfast/lunch/dinner orders (v35.21).
   - Hid Past Dues Recovery UI for On-Account customers since they do not pay upfront.
 - **Features:**
@@ -117,4 +128,6 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 ## Where the deep documentation lives
 - `git log` — every commit message is a full incident/design writeup. Start any investigation with `git log --oneline -15`.
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
-\n### Billing & On-Account\n- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 10th of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.\n
+
+### Billing & On-Account
+- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 10th of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.
