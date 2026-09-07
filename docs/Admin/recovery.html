@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scale=no">
+<title>Svaadh — Order Recovery</title>
+<style>
+  :root {
+    --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #252525;
+    --border: #333; --text: #e8e8e8; --text2: #999;
+    --accent: #4CAF50; --accent-hover: #45a049;
+    --danger: #e74c3c; --warn: #f39c12; --info: #3498db;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100dvh; padding: 12px;
+  }
+  .container { max-width: 600px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center; padding: 16px 0 8px;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header p { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  /* Input area */
+  .input-section {
+    background: var(--surface); border-radius: 12px;
+    padding: 16px; margin: 12px 0;
+    border: 1px solid var(--border);
+  }
+  .input-section label {
+    font-size: 13px; font-weight: 600; color: var(--text2);
+    display: block; margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%; min-height: 120px; max-height: 300px;
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; font-size: 13px; font-family: monospace;
+    resize: vertical; line-height: 1.4;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  textarea::placeholder { color: #555; }
+
+  /* Buttons */
+  .btn {
+    display: block; width: 100%; padding: 14px;
+    border: none; border-radius: 10px; font-size: 15px;
+    font-weight: 600; cursor: pointer;
+    transition: all 0.2s; margin-top: 12px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-parse { background: var(--info); color: #fff; }
+  .btn-parse:hover { background: #2980b9; }
+  .btn-submit { background: var(--accent); color: #fff; }
+  .btn-submit:hover { background: var(--accent-hover); }
+  .btn-submit:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn-clear { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+
+  /* Preview card */
+  .preview {
+    background: var(--surface); border-radius: 12px;
+    padding: 16px; margin: 12px 0;
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .preview.show { display: block; }
+  .preview h3 { font-size: 14px; margin-bottom: 12px; color: var(--accent); }
+
+  .info-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0; font-size: 13px;
+    border-bottom: 1px solid var(--surface2);
+  }
+  .info-row .label { color: var(--text2); }
+  .info-row .value { font-weight: 600; text-align: right; max-width: 60%; }
+
+  .meal-card {
+    background: var(--surface2); border-radius: 8px;
+    padding: 10px 12px; margin: 8px 0;
+  }
+  .meal-card .meal-header {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .meal-card .item-line {
+    font-size: 12px; color: var(--text2); padding: 2px 0;
+  }
+  .meal-card .subtotal {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    margin-top: 4px; text-align: right;
+  }
+
+  /* Status messages */
+  .status {
+    padding: 12px 16px; border-radius: 10px; margin: 12px 0;
+    font-size: 13px; display: none; line-height: 1.5;
+  }
+  .status.show { display: block; }
+  .status.error { background: rgba(231,76,60,0.15); color: #e74c3c; border: 1px solid rgba(231,76,60,0.3); }
+  .status.success { background: rgba(76,175,80,0.15); color: #4CAF50; border: 1px solid rgba(76,175,80,0.3); }
+  .status.warn { background: rgba(243,156,18,0.15); color: #f39c12; border: 1px solid rgba(243,156,18,0.3); }
+  .status.info { background: rgba(52,152,219,0.15); color: #3498db; border: 1px solid rgba(52,152,219,0.3); }
+
+  /* Spinner */
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+
+  /* Admin PIN */
+  .pin-section {
+    background: var(--surface); border-radius: 12px;
+    padding: 16px; margin: 12px 0;
+    border: 1px solid var(--border);
+  }
+  .pin-input {
+    width: 100%; padding: 12px; font-size: 16px;
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    text-align: center; letter-spacing: 8px;
+  }
+  .pin-input:focus { outline: none; border-color: var(--accent); }
+
+  /* Help text */
+  .help {
+    font-size: 11px; color: var(--text2); margin-top: 8px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🔧 Order Recovery</h1>
+    <p>Paste a missed order log row → Preview → Submit</p>
+  </div>
+
+  <!-- PIN Section -->
+  <div class="pin-section" id="pinSection">
+    <label for="pinInput" style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:8px;">Admin PIN</label>
+    <input type="password" inputmode="numeric" id="pinInput" class="pin-input" maxlength="10" placeholder="••••">
+    <button class="btn btn-parse" onclick="verifyPin()" style="margin-top:12px">Unlock</button>
+  </div>
+
+  <!-- Main UI (hidden until PIN verified) -->
+  <div id="mainUI" style="display:none">
+
+    <!-- Input -->
+    <div class="input-section">
+      <label>Paste the log row from SK_Order_Log</label>
+      <textarea id="rawInput" placeholder="Paste the full row here — tab-separated columns with JSON..."></textarea>
+      <p class="help">
+        💡 Copy the entire row from Google Sheets (timestamp, phone, name, order ID, JSON, status).
+        All formats supported — doubled quotes, wrapped quotes, raw JSON.
+      </p>
+      <button class="btn btn-parse" onclick="parseInput()">🔍 Parse & Preview</button>
+    </div>
+
+    <!-- Status -->
+    <div class="status" id="statusBox"></div>
+
+    <!-- Preview -->
+    <div class="preview" id="previewBox">
+      <h3>📦 Order Preview</h3>
+      <div id="previewContent"></div>
+      <button class="btn btn-submit" id="submitBtn" onclick="submitRecovery()">🚀 Submit Recovery</button>
+      <button class="btn btn-clear" onclick="clearAll()" style="margin-top:8px">Clear & Start Over</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
+let parsedBody = null;
+let adminPin = "";
+
+// ─── PIN Verification ────────────────────────────────
+function verifyPin() {
+  const pin = document.getElementById("pinInput").value.trim();
+  if (!pin) { showStatus("Enter your admin PIN.", "error"); return; }
+  adminPin = pin;
+  // Quick verify against the backend
+  showStatus('<span class="spinner"></span> Verifying...', "info");
+  fetch(ENDPOINT + "?action=getAdminData&pin=" + encodeURIComponent(pin))
+    .then(r => r.json())
+    .then(d => {
+      if (d.error && /pin|auth|denied/i.test(d.error)) {
+        showStatus("❌ Invalid PIN.", "error");
+        adminPin = "";
+      } else {
+        document.getElementById("pinSection").style.display = "none";
+        document.getElementById("mainUI").style.display = "block";
+        hideStatus();
+      }
+    })
+    .catch(() => {
+      // Can't verify — let them through, submitOrder will fail if wrong
+      document.getElementById("pinSection").style.display = "none";
+      document.getElementById("mainUI").style.display = "block";
+      hideStatus();
+    });
+}
+
+// ─── JSON Healing ────────────────────────────────────
+function healJSON(raw) {
+  let s = raw.trim();
+
+  // Strip outer wrapping quotes
+  if ((s.startsWith('"{') && s.endsWith('}"')) ||
+      (s.startsWith("'{") && s.endsWith("}'")) ) {
+    s = s.slice(1, -1);
+  }
+
+  // Attempt 0: as-is
+  try { return JSON.parse(s); } catch(_) {}
+
+  // Attempt 1: Google Sheets doubled quotes → single
+  // Protect empty strings first
+  let h = s.replace(/:""/g, ':__EMPTY__')
+           .replace(/"",/g, '__EMPTY__,')
+           .replace(/""\}/g, '__EMPTY__}')
+           .replace(/""\]/g, '__EMPTY__]');
+  h = h.replace(/""/g, '"');
+  h = h.replace(/__EMPTY__/g, '""');
+  // Fix boundary quotes
+  if (h.startsWith('"') && !h.startsWith('{"')) h = h.slice(1);
+  if (h.endsWith('"') && !h.endsWith('"}'))   h = h.slice(0, -1);
+  try { return JSON.parse(h); } catch(_) {}
+
+  // Attempt 2: Brute force replace all "" → "
+  let h2 = s.replace(/""/g, '"');
+  if (h2.startsWith('"') && !h2.startsWith('{"')) h2 = h2.slice(1);
+  if (h2.endsWith('"') && !h2.endsWith('"}'))   h2 = h2.slice(0, -1);
+  try { return JSON.parse(h2); } catch(_) {}
+
+  // Attempt 3: Strip meal_addresses (JSON-in-JSON) and retry
+  for (const base of [s, h, h2]) {
+    const stripped = base.replace(
+      /"meal_addresses"\s*:\s*"[^"]*(?:"[^"]*)*"(?=\s*[,}])/,
+      '"meal_addresses":""'
+    );
+    if (stripped !== base) {
+      try { return JSON.parse(stripped); } catch(_) {}
+    }
+  }
+
+  return null;
+}
+
+// ─── Parse Input ─────────────────────────────────────
+function parseInput() {
+  const raw = document.getElementById("rawInput").value.trim();
+  if (!raw) { showStatus("❌ Paste the log row first.", "error"); return; }
+
+  // Find JSON in the text
+  const jMatch = raw.match(/(\{[\s\S]*\})/);
+  if (!jMatch) {
+    showStatus("❌ No JSON found. Make sure you pasted the full log row with the {...} payload.", "error");
+    return;
+  }
+
+  const stash = healJSON(jMatch[1]);
+  if (!stash) {
+    showStatus("❌ Could not parse JSON even after healing. Make sure you copied the full row.", "error");
+    return;
+  }
+
+  // Extract order ID
+  const idMatch = raw.match(/\b((?:SK|LS)\d{6}[A-Za-z0-9]+)\b/);
+  let orderId = idMatch ? idMatch[1] : "";
+  if (!orderId) orderId = stash.order_id || stash.gateway_order_id || stash.orderId || "";
+  if (!orderId) {
+    showStatus("❌ No order ID found (e.g. SK260907...). Check the pasted data.", "error");
+    return;
+  }
+
+  const profile = stash.profile || {};
+  const ordersByDate = stash.orders || {};
+  const selectedDates = stash.selectedDates || Object.keys(ordersByDate);
+  const mealAddrs = stash.mealAddrs || {};
+
+  // Build orders array
+  const orders = [];
+  for (const date of selectedDates) {
+    const dayOrders = ordersByDate[date];
+    if (!dayOrders) continue;
+    const meals = [];
+    for (const meal of ["Breakfast", "Lunch", "Dinner"]) {
+      const m = dayOrders[meal];
+      if (!m || parseFloat(m.subtotal || 0) <= 0) continue;
+
+      const itemsArr = [];
+      for (const [k, v] of Object.entries(m.items || {})) {
+        const qty = parseFloat(v);
+        if (qty > 0) itemsArr.push({ colKey: k, qty });
+      }
+      if (!itemsArr.length) continue;
+
+      const ma = mealAddrs[meal] || {};
+      const area = (m.area || ma.area || profile.area || "").trim();
+      const isPickup = /pickup/i.test(area);
+
+      const wing    = isPickup ? "" : (m.wing || ma.wing || profile.wing || "").toString();
+      const flat    = isPickup ? "" : (m.flat || ma.flat || profile.flat || "").toString();
+      const floor   = isPickup ? "" : (m.floor || ma.floor || profile.floor || "").toString();
+      const society = isPickup ? "" : (m.society || ma.society || profile.society || "").toString();
+      const delPt   = (m.delivery_point || ma.delivery_point || profile.delivery_point || "").toString();
+      const maps    = isPickup ? "" : (m.maps || ma.maps || profile.maps || "").toString();
+      const landmark = isPickup ? "" : (m.landmark || ma.landmark || profile.landmark || "").toString();
+
+      let address = "Self Pickup";
+      if (!isPickup) {
+        const parts = [];
+        if (wing) parts.push("Wing " + wing);
+        if (flat) parts.push("Flat " + flat);
+        if (floor) parts.push(floor.toLowerCase().endsWith("floor") ? floor : floor + " Floor");
+        if (society) parts.push(society);
+        if (area) parts.push(area);
+        address = parts.join(", ");
+      }
+
+      meals.push({
+        type: meal, items: itemsArr,
+        notesKitchen: m.notesKitchen || "", notesDelivery: m.notesDelivery || "",
+        subtotal: parseFloat(m.subtotal || 0),
+        area: isPickup ? "Self Pickup" : area,
+        wing, flat, floor, society,
+        delivery_point: delPt, maps, landmark, address
+      });
+    }
+    if (meals.length) orders.push({ date, meals });
+  }
+
+  if (!orders.length) {
+    showStatus("❌ No valid meals found in the JSON.", "error");
+    return;
+  }
+
+  const isSplit = stash.payment_choice === "Split";
+  const walletApplied = isSplit ? parseFloat(stash.wallet_applied || stash.wallet_hint || 0) : 0;
+
+  parsedBody = {
+    action: "submitOrder",
+    profile: {
+      name: profile.name || "Customer",
+      phone: stash.phone || profile.phone || "",
+      wing: profile.wing || "",
+      flat: (profile.flat || "").toString(),
+      floor: (profile.floor || "").toString(),
+      society: profile.society || "",
+      area: profile.area || "",
+      maps: profile.maps || "",
+      landmark: profile.landmark || "",
+      meal_addresses: profile.meal_addresses || JSON.stringify(mealAddrs),
+      payment_preference: profile.payment_preference || "Daily Payment",
+      isFirstTime: !!stash.isFirstTime
+    },
+    orders,
+    storefront: stash.storefront || "",
+    payment_method: isSplit ? "Split (HDFC)" : "Gateway (HDFC)",
+    payment_status: "Paid",
+    wallet_credit: walletApplied,
+    gateway_order_id: orderId,
+    confirm_duplicate: true
+  };
+
+  // Render preview
+  renderPreview(orderId, parsedBody);
+  showStatus("✅ Parsed successfully! Review below and submit.", "success");
+}
+
+// ─── Render Preview ──────────────────────────────────
+function renderPreview(orderId, body) {
+  const total = body.orders.reduce((s, o) => s + o.meals.reduce((ms, m) => ms + m.subtotal, 0), 0);
+  const mealCount = body.orders.reduce((s, o) => s + o.meals.length, 0);
+
+  let html = '';
+  html += infoRow("Order ID", orderId);
+  html += infoRow("Customer", body.profile.name);
+  html += infoRow("Phone", body.profile.phone);
+  html += infoRow("Area", body.profile.area);
+  html += infoRow("Total", "₹" + total.toFixed(0));
+  html += infoRow("Meals", mealCount + " across " + body.orders.length + " day(s)");
+
+  for (const o of body.orders) {
+    for (const ml of o.meals) {
+      html += '<div class="meal-card">';
+      html += '<div class="meal-header">' + o.date + ' — ' + ml.type + '</div>';
+      for (const it of ml.items) {
+        html += '<div class="item-line">' + it.colKey + ' × ' + it.qty + '</div>';
+      }
+      html += '<div class="subtotal">₹' + ml.subtotal.toFixed(0) + '</div>';
+      html += '</div>';
+    }
+  }
+
+  document.getElementById("previewContent").innerHTML = html;
+  document.getElementById("previewBox").classList.add("show");
+}
+
+function infoRow(label, value) {
+  return '<div class="info-row"><span class="label">' + label + '</span><span class="value">' + value + '</span></div>';
+}
+
+// ─── Submit ──────────────────────────────────────────
+function submitRecovery() {
+  if (!parsedBody) { showStatus("❌ Parse an order first.", "error"); return; }
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Submitting...';
+  showStatus('<span class="spinner"></span> Sending to backend...', "info");
+
+  fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(parsedBody),
+    redirect: "follow"
+  })
+  .then(r => r.text())
+  .then(text => {
+    btn.disabled = false;
+    btn.textContent = "🚀 Submit Recovery";
+
+    let resp;
+    try { resp = JSON.parse(text); } catch(_) { resp = null; }
+
+    if (resp && resp.duplicate_detected) {
+      showStatus("⚠️ DUPLICATE — This order already exists. No action taken.", "warn");
+    } else if (resp && (resp.success || resp.submissionId)) {
+      const sid = resp.submissionId || "";
+      const gt = resp.grand_total != null ? " • ₹" + resp.grand_total : "";
+      const rows = resp.rows_written != null ? " • " + resp.rows_written + " rows" : "";
+      showStatus("✅ Order recovered! " + sid + gt + rows, "success");
+      // Disable re-submit
+      btn.disabled = true;
+      btn.textContent = "✅ Submitted";
+    } else {
+      showStatus("❌ Submission failed.\n" + text.substring(0, 300), "error");
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.textContent = "🚀 Submit Recovery";
+    showStatus("❌ Network error: " + err.message, "error");
+  });
+}
+
+// ─── Helpers ─────────────────────────────────────────
+function showStatus(msg, type) {
+  const box = document.getElementById("statusBox");
+  box.className = "status show " + type;
+  box.innerHTML = msg;
+}
+function hideStatus() {
+  document.getElementById("statusBox").className = "status";
+}
+function clearAll() {
+  document.getElementById("rawInput").value = "";
+  document.getElementById("previewBox").classList.remove("show");
+  parsedBody = null;
+  hideStatus();
+}
+
+// Auto-focus
+document.getElementById("pinInput").focus();
+</script>
+</body>
+</html>
