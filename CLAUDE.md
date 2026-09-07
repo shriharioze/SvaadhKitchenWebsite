@@ -35,6 +35,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 - `docs/Liviano-Serio.html` — LS storefront clone. LS-specific: `STOREFRONT="LS"` injected into every POST by `apiPost`; LS-prefixed gateway ids; `_lsApplyAddressLocks`-era helpers `_lsSocietyForWing/_lsSyncSociety/_lsPinSocietyInputs` (area=Kharadi locked, wing dropdown A–G2, society auto Liviano/Serio); free-delivery UI; Breakfast removed; LS texts in guide/FAQ/JSON-LD; `&storefront=LS` on all GET identity/order/wallet calls.
 - `docs/order-chat.js` — help-chat widget (shared). `IS_LS` gates chips/greeting; Gemini messages prefixed with LS_CONTEXT; main-page behavior unchanged.
 - `docs/Admin/vault_admin.html` — master admin panel ([LS] badge via `c.ls`/`o.ls`; APP_VERSION marker; Analytics tab clickable Pending KPI card + pending customers & orders drilldown modal with individual and bulk "Mark as Paid"; inventory, expense tracking, staff payroll).
+- `docs/Admin/recovery.html` — mobile-friendly order recovery tool (admin PIN protected, multi-stage JSON healing for Google Sheets doubled quotes, item preview, Gateway_Order_ID replay guard).
 - `docs/Admin/kitchen.html` — ops surfaces (LS rows included server-side). 5-min auto-refresh without intrusive reload on tab switch. Label tab `getBulkItemSummary` mirrors backend `_lblItemSummary` (Items_JSON-first); LABEL_MR/EN extended (full breakfast menu, Devanagari + codes). Kitchen notes intentionally not on labels. Automatic silent version refresh.
 - `docs/Admin/driver.html` — ops surface (LS rows included server-side; WhatsApp SVG + native SMS buttons).
 - `docs/intentamplify.html` + `docs/Admin/ia_admin.html` — IA corporate channel storefront and admin.
@@ -101,6 +102,16 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Order Audit Hardening & Spam Prevention (CODE_VERSION 35.43 & 35.44)**
+  - **36-Hour Operational Live Window:** `auditLostGatewayOrders` 10-minute live audit (`monthsBack === 0`) now checks only the last 36 hours of webhooks instead of 7 days, eliminating recurring false-positive alerts on older unrecoverable webhooks. The nightly deep audit (`monthsBack === 1`) retains the 7-day lookback.
+  - **Fuzzy Header Matching & Deep Cell Scans:** Normalized header detection (`norm === "gatewayorderid" || norm === "gatewayid"`) across `ordHeader` and `missH`, plus fallback regex scanning (`/^(SK|LS)\d{6}[A-Za-z0-9]+/`) across `SK_Missed_Orders` and `Archive_Missed_Orders_YYYY` so logged/archived orders are never reported as missing.
+  - **24-Hour CacheService Alert Deduplication:** Alert emails are throttled by `missed_alert_<OID>` cache key (86400s TTL), ensuring any single order ID sends at most one email alert per 24 hours even during edge-case sync delays.
+  - **Authoritative Gateway Replay Guard:** Added pre-flight check in `_submitOrderInternal` (submitOrder) verifying `Gateway_Order_ID`. If active non-cancelled rows already exist for that gateway ID, returns `{ success: false, duplicate_detected: true }` and halts without writing duplicate rows.
+- **Mobile-Friendly Order Recovery Tool (`docs/Admin/recovery.html`)**
+  - Web UI for mobile browsers (www.svaadhkitchen.in/Admin/recovery.html) to recover missed orders from `SK_Order_Log` stash rows without Google Colab, Python, or a laptop.
+  - Features: Admin PIN unlock, robust JSON healing (strips wrapping quotes, fixes `""` doubled quotes from Google Sheets exports, safely handles nested `meal_addresses`), full line-item preview, and double-run replay protection.
+- **Dal Fry Admin Quick-Edit Pricing Parity (`docs/Admin/vault_admin.html` v26.09.07.01)**
+  - Added Dal Fry to `GLOBAL_STAPLE_PRICES` (base ₹37, V2 = ₹40) and mapped `L_DAL_FRY`/`D_DAL_FRY` in `colKeyToDisplayName` to fix manual quick-edit fallback mispricing (was falling back to ₹24 as a generic mini sabji).
 - **Society Pre-Approval Code System (MyGate / NoBrokerHood) (CODE_VERSION 35.41 / APP_VERSION v26.09.03.14)**
   - **Order-Bound Storage Architecture:** Added `MyGate_Code` as the **last column** in `SK_Orders` (`ORDERS_HEADERS` in `00_Config.gs`, index 60, col 61). Preserves 100% backward compatibility with existing sheet positions. PINs are strictly order-bound (not stored in `SK_Customers`) since gate approvals vary per order and validity dates.
   - **Batch Expansion:** `updateMyGateCode` in `02_Orders_Menu.gs` maps the PIN to all rows of the checkout session (matching by `Submission_ID`, `Gateway_Order_ID`, `Batch_ID`, or sibling rows submitted within 2 minutes for the same phone).
