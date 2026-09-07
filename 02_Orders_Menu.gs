@@ -1567,7 +1567,12 @@ function auditLostGatewayOrders(monthsBack) {
   const ordWs      = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
   const ordLastRow = ordWs.getLastRow();
   const ordHeader  = ordWs.getRange(1, 1, 1, ordWs.getLastColumn()).getValues()[0] || [];
-  const gCol       = ordHeader.indexOf("Gateway_Order_ID");
+  let gCol = -1;
+  for (let c = 0; c < ordHeader.length; c++) {
+    const norm = String(ordHeader[c] || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+    if (norm === "gatewayorderid" || norm === "gatewayid") { gCol = c; break; }
+  }
+  if (gCol === -1) gCol = ordHeader.indexOf("Gateway_Order_ID");
   const inOrders   = new Set();
   if (gCol !== -1 && ordLastRow > 1) {
     const gVals = ordWs.getRange(2, gCol + 1, ordLastRow - 1, 1).getValues();
@@ -2101,6 +2106,31 @@ function _submitOrderInternal(body) {
   // pages. LS orders consume 0 delivery slots, so cap counting on the SK path
   // is unaffected (LS path skips caps entirely below).
   const allOrderRows  = getAllRows(ordersWs);
+
+  // ── GATEWAY ORDER ID DEDUPLICATION (Replay / Double-Run Guard) ──────────
+  // A Gateway_Order_ID from HDFC SmartGateway is globally unique per transaction.
+  // If an active order row with this Gateway_Order_ID ALREADY exists in the orders sheet,
+  // this is a duplicate or replay attempt (e.g. recovery tool double-run, webhook retry).
+  // Block it authoritatively to prevent duplicate row writes.
+  const _gwId = String(body.gateway_order_id || "").trim();
+  if (_gwId && body.force_recreate !== true) {
+    const _existingGw = allOrderRows.find(r => {
+      if (_isOrderCancelled(r.Payment_Status)) return false;
+      return String(r.Gateway_Order_ID || "").trim() === _gwId;
+    });
+    if (_existingGw) {
+      console.warn("Gateway order " + _gwId + " already exists in sheet (sid=" + _existingGw.Submission_ID + ") — rejecting duplicate submission.");
+      return {
+        success: false,
+        duplicate_detected: true,
+        error: "Order with Gateway ID " + _gwId + " already exists in the system (Order ID: " + _existingGw.Submission_ID + "). No duplicate rows were created.",
+        existing_submission_id: _existingGw.Submission_ID,
+        submissionId: _existingGw.Submission_ID,
+        replayed: true
+      };
+    }
+  }
+
   const walletWsRef   = _walletTabFor(ss, _sf);   // LS orders draw from LS_Wallet
   const allWalletRows = getAllRows(walletWsRef);
   // Menu rows read once here — reused by stock check below (avoids duplicate sheet fetch)

@@ -346,6 +346,7 @@ function parseInput() {
 
   parsedBody = {
     action: "submitOrder",
+    request_id: "rec_" + orderId,
     profile: {
       name: profile.name || "Customer",
       phone: stash.phone || profile.phone || "",
@@ -386,6 +387,7 @@ function renderPreview(orderId, body) {
   html += infoRow("Area", body.profile.area);
   html += infoRow("Total", "₹" + total.toFixed(0));
   html += infoRow("Meals", mealCount + " across " + body.orders.length + " day(s)");
+  html += infoRow("Protection", "🛡️ Replay Guard Active (No duplicates if run twice)");
 
   for (const o of body.orders) {
     for (const ml of o.meals) {
@@ -401,6 +403,10 @@ function renderPreview(orderId, body) {
 
   document.getElementById("previewContent").innerHTML = html;
   document.getElementById("previewBox").classList.add("show");
+  // Ensure submit button is active
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = false;
+  btn.textContent = "🚀 Submit Recovery";
 }
 
 function infoRow(label, value) {
@@ -431,15 +437,18 @@ function submitRecovery() {
     try { resp = JSON.parse(text); } catch(_) { resp = null; }
 
     if (resp && resp.duplicate_detected) {
-      showStatus("⚠️ DUPLICATE — This order already exists. No action taken.", "warn");
+      const sid = resp.existing_submission_id || resp.submissionId || "";
+      showStatus("⚠️ DUPLICATE ORDER: Gateway order " + (parsedBody.gateway_order_id || "") + " ALREADY exists in the system (Order ID: <b>" + sid + "</b>).<br>No duplicate rows were created.", "warn");
+      btn.disabled = true;
+      btn.textContent = "⚠️ Already Exists (" + sid + ")";
     } else if (resp && (resp.success || resp.submissionId)) {
       const sid = resp.submissionId || "";
       const gt = resp.grand_total != null ? " • ₹" + resp.grand_total : "";
       const rows = resp.rows_written != null ? " • " + resp.rows_written + " rows" : "";
-      showStatus("✅ Order recovered! " + sid + gt + rows, "success");
+      showStatus("✅ Order successfully recovered! " + sid + gt + rows, "success");
       // Disable re-submit
       btn.disabled = true;
-      btn.textContent = "✅ Submitted";
+      btn.textContent = "✅ Submitted (" + sid + ")";
     } else {
       showStatus("❌ Submission failed.\n" + text.substring(0, 300), "error");
     }
