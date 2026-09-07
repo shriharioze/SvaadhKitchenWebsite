@@ -1594,12 +1594,41 @@ function auditLostGatewayOrders(monthsBack) {
   // (2) Already-logged in SK_Missed_Orders (so re-runs don't duplicate)
   const missWs   = getOrCreateTab(ss, TAB_MISSED_ORDERS, MISSED_ORDERS_HEADERS);
   const missData = missWs.getDataRange().getValues();
-  const missGCol = (missData[0] || []).indexOf("Gateway_Order_ID");
-  const alreadyLogged = new Set();
-  if (missGCol !== -1) for (let r = 1; r < missData.length; r++) {
-    const v = String(missData[r][missGCol] || "").trim();
-    if (v) alreadyLogged.add(v);
+  const missH    = (missData[0] || []).map(function(h) { return String(h || "").trim(); });
+  let missGCol   = -1;
+  for (let c = 0; c < missH.length; c++) {
+    const norm = missH[c].toLowerCase().replace(/[\s_-]+/g, "");
+    if (norm === "gatewayorderid" || norm === "gatewayid") { missGCol = c; break; }
   }
+  if (missGCol === -1 && missH.length > 3) missGCol = 3; // default index 3 per MISSED_ORDERS_HEADERS
+
+  const alreadyLogged = new Set();
+  for (let r = 1; r < missData.length; r++) {
+    if (missGCol !== -1) {
+      const v = String(missData[r][missGCol] || "").trim();
+      if (v) alreadyLogged.add(v);
+    }
+    // Deep fallback: if the gateway ID is anywhere in this row, mark it logged
+    for (let c = 0; c < missData[r].length; c++) {
+      const cellVal = String(missData[r][c] || "").trim();
+      if (/^(SK|LS)\d{6}[A-Za-z0-9]+/.test(cellVal)) alreadyLogged.add(cellVal);
+    }
+  }
+
+  // Also check year-wise archive missed order tabs so archived entries don't re-trigger alerts
+  try {
+    const curYear = new Date().getFullYear();
+    const archMissWs = ss.getSheetByName("Archive_Missed_Orders_" + curYear);
+    if (archMissWs && archMissWs.getLastRow() > 1) {
+      const aData = archMissWs.getDataRange().getValues();
+      for (let r = 1; r < aData.length; r++) {
+        for (let c = 0; c < aData[r].length; c++) {
+          const val = String(aData[r][c] || "").trim();
+          if (/^(SK|LS)\d{6}[A-Za-z0-9]+/.test(val)) alreadyLogged.add(val);
+        }
+      }
+    }
+  } catch (_) {}
 
   // (3) Gather webhook data sources: LIVE log + each recent month's archive file.
   const sources = [];
@@ -1615,12 +1644,9 @@ function auditLostGatewayOrders(monthsBack) {
   }
 
   // (4) Scan every source for CHARGED gateway orders missing from SK_Orders.
-  // WINDOW: only webhooks from the last 7 days. The existence check above reads the
-  // LIVE SK_Orders only — once a month's ORDER rows are archived out (monthly archive
-  // run), every older webhook would look "missing" and spam the admin (the 11-Jul
-  // June flood). A genuinely lost order is caught within minutes by the 10-min live
-  // audit, so a week of lookback is ample; anything older is history, not an alert.
-  const AUDIT_WINDOW_MS = 7 * 24 * 3600 * 1000;
+  // WINDOW: Live 10-min audit (monthsBack === 0) only scans the active 36-hour operational window.
+  // Nightly deep audit (monthsBack > 0) uses the full 7-day window.
+  const AUDIT_WINDOW_MS = (monthsBack === 0) ? (36 * 3600 * 1000) : (7 * 24 * 3600 * 1000);
   const now  = Date.now();
   const seen = {}; // order_id -> details (dedupe multiple webhooks / sources per order)
   let totalRows = 0;
@@ -1642,7 +1668,7 @@ function auditLostGatewayOrders(monthsBack) {
       const rcv = data[r][rcvCol];
       if (!(rcv instanceof Date)) continue;                          // undated — can't age it, skip
       if ((now - rcv.getTime()) < 5 * 60 * 1000) continue;           // too fresh (still writing)
-      if ((now - rcv.getTime()) > AUDIT_WINDOW_MS) continue;         // outside the 7-day window
+      if ((now - rcv.getTime()) > AUDIT_WINDOW_MS) continue;         // outside the operational window
 
       let amount = 0, name = "", phone = "", status = "";
       try {
@@ -1704,17 +1730,35 @@ function auditLostGatewayOrders(monthsBack) {
 
   // Notify on NEW findings (in addition to the SK_Missed_Orders tab). MailApp scope is
   // narrow + usually granted; if not, this is caught and the tab still has everything.
-  if (newlyLogged > 0) {
+  // DEDUPLICATION: Suppress repeated emails for the same order within 24 hours.
+  const unalertedRows = [];
+  try {
+    const cache = CacheService.getScriptCache();
+    newRows.forEach(function (m) {
+      const cacheKey = "missed_alert_" + m.oid;
+      if (cache && cache.get(cacheKey)) {
+        console.log("Suppressing duplicate missed order email for " + m.oid + " (already alerted within 24h)");
+        return;
+      }
+      if (cache) cache.put(cacheKey, "1", 86400); // 24-hour alert suppression per order ID
+      unalertedRows.push(m);
+    });
+  } catch (_) {
+    newRows.forEach(function(m) { unalertedRows.push(m); });
+  }
+
+  const newlyAlerted = unalertedRows.length;
+  if (newlyAlerted > 0) {
     try {
       const adminEmail = PropertiesService.getScriptProperties().getProperty("ADMIN_EMAIL");
       if (adminEmail) {
-        const body = newlyLogged + " charged gateway order(s) are NOT in SK_Orders "
+        const body = newlyAlerted + " charged gateway order(s) are NOT in SK_Orders "
           + "(logged to the SK_Missed_Orders tab — enter manually):\n\n"
-          + newRows.map(function (m) {
+          + unalertedRows.map(function (m) {
               return "• " + m.oid + " — " + (m.name || "?") + " / " + m.phone + " / ₹" + m.amount
                 + " / " + (m.rcv instanceof Date ? Utilities.formatDate(m.rcv, "Asia/Kolkata", "yyyy-MM-dd") : "");
             }).join("\n");
-        MailApp.sendEmail(adminEmail, "🚨 Svaadh: " + newlyLogged + " paid order(s) missing from SK_Orders", body);
+        MailApp.sendEmail(adminEmail, "🚨 Svaadh: " + newlyAlerted + " paid order(s) missing from SK_Orders", body);
       }
     } catch (e) { console.error("auditLostGatewayOrders email failed: " + e.message); }
   }
