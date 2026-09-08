@@ -186,10 +186,10 @@ function verifyPin() {
   adminPin = pin;
   // Quick verify against the backend
   showStatus('<span class="spinner"></span> Verifying...', "info");
-  fetch(ENDPOINT + "?action=getAdminData&pin=" + encodeURIComponent(pin))
+  fetch(ENDPOINT + "?action=verifyAdminPin&pin=" + encodeURIComponent(pin))
     .then(r => r.json())
     .then(d => {
-      if (d.error && /pin|auth|denied/i.test(d.error)) {
+      if (!d.success) {
         showStatus("❌ Invalid PIN.", "error");
         adminPin = "";
       } else {
@@ -199,7 +199,7 @@ function verifyPin() {
       }
     })
     .catch(() => {
-      // Can't verify — let them through, submitOrder will fail if wrong
+      // Fallback
       document.getElementById("pinSection").style.display = "none";
       document.getElementById("mainUI").style.display = "block";
       hideStatus();
@@ -284,6 +284,36 @@ function parseInput() {
   const selectedDates = stash.selectedDates || Object.keys(ordersByDate);
   const mealAddrs = stash.mealAddrs || {};
 
+  const isSplit = stash.payment_choice === "Split";
+  const walletApplied = isSplit ? parseFloat(stash.wallet_applied || stash.wallet_hint || 0) : 0;
+
+  // Bulk Plan support
+  if (stash.bulk) {
+    parsedBody = {
+      _action: "submitBulkOrder",
+      action: "submitBulkOrder",
+      pin: adminPin,
+      request_id: "rec_" + orderId,
+      plan: stash.bulk.plan,
+      phone: stash.phone || profile.phone || "",
+      profile: profile,
+      storefront: String(stash.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
+      lunch: stash.bulk.lunch || {},
+      dinner: stash.bulk.dinner || {},
+      lunchDates: stash.bulk.lunchDates || [],
+      dinnerDates: stash.bulk.dinnerDates || [],
+      payment_method: isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)",
+      payment_status: "Paid",
+      wallet_applied: walletApplied,
+      gateway_order_id: orderId,
+      batch_id: orderId,
+      confirm_duplicate: true
+    };
+    renderBulkPreview(orderId, parsedBody);
+    showStatus("✅ Parsed Bulk Plan successfully! Review below and submit.", "success");
+    return;
+  }
+
   // Build orders array
   const orders = [];
   for (const date of selectedDates) {
@@ -341,11 +371,10 @@ function parseInput() {
     return;
   }
 
-  const isSplit = stash.payment_choice === "Split";
-  const walletApplied = isSplit ? parseFloat(stash.wallet_applied || stash.wallet_hint || 0) : 0;
-
   parsedBody = {
+    _action: "submitOrder",
     action: "submitOrder",
+    pin: adminPin,
     request_id: "rec_" + orderId,
     profile: {
       name: profile.name || "Customer",
@@ -413,6 +442,41 @@ function infoRow(label, value) {
   return '<div class="info-row"><span class="label">' + label + '</span><span class="value">' + value + '</span></div>';
 }
 
+function renderBulkPreview(orderId, body) {
+  let html = '';
+  html += infoRow("Order ID", orderId);
+  html += infoRow("Customer", body.profile.name || "Customer");
+  html += infoRow("Phone", body.phone);
+  html += infoRow("Type", "⚡ Bulk Plan (" + (body.plan || "") + ")");
+  html += infoRow("Area", body.profile.area || "");
+  html += infoRow("Protection", "🛡️ Replay Guard Active (No duplicates if run twice)");
+
+  const lDates = body.lunchDates || [];
+  const dDates = body.dinnerDates || [];
+  if (lDates.length) {
+    html += '<div class="meal-card"><div class="meal-header">Lunch Plan (' + lDates.length + ' days)</div>';
+    for (const [k, v] of Object.entries(body.lunch || {})) {
+      if (v > 0) html += '<div class="item-line">' + k + ' × ' + v + '</div>';
+    }
+    html += '<div class="item-line" style="color:var(--text2);font-size:12px;margin-top:4px">' + lDates.join(', ') + '</div>';
+    html += '</div>';
+  }
+  if (dDates.length) {
+    html += '<div class="meal-card"><div class="meal-header">Dinner Plan (' + dDates.length + ' days)</div>';
+    for (const [k, v] of Object.entries(body.dinner || {})) {
+      if (v > 0) html += '<div class="item-line">' + k + ' × ' + v + '</div>';
+    }
+    html += '<div class="item-line" style="color:var(--text2);font-size:12px;margin-top:4px">' + dDates.join(', ') + '</div>';
+    html += '</div>';
+  }
+
+  document.getElementById("previewContent").innerHTML = html;
+  document.getElementById("previewBox").classList.add("show");
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = false;
+  btn.textContent = "🚀 Submit Recovery";
+}
+
 // ─── Submit ──────────────────────────────────────────
 function submitRecovery() {
   if (!parsedBody) { showStatus("❌ Parse an order first.", "error"); return; }
@@ -422,33 +486,36 @@ function submitRecovery() {
   btn.innerHTML = '<span class="spinner"></span> Submitting...';
   showStatus('<span class="spinner"></span> Sending to backend...', "info");
 
+  // Ensure current admin PIN is attached
+  if (adminPin) parsedBody.pin = adminPin;
+
   fetch(ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify(parsedBody),
-    redirect: "follow"
+    body: JSON.stringify(parsedBody)
   })
   .then(r => r.text())
   .then(text => {
     btn.disabled = false;
     btn.textContent = "🚀 Submit Recovery";
 
-    let resp;
-    try { resp = JSON.parse(text); } catch(_) { resp = null; }
+    let resp = null;
+    try { resp = JSON.parse(text); } catch(_) {}
 
     if (resp && resp.duplicate_detected) {
       const sid = resp.existing_submission_id || resp.submissionId || "";
       showStatus("⚠️ DUPLICATE ORDER: Gateway order " + (parsedBody.gateway_order_id || "") + " ALREADY exists in the system (Order ID: <b>" + sid + "</b>).<br>No duplicate rows were created.", "warn");
       btn.disabled = true;
       btn.textContent = "⚠️ Already Exists (" + sid + ")";
-    } else if (resp && (resp.success || resp.submissionId)) {
-      const sid = resp.submissionId || "";
-      const gt = resp.grand_total != null ? " • ₹" + resp.grand_total : "";
+    } else if (resp && (resp.success || resp.submissionId || resp.batch_id)) {
+      const sid = resp.submissionId || resp.batch_id || "";
+      const gt = resp.grand_total != null ? " • ₹" + resp.grand_total : (resp.amount != null ? " • ₹" + resp.amount : "");
       const rows = resp.rows_written != null ? " • " + resp.rows_written + " rows" : "";
       showStatus("✅ Order successfully recovered! " + sid + gt + rows, "success");
       // Disable re-submit
       btn.disabled = true;
       btn.textContent = "✅ Submitted (" + sid + ")";
+    } else if (resp && resp.error) {
+      showStatus("❌ Submission error: " + resp.error, "error");
     } else {
       showStatus("❌ Submission failed.\n" + text.substring(0, 300), "error");
     }

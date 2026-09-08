@@ -338,6 +338,10 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
     if (action === "ia_getLabelOrders")    return jsonRes(ia_getLabelOrders(p));
     if (action === "ia_gatewayEnabled")    return jsonRes({ gateway_enabled: PAYMENT_GATEWAY_ENABLED, gateway_env: HDFC_ENV });
 
+    if (action === "submitOrder" || action === "processOrder") {
+      return jsonRes({ error: "submitOrder requires HTTP POST with JSON order payload" });
+    }
+
     return jsonRes({error:"Unknown action or Access Denied"});
   } catch(err) {
     return jsonRes({error: err.message});
@@ -384,7 +388,7 @@ function doPost(e) {
     }
     // ── Normal API actions ─────────────────────────────────────
     const body = JSON.parse(rawBody);
-    const action = body._action || "";
+    const action = body._action || body.action || "";
     const pin = body.pin || "";
     const isAdmin = _pinMatch(pin, ADMIN_PIN) && pin !== "";
     const isStaff = (_pinMatch(pin, KITCHEN_PIN) || _pinMatch(pin, ADMIN_PIN)) && pin !== "";
@@ -781,9 +785,11 @@ function doPost(e) {
     // payload as a regular submission. Route it (and the explicit "submitOrder"
     // name) to submitOrder. Same orders[]-present guard as the no-action path so
     // a malformed payload can't produce the old phantom "success".
-    if ((action === "processOrder" || action === "submitOrder")
-        && Array.isArray(body.orders) && body.orders.length) {
-      return jsonRes(submitOrder(body));
+    if (action === "processOrder" || action === "submitOrder") {
+      if (Array.isArray(body.orders) && body.orders.length) {
+        return jsonRes(submitOrder(body));
+      }
+      return jsonRes({ error: "No orders found in payload for " + action + " (empty or missing orders array)" });
     }
 
     // Bulk weekly / 15-day / month order (bulk-orders branch — not yet on LIVE).
