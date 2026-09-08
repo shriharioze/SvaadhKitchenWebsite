@@ -144,6 +144,8 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
     if (action === "ackLoginNotice") return jsonRes(acknowledgeLoginNotice(p.phone)); // customer taps "I understand" on a login notice
     if (action === "seedDeliveryNotices") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedDeliveryStopNotices(p.commit === "1")); } // seed the 12 delivery-stop login notices (dry-run unless commit=1)
     if (action === "cleanDeliveryAddresses") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(cleanDeliveryStopAddresses(p.commit === "1")); } // clear the 12 affected customers' stale addresses, backed up (dry-run unless commit=1)
+    if (action === "seedCanonicalSocietyAliases") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedCanonicalSocietyAliases(p.commit === "1")); }
+    if (action === "standardizeCustomerAddresses") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(standardizeCustomerAddresses(p.commit === "1")); }
     if (action === "setPin") {
       const profile = { phone: p.phone, pin: p.pin };
   _upsertCustomer(getSpreadsheet(), profile, p.storefront === 'LS' ? 'LS' : '');

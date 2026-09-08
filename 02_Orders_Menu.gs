@@ -651,6 +651,166 @@ function seedAmanoraTowerAliases(commit) {
            plan: plan.slice(0, 80) };
 }
 
+// Seed canonical aliases for major societies (including Heliconia 1 vs Heliconia 2)
+function seedCanonicalSocietyAliases(commit) {
+  const ss = getSpreadsheet();
+  setupSocietyAliasTab();
+  const ws = ss.getSheetByName("SK_Society_Aliases");
+  if (!ws) return { error: "Could not find or create SK_Society_Aliases" };
+
+  const rows = [
+    // Heliconia 1 (Phase 1, ABC / H blocks)
+    ["Heliconia 1", "Heliconia 1"],
+    ["Heliconia-1", "Heliconia 1"],
+    ["Heliconia Phase 1", "Heliconia 1"],
+    ["*heliconia 1", "Heliconia 1"],
+    ["*heliconia-1", "Heliconia 1"],
+    ["*heliconia phase 1", "Heliconia 1"],
+    ["*heliconia1", "Heliconia 1"],
+    
+    // Heliconia 2 (Phase 2)
+    ["Heliconia 2", "Heliconia 2"],
+    ["Heliconia-2", "Heliconia 2"],
+    ["Heliconia Phase 2", "Heliconia 2"],
+    ["*heliconia 2", "Heliconia 2"],
+    ["*heliconia-2", "Heliconia 2"],
+    ["*heliconia phase 2", "Heliconia 2"],
+    ["*heliconia2", "Heliconia 2"],
+
+    // Sylvania
+    ["Sylvania", "Sylvania"],
+    ["*sylvania", "Sylvania"],
+
+    // Laburnum Park (with typo transpositions)
+    ["Laburnum Park", "Laburnum Park"],
+    ["*laburnum", "Laburnum Park"],
+    ["*labrunum", "Laburnum Park"],
+    ["*labranum", "Laburnum Park"],
+    ["*luburnum", "Laburnum Park"],
+    ["*lumburnum", "Laburnum Park"],
+    ["*labournam", "Laburnum Park"],
+
+    // Cosmos
+    ["Cosmos", "Cosmos"],
+    ["*cosmos", "Cosmos"],
+    ["Cosmo", "Cosmos"],
+
+    // Trillium
+    ["Trillium", "Trillium"],
+    ["*trillium", "Trillium"],
+
+    // Roystonea
+    ["Roystonea", "Roystonea"],
+    ["*roystonea", "Roystonea"],
+    ["*royalstonea", "Roystonea"],
+
+    // Zinnia
+    ["Zinnia", "Zinnia"],
+    ["*zinnia", "Zinnia"],
+
+    // Jasminium
+    ["Jasminium", "Jasminium"],
+    ["*jasminium", "Jasminium"],
+
+    // Kumar societies
+    ["Kumar Paradise", "Kumar Paradise"],
+    ["*kumar paradise", "Kumar Paradise"],
+    ["Kumar Prospera", "Kumar Prospera"],
+    ["*kumar prospera", "Kumar Prospera"],
+
+    // Vrindavan Heights
+    ["Vrindavan Heights", "Vrindavan Heights"],
+    ["*vrindavan", "Vrindavan Heights"],
+
+    // City Centre
+    ["City Centre", "City Centre"],
+    ["*city centre", "City Centre"],
+    ["*city center", "City Centre"],
+
+    // 47 East
+    ["47 East", "47 East"],
+    ["*47 east", "47 East"],
+    ["*47east", "47 East"],
+
+    // Marvel Fuego
+    ["Marvel Fuego", "Marvel Fuego"],
+    ["*marvel fuego", "Marvel Fuego"],
+
+    // Cybercity
+    ["Cybercity", "Cybercity"],
+    ["*cybercity", "Cybercity"],
+    ["*cyber city", "Cybercity"]
+  ];
+
+  const existing = {};
+  const last = ws.getLastRow();
+  if (last > 1) {
+    ws.getRange(2, 1, last - 1, 2).getValues().forEach(function (r, i) {
+      const raw = String(r[0] == null ? "" : r[0]).trim();
+      if (!raw) return;
+      const isC = raw.charAt(0) === "*";
+      const key = (isC ? "*" : "") + _normSocietyBase(isC ? raw.slice(1) : raw);
+      existing[key] = { row: i + 2, canonical: String(r[1] == null ? "" : r[1]).trim() };
+    });
+  }
+
+  let added = 0, updated = 0, unchanged = 0;
+  const plan = [];
+  rows.forEach(function (r) {
+    const raw = r[0], canon = r[1];
+    const isC = raw.charAt(0) === "*";
+    const key = (isC ? "*" : "") + _normSocietyBase(isC ? raw.slice(1) : raw);
+    const ex = existing[key];
+    if (ex && ex.canonical === canon) { unchanged++; return; }
+    if (ex) {
+      updated++; plan.push("UPDATE '" + raw + "' -> '" + canon + "' (was '" + ex.canonical + "')");
+      if (commit) ws.getRange(ex.row, 2).setValue(canon);
+    } else {
+      added++; plan.push("ADD '" + raw + "' -> '" + canon + "'");
+      if (commit) { ws.appendRow([raw, canon]); existing[key] = { row: ws.getLastRow(), canonical: canon }; }
+    }
+  });
+  if (commit) {
+    SpreadsheetApp.flush();
+    try { CacheService.getScriptCache().remove("society_aliases_v2"); } catch (_) {}
+    _socAliasMemo = null;
+  }
+  return { success: true, committed: !!commit, added: added, updated: updated, unchanged: unchanged, plan: plan.slice(0, 100) };
+}
+
+// Return the official canonical display name for any society input (or raw if unmapped)
+function _getCanonicalSocietyDisplay(s) {
+  if (!s) return "";
+  const key = _normSocietyKey(s);
+  const DISPLAY_TITLES = {
+    "heliconia1": "Heliconia 1",
+    "heliconia2": "Heliconia 2",
+    "sylvania": "Sylvania",
+    "laburnumpark": "Laburnum Park",
+    "cosmos": "Cosmos",
+    "trillium": "Trillium",
+    "roystonea": "Roystonea",
+    "zinnia": "Zinnia",
+    "jasminium": "Jasminium",
+    "kumarparadise": "Kumar Paradise",
+    "kumarprospera": "Kumar Prospera",
+    "vrindavanheights": "Vrindavan Heights",
+    "citycenter": "City Centre",
+    "47east": "47 East",
+    "marvelfuego": "Marvel Fuego",
+    "cybercity": "Cybercity",
+    "amanorafuturetowers": "Amanora Future Towers",
+    "amanoraadrenotowers": "Amanora Adreno Towers",
+    "amanoragoldtowers": "Amanora Gold Towers",
+    "amanorametrotowers": "Amanora Metro Towers",
+    "amanoradesiretowers": "Amanora Desire Towers",
+    "amanoragatewaytowers": "Amanora Gateway Towers",
+    "amanoraneotowers": "Amanora Neo Towers",
+    "elevatetowers": "Amanora Elevate Towers"
+  };
+  return DISPLAY_TITLES[key] || String(s).trim();
+}
+
 // Canonical matching key: base-normalize, then exact-alias, then contains-rules.
 // "T43 2502 Gold Tower" → "t432502goldtower" → (contains '*gold tower') → "goldtower".
 function _normSocietyKey(s) {
@@ -3196,13 +3356,21 @@ function _upsertCustomer(ss, profile, storefront) {
   const ws = _customersTabFor(ss, storefront);
   SpreadsheetApp.flush(); // Lock in the headers before indexing
 
-  // Sanitize maps links up front — the profile's own link and each per-meal one.
+  // Sanitize maps links & auto-canonicalize society names up front.
   if (profile.maps !== undefined) profile.maps = _sanitizeMapsLink(profile.maps);
+  if (profile.society !== undefined && typeof _getCanonicalSocietyDisplay === "function") {
+    profile.society = _getCanonicalSocietyDisplay(profile.society);
+  }
   if (profile.meal_addresses) {
     try {
       const _ma = JSON.parse(profile.meal_addresses);
       ["Breakfast", "Lunch", "Dinner"].forEach(function (m) {
-        if (_ma[m] && _ma[m].maps !== undefined) _ma[m].maps = _sanitizeMapsLink(_ma[m].maps);
+        if (_ma[m]) {
+          if (_ma[m].maps !== undefined) _ma[m].maps = _sanitizeMapsLink(_ma[m].maps);
+          if (_ma[m].society !== undefined && typeof _getCanonicalSocietyDisplay === "function") {
+            _ma[m].society = _getCanonicalSocietyDisplay(_ma[m].society);
+          }
+        }
       });
       profile.meal_addresses = JSON.stringify(_ma);
     } catch (e) { /* malformed JSON — leave as-is; nothing reads it blindly */ }

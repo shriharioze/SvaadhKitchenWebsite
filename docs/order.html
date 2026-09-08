@@ -3460,7 +3460,34 @@
             </div>
             <div class="form-group">
               <label data-i18n="label_society">Society / Building / Office Park *</label>
-              <input type="text" id="societyInput" placeholder="e.g. Pentagon 1, Magarpatta" oninput="syncSingleAddr()">
+              <input type="text" id="societyInput" list="canonicalSocieties" placeholder="e.g. Pentagon 1, Magarpatta" oninput="syncSingleAddr()">
+              <datalist id="canonicalSocieties">
+                <option value="Jasminium">
+                <option value="Cosmos">
+                <option value="Laburnum Park">
+                <option value="Heliconia 1">
+                <option value="Heliconia 2">
+                <option value="Sylvania">
+                <option value="Trillium">
+                <option value="Roystonea">
+                <option value="Zinnia">
+                <option value="Cybercity">
+                <option value="Amanora Future Towers">
+                <option value="Amanora Adreno Towers">
+                <option value="Amanora Gold Towers">
+                <option value="Amanora Metro Towers">
+                <option value="Amanora Desire Towers">
+                <option value="Amanora Gateway Towers">
+                <option value="Amanora Neo Towers">
+                <option value="Amanora Elevate Towers">
+                <option value="Kumar Paradise">
+                <option value="Kumar Prospera">
+                <option value="Vrindavan Heights">
+                <option value="City Centre">
+                <option value="47 East">
+                <option value="Marvel Fuego">
+                <option value="Konark Icon">
+              </datalist>
             </div>
             <div class="form-group">
               <label data-i18n="label_delivery_point">Handover instructions</label>
@@ -3539,7 +3566,7 @@
                     type="text" id="bf_floorInput" placeholder="3rd"></div>
               </div>
               <div class="form-group"><label data-i18n="label_society">Society / Building / Office Park</label><input
-                  type="text" id="bf_societyInput" placeholder="e.g. Pentagon 1, Magarpatta"></div>
+                  type="text" id="bf_societyInput" list="canonicalSocieties" placeholder="e.g. Pentagon 1, Magarpatta"></div>
               <div class="form-group">
                 <label data-i18n="label_delpoint_simple">Handover instructions</label>
                 <select id="bf_deliveryPointSelection">
@@ -3609,7 +3636,7 @@
                     type="text" id="l_floorInput" placeholder="3rd"></div>
               </div>
               <div class="form-group"><label data-i18n="label_society">Society / Building / Office Park</label><input
-                  type="text" id="l_societyInput" placeholder="e.g. Magarpatta"></div>
+                  type="text" id="l_societyInput" list="canonicalSocieties" placeholder="e.g. Magarpatta"></div>
               <div class="form-group">
                 <label data-i18n="label_delpoint_simple">Handover instructions</label>
                 <select id="l_deliveryPointSelection">
@@ -3679,7 +3706,7 @@
                     type="text" id="d_floorInput" placeholder="3rd"></div>
               </div>
               <div class="form-group"><label data-i18n="label_society">Society / Building / Office Park</label><input
-                  type="text" id="d_societyInput" placeholder="e.g. Pentagon 1, Magarpatta"></div>
+                  type="text" id="d_societyInput" list="canonicalSocieties" placeholder="e.g. Pentagon 1, Magarpatta"></div>
               <div class="form-group">
                 <label data-i18n="label_delpoint_simple">Handover instructions</label>
                 <select id="d_deliveryPointSelection">
@@ -4716,7 +4743,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.08.01";
+    const APP_VERSION = "v26.09.08.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API

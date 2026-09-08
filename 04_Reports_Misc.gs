@@ -456,6 +456,176 @@ function cleanDeliveryStopAddresses(commit) {
   } finally { lock.releaseLock(); }
 }
 
+// ── CUSTOMER ADDRESS STANDARDIZATION TOOL ──────────────────────────
+// Cleans non-standard customer addresses in SK_Customers:
+// 1. Extracts embedded flat/floor numbers from Society into Flat/Wing/Floor.
+// 2. Converts society spellings into official canonical names using _getCanonicalSocietyDisplay.
+// 3. Cleans Meal_Addresses JSON blob so per-meal saved addresses match.
+// 4. Backs up original rows to SK_Customers_AddrBackup_<ts> before writing (when commit=true).
+function standardizeCustomerAddresses(commit) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: "busy" }; }
+  try {
+    var ss = getSpreadsheet();
+    var ws = ss.getSheetByName(TAB_CUSTOMERS);
+    if (!ws) return { success: false, error: "SK_Customers not found" };
+
+    var data = ws.getDataRange().getValues();
+    if (data.length < 2) return { success: true, message: "No customer rows found" };
+    var idx = {}; data[0].forEach(function (h, i) { idx[h] = i; });
+    if (idx["Phone"] == null || idx["Society"] == null) return { success: false, error: "Missing required columns in SK_Customers" };
+
+    var bws = null;
+    var backupTabName = "";
+    if (commit) {
+      var ts = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyyMMdd_HHmm");
+      backupTabName = "SK_Customers_AddrBackup_" + ts;
+      bws = ss.insertSheet(backupTabName);
+      ws.getDataRange().copyTo(bws.getRange(1, 1));
+    }
+
+    var report = [];
+    var updatedCount = 0;
+
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var name = String(row[idx["Name"]] || "").trim();
+      var phone = _normalizePhone(row[idx["Phone"]]);
+      var area = String(row[idx["Area"]] || "").trim();
+      var arLower = area.toLowerCase();
+      if (!phone || arLower.indexOf("pickup") !== -1 || arLower === "porter") continue;
+
+      var origSoc = String(row[idx["Society"]] || "").trim();
+      var origWing = idx["Wing"] != null ? String(row[idx["Wing"]] || "").trim() : "";
+      var origFlat = idx["Flat"] != null ? String(row[idx["Flat"]] || "").trim() : "";
+      var origFloor = idx["Floor"] != null ? String(row[idx["Floor"]] || "").trim() : "";
+
+      if (!origSoc) continue;
+
+      var sClean = origSoc;
+      var wing = origWing;
+      var flat = origFlat;
+      var floor = origFloor;
+
+      var sLower = sClean.toLowerCase();
+
+      // Category 1: Specific known embedded addresses
+      if (sLower.indexOf("future towers") !== -1 && sClean.indexOf("1403") !== -1) {
+        sClean = "Amanora Future Towers"; wing = wing || "58"; flat = flat || "1403";
+      } else if (sLower.indexOf("cosmopolis") !== -1 && sClean.indexOf("803") !== -1) {
+        sClean = "Cosmopolis"; floor = floor || "8"; flat = flat || "803";
+      } else if (sLower.indexOf("heliconia") !== -1 && sLower.indexOf("h-502") !== -1) {
+        sClean = "Heliconia 1"; wing = wing || "H"; flat = flat || "502";
+      } else if (sLower.indexOf("f1") !== -1 && sClean.indexOf("201") !== -1 && sLower.indexOf("jasminium") !== -1) {
+        sClean = "Jasminium"; wing = wing || "F1"; flat = flat || "201";
+      } else if (sLower.indexOf("l-903") !== -1 && sLower.indexOf("laburnum") !== -1) {
+        sClean = "Laburnum Park"; wing = wing || "L"; flat = flat || "903";
+      } else if (sLower.indexOf("royalstonea") !== -1 && sClean.indexOf("102") !== -1) {
+        sClean = "Roystonea"; wing = wing || "J"; flat = flat || "102";
+      } else if (sLower.indexOf("c 102") !== -1 && sLower.indexOf("trillium") !== -1) {
+        sClean = "Trillium"; wing = wing || "C"; flat = flat || "102";
+      } else if (sLower.indexOf("tower 25") !== -1 && sClean.indexOf("1026") !== -1) {
+        sClean = "Amanora Metro Towers"; wing = wing || "25"; flat = flat || "1026";
+      } else if (sLower.indexOf("marvel fuego") !== -1 && sClean.indexOf("2120") !== -1) {
+        sClean = "Marvel Fuego"; floor = floor || "2"; flat = flat || "2120";
+      } else if (sLower.indexOf("livogue") !== -1 && sClean.indexOf("1101") !== -1) {
+        sClean = "Livogue Society"; wing = wing || "C"; flat = flat || "1101";
+      } else if (sLower.indexOf("amar ornate") !== -1 && sClean.indexOf("902") !== -1) {
+        sClean = "Amar Ornate"; wing = wing || "D"; flat = flat || "902";
+      } else if (sLower.indexOf("gandharav") !== -1 && sClean.indexOf("201") !== -1) {
+        sClean = "Gandharav"; floor = floor || "2"; flat = flat || "201";
+      } else if (sLower.indexOf("tower s4") !== -1 && sClean.indexOf("202") !== -1) {
+        sClean = "Cybercity"; wing = wing || "Tower S4"; flat = flat || "202";
+      } else if (sLower.indexOf("tower12") !== -1 && sLower.indexOf("cybercity") !== -1) {
+        sClean = "Cybercity"; wing = wing || "Tower 12";
+        if (!flat && sLower.indexOf("level 5") !== -1) floor = floor || "5";
+      } else if (/cybercity\s*tower\s*11/i.test(sClean) || /magarpatta\s*tower\s*11/i.test(sClean)) {
+        sClean = "Cybercity"; wing = wing || "Tower 11";
+      } else {
+        // Category 2: Standardize society name via canonical map
+        var b = _normSocietyBase(sClean);
+        if (b.indexOf("heliconia") !== -1) {
+          if (b.indexOf("2") !== -1 || b.indexOf("phase2") !== -1) sClean = "Heliconia 2";
+          else sClean = "Heliconia 1";
+        } else if (typeof _getCanonicalSocietyDisplay === "function") {
+          sClean = _getCanonicalSocietyDisplay(sClean);
+        }
+      }
+
+      // Check Meal_Addresses
+      var origMealAddrs = idx["Meal_Addresses"] != null ? String(row[idx["Meal_Addresses"]] || "") : "";
+      var newMealAddrs = origMealAddrs;
+      if (origMealAddrs) {
+        try {
+          var ma = JSON.parse(origMealAddrs);
+          var maChanged = false;
+          ["Breakfast", "Lunch", "Dinner"].forEach(function(m) {
+            if (ma[m] && ma[m].society) {
+              var oldM = ma[m].society;
+              var canM = typeof _getCanonicalSocietyDisplay === "function" ? _getCanonicalSocietyDisplay(oldM) : oldM;
+              if (canM !== oldM) { ma[m].society = canM; maChanged = true; }
+            }
+          });
+          if (maChanged) newMealAddrs = JSON.stringify(ma);
+        } catch (e) {}
+      }
+
+      var changed = (sClean !== origSoc || wing !== origWing || flat !== origFlat || floor !== origFloor || newMealAddrs !== origMealAddrs);
+      if (changed) {
+        updatedCount++;
+        var diff = {
+          name: name,
+          phone: phone,
+          changes: {}
+        };
+        if (sClean !== origSoc) diff.changes.society = { old: origSoc, "new": sClean };
+        if (wing !== origWing)   diff.changes.wing    = { old: origWing, "new": wing };
+        if (flat !== origFlat)   diff.changes.flat    = { old: origFlat, "new": flat };
+        if (floor !== origFloor) diff.changes.floor   = { old: origFloor, "new": floor };
+        if (newMealAddrs !== origMealAddrs) diff.changes.mealAddresses = "Standardized per-meal society";
+        report.push(diff);
+
+        if (commit) {
+          var rowNum = i + 1;
+          if (idx["Society"] != null) ws.getRange(rowNum, idx["Society"] + 1).setValue(sClean);
+          if (idx["Wing"] != null)    ws.getRange(rowNum, idx["Wing"] + 1).setValue(wing);
+          if (idx["Flat"] != null)    ws.getRange(rowNum, idx["Flat"] + 1).setValue(flat);
+          if (idx["Floor"] != null)   ws.getRange(rowNum, idx["Floor"] + 1).setValue(floor);
+          if (idx["Meal_Addresses"] != null && newMealAddrs !== origMealAddrs) {
+            ws.getRange(rowNum, idx["Meal_Addresses"] + 1).setValue(newMealAddrs);
+          }
+          // Recompute Full_Address
+          if (idx["Full_Address"] != null) {
+            var fullAddr = [
+              wing && ("Wing " + wing),
+              flat && ("Flat " + flat),
+              floor && (floor + " Floor"),
+              sClean,
+              area
+            ].filter(Boolean).join(", ");
+            ws.getRange(rowNum, idx["Full_Address"] + 1).setValue(fullAddr);
+          }
+        }
+      }
+    }
+
+    if (commit) {
+      SpreadsheetApp.flush();
+    }
+
+    return {
+      success: true,
+      committed: !!commit,
+      backupTab: backupTabName,
+      totalCustomers: data.length - 1,
+      standardizedCustomers: updatedCount,
+      report: report
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ── GET UNPAID CUSTOMERS (reconciliation) ────────────────────────────────────
 function getUnpaidCustomers(p) {
   const dateFrom = p.dateFrom;
