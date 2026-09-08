@@ -102,18 +102,32 @@ function _getAdminDataUncached() {
         else if (_isIA(row.Customer_Name)) { sawIA[dd][meal] = true; }
         else {
           const nameKey = "name|" + String(row.Customer_Name || "").trim().toLowerCase();
-          var f = String(row.Flat || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+          var fRaw = String(row.Flat || "").trim().toLowerCase();
+          var fMatch = fRaw.match(/\d+/);
+          var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
           var w = String(row.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
           var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(row.Society) : _normSocietyBase(row.Society || "");
           var addrKey = "";
           if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
 
-          if (!seen[dd][meal][nameKey] && (!addrKey || !seen[dd][meal][addrKey])) {
+          // Magarpatta Cybercity Towers 1–12 grouping (synced with _countActiveMealOrders).
+          var towerKey = "";
+          var _tCombined = String(row.Society || "") + " " + String(row.Wing || "") + " " + String(row.Flat || "") + " " + String(row.Area || "");
+          if (_tCombined.toLowerCase().indexOf("amanora") === -1) {
+            var _tMatch = _tCombined.match(/tower\s*(\d{1,2})(?!\d)/i);
+            if (_tMatch) {
+              var _tNum = parseInt(_tMatch[1], 10);
+              if (_tNum >= 1 && _tNum <= 12) towerKey = "mpt|" + _tNum;
+            }
+          }
+
+          if (!seen[dd][meal][nameKey] && (!addrKey || !seen[dd][meal][addrKey]) && (!towerKey || !seen[dd][meal][towerKey])) {
             mealOrderCounts[dd][meal]++;
           }
           
           seen[dd][meal][nameKey] = true;
           if (addrKey) seen[dd][meal][addrKey] = true;
+          if (towerKey) seen[dd][meal][towerKey] = true;
         }
       }
     }

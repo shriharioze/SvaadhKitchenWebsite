@@ -662,6 +662,13 @@ function _normSocietyKey(s) {
   for (var i = 0; i < rules.length; i++) {
     if (base.indexOf(rules[i][0]) !== -1) return rules[i][1];
   }
+  // Built-in typo corrections for persistent customer misspellings that bypass
+  // the sheet's *laburnum contains rule (character transpositions like "labrunum"
+  // don't contain "laburnum"). These supplement the alias sheet as a safety net.
+  if (base.indexOf("labrunum") !== -1 || base.indexOf("labranum") !== -1 ||
+      base.indexOf("luburnum") !== -1 || base.indexOf("lumburnum") !== -1 ||
+      base.indexOf("labournam") !== -1) return "laburnumpark";
+  if (base === "cosmo") return "cosmos"; // exact match only — avoids "cosmopolis"
   return base;
 }
 
@@ -808,12 +815,28 @@ function _countActiveMealOrders(rows, dateStr) {
     var addrKey = "";
     if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
 
-    if (!seen[mt][nameKey] && (!addrKey || !seen[mt][addrKey])) {
+    // Magarpatta Cybercity Towers 1–12 grouping: all orders at the same tower
+    // collapse to ONE delivery slot (driver delivers to one building gate).
+    // Excludes Amanora township (towers 18+, separate buildings/routes).
+    // The tower number can appear in Society ("Cybercity Tower 12"), Wing
+    // ("Tower"), or Flat ("12") fields depending on how the customer entered it.
+    var towerKey = "";
+    var _tCombined = String(r.Society || "") + " " + String(r.Wing || "") + " " + String(r.Flat || "") + " " + String(r.Area || "");
+    if (_tCombined.toLowerCase().indexOf("amanora") === -1) {
+      var _tMatch = _tCombined.match(/tower\s*(\d{1,2})(?!\d)/i);
+      if (_tMatch) {
+        var _tNum = parseInt(_tMatch[1], 10);
+        if (_tNum >= 1 && _tNum <= 12) towerKey = "mpt|" + _tNum;
+      }
+    }
+
+    if (!seen[mt][nameKey] && (!addrKey || !seen[mt][addrKey]) && (!towerKey || !seen[mt][towerKey])) {
       c[mt]++;
     }
     
     seen[mt][nameKey] = true;
     if (addrKey) seen[mt][addrKey] = true;
+    if (towerKey) seen[mt][towerKey] = true;
   }
   // presence in as ONE slot per meal too (one corporate delivery, not n).
   try {
