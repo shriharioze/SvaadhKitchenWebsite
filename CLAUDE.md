@@ -7,8 +7,22 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 - Backend: `clasp push -f` (updates HEAD, validates syntax) → bump CODE_VERSION in 00_Config.gs with a changelog comment → `clasp push -f` AGAIN (the bump must be in the pushed code) → `clasp deploy -i AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W -d "msg"` → verify: GET `<exec>?action=version`.
 - ⚠️ **clasp deploy pins a VERSION SNAPSHOT.** Pushing after deploying does NOT change a live deployment — re-run `clasp deploy` after every emergency push (2026-08-24 incident: ~10 min outage).
 - ⚠️ **NEVER leave scratch .js files at repo root** — clasp pushes them and GAS executes .js globally (`require()` crash = total outage). Keep scratch in `scratch/` (gitignored + claspignored).
-- Frontend: bump APP_VERSION (and any visible version text) in any modified HTML file (docs/order.html, docs/Liviano-Serio.html, docs/Admin/vault_admin.html, kitchen.html, driver.html, etc.) → git commit + push (GitHub Pages serves docs/ from main).
-- ⚠️ **Version format: `vYYYY.MM.DD.xx`** (e.g. `v26.08.27.01`) — date-based, NOT semantic. `xx` = bump counter for that day (01, 02, 03…). Only bump pages actually modified in the round. driver.html uses a `<meta app-version>` tag (no JS const). kitchen.html has BOTH `APP_VERSION` and `KITCHEN_VERSION` — bump both. LS page historically used `v26.08.24.LS.xx` — now standardised to date format.
+- Frontend: bump APP_VERSION (and any visible version text/tags) in ANY modified HTML file (docs/order.html, docs/Liviano-Serio.html, docs/Admin/vault_admin.html, kitchen.html, driver.html, recovery.html, etc.) → git commit + push (GitHub Pages serves docs/ from main).
+- ⚠️ **Version format: `vYYYY.MM.DD.xx`** (e.g. `v26.09.08.01`) — date-based, NOT semantic. `xx` = bump counter for that day (01, 02, 03…). Only bump pages actually modified in the round.
+- 🤖 **CRITICAL DIRECTIVE FOR AI MODELS (Claude, Gemini, GPT):**
+  Whenever you edit ANY file in this repository, you MUST bump the corresponding version identifiers BEFORE proposing or committing changes:
+  1. **Frontend HTML edits (`docs/*.html`, `docs/Admin/*.html`):** Admin & customer portals employ silent cache-busting auto-refresh mechanisms. If you change frontend code without bumping version identifiers, clients stay trapped on stale cached versions! **ALL version references in the edited file must be bumped in lockstep:**
+     - `docs/order.html`: `const APP_VERSION = "..."` + visible version text in footer.
+     - `docs/Liviano-Serio.html`: `const APP_VERSION = "..."` + visible version text.
+     - `docs/Admin/vault_admin.html`: `<meta name="app-version" content="...">` + `const ADMIN_VERSION = "..."`.
+     - `docs/Admin/kitchen.html`: `<meta name="app-version" content="...">` + `const APP_VERSION = "..."` + `const KITCHEN_VERSION = "..."` (bump all three).
+     - `docs/Admin/driver.html`: `<meta name="app-version" content="...">` tag (bump tag).
+     - `docs/Admin/recovery.html`: `<meta name="app-version" content="...">` + `const RECOVERY_VERSION = "..."` + `<div class="ver-badge">` header badge (bump all three).
+  2. **Backend Apps Script edits (`*.gs`):**
+     - Increment `CODE_VERSION` in `00_Config.gs` (e.g. `35.45` → `35.46`) and add a bullet to the comment block above it.
+     - Run `clasp push -f`
+     - Run `clasp deploy -i AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W -d "<description>"`
+     - Verify live with `GET https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec?action=version`.
 - ALWAYS commit to git after deploying (live and git must never diverge).
 - Deploys take ~10s+ to propagate — re-check `?action=version` before concluding a fix "didn't work". Each deploy resets GAS caches/instances → the site is SLOW for a few minutes after every deploy (cold starts). Avoid deploying during business hours; batch changes.
 
@@ -35,7 +49,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
 - `docs/Liviano-Serio.html` — LS storefront clone. LS-specific: `STOREFRONT="LS"` injected into every POST by `apiPost`; LS-prefixed gateway ids; `_lsApplyAddressLocks`-era helpers `_lsSocietyForWing/_lsSyncSociety/_lsPinSocietyInputs` (area=Kharadi locked, wing dropdown A–G2, society auto Liviano/Serio); free-delivery UI; Breakfast removed; LS texts in guide/FAQ/JSON-LD; `&storefront=LS` on all GET identity/order/wallet calls.
 - `docs/order-chat.js` — help-chat widget (shared). `IS_LS` gates chips/greeting; Gemini messages prefixed with LS_CONTEXT; main-page behavior unchanged.
 - `docs/Admin/vault_admin.html` — master admin panel ([LS] badge via `c.ls`/`o.ls`; APP_VERSION marker; Analytics tab clickable Pending KPI card + pending customers & orders drilldown modal with individual and bulk "Mark as Paid"; inventory, expense tracking, staff payroll).
-- `docs/Admin/recovery.html` — mobile-friendly order recovery tool (admin PIN protected, multi-stage JSON healing for Google Sheets doubled quotes, item preview, Gateway_Order_ID replay guard).
+- `docs/Admin/recovery.html` — mobile-friendly order recovery tool (admin PIN protected, multi-stage JSON healing for Google Sheets doubled quotes, full line-item & bulk plan preview, Gateway_Order_ID replay guard, silent auto-refresh on version bump).
 - `docs/Admin/kitchen.html` — ops surfaces (LS rows included server-side). 5-min auto-refresh without intrusive reload on tab switch. Label tab `getBulkItemSummary` mirrors backend `_lblItemSummary` (Items_JSON-first); LABEL_MR/EN extended (full breakfast menu, Devanagari + codes). Kitchen notes intentionally not on labels. Automatic silent version refresh.
 - `docs/Admin/driver.html` — ops surface (LS rows included server-side; WhatsApp SVG + native SMS buttons).
 - `docs/intentamplify.html` + `docs/Admin/ia_admin.html` — IA corporate channel storefront and admin.
