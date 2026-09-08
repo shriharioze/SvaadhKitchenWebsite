@@ -92,8 +92,8 @@ function _getAdminDataUncached() {
         const ar = String(row.Area || "").toLowerCase();
         if (ar.indexOf("pickup") !== -1 || ar === "porter") isDelivery = false;
         else {
-          const soc = _normSocietyBase(row.Society || "");
-          if (soc.indexOf("shreelaxmivihar") !== -1) isDelivery = false;
+          const addrFull = _normSocietyBase(String(row.Society || "") + " " + String(row.Full_Address || "") + " " + String(row.Flat || "") + " " + String(row.Landmark || ""));
+          if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1) isDelivery = false;
         }
       }
       

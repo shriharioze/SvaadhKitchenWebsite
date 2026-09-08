@@ -82,7 +82,7 @@ SK_Orders · SK_Customers · SK_Wallet · SK_Daily_Menu · SK_Areas · SK_Refund
 2. Charge == storage: what HDFC charges must equal the sum of written rows. Pricing rules are mirrored in N places (frontend cart, submitOrder, `_computeAuthoritativeTotal`, bulk engines) — change ALL together.
 3. Loyalty 6-day streak engines must agree: frontend (order.html / LS page calculateLoyaltyStreak + bill), submitOrder, gateway recompute. Each storefront's streak reads ITS OWN orders tab only (separate bases). Partial-close rule: check for a valid order on a day BEFORE treating the day as closed/Sunday.
 4. Discount tiers (5%≥325 / 7.5%≥485 / 10%≥750) hardcoded in 5 places — change all or charge≠cart.
-5. Delivery: main site ₹11/meal, free at ₹106/159/190, free areas Bhosale Nagar+Triveni Nagar+pickup/porter. LS: always free. Cap bypass ≥₹200 (breakfast ₹100). **Cap Counting:** unique customer name OR exact identical address (wing+flat+society) per meal = 1 slot; VIPs (Fee_Exempt) = 0 slots; Enkin/IA collapse to 1; LS = 0 slots, never blocked.
+5. Delivery: main site ₹11/meal, free at ₹106/159/190, free areas Bhosale Nagar+Triveni Nagar+pickup/porter. LS: always free. Cap bypass ≥₹200 (breakfast ₹100). **Cap Counting:** unique customer name OR exact identical address (wing+flat+society) per meal = 1 slot; VIPs (Fee_Exempt) = 0 slots; Enkin/IA collapse to 1; Shree Laxmi Vihar & Momstory Hospital (desk drop) = 0 slots; LS = 0 slots, never blocked.
 6. Wallet: `_calculateWalletBalance` classifies Txn_Type KEYWORDS (credit keywords win first; never name a debit type with them). Wallet is NEVER archived; only safe shrink is `?action=compactWalletLedger` (dry-run default). LS wallet is LS_Wallet — route by storefront, refunds credit the ORDER's wallet.
 7. On-account status: `_isOnAccountDueStatus` only. Kitchen-closed: `_closedMealsObj`/`_isMealKitchenClosed` (per-meal).
 8. Stock keys: Items_JSON names are suffix-stripped; join via `itemsJsonKey`/`_stripItemSuffix`.
@@ -116,6 +116,10 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Momstory Hospital Delivery Slot Exemption (CODE_VERSION 35.46 / APP_VERSION v26.09.08.01)**
+  - **Zero Delivery Slot Consumption:** Orders for Sahyadri Momstory Hospital (`"momstory"` in address, flat, society, or landmark) are dropped at the basement desk of the adjacent building, requiring 0 delivery transit effort.
+  - **Cap Exemption & Non-Blocking:** Synchronized across backend (`_countActiveMealOrders`, `_submitOrderInternal` cap guard in `02_Orders_Menu.gs`), admin dashboard stats (`_getAdminDataUncached` in `03_Admin_Kitchen.gs`), and customer frontend (`_mealKeepsDeliveryAtCap` in `docs/order.html` & `docs/Liviano-Serio.html`).
+  - **Kitchen Prep Retained:** Items and food quantities continue to count normally toward kitchen prep totals, labels, and driver packaging.
 - **Recovery Tool Hardening & Router Dispatch Support (CODE_VERSION 35.45)**
   - **Dual Action Detection (`_action` & `action`):** `doPost` in `Code.gs` now parses `body._action || body.action || ""` ensuring seamless routing for payloads using either naming convention.
   - **Explicit Payload Validation:** Replaced generic "Unknown action" fall-through with explicit error descriptions (e.g. *"No orders found in payload for submitOrder"*) and informative guidance if called via GET.
