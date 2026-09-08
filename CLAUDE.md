@@ -116,8 +116,8 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
-- **Customer Address Standardization & Society Autocomplete (CODE_VERSION 35.49 / APP_VERSION v26.09.08.02)**
-  - **Canonical Society Datalist Autocomplete:** Added `<datalist id="canonicalSocieties">` wired to single-address and per-meal society inputs in `docs/order.html` with clean canonical options (`Jasminium`, `Cosmos`, `Laburnum Park`, `Heliconia 1`, `Heliconia 2`, `Sylvania`, `Trillium`, `Roystonea`, `Zinnia`, `Cybercity`, Amanora towers, Kumar societies, etc.).
+- **Customer Address Standardization & Society Autocomplete (CODE_VERSION 35.49 / APP_VERSION v26.09.08.03)**
+  - **Type 2+ Letters Society Autocomplete Dropdown:** Replaced native browser datalist (which aggressively popped open all 25 options on empty click with unstyled OS box) with a sleek custom autocomplete dropdown (`initSocietyAutocomplete` in `docs/order.html`). Requires users to type at least 2 characters before suggesting, highlights matching letters in bold brand orange (`#c2410c`), prioritizes prefix matches, and fully supports arrow key navigation, click/tap selection, and auto-closing on blur or click-outside.
   - **Auto-Canonicalization on Upsert:** `_upsertCustomer` automatically canonicalizes customer `profile.society` and `Meal_Addresses` JSON blob using `_getCanonicalSocietyDisplay`.
   - **Canonical Alias Seeder & Standardization Tool:** Added `seedCanonicalSocietyAliases(commit)` in `02_Orders_Menu.gs` to populate alias rules (including `Heliconia 1` vs `Heliconia 2` phase mapping and typo variants). Added `standardizeCustomerAddresses(commit)` in `04_Reports_Misc.gs` to extract embedded flat/wing/floor numbers from society, canonicalize names, update `Meal_Addresses`, and create automated backup tab `SK_Customers_AddrBackup_<ts>`.
 - **Flat Normalization Parity Across Dashboard & Delivery Engine (CODE_VERSION 35.48)**

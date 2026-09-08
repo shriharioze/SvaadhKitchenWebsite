@@ -416,6 +416,39 @@
       margin-bottom: 12px;
     }
 
+    /* Society Autocomplete Dropdown (2+ characters typed) */
+    .soc-ac-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 4px;
+      padding: 4px 0;
+      display: none;
+    }
+    .soc-ac-item {
+      padding: 9px 12px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      color: #1f2937;
+      line-height: 1.35;
+      transition: background 0.12s ease;
+    }
+    .soc-ac-item:hover, .soc-ac-item.active {
+      background: #fff7ed;
+      color: #c2410c;
+    }
+    .soc-ac-item strong {
+      color: #c2410c;
+    }
+
     .input-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -3458,36 +3491,10 @@
                 <input type="text" id="floorInput" placeholder="3rd" oninput="syncSingleAddr()">
               </div>
             </div>
-            <div class="form-group">
+            <div class="form-group" style="position:relative;">
               <label data-i18n="label_society">Society / Building / Office Park *</label>
-              <input type="text" id="societyInput" list="canonicalSocieties" placeholder="e.g. Pentagon 1, Magarpatta" oninput="syncSingleAddr()">
-              <datalist id="canonicalSocieties">
-                <option value="Jasminium">
-                <option value="Cosmos">
-                <option value="Laburnum Park">
-                <option value="Heliconia 1">
-                <option value="Heliconia 2">
-                <option value="Sylvania">
-                <option value="Trillium">
-                <option value="Roystonea">
-                <option value="Zinnia">
-                <option value="Cybercity">
-                <option value="Amanora Future Towers">
-                <option value="Amanora Adreno Towers">
-                <option value="Amanora Gold Towers">
-                <option value="Amanora Metro Towers">
-                <option value="Amanora Desire Towers">
-                <option value="Amanora Gateway Towers">
-                <option value="Amanora Neo Towers">
-                <option value="Amanora Elevate Towers">
-                <option value="Kumar Paradise">
-                <option value="Kumar Prospera">
-                <option value="Vrindavan Heights">
-                <option value="City Centre">
-                <option value="47 East">
-                <option value="Marvel Fuego">
-                <option value="Konark Icon">
-              </datalist>
+              <input type="text" id="societyInput" placeholder="e.g. Pentagon 1, Magarpatta" oninput="syncSingleAddr()" autocomplete="off">
+              <div id="societyInput_ac" class="soc-ac-list"></div>
             </div>
             <div class="form-group">
               <label data-i18n="label_delivery_point">Handover instructions</label>
@@ -3565,8 +3572,10 @@
                 <div class="form-group" style="margin-bottom:0;"><label data-i18n="label_floor">Floor</label><input
                     type="text" id="bf_floorInput" placeholder="3rd"></div>
               </div>
-              <div class="form-group"><label data-i18n="label_society">Society / Building / Office Park</label><input
-                  type="text" id="bf_societyInput" list="canonicalSocieties" placeholder="e.g. Pentagon 1, Magarpatta"></div>
+              <div class="form-group" style="position:relative;"><label data-i18n="label_society">Society / Building / Office Park</label><input
+                  type="text" id="bf_societyInput" placeholder="e.g. Pentagon 1, Magarpatta" autocomplete="off">
+                <div id="bf_societyInput_ac" class="soc-ac-list"></div>
+              </div>
               <div class="form-group">
                 <label data-i18n="label_delpoint_simple">Handover instructions</label>
                 <select id="bf_deliveryPointSelection">
@@ -3635,8 +3644,10 @@
                 <div class="form-group" style="margin-bottom:0;"><label data-i18n="label_floor">Floor</label><input
                     type="text" id="l_floorInput" placeholder="3rd"></div>
               </div>
-              <div class="form-group"><label data-i18n="label_society">Society / Building / Office Park</label><input
-                  type="text" id="l_societyInput" list="canonicalSocieties" placeholder="e.g. Magarpatta"></div>
+              <div class="form-group" style="position:relative;"><label data-i18n="label_society">Society / Building / Office Park</label><input
+                  type="text" id="l_societyInput" placeholder="e.g. Magarpatta" autocomplete="off">
+                <div id="l_societyInput_ac" class="soc-ac-list"></div>
+              </div>
               <div class="form-group">
                 <label data-i18n="label_delpoint_simple">Handover instructions</label>
                 <select id="l_deliveryPointSelection">
@@ -3705,8 +3716,10 @@
                 <div class="form-group" style="margin-bottom:0;"><label data-i18n="label_floor">Floor</label><input
                     type="text" id="d_floorInput" placeholder="3rd"></div>
               </div>
-              <div class="form-group"><label data-i18n="label_society">Society / Building / Office Park</label><input
-                  type="text" id="d_societyInput" list="canonicalSocieties" placeholder="e.g. Pentagon 1, Magarpatta"></div>
+              <div class="form-group" style="position:relative;"><label data-i18n="label_society">Society / Building / Office Park</label><input
+                  type="text" id="d_societyInput" placeholder="e.g. Pentagon 1, Magarpatta" autocomplete="off">
+                <div id="d_societyInput_ac" class="soc-ac-list"></div>
+              </div>
               <div class="form-group">
                 <label data-i18n="label_delpoint_simple">Handover instructions</label>
                 <select id="d_deliveryPointSelection">
@@ -4743,7 +4756,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.08.02";
+    const APP_VERSION = "v26.09.08.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6751,6 +6764,164 @@
       };
       const pfxMap = { Breakfast: "bf", Lunch: "l", Dinner: "d" };
       return readPerMealAddr(pfxMap[mealType] || "bf");
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SOCIETY AUTOCOMPLETE (triggers after 2+ letters typed)
+    // ═══════════════════════════════════════════════════════════
+    const CANONICAL_SOCIETIES = [
+      "Jasminium",
+      "Cosmos",
+      "Laburnum Park",
+      "Heliconia 1",
+      "Heliconia 2",
+      "Sylvania",
+      "Trillium",
+      "Roystonea",
+      "Zinnia",
+      "Cybercity",
+      "Amanora Future Towers",
+      "Amanora Adreno Towers",
+      "Amanora Gold Towers",
+      "Amanora Metro Towers",
+      "Amanora Desire Towers",
+      "Amanora Gateway Towers",
+      "Amanora Neo Towers",
+      "Amanora Elevate Towers",
+      "Kumar Paradise",
+      "Kumar Prospera",
+      "Vrindavan Heights",
+      "City Centre",
+      "47 East",
+      "Marvel Fuego",
+      "Konark Icon"
+    ];
+
+    function initSocietyAutocomplete() {
+      const inputs = [
+        { id: "societyInput", onSelect: () => { if (typeof syncSingleAddr === "function") syncSingleAddr(); } },
+        { id: "bf_societyInput", onSelect: null },
+        { id: "l_societyInput", onSelect: null },
+        { id: "d_societyInput", onSelect: null }
+      ];
+
+      inputs.forEach(({ id, onSelect }) => {
+        const inp = $(id);
+        if (!inp) return;
+        const container = inp.parentElement;
+        if (!container) return;
+
+        let listEl = container.querySelector(".soc-ac-list");
+        if (!listEl) {
+          listEl = document.createElement("div");
+          listEl.className = "soc-ac-list";
+          container.appendChild(listEl);
+        }
+
+        let activeIdx = -1;
+
+        function closeList() {
+          listEl.style.display = "none";
+          listEl.innerHTML = "";
+          activeIdx = -1;
+        }
+
+        function renderMatches(q) {
+          const lowerQ = q.toLowerCase();
+          const matches = CANONICAL_SOCIETIES.filter(s => s.toLowerCase().includes(lowerQ));
+          if (matches.length === 0) {
+            closeList();
+            return;
+          }
+          // Sort prefix matches first
+          matches.sort((a, b) => {
+            const aStarts = a.toLowerCase().startsWith(lowerQ);
+            const bStarts = b.toLowerCase().startsWith(lowerQ);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return a.localeCompare(b);
+          });
+
+          listEl.innerHTML = matches.map((s, idx) => {
+            const matchStart = s.toLowerCase().indexOf(lowerQ);
+            let label = s;
+            if (matchStart !== -1) {
+              const before = s.slice(0, matchStart);
+              const matched = s.slice(matchStart, matchStart + q.length);
+              const after = s.slice(matchStart + q.length);
+              label = `${before}<strong>${matched}</strong>${after}`;
+            }
+            return `<div class="soc-ac-item" data-idx="${idx}" data-val="${s}">${label}</div>`;
+          }).join("");
+          listEl.style.display = "block";
+          activeIdx = -1;
+        }
+
+        inp.addEventListener("input", function () {
+          const val = this.value.trim();
+          // Require at least 2 characters before suggesting
+          if (val.length < 2) {
+            closeList();
+            return;
+          }
+          renderMatches(val);
+        });
+
+        inp.addEventListener("keydown", function (e) {
+          const items = listEl.querySelectorAll(".soc-ac-item");
+          if (listEl.style.display !== "block" || !items.length) return;
+
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            activeIdx = (activeIdx + 1) % items.length;
+            updateActive(items);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            activeIdx = (activeIdx - 1 + items.length) % items.length;
+            updateActive(items);
+          } else if (e.key === "Enter") {
+            if (activeIdx >= 0 && items[activeIdx]) {
+              e.preventDefault();
+              selectVal(items[activeIdx].getAttribute("data-val"));
+            }
+          } else if (e.key === "Escape") {
+            closeList();
+          }
+        });
+
+        function updateActive(items) {
+          items.forEach((it, i) => {
+            it.classList.toggle("active", i === activeIdx);
+            if (i === activeIdx) it.scrollIntoView({ block: "nearest" });
+          });
+        }
+
+        function selectVal(val) {
+          inp.value = val;
+          closeList();
+          if (onSelect) onSelect();
+          inp.dispatchEvent(new Event("input", { bubbles: true }));
+          inp.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        listEl.addEventListener("mousedown", function (e) {
+          const it = e.target.closest(".soc-ac-item");
+          if (it) {
+            e.preventDefault();
+            selectVal(it.getAttribute("data-val"));
+          }
+        });
+
+        inp.addEventListener("blur", function () {
+          setTimeout(closeList, 200);
+        });
+      });
+
+      document.addEventListener("click", function (e) {
+        if (!e.target.closest(".soc-ac-list") && !e.target.closest("input[id*='societyInput']")) {
+          document.querySelectorAll(".soc-ac-list").forEach(el => el.style.display = "none");
+        }
+      });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -13348,6 +13519,7 @@
 
       loadAreas();
       updateNav();
+      initSocietyAutocomplete();
       initCalendar();
       buildFAQ();
       // Pre-fetch today's menu so cutoff_overrides are available before calendar renders
