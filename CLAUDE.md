@@ -116,9 +116,9 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
-- **Area-Scoped Society Autocomplete Filtering (APP_VERSION v26.09.08.05)**
+- **Area-Scoped Society Autocomplete Filtering (APP_VERSION v26.09.08.06)**
   - **Dynamic Area-Based Society Filtering:** Society suggestions are now dynamically scoped to the customer's selected Delivery Area:
-    - `Amanora`: Restricts suggestions strictly to Amanora Towers (Future, Adreno, Gold, Metro, Desire, Gateway, Neo, Elevate, Sweet Water Villas, Trendy, Aspire, Citizen) + `Vrindavan Heights`.
+    - `Amanora`: Restricts suggestions strictly to Amanora Towers (Future, Adreno, Gold, Metro, Desire, Gateway, Neo, Elevate, Sweet Water Villas, Trendy, Aspire) + `Vrindavan Heights` (removed invalid Citizen Towers).
     - `Magarpatta`: Restricts suggestions to Magarpatta residential societies (Jasminium, Cosmos, Laburnum Park, Heliconia 1/2, Sylvania, Trillium, Roystonea, Zinnia), Cybercity & Towers 1–12, Destination Centre, Kumar Prospera, and Marvel Fuego (City Centre & Mega Centre excluded).
     - `Kirtane Baug`: Konark Icon, Kumar Paradise.
     - `DP Road`: 47 East.
