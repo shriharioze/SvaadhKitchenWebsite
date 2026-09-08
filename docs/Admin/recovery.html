@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scale=no">
-<meta name="app-version" content="v26.09.08.01">
+<meta name="app-version" content="v26.09.08.02">
 <title>Svaadh — Order Recovery</title>
+<link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
+<link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
+<link rel="apple-touch-icon" href="../images/svaadh-kitchen-hero.PNG">
 <style>
   :root {
     --bg: #0f0f0f; --surface: #1a1a1a; --surface2: #252525;
@@ -139,7 +142,7 @@
   <div class="header">
     <h1>🔧 Order Recovery</h1>
     <p>Paste a missed order log row → Preview → Submit</p>
-    <div class="ver-badge">v26.09.08.01</div>
+    <div class="ver-badge">v26.09.08.02</div>
   </div>
 
   <!-- PIN Section -->
@@ -550,7 +553,7 @@ function clearAll() {
 document.getElementById("pinInput").focus();
 
 // ─── Auto Version Check & Silent Refresh ─────────────
-const RECOVERY_VERSION = "v26.09.08.01";
+const RECOVERY_VERSION = "v26.09.08.02";
 async function _checkVersion() {
   try {
     const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
