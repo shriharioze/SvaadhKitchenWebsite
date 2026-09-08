@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.07.01">
+  <meta name="app-version" content="v26.09.08.08">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -556,6 +556,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
 .pay-badge.tenday{background:#d6eaf8;color:#1a5276;}
 .notes-badge{display:inline-block;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:4px;font-size:0.68rem;margin-top:2px;}
 .area-chip{display:inline-block;background:#f0f0f0;padding:1px 6px;border-radius:4px;font-size:0.68rem;color:#666;}
+.slot-badge{display:inline-flex;align-items:center;gap:3px;font-size:0.68rem;font-weight:700;padding:2px 7px;border-radius:6px;text-transform:none;line-height:1.25;white-space:nowrap;}
+.slot-badge.slot{background:#e8f5e9;color:#2e7d32;border:1px solid #c8e6c9;}
+.slot-badge.shared{background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;}
+.slot-badge.exempt{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;}
 .no-orders-msg{text-align:center;padding:30px;color:#aaa;font-size:0.85rem;}
 /* ── PACKAGING EXPENSES PAGE ── */
 .pkg-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
@@ -2328,7 +2332,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.09.07.01";
+    const ADMIN_VERSION = "v26.09.08.08";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -4983,6 +4987,20 @@ function renderOrderSummary(data) {
       return `<span class="pay-badge pending">⏳ Pending</span>`;
     };
 
+    const slotBadge = c => {
+      if (!c.slotType) return "";
+      if (c.slotType === "slot") {
+        return `<span class="slot-badge slot" title="${c.slotReason || 'Primary Slot #' + c.slotNumber}">🟢 Slot #${c.slotNumber}</span>`;
+      }
+      if (c.slotType === "shared") {
+        return `<span class="slot-badge shared" title="${c.slotReason || 'Shared Slot'}">🔄 Shared: ${c.slotReason || 'Shared'}</span>`;
+      }
+      if (c.slotType === "exempt") {
+        return `<span class="slot-badge exempt" title="${c.slotReason || 'Exempt'}">⚪ ${c.slotReason || 'Exempt'}</span>`;
+      }
+      return "";
+    };
+
     // Item totals chips
     const itemChips = Object.entries(m.itemTotals)
       .sort((a,b) => b[1]-a[1])
@@ -4992,10 +5010,16 @@ function renderOrderSummary(data) {
     // Customer rows
     const custRows = m.customers.map(c => {
       const itemList = Object.entries(c.items).filter(([,q])=>q>0).map(([n,q])=>`${q}×${n}`).join(", ");
-      return `<tr data-cust="${(c.name+' '+c.phone).replace(/"/g,'&quot;')}">
+      return `<tr data-cust="${(c.name+' '+c.phone+' '+(c.slotType||'')+' '+(c.slotReason||'')+' '+(c.area||'')+' '+(c.address||'')).replace(/"/g,'&quot;')}">
         <td><strong>${c.name}</strong><br><span style="color:#aaa;font-size:0.72rem;">${c.phone}</span></td>
         <td>${itemList||"—"}</td>
-        <td><span class="area-chip">${c.area}</span><br><span style="font-size:0.7rem;color:#888;">${c.address}</span></td>
+        <td>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:3px;">
+            <span class="area-chip">${c.area}</span>
+            ${slotBadge(c)}
+          </div>
+          <span style="font-size:0.7rem;color:#888;">${c.address}</span>
+        </td>
         <td style="text-align:right;white-space:nowrap;">
           <strong>${fmtMoney(c.total)}</strong><br>
           ${payBadge(c.payStatus)}
@@ -5012,7 +5036,7 @@ function renderOrderSummary(data) {
 
     html += `<div class="meal-section">
       <div class="meal-section-head" onclick="toggleMealSection('${meal}')">
-        <h3>${MEAL_ICONS[meal]} ${meal} <span style="font-weight:400;font-size:0.82rem;color:#888;">(${m.count} order${m.count>1?"s":""})</span></h3>
+        <h3>${MEAL_ICONS[meal]} ${meal} <span style="font-weight:400;font-size:0.82rem;color:#888;">(${m.deliverySlots !== undefined ? m.deliverySlots + ' delivery slot' + (m.deliverySlots !== 1 ? 's' : '') + ' • ' : ''}${m.count} order${m.count>1?"s":""})</span></h3>
         <div class="meal-stats">
           <span>💰 ${fmtMoney(m.revenue)}</span>
           <span style="color:#27ae60;">✓ ${fmtMoney(m.paid)}</span>

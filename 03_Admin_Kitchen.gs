@@ -1893,10 +1893,17 @@ function getOrderSummary(date) {
     "Dal","Dal_Fry","Rice","Salad","Curd"
   ];
 
+  var vips = typeof _getVipPhonesCached === "function" ? _getVipPhonesCached() : {};
+  var mealSlotState = {
+    Breakfast: { slotCount: 0, seenNames: {}, seenAddrs: {}, seenTowers: {}, sawEnkin: null, sawIA: null },
+    Lunch:     { slotCount: 0, seenNames: {}, seenAddrs: {}, seenTowers: {}, sawEnkin: null, sawIA: null },
+    Dinner:    { slotCount: 0, seenNames: {}, seenAddrs: {}, seenTowers: {}, sawEnkin: null, sawIA: null }
+  };
+
   dayRows.forEach(function(r) {
     var meal = String(r.Meal_Type || "");
     if (!meal) return;
-    if (!meals[meal]) meals[meal] = {count:0, revenue:0, paid:0, pending:0, itemTotals:{}, customers:[]};
+    if (!meals[meal]) meals[meal] = {count:0, revenue:0, paid:0, pending:0, deliverySlots:0, itemTotals:{}, customers:[]};
     var m = meals[meal];
     var net = Number(r.Net_Total) || 0;
     var payStatus = String(r.Payment_Status || "Pending");
@@ -1945,20 +1952,133 @@ function getOrderSummary(date) {
       }
     }
 
+    // ── Delivery Slot Attribution (Synced with _countActiveMealOrders) ──
+    var st = mealSlotState[meal] || (mealSlotState[meal] = { slotCount: 0, seenNames: {}, seenAddrs: {}, seenTowers: {}, sawEnkin: null, sawIA: null });
+    var phoneTrim = String(r.Phone || "").trim();
+    var custName = (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || "");
+    var rawCustName = String(r.Customer_Name || "").trim();
+
+    var slotType = "slot";
+    var slotNumber = 0;
+    var slotReason = "";
+
+    var ar = String(r.Area || "").toLowerCase();
+    var addrFull = typeof _normSocietyBase === "function" 
+      ? _normSocietyBase(String(r.Society || "") + " " + String(r.Full_Address || "") + " " + String(r.Flat || "") + " " + String(r.Landmark || ""))
+      : (String(r.Society || "") + " " + String(r.Full_Address || "")).toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    if (ar.indexOf("pickup") !== -1) {
+      slotType = "exempt";
+      slotReason = "Self Pickup";
+    } else if (ar === "porter") {
+      slotType = "exempt";
+      slotReason = "Porter Courier";
+    } else if (addrFull.indexOf("shreelaxmivihar") !== -1) {
+      slotType = "exempt";
+      slotReason = "Shree Laxmi Vihar (Home Base)";
+    } else if (addrFull.indexOf("momstory") !== -1) {
+      slotType = "exempt";
+      slotReason = "Momstory (Desk Drop)";
+    } else if (vips[phoneTrim]) {
+      slotType = "exempt";
+      slotReason = "VIP Customer";
+    } else if (r._lsTab || String(r.Source || "").trim() === "LS") {
+      slotType = "exempt";
+      slotReason = "Liviano-Serio (Free Delivery)";
+    } else {
+      var _isEnkin = rawCustName.toLowerCase().indexOf("enkin") !== -1;
+      var _isIA    = rawCustName.toLowerCase().indexOf("[ia]") === 0;
+
+      if (_isEnkin) {
+        if (!st.sawEnkin) {
+          st.slotCount++;
+          st.sawEnkin = rawCustName;
+          slotType = "slot";
+          slotNumber = st.slotCount;
+          slotReason = "Enkin Batch (Slot Leader)";
+        } else {
+          slotType = "shared";
+          slotReason = "Enkin Batch (with " + st.sawEnkin + ")";
+        }
+      } else if (_isIA) {
+        if (!st.sawIA) {
+          st.slotCount++;
+          st.sawIA = rawCustName;
+          slotType = "slot";
+          slotNumber = st.slotCount;
+          slotReason = "IA Corporate (Slot Leader)";
+        } else {
+          slotType = "shared";
+          slotReason = "IA Corporate (with " + st.sawIA + ")";
+        }
+      } else {
+        var nameKey = "name|" + rawCustName.toLowerCase();
+
+        var fRaw = String(r.Flat || "").trim().toLowerCase();
+        var fMatch = fRaw.match(/\d+/);
+        var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
+        var w = String(r.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+        var sStr = typeof _normSocietyKey === "function" 
+          ? _normSocietyKey(r.Society) 
+          : (typeof _normSocietyBase === "function" ? _normSocietyBase(r.Society || "") : String(r.Society || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+        var addrKey = (f && sStr) ? "addr|" + w + "|" + f + "|" + sStr : "";
+
+        var towerKey = "";
+        var tNum = 0;
+        var _tCombined = String(r.Society || "") + " " + String(r.Wing || "") + " " + String(r.Flat || "") + " " + String(r.Area || "");
+        if (_tCombined.toLowerCase().indexOf("amanora") === -1) {
+          var _tMatch = _tCombined.match(/tower\s*(\d{1,2})(?!\d)/i);
+          if (_tMatch) {
+            tNum = parseInt(_tMatch[1], 10);
+            if (tNum >= 1 && tNum <= 12) towerKey = "mpt|" + tNum;
+          }
+        }
+
+        if (st.seenNames[nameKey]) {
+          slotType = "shared";
+          slotReason = "Same Customer (" + st.seenNames[nameKey].name + ")";
+        } else if (addrKey && st.seenAddrs[addrKey]) {
+          slotType = "shared";
+          var unitDesc = (w ? "Wing " + w.toUpperCase() + ", " : "") + (f ? "Flat " + f : "");
+          slotReason = (unitDesc ? unitDesc + " " : "") + "with " + st.seenAddrs[addrKey].name;
+        } else if (towerKey && st.seenTowers[towerKey]) {
+          slotType = "shared";
+          slotReason = "Cybercity Tower " + tNum + " (with " + st.seenTowers[towerKey].name + ")";
+        } else {
+          st.slotCount++;
+          slotType = "slot";
+          slotNumber = st.slotCount;
+          slotReason = "Primary Slot #" + st.slotCount;
+
+          var leaderInfo = { name: rawCustName, slotNum: st.slotCount };
+          st.seenNames[nameKey] = leaderInfo;
+          if (addrKey) st.seenAddrs[addrKey] = leaderInfo;
+          if (towerKey) st.seenTowers[towerKey] = leaderInfo;
+        }
+      }
+    }
+
+    m.deliverySlots = st.slotCount;
     m.count++;
     m.revenue += net;
     if (payStatus === "Paid" || payStatus === "Wallet Paid" || payStatus === "Collected") m.paid += net; else m.pending += net;
     m.customers.push({
-      id:        String(r.Submission_ID || ""),
-      name:      (String(r.Source || "").trim() === "LS" && String(r.Customer_Name || "").trim().indexOf("[LS]") !== 0) ? "[LS] " + String(r.Customer_Name || "") : String(r.Customer_Name || ""),
-      phone:     String(r.Phone || ""),
-      items:     items,
-      area:      String(r.Area || ""),
-      address:   String(r.Full_Address || r.Flat || ""),
-      total:     net,
-      payStatus: payStatus,
-      notes:     String(r.Special_Notes_Kitchen || ""),
-      ls:        !!r._lsTab  // Liviano-Serio storefront → [LS] badge in admin UI
+      id:         String(r.Submission_ID || ""),
+      name:       custName,
+      phone:      String(r.Phone || ""),
+      items:      items,
+      area:       String(r.Area || ""),
+      address:    String(r.Full_Address || r.Flat || ""),
+      wing:       String(r.Wing || ""),
+      flat:       String(r.Flat || ""),
+      society:    String(r.Society || ""),
+      total:      net,
+      payStatus:  payStatus,
+      notes:      String(r.Special_Notes_Kitchen || ""),
+      ls:         !!r._lsTab,
+      slotType:   slotType,
+      slotNumber: slotNumber,
+      slotReason: slotReason
     });
 
     totals.orders++;

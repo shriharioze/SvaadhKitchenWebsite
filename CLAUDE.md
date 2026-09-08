@@ -146,6 +146,11 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Explicit Payload Validation:** Replaced generic "Unknown action" fall-through with explicit error descriptions (e.g. *"No orders found in payload for submitOrder"*) and informative guidance if called via GET.
   - **Bulk Plan Recovery Support:** Added full support for recovering weekly, 15-day, and monthly bulk plans from `SK_Order_Log` stash rows (`stash.bulk`) via `submitBulkOrder`.
   - **Instant PIN Verification:** Switched admin gate on `recovery.html` to lightweight `verifyAdminPin` endpoint and attaches verified `pin` directly to recovery payloads.
+- **Delivery Slot Status & Attribution on Admin Orders Tab (CODE_VERSION 35.51 / ADMIN_VERSION v26.09.08.08)**
+  - **Authoritative Slot Attribution in `getOrderSummary`:** Enriched backend order summary with real-time delivery slot attribution matching `_countActiveMealOrders`: identifies whether each order takes a primary delivery slot (`slotType: "slot"`), piggybacks on an existing stop (`slotType: "shared"`), or is slot-exempt (`slotType: "exempt"`).
+  - **Shared Slot Context:** Identifies exact sharing reasons (e.g. `Same Flat w/ Ankit Bansal`, `Cybercity Tower 11 w/ Nitin Jadhav`, `Same Customer`, `Enkin Batch`, `IA Corporate`).
+  - **Exempt Reasons:** Identifies exact exemption reasons (`Self Pickup`, `Porter Courier`, `Momstory Desk Drop`, `Shree Laxmi Vihar Home Base`, `VIP Customer`, `Liviano-Serio`).
+  - **Admin Orders Tab UI:** Displayed in `docs/Admin/vault_admin.html` with color-coded badges next to the Area chip (`🟢 Slot #N`, `🔄 Shared`, `⚪ Exempt`), delivery slot totals in meal headers (e.g., `🌅 Breakfast (9 delivery slots • 11 orders)`), and instant search filtering via search input.
 - **Live Address Preview on Order Form (`docs/order.html` APP_VERSION v26.09.08.07)**
   - **Instant Real-Time Address Preview:** Renders an interactive live address preview card as customers type their address fields (Wing, Flat, Floor, Society, Area, Landmark, Handover instructions) in both single-address mode and per-meal mode.
   - **Natural Address Formatting:** Dropped explicit `"Wing"` and `"Flat"` labels so addresses format cleanly (e.g., `A 104, Jasminium, Magarpatta` or `3, KanchanJunga, Tupe Patil Road` or `Office 5, Cybercity Tower 12, Magarpatta`).
