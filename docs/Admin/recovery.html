@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scale=no">
+<meta name="app-version" content="v26.09.08.01">
 <title>Svaadh — Order Recovery</title>
 <style>
   :root {
@@ -25,6 +26,7 @@
   }
   .header h1 { font-size: 18px; font-weight: 600; }
   .header p { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .ver-badge { font-size: 10px; color: var(--text2); display: inline-block; background: var(--surface2); padding: 2px 8px; border-radius: 6px; margin-top: 6px; font-family: monospace; }
 
   /* Input area */
   .input-section {
@@ -137,6 +139,7 @@
   <div class="header">
     <h1>🔧 Order Recovery</h1>
     <p>Paste a missed order log row → Preview → Submit</p>
+    <div class="ver-badge">v26.09.08.01</div>
   </div>
 
   <!-- PIN Section -->
@@ -545,6 +548,26 @@ function clearAll() {
 
 // Auto-focus
 document.getElementById("pinInput").focus();
+
+// ─── Auto Version Check & Silent Refresh ─────────────
+const RECOVERY_VERSION = "v26.09.08.01";
+async function _checkVersion() {
+  try {
+    const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    const html = await res.text();
+    const m = html.match(/<meta\s+name=["']app-version["']\s+content=["']([^"']+)["']/i);
+    if (m && m[1] && m[1] !== RECOVERY_VERSION) {
+      console.log("[Auto-Update] Detected new version " + m[1] + " (running " + RECOVERY_VERSION + "). Reloading...");
+      window.location.reload(true);
+    }
+  } catch (_) {}
+}
+_checkVersion();
+// Re-check when user switches back to this tab/app on mobile phone
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") _checkVersion();
+});
 </script>
 </body>
 </html>
