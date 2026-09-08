@@ -449,6 +449,82 @@
       color: #c2410c;
     }
 
+    /* Live Address Preview Card */
+    .addr-live-preview {
+      margin-top: 14px;
+      margin-bottom: 8px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 10px;
+      transition: all 0.2s ease;
+      font-size: 0.88rem;
+    }
+    .addr-live-preview.active {
+      background: #fffaf0;
+      border: 1.5px solid #fdba74;
+      box-shadow: 0 2px 8px rgba(194, 65, 12, 0.08);
+    }
+    .addr-preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .addr-preview-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .addr-live-preview.active .addr-preview-title {
+      color: #c2410c;
+    }
+    .addr-preview-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #e2e8f0;
+      color: #475569;
+      text-transform: uppercase;
+    }
+    .addr-live-preview.active .addr-preview-badge {
+      background: #ffedd5;
+      color: #c2410c;
+    }
+    .addr-preview-text {
+      color: #94a3b8;
+      font-style: italic;
+      font-size: 0.92rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+    .addr-live-preview.active .addr-preview-text {
+      color: #1e293b;
+      font-style: normal;
+      font-weight: 600;
+    }
+    .addr-preview-meta {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed #fed7aa;
+      font-size: 0.78rem;
+      color: #475569;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+    }
+    .addr-preview-meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     .input-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -3524,6 +3600,8 @@
               <input type="text" id="landmarkInput" placeholder="e.g. Opposite Reliance Fresh, Gate no. 2"
                 oninput="syncSingleAddr()">
             </div>
+            <!-- Live Address Preview Card -->
+            <div id="single_addrPreview" class="addr-live-preview"></div>
           </div>
         </div>
 
@@ -3600,6 +3678,8 @@
                     Landmark</span> <span style="font-size:0.7rem;color:#aaa;"
                     data-i18n="label_optional">(optional)</span></label><input type="text" id="bf_landmarkInput"
                   placeholder="e.g. Gate no. 2"></div>
+              <!-- Live Address Preview Card -->
+              <div id="bf_addrPreview" class="addr-live-preview"></div>
             </div>
           </div>
 
@@ -3672,6 +3752,8 @@
                     Landmark</span> <span style="font-size:0.7rem;color:#aaa;"
                     data-i18n="label_optional">(optional)</span></label><input type="text" id="l_landmarkInput"
                   placeholder="e.g. Office entrance, 2nd floor"></div>
+              <!-- Live Address Preview Card -->
+              <div id="l_addrPreview" class="addr-live-preview"></div>
             </div>
           </div>
 
@@ -3744,6 +3826,8 @@
                     Landmark</span> <span style="font-size:0.7rem;color:#aaa;"
                     data-i18n="label_optional">(optional)</span></label><input type="text" id="d_landmarkInput"
                   placeholder="e.g. Opposite main gate"></div>
+              <!-- Live Address Preview Card -->
+              <div id="d_addrPreview" class="addr-live-preview"></div>
             </div>
           </div>
         </div>
@@ -4756,7 +4840,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.08.06";
+    const APP_VERSION = "v26.09.08.07";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6531,6 +6615,9 @@
         const def = { area: S.profile.area, wing: S.profile.wing, flat: S.profile.flat, floor: S.profile.floor, society: S.profile.society, delivery_point: S.profile.delivery_point, maps: S.profile.maps || "", landmark: S.profile.landmark || "" };
         S.mealAddrs = { Breakfast: { ...def }, Lunch: { ...def }, Dinner: { ...def } };
       }
+      if (typeof _renderLiveAddrPreview === "function") {
+        ["single", "bf", "l", "d"].forEach(p => _renderLiveAddrPreview(p));
+      }
 
       $("btnNext").textContent = t('btn_continue'); $("btnNext").disabled = false;
       S.step++; updateNav(); window.scrollTo(0, 0);
@@ -6706,6 +6793,13 @@
       } else {
         togglePickupUI("single", $("areaSelect").value);
       }
+      if (typeof _renderLiveAddrPreview === "function") {
+        if (S.sameAddr) {
+          _renderLiveAddrPreview("single");
+        } else {
+          ["bf", "l", "d"].forEach(p => _renderLiveAddrPreview(p));
+        }
+      }
     }
 
     function syncSingleAddr() {
@@ -6739,6 +6833,7 @@
       S.mealAddrs = { Breakfast: { ...def }, Lunch: { ...def }, Dinner: { ...def } };
 
       togglePickupUI("single", area);
+      if (typeof _renderLiveAddrPreview === "function") _renderLiveAddrPreview("single");
     }
 
 
@@ -6767,6 +6862,142 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // LIVE ADDRESS PREVIEW (Real-time formatting)
+    // ═══════════════════════════════════════════════════════════
+    const DELIVERY_POINT_LABELS = {
+      "door": "Doorstep / Office Door",
+      "bell_keep": "Keep outside & Ring bell",
+      "keep_no_bell": "Keep outside & Don't ring bell",
+      "bag_ring": "Keep in bag outside & Ring bell",
+      "bag_no_bell": "Keep in bag outside & Don't ring bell",
+      "lobby_handoff": "Handover at Lobby / Reception",
+      "lobby_keep": "Keep at Lobby / Reception",
+      "gate_handoff": "Handover at Security Gate",
+      "gate_keep": "Keep at security cabin",
+      "comedown": "I will come down",
+      "other": "Other instructions"
+    };
+
+    function _escHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function _formatLiveAddress(wing, flat, society, area) {
+      const parts = [];
+      const w = (wing || "").trim();
+      const f = (flat || "").trim();
+
+      let unit = "";
+      if (w && f) {
+        const cleanW = w.replace(/^(wing|tower|block|bldg|building)\s+/i, "").trim();
+        if (f.toLowerCase().startsWith(w.toLowerCase()) || (cleanW && f.toLowerCase().startsWith(cleanW.toLowerCase()))) {
+          unit = f;
+        } else {
+          unit = `${w} ${f}`;
+        }
+      } else if (f) {
+        unit = f;
+      } else if (w) {
+        unit = w;
+      }
+
+      if (unit) parts.push(unit);
+      if (society && society.trim()) parts.push(society.trim());
+      if (area && area.trim() && !/pickup|porter/i.test(area)) parts.push(area.trim());
+
+      return parts.join(", ");
+    }
+
+    function _formatFloor(floor) {
+      if (!floor || !floor.trim()) return "";
+      const fl = floor.trim();
+      if (/floor\b/i.test(fl)) return fl;
+      if (/^\d+$/.test(fl)) {
+        const n = parseInt(fl, 10);
+        const s = ["th", "st", "nd", "rd"], v = n % 100;
+        const ord = n + (s[(v - 20) % 10] || s[v] || s[0]);
+        return ord + " Floor";
+      }
+      if (/^ground$/i.test(fl)) return "Ground Floor";
+      if (/^\d+(st|nd|rd|th)$/i.test(fl)) return fl + " Floor";
+      return fl + " Floor";
+    }
+
+    function _renderLiveAddrPreview(pfx) {
+      const isSingle = (pfx === "single");
+      const area = $(isSingle ? "areaSelect" : `${pfx}_areaSelect`)?.value || "";
+      const wing = $(isSingle ? "wingInput" : `${pfx}_wingInput`)?.value || "";
+      const flat = $(isSingle ? "flatInput" : `${pfx}_flatInput`)?.value || "";
+      const floor = $(isSingle ? "floorInput" : `${pfx}_floorInput`)?.value || "";
+      const society = $(isSingle ? "societyInput" : `${pfx}_societyInput`)?.value || "";
+      const dp = $(isSingle ? "deliveryPointSelection" : `${pfx}_deliveryPointSelection`)?.value || "door";
+      const landmark = $(isSingle ? "landmarkInput" : `${pfx}_landmarkInput`)?.value || "";
+
+      const container = $(`${pfx}_addrPreview`);
+      if (!container) return;
+
+      if (/pickup/i.test(area)) {
+        container.style.display = "none";
+        return;
+      }
+      container.style.display = "block";
+
+      const formattedAddr = _formatLiveAddress(wing, flat, society, area);
+      const formattedFloor = _formatFloor(floor);
+      const dpLabel = DELIVERY_POINT_LABELS[dp] || "Handover at Doorstep / Office Door";
+
+      if (formattedAddr) {
+        container.classList.add("active");
+        let metaHtml = "";
+        if (formattedFloor) {
+          metaHtml += `<span class="addr-preview-meta-item">🏢 <strong>Floor:</strong> ${_escHtml(formattedFloor)}</span>`;
+        }
+        metaHtml += `<span class="addr-preview-meta-item">🚚 <strong>Handover:</strong> ${_escHtml(dpLabel)}</span>`;
+        if (landmark.trim()) {
+          metaHtml += `<span class="addr-preview-meta-item">🏷️ <strong>Landmark:</strong> ${_escHtml(landmark.trim())}</span>`;
+        }
+        container.innerHTML = `
+          <div class="addr-preview-header">
+            <span class="addr-preview-title">📍 Live Address Preview</span>
+            <span class="addr-preview-badge">LIVE</span>
+          </div>
+          <div class="addr-preview-text">${_escHtml(formattedAddr)}</div>
+          <div class="addr-preview-meta">${metaHtml}</div>
+        `;
+      } else {
+        container.classList.remove("active");
+        container.innerHTML = `
+          <div class="addr-preview-header">
+            <span class="addr-preview-title">📍 Live Address Preview</span>
+            <span class="addr-preview-badge">EMPTY</span>
+          </div>
+          <div class="addr-preview-text">Start typing your Flat, Wing, and Society above to see your live address preview…</div>
+        `;
+      }
+    }
+
+    function initLiveAddressPreview() {
+      // Wire per-meal listeners
+      ["bf", "l", "d"].forEach(pfx => {
+        ["areaSelect", "wingInput", "flatInput", "floorInput", "societyInput", "deliveryPointSelection", "landmarkInput"].forEach(field => {
+          const el = document.getElementById(`${pfx}_${field}`);
+          if (el) {
+            el.addEventListener("input", () => _renderLiveAddrPreview(pfx));
+            el.addEventListener("change", () => _renderLiveAddrPreview(pfx));
+          }
+        });
+      });
+
+      // Initial render across all cards
+      ["single", "bf", "l", "d"].forEach(p => _renderLiveAddrPreview(p));
+    }
+
     // ═══════════════════════════════════════════════════════════
     // SOCIETY AUTOCOMPLETE (Area-scoped, triggers after 2+ letters typed)
     // ═══════════════════════════════════════════════════════════
@@ -6838,9 +7069,9 @@
     function initSocietyAutocomplete() {
       const inputs = [
         { id: "societyInput", areaId: "areaSelect", onSelect: () => { if (typeof syncSingleAddr === "function") syncSingleAddr(); } },
-        { id: "bf_societyInput", areaId: "bf_areaSelect", onSelect: null },
-        { id: "l_societyInput", areaId: "l_areaSelect", onSelect: null },
-        { id: "d_societyInput", areaId: "d_areaSelect", onSelect: null }
+        { id: "bf_societyInput", areaId: "bf_areaSelect", onSelect: () => { if (typeof _renderLiveAddrPreview === "function") _renderLiveAddrPreview("bf"); } },
+        { id: "l_societyInput", areaId: "l_areaSelect", onSelect: () => { if (typeof _renderLiveAddrPreview === "function") _renderLiveAddrPreview("l"); } },
+        { id: "d_societyInput", areaId: "d_areaSelect", onSelect: () => { if (typeof _renderLiveAddrPreview === "function") _renderLiveAddrPreview("d"); } }
       ];
 
       function getCandidateSocieties(areaId) {
@@ -13581,6 +13812,7 @@
       loadAreas();
       updateNav();
       initSocietyAutocomplete();
+      initLiveAddressPreview();
       initCalendar();
       buildFAQ();
       // Pre-fetch today's menu so cutoff_overrides are available before calendar renders
