@@ -116,6 +116,10 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Cybercity Towers 1–12 Dropdown & Alias Support (CODE_VERSION 35.50 / APP_VERSION v26.09.08.04)**
+  - **All 12 Cybercity Towers in Autocomplete:** Added `Cybercity Tower 1` through `Cybercity Tower 12` explicitly to `CANONICAL_SOCIETIES` in `docs/order.html`.
+  - **Backend Tower Preservation:** Updated `_normSocietyKey` in `02_Orders_Menu.gs` to preserve the specific tower key (`cybercitytower1`..`cybercitytower12`) before falling into the generic `*cybercity` contains rule, and added all 12 tower display titles to `DISPLAY_TITLES`.
+  - **Alias Seeder:** Added all 12 towers to `seedCanonicalSocietyAliases`.
 - **Customer Address Standardization & Society Autocomplete (CODE_VERSION 35.49 / APP_VERSION v26.09.08.03)**
   - **Type 2+ Letters Society Autocomplete Dropdown:** Replaced native browser datalist (which aggressively popped open all 25 options on empty click with unstyled OS box) with a sleek custom autocomplete dropdown (`initSocietyAutocomplete` in `docs/order.html`). Requires users to type at least 2 characters before suggesting, highlights matching letters in bold brand orange (`#c2410c`), prioritizes prefix matches, and fully supports arrow key navigation, click/tap selection, and auto-closing on blur or click-outside.
   - **Auto-Canonicalization on Upsert:** `_upsertCustomer` automatically canonicalizes customer `profile.society` and `Meal_Addresses` JSON blob using `_getCanonicalSocietyDisplay`.

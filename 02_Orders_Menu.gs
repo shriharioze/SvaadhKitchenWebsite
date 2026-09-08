@@ -736,10 +736,22 @@ function seedCanonicalSocietyAliases(commit) {
     ["Marvel Fuego", "Marvel Fuego"],
     ["*marvel fuego", "Marvel Fuego"],
 
-    // Cybercity
+    // Cybercity & Cybercity Towers 1-12
     ["Cybercity", "Cybercity"],
     ["*cybercity", "Cybercity"],
-    ["*cyber city", "Cybercity"]
+    ["*cyber city", "Cybercity"],
+    ["Cybercity Tower 1", "Cybercity Tower 1"],
+    ["Cybercity Tower 2", "Cybercity Tower 2"],
+    ["Cybercity Tower 3", "Cybercity Tower 3"],
+    ["Cybercity Tower 4", "Cybercity Tower 4"],
+    ["Cybercity Tower 5", "Cybercity Tower 5"],
+    ["Cybercity Tower 6", "Cybercity Tower 6"],
+    ["Cybercity Tower 7", "Cybercity Tower 7"],
+    ["Cybercity Tower 8", "Cybercity Tower 8"],
+    ["Cybercity Tower 9", "Cybercity Tower 9"],
+    ["Cybercity Tower 10", "Cybercity Tower 10"],
+    ["Cybercity Tower 11", "Cybercity Tower 11"],
+    ["Cybercity Tower 12", "Cybercity Tower 12"]
   ];
 
   const existing = {};
@@ -799,6 +811,18 @@ function _getCanonicalSocietyDisplay(s) {
     "47east": "47 East",
     "marvelfuego": "Marvel Fuego",
     "cybercity": "Cybercity",
+    "cybercitytower1": "Cybercity Tower 1",
+    "cybercitytower2": "Cybercity Tower 2",
+    "cybercitytower3": "Cybercity Tower 3",
+    "cybercitytower4": "Cybercity Tower 4",
+    "cybercitytower5": "Cybercity Tower 5",
+    "cybercitytower6": "Cybercity Tower 6",
+    "cybercitytower7": "Cybercity Tower 7",
+    "cybercitytower8": "Cybercity Tower 8",
+    "cybercitytower9": "Cybercity Tower 9",
+    "cybercitytower10": "Cybercity Tower 10",
+    "cybercitytower11": "Cybercity Tower 11",
+    "cybercitytower12": "Cybercity Tower 12",
     "amanorafuturetowers": "Amanora Future Towers",
     "amanoraadrenotowers": "Amanora Adreno Towers",
     "amanoragoldtowers": "Amanora Gold Towers",
@@ -818,6 +842,14 @@ function _normSocietyKey(s) {
   if (!base) return "";
   const m = _societyAliasMap();
   if (m.exact && m.exact[base]) return m.exact[base];
+
+  // Cybercity Towers 1-12: preserve tower distinction so it doesn't collapse into generic "cybercity"
+  var ccMatch = base.match(/cybercity.*tower(\d{1,2})|tower(\d{1,2}).*cybercity/);
+  if (ccMatch) {
+    var tNum = parseInt(ccMatch[1] || ccMatch[2], 10);
+    if (tNum >= 1 && tNum <= 12) return "cybercitytower" + tNum;
+  }
+
   const rules = m.contains || [];
   for (var i = 0; i < rules.length; i++) {
     if (base.indexOf(rules[i][0]) !== -1) return rules[i][1];
