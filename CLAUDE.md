@@ -116,6 +116,14 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Area-Scoped Society Autocomplete Filtering (APP_VERSION v26.09.08.05)**
+  - **Dynamic Area-Based Society Filtering:** Society suggestions are now dynamically scoped to the customer's selected Delivery Area:
+    - `Amanora`: Restricts suggestions strictly to Amanora Towers (Future, Adreno, Gold, Metro, Desire, Gateway, Neo, Elevate, Sweet Water Villas, Trendy, Aspire, Citizen) + `Vrindavan Heights`.
+    - `Magarpatta`: Restricts suggestions to Magarpatta residential societies (Jasminium, Cosmos, Laburnum Park, Heliconia 1/2, Sylvania, Trillium, Roystonea, Zinnia), Cybercity & Towers 1–12, Destination Centre, Kumar Prospera, and Marvel Fuego (City Centre & Mega Centre excluded).
+    - `Kirtane Baug`: Konark Icon, Kumar Paradise.
+    - `DP Road`: 47 East.
+    - `Bhosale Nagar`: Amar Ornate.
+    - Unselected / Other Areas: Falls back to full canonical search pool.
 - **Cybercity Towers 1–12 Dropdown & Alias Support (CODE_VERSION 35.50 / APP_VERSION v26.09.08.04)**
   - **All 12 Cybercity Towers in Autocomplete:** Added `Cybercity Tower 1` through `Cybercity Tower 12` explicitly to `CANONICAL_SOCIETIES` in `docs/order.html`.
   - **Backend Tower Preservation:** Updated `_normSocietyKey` in `02_Orders_Menu.gs` to preserve the specific tower key (`cybercitytower1`..`cybercitytower12`) before falling into the generic `*cybercity` contains rule, and added all 12 tower display titles to `DISPLAY_TITLES`.

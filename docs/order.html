@@ -4756,7 +4756,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.08.04";
+    const APP_VERSION = "v26.09.08.05";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -6767,57 +6767,96 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // SOCIETY AUTOCOMPLETE (triggers after 2+ letters typed)
     // ═══════════════════════════════════════════════════════════
+    // SOCIETY AUTOCOMPLETE (Area-scoped, triggers after 2+ letters typed)
+    // ═══════════════════════════════════════════════════════════
+    const AREA_SOCIETIES = {
+      "Amanora": [
+        "Amanora Future Towers",
+        "Amanora Adreno Towers",
+        "Amanora Gold Towers",
+        "Amanora Metro Towers",
+        "Amanora Desire Towers",
+        "Amanora Gateway Towers",
+        "Amanora Neo Towers",
+        "Amanora Elevate Towers",
+        "Amanora Sweet Water Villas",
+        "Amanora Trendy Towers",
+        "Amanora Aspire Towers",
+        "Amanora Citizen Towers",
+        "Vrindavan Heights"
+      ],
+      "Magarpatta": [
+        "Jasminium",
+        "Cosmos",
+        "Laburnum Park",
+        "Heliconia 1",
+        "Heliconia 2",
+        "Sylvania",
+        "Trillium",
+        "Roystonea",
+        "Zinnia",
+        "Cybercity",
+        "Cybercity Tower 1",
+        "Cybercity Tower 2",
+        "Cybercity Tower 3",
+        "Cybercity Tower 4",
+        "Cybercity Tower 5",
+        "Cybercity Tower 6",
+        "Cybercity Tower 7",
+        "Cybercity Tower 8",
+        "Cybercity Tower 9",
+        "Cybercity Tower 10",
+        "Cybercity Tower 11",
+        "Cybercity Tower 12",
+        "Destination Centre",
+        "Kumar Prospera",
+        "Marvel Fuego"
+      ],
+      "Kirtane Baug": [
+        "Konark Icon",
+        "Kumar Paradise"
+      ],
+      "DP Road": [
+        "47 East"
+      ],
+      "Bhosale Nagar": [
+        "Amar Ornate"
+      ]
+    };
+
+    // Full canonical fallback list (used if no area is selected or unmapped area)
     const CANONICAL_SOCIETIES = [
-      "Jasminium",
-      "Cosmos",
-      "Laburnum Park",
-      "Heliconia 1",
-      "Heliconia 2",
-      "Sylvania",
-      "Trillium",
-      "Roystonea",
-      "Zinnia",
-      "Cybercity",
-      "Cybercity Tower 1",
-      "Cybercity Tower 2",
-      "Cybercity Tower 3",
-      "Cybercity Tower 4",
-      "Cybercity Tower 5",
-      "Cybercity Tower 6",
-      "Cybercity Tower 7",
-      "Cybercity Tower 8",
-      "Cybercity Tower 9",
-      "Cybercity Tower 10",
-      "Cybercity Tower 11",
-      "Cybercity Tower 12",
-      "Amanora Future Towers",
-      "Amanora Adreno Towers",
-      "Amanora Gold Towers",
-      "Amanora Metro Towers",
-      "Amanora Desire Towers",
-      "Amanora Gateway Towers",
-      "Amanora Neo Towers",
-      "Amanora Elevate Towers",
-      "Kumar Paradise",
-      "Kumar Prospera",
-      "Vrindavan Heights",
+      ...AREA_SOCIETIES["Magarpatta"],
+      ...AREA_SOCIETIES["Amanora"],
+      ...AREA_SOCIETIES["Kirtane Baug"],
+      ...AREA_SOCIETIES["DP Road"],
+      ...AREA_SOCIETIES["Bhosale Nagar"],
       "City Centre",
-      "47 East",
-      "Marvel Fuego",
-      "Konark Icon"
+      "Mega Centre"
     ];
 
     function initSocietyAutocomplete() {
       const inputs = [
-        { id: "societyInput", onSelect: () => { if (typeof syncSingleAddr === "function") syncSingleAddr(); } },
-        { id: "bf_societyInput", onSelect: null },
-        { id: "l_societyInput", onSelect: null },
-        { id: "d_societyInput", onSelect: null }
+        { id: "societyInput", areaId: "areaSelect", onSelect: () => { if (typeof syncSingleAddr === "function") syncSingleAddr(); } },
+        { id: "bf_societyInput", areaId: "bf_areaSelect", onSelect: null },
+        { id: "l_societyInput", areaId: "l_areaSelect", onSelect: null },
+        { id: "d_societyInput", areaId: "d_areaSelect", onSelect: null }
       ];
 
-      inputs.forEach(({ id, onSelect }) => {
+      function getCandidateSocieties(areaId) {
+        const areaEl = document.getElementById(areaId);
+        const selectedArea = (areaEl ? areaEl.value : "").trim().toLowerCase();
+        if (!selectedArea) return CANONICAL_SOCIETIES;
+        if (selectedArea.includes("amanora")) return AREA_SOCIETIES["Amanora"] || CANONICAL_SOCIETIES;
+        if (selectedArea.includes("magarpatta")) return AREA_SOCIETIES["Magarpatta"] || CANONICAL_SOCIETIES;
+        if (selectedArea.includes("kirtane")) return AREA_SOCIETIES["Kirtane Baug"] || CANONICAL_SOCIETIES;
+        if (selectedArea.includes("dp road")) return AREA_SOCIETIES["DP Road"] || CANONICAL_SOCIETIES;
+        if (selectedArea.includes("bhosale")) return AREA_SOCIETIES["Bhosale Nagar"] || CANONICAL_SOCIETIES;
+        return CANONICAL_SOCIETIES;
+      }
+
+      inputs.forEach(({ id, areaId, onSelect }) => {
         const inp = $(id);
         if (!inp) return;
         const container = inp.parentElement;
@@ -6839,8 +6878,9 @@
         }
 
         function renderMatches(q) {
+          const pool = getCandidateSocieties(areaId);
           const lowerQ = q.toLowerCase();
-          const matches = CANONICAL_SOCIETIES.filter(s => s.toLowerCase().includes(lowerQ));
+          const matches = pool.filter(s => s.toLowerCase().includes(lowerQ));
           if (matches.length === 0) {
             closeList();
             return;
@@ -6878,6 +6918,16 @@
           }
           renderMatches(val);
         });
+
+        // Close suggestion list if user changes the area dropdown
+        const areaEl = document.getElementById(areaId);
+        if (areaEl) {
+          areaEl.addEventListener("change", function () {
+            closeList();
+            const val = inp.value.trim();
+            if (val.length >= 2) renderMatches(val);
+          });
+        }
 
         inp.addEventListener("keydown", function (e) {
           const items = listEl.querySelectorAll(".soc-ac-item");
