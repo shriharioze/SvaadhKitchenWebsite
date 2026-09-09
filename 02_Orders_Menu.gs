@@ -1552,17 +1552,24 @@ function _logMissedOrderRow(ss, rec) {
   try {
     const ws = getOrCreateTab(ss, TAB_MISSED_ORDERS, MISSED_ORDERS_HEADERS);
     // Self-heal: legacy tabs predate the Row_JSON column.
-    const hdr = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0].map(String);
-    if (hdr.indexOf("Row_JSON") === -1) ws.getRange(1, ws.getLastColumn() + 1).setValue("Row_JSON");
-    ws.appendRow([
-      new Date(), rec.status || "", rec.sid || "", rec.gatewayId || "",
+    const lastC = ws.getLastColumn();
+    if (lastC > 0) {
+      const hdr = ws.getRange(1, 1, 1, lastC).getValues()[0].map(String);
+      if (hdr.indexOf("Row_JSON") === -1) ws.getRange(1, lastC + 1).setValue("Row_JSON");
+    }
+    const nextRow = ws.getLastRow() + 1;
+    const rowData = [
+      getISTTimestamp(), rec.status || "", rec.sid || "", rec.gatewayId || "",
       rec.name || "", rec.phone || "", rec.amount || "", rec.date || "", rec.meal || "",
       (rec.attempts == null ? "" : rec.attempts),
       rec.rowJson || ""
-    ]);
+    ];
+    ws.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
     SpreadsheetApp.flush();
+    return { success: true, lastRow: ws.getLastRow(), nextRow: nextRow };
   } catch (e) {
     console.error("_logMissedOrderRow failed for " + (rec && rec.sid) + ": " + e.message);
+    return { success: false, error: e.message, stack: e.stack };
   }
 }
 
@@ -1592,12 +1599,13 @@ function reconcileMissedOrdersLog(debug) {
   // Capped per run — each run must finish WELL inside the ~6-min execution limit
   // (the first uncapped run timed out on the June backlog); the 10-min trigger
   // drains any remainder across subsequent runs.
-  const PENDING_RE = /STILL MISSING|BULK ROW DROPPED|FOUND BY AUDIT/i;
+  const PENDING_RE = /STILL MISSING|BULK ROW DROPPED|FOUND BY AUDIT|CHARGED BUT NOT IN SK_ORDERS/i;
   const MAX_PER_RUN = 30;
   let cand = [];
   for (let i = 1; i < data.length; i++) {
     const st = String(data[i][cSt] || "");
-    if (PENDING_RE.test(st) && st.indexOf("✅") === -1 && st.indexOf("⚠️") === -1) cand.push(i);
+    if (st.indexOf("✅") !== -1 || st.indexOf("Unrecoverable") !== -1) continue;
+    if (PENDING_RE.test(st)) cand.push(i);
   }
   if (!cand.length) return { checked: 0, recovered: 0 };
   const candTotal = cand.length;
@@ -1693,6 +1701,71 @@ function reconcileMissedOrdersLog(debug) {
           }
         }
       } catch (e) {}
+    }
+
+    // (d) Refer to SK_Order_Log sheet to retrieve and register the order in SK_Orders
+    if (!how && gw) {
+      try {
+        let isCharged = false;
+        const currentSt = String(data[i][cSt] || "").toUpperCase();
+        if (currentSt.indexOf("CHARGED") !== -1 || currentSt.indexOf("FOUND BY AUDIT") !== -1 || currentSt.indexOf("AUTO-RECOVERED") !== -1) {
+          isCharged = true;
+        } else if (typeof hdfc_getOrderStatus === "function") {
+          const sc = hdfc_getOrderStatus(gw);
+          if (sc && sc.confirmed) isCharged = true;
+        }
+        if (isCharged) {
+          const olWs = ss.getSheetByName("SK_Order_Log");
+          if (olWs && olWs.getLastRow() > 1) {
+            const olData = olWs.getDataRange().getValues();
+            const olH = olData[0];
+            const olGwCol = olH.indexOf("Gateway_Order_ID");
+            const olStashCol = olH.indexOf("Stash_JSON");
+            const olStCol = olH.indexOf("Status");
+            if (olGwCol !== -1 && olStashCol !== -1) {
+              for (let olIdx = 1; olIdx < olData.length; olIdx++) {
+                if (String(olData[olIdx][olGwCol] || "").trim() === gw) {
+                  const rawStash = String(olData[olIdx][olStashCol] || "");
+                  if (rawStash) {
+                    const entry = JSON.parse(rawStash);
+                    if (entry && (entry.orders || entry.bulk)) {
+                      let submitRes = null;
+                      if (entry.bulk && typeof submitBulkOrder === "function") {
+                        const isSplit = String(entry.payment_choice || "") === "Split";
+                        submitRes = submitBulkOrder({
+                          plan: entry.bulk.plan, phone: entry.phone, profile: entry.profile,
+                          storefront: String(entry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
+                          lunch: entry.bulk.lunch, dinner: entry.bulk.dinner,
+                          lunchDates: entry.bulk.lunchDates, dinnerDates: entry.bulk.dinnerDates,
+                          payment_method: isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)", payment_status: "Paid",
+                          wallet_applied: isSplit ? Number(entry.wallet_applied || 0) : 0,
+                          gateway_order_id: gw, batch_id: gw
+                        });
+                      } else if (typeof _buildSubmitBodyFromPending === "function" && typeof submitOrder === "function") {
+                        const body = _buildSubmitBodyFromPending(gw, entry, { status: "CHARGED", confirmed: true });
+                        if (body) {
+                          body.pin = PropertiesService.getScriptProperties().getProperty("ADMIN_PIN") || "7532";
+                          submitRes = submitOrder(body);
+                        }
+                      }
+                      if (submitRes && (submitRes.success || submitRes.submission_id || submitRes.submissionId)) {
+                        const placedSid = submitRes.submission_id || submitRes.submissionId || "";
+                        how = "RETRIEVED from SK_Order_Log & registered in SK_Orders" + (placedSid ? " (" + placedSid + ")" : "");
+                        liveGws.add(gw);
+                        if (placedSid) liveSids.add(placedSid);
+                        if (olStCol !== -1) olWs.getRange(olIdx + 1, olStCol + 1).setValue("recovered");
+                      }
+                    }
+                  }
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (eOl) {
+        Logger.log("reconcileMissedOrdersLog SK_Order_Log recovery error for " + gw + ": " + eOl.message);
+      }
     }
 
     if (how) {
@@ -1883,13 +1956,20 @@ function auditLostGatewayOrders(monthsBack) {
     for (let r = 1; r < data.length; r++) {
       if (String(data[r][evCol] || "").trim() !== "ORDER_SUCCEEDED") continue;
       const oid = String(data[r][oidCol] || "").trim();
-      if (!/^SK\d{6}G/.test(oid)) continue;   // regular + bulk gateway ids only
+      if (!/^(SK|LS)\d{6}G/i.test(oid)) continue;   // regular + bulk gateway ids only (both SK and LS)
       if (inOrders.has(oid)) continue;        // it landed — fine
       if (seen[oid]) continue;                // already captured from another row/source
       const rcv = data[r][rcvCol];
-      if (!(rcv instanceof Date)) continue;                          // undated — can't age it, skip
-      if ((now - rcv.getTime()) < 5 * 60 * 1000) continue;           // too fresh (still writing)
-      if ((now - rcv.getTime()) > AUDIT_WINDOW_MS) continue;         // outside the operational window
+      let rcvTime = 0;
+      if (rcv instanceof Date) {
+        rcvTime = rcv.getTime();
+      } else if (rcv) {
+        const parsed = new Date(rcv);
+        if (!isNaN(parsed.getTime())) rcvTime = parsed.getTime();
+      }
+      if (!rcvTime) continue;                                        // undated — can't age it, skip
+      if ((now - rcvTime) < 5 * 60 * 1000) continue;                 // too fresh (still writing)
+      if ((now - rcvTime) > AUDIT_WINDOW_MS) continue;               // outside the operational window
 
       let amount = 0, name = "", phone = "", status = "";
       try {
@@ -1903,10 +1983,10 @@ function auditLostGatewayOrders(monthsBack) {
         sdk = sdk || {};
         name = ((sdk.firstName || "") + " " + (sdk.lastName || "")).trim();
       } catch (_) {}
-      if (status && status !== "CHARGED") continue; // only genuinely charged
+      if (status && status !== "CHARGED" && status !== "SUCCESS") continue; // only genuinely charged
       const _regName = nameByPhone[_normalizePhone(phone)]; // prefer the registered name
       if (_regName) name = _regName;
-      seen[oid] = { oid: oid, amount: amount, name: name, phone: phone, rcv: rcv, source: src.label };
+      seen[oid] = { oid: oid, amount: amount, name: name, phone: phone, rcv: (rcv instanceof Date ? rcv : new Date(rcvTime)), source: src.label };
     }
   });
 
@@ -3981,7 +4061,7 @@ function getCustomerOrders(phone, storefront) {
         is_bulk:            _isBulkRow,
         batch_id:           String(r.Batch_ID || "").trim(),
         bulk_plan:          _isBulkRow ? String(r.Bulk_Plan || "").trim() : "",
-        bulk_postponed:     _isBulkRow ? !!String(r.Bulk_Postponed || "").trim() : false,
+        bulk_postponed:     _isBulkRow ? (typeof _isCustomerBulkPostponed === "function" ? _isCustomerBulkPostponed(r.Bulk_Postponed) : !!String(r.Bulk_Postponed || "").trim()) : false,
         deliveredAt:        delTracker.deliveredAt,
         enRouteAt:          delTracker.enRouteAt
       };

@@ -90,10 +90,23 @@ function _bulkRowPlan(r) {
   return BULK_PLANS[p] ? p : "week";
 }
 
+// Helper: checks if a Bulk_Postponed value contains customer-initiated postponements.
+// Shifts initiated administratively via kitchen closure ("Kitchen Close: ...") or
+// admin actions ("Admin Close: ...") do NOT count against the customer's quota.
+function _isCustomerBulkPostponed(bpVal) {
+  const s = String(bpVal || "").trim();
+  if (!s) return false;
+  const parts = s.split("|").map(function (x) { return x.trim(); }).filter(Boolean);
+  return parts.some(function (p) {
+    return p.indexOf("Kitchen Close") === -1 && p.indexOf("Admin Close") === -1;
+  });
+}
+
 // { cap, used, remaining } of postpones for ONE (batch, meal). `used` counts rows
-// already marked Bulk_Postponed (INCLUDING later-cancelled ones — a postpone, once
+// already marked Bulk_Postponed by customer (INCLUDING later-cancelled ones — a postpone, once
 // spent, is not refunded by cancelling the moved day). Re-postponing an already-
 // marked row doesn't consume more quota (it stays a single marked row).
+// Note: Involuntary shifts from kitchen closures do not consume customer quota.
 function _bulkPostponeState(allRows, batchId, meal, plan) {
   const cap = BULK_POSTPONE_CAP[plan] || 0;
   const b = String(batchId || "").trim(), m = String(meal || "").trim();
@@ -102,7 +115,7 @@ function _bulkPostponeState(allRows, batchId, meal, plan) {
     allRows.forEach(function (r) {
       if (String(r.Batch_ID || "").trim() !== b) return;
       if (String(r.Meal_Type || "").trim() !== m) return;
-      if (String(r.Bulk_Postponed || "").trim()) used++;
+      if (_isCustomerBulkPostponed(r.Bulk_Postponed)) used++;
     });
   }
   return { cap: cap, used: used, remaining: Math.max(0, cap - used) };
@@ -180,7 +193,7 @@ function _bulkPostponeContext(phone, rowId) {
   if (cap <= 0) return { ok: false, error: "Postponing isn't available on this plan." };
 
   const state = _bulkPostponeState(allRows, batchId, meal, plan);
-  const alreadyMarked = !!String(row.Bulk_Postponed || "").trim();
+  const alreadyMarked = _isCustomerBulkPostponed(row.Bulk_Postponed);
   // A fresh row needs remaining quota; an already-postponed row can always move again.
   if (!alreadyMarked && state.remaining <= 0) {
     return { ok: false, error: "You've used all " + cap + " " + meal.toLowerCase() + " postpones for this order." };
@@ -236,13 +249,15 @@ function postponeBulkOrder(body) {
     }
 
     const dCol = ctx.hIdx["Order_Date"];
-    const pCol = ctx.hIdx["Bulk_Postponed", "MyGate_Code"] ||
+    const pCol = ctx.hIdx["Bulk_Postponed"] ||
       (function () { ctx.ws.getRange(1, ctx.ws.getLastColumn() + 1).setValue("Bulk_Postponed"); return ctx.ws.getLastColumn(); })();
     ctx.ws.getRange(ctx.row._row, dCol).setValue(newDate);
     // Mark on first move only, so quota counts DISTINCT postponed days (re-moving a
     // day that was already postponed doesn't spend another slot).
     if (!ctx.alreadyMarked) {
-      ctx.ws.getRange(ctx.row._row, pCol).setValue(ctx.curDate + " → moved " + getISTTimestamp());
+      const prevBp = String(ctx.row.Bulk_Postponed || "").trim();
+      const moveNote = ctx.curDate + " → moved " + getISTTimestamp();
+      ctx.ws.getRange(ctx.row._row, pCol).setValue(prevBp ? (prevBp + " | " + moveNote) : moveNote);
     }
     SpreadsheetApp.flush();
 

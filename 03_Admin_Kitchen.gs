@@ -404,47 +404,146 @@ function setKitchenClosed(body) {
 
   // If closing AND not yet confirmed: count affected orders (of the SELECTED meals) + amount.
   if (isClosed) {
-    const ordersWs = ss.getSheetByName(TAB_ORDERS);
-    const oRows = ordersWs ? getAllRows(ordersWs) : [];
+    const oRows = (typeof _getAllOrdersBothTabsIfPresent === "function")
+      ? _getAllOrdersBothTabsIfPresent(ss)
+      : (ss.getSheetByName(TAB_ORDERS) ? getAllRows(ss.getSheetByName(TAB_ORDERS)) : []);
+
     const activeMatches = oRows.filter(function(r) {
       const od = r.Order_Date instanceof Date
         ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
-        : String(r.Order_Date || "").trim();
+        : String(r.Order_Date || "").trim().slice(0, 10);
       if (od !== dateStr) return false;
       if (!mealSel[String(r.Meal_Type || "").trim()]) return false; // only the selected meals
       return !_isOrderCancelled(r.Payment_Status);
     });
 
+    const standardMatches = [];
+    const bulkMatches = [];
+    activeMatches.forEach(function(r) {
+      if (_isBulkOrderRow(r)) {
+        bulkMatches.push(r);
+      } else {
+        standardMatches.push(r);
+      }
+    });
+
     if (activeMatches.length && !confirmCancelOrders) {
-      const total = activeMatches.reduce(function(s, r) {
+      const standardTotal = standardMatches.reduce(function(s, r) {
         return s + (Number(r.Net_Total) || 0);
       }, 0);
-      const customers = {};
-      activeMatches.forEach(function(r) { customers[String(r.Phone || "")] = true; });
+      const allCustomers = {};
+      activeMatches.forEach(function(r) { allCustomers[String(r.Phone || "")] = true; });
+
+      let msg = "There are " + activeMatches.length + " active " + meals.join("/") + " order(s) for " + dateStr + ": ";
+      if (standardMatches.length && bulkMatches.length) {
+        msg += standardMatches.length + " standard order(s) totaling ₹" + standardTotal + " will be cancelled & refunded, and "
+             + bulkMatches.length + " bulk order(s) will be rescheduled to their next non-order working day. Confirm?";
+      } else if (bulkMatches.length) {
+        msg += bulkMatches.length + " bulk order(s) will be rescheduled to the next non-order working day (no cancellation or refund). Confirm?";
+      } else {
+        msg += standardMatches.length + " standard order(s) totaling ₹" + standardTotal + " will be cancelled & refunded. Confirm?";
+      }
+
       return {
         success: false,
         requires_confirm: true,
         orderCount: activeMatches.length,
-        customerCount: Object.keys(customers).length,
-        totalAmount: total,
+        standardCount: standardMatches.length,
+        bulkCount: bulkMatches.length,
+        customerCount: Object.keys(allCustomers).length,
+        totalAmount: standardTotal,
         date: dateStr,
         meals: meals,
-        message: "There are " + activeMatches.length + " active " + meals.join("/") + " order(s) totaling ₹"
-               + total + " across " + Object.keys(customers).length
-               + " customer(s) for " + dateStr
-               + ". Closing will cancel and refund all of them. Confirm?"
+        message: msg
       };
     }
 
-    // Auto-cancel + refund every active order for this date. deleteOrder
-    // auto-detects "On Account" status from the row itself, so passing
-    // rType="none" for those is safe — it routes to the On-Account branch
-    // (row marked Cancelled, no payout, auto-excluded from monthly bills).
+    // 1. BULK ORDERS: Reschedule to customer's next available non-order working day
+    let rescheduledBulk = 0;
+    const shiftedOrders = [];
+    const datesToInvalidate = [];
+
+    if (bulkMatches.length) {
+      const closedMealsMap = (typeof _kitchenClosedMealSet === "function") ? _kitchenClosedMealSet() : {};
+      // Ensure dateStr is treated as closed for selected meals
+      closedMealsMap[dateStr] = closedMealsMap[dateStr] || {};
+      meals.forEach(function(m) { closedMealsMap[dateStr][m] = true; });
+
+      // Build customer active order dates map per (phone, meal)
+      const customerTakenDates = {};
+      oRows.forEach(function(r) {
+        const p = _normalizePhone(r.Phone);
+        if (!p) return;
+        if (_isOrderCancelled(r.Payment_Status)) return;
+        const m = String(r.Meal_Type || "").trim();
+        const od = r.Order_Date instanceof Date
+          ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(r.Order_Date || "").trim().slice(0, 10);
+        if (!od) return;
+
+        // Skip the bulk orders currently on dateStr being moved
+        if (od === dateStr && mealSel[m]) return;
+
+        const k = p + "_" + m;
+        if (!customerTakenDates[k]) customerTakenDates[k] = {};
+        customerTakenDates[k][od] = true;
+      });
+
+      bulkMatches.forEach(function(r) {
+        const p = _normalizePhone(r.Phone);
+        const m = String(r.Meal_Type || "").trim();
+        const k = p + "_" + m;
+        const takenMap = customerTakenDates[k] || {};
+
+        const nextDate = _findNextNonOrderWorkingDay(m, dateStr, takenMap, closedMealsMap);
+
+        if (nextDate) {
+          takenMap[nextDate] = true;
+          customerTakenDates[k] = takenMap;
+
+          const ws = r._ws || ss.getSheetByName(TAB_ORDERS);
+          const hIdx = headerIndex(ws);
+
+          if (!hIdx["Bulk_Postponed"]) {
+            ws.getRange(1, ws.getLastColumn() + 1).setValue("Bulk_Postponed");
+            hIdx["Bulk_Postponed"] = ws.getLastColumn();
+          }
+
+          const dCol = hIdx["Order_Date"];
+          const pCol = hIdx["Bulk_Postponed"];
+
+          ws.getRange(r._row, dCol).setValue(nextDate);
+
+          const prevBp = String(r.Bulk_Postponed || "").trim();
+          const shiftNote = "Kitchen Close: shifted from " + dateStr + " to " + nextDate + " @ " + getISTTimestamp();
+          const newBp = prevBp ? (prevBp + " | " + shiftNote) : shiftNote;
+          ws.getRange(r._row, pCol).setValue(newBp);
+
+          rescheduledBulk++;
+          if (datesToInvalidate.indexOf(nextDate) === -1) datesToInvalidate.push(nextDate);
+          shiftedOrders.push({
+            submissionId: String(r.Submission_ID || "").trim(),
+            customerName: String(r.Customer_Name || "").trim(),
+            phone: p,
+            meal: m,
+            fromDate: dateStr,
+            toDate: nextDate
+          });
+        } else {
+          // Safety fallback: if no next working day found in 180 days, fallback to cancel
+          console.error("setKitchenClosed: no available working day found for bulk order " + r.Submission_ID + " (" + p + ", " + m + "). Falling back to cancel.");
+          standardMatches.push(r);
+        }
+      });
+      SpreadsheetApp.flush();
+    }
+
+    // 2. STANDARD ORDERS (and any fallback bulk): Cancel & refund
     let cancelled = 0;
     let refundedWallet = 0;
     let refundedUpi = 0;
     let onAccountAdjusted = 0;     // billed-later customers — nothing to pay back
-    activeMatches.forEach(function(r) {
+    standardMatches.forEach(function(r) {
       const pStat = String(r.Payment_Status || "").toLowerCase();
       let rType = "none";
       let bucket = "other";
@@ -473,7 +572,18 @@ function setKitchenClosed(body) {
     const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
     meals.forEach(function (m) { newClosed[m] = true; });
     _writeClosedMeals(menuWs, mIdx, dateStr, newClosed);
-    _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "kitchen_closed_set_v1", "kitchen_closed_mealset_v1", "adminData_v1");
+
+    const cacheKeys = [
+      "menu_v2_" + dateStr,
+      "kitchen_closed_dates_v1",
+      "kitchen_closed_set_v1",
+      "kitchen_closed_mealset_v1",
+      "adminData_v1"
+    ];
+    datesToInvalidate.forEach(function(d) {
+      cacheKeys.push("menu_v2_" + d);
+    });
+    _invalidateCache.apply(null, cacheKeys);
 
     const closedList = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
     const isFullDay = closedList.length === 3;
@@ -485,17 +595,31 @@ function setKitchenClosed(body) {
     if (onAccountAdjusted > 0) parts.push("₹" + onAccountAdjusted + " removed from On-Account balances (no payout — just won't be billed)");
     var breakdown = parts.length ? (" — " + parts.join(", ") + ".") : ".";
 
+    var summaryParts = [];
+    if (cancelled > 0) {
+      summaryParts.push(cancelled + " standard order(s) cancelled" + breakdown);
+    }
+    if (rescheduledBulk > 0) {
+      summaryParts.push(rescheduledBulk + " bulk order(s) rescheduled to next non-order working day");
+    }
+
+    var finalMsg = (isFullDay ? "Kitchen closed (full day)" : "Closed " + meals.join(", ")) + " for " + dateStr + ".";
+    if (summaryParts.length) {
+      finalMsg += " " + summaryParts.join("; ") + ".";
+    }
+
     return {
       success: true,
       isClosed: true,
       closedMeals: closedList,
       fullDay: isFullDay,
       cancelled: cancelled,
+      rescheduledBulk: rescheduledBulk,
+      rescheduledOrders: shiftedOrders,
       refundedWallet: refundedWallet,
       refundedUpi: refundedUpi,
       onAccountAdjusted: onAccountAdjusted,
-      message: (isFullDay ? "Kitchen closed (full day)" : "Closed " + meals.join(", ")) + " for " + dateStr + ". "
-             + cancelled + " order(s) cancelled" + breakdown
+      message: finalMsg
     };
   }
 
@@ -539,6 +663,50 @@ function _writeClosedMeals(menuWs, mIdx, dateStr, closedObj) {
     menuWs.appendRow(newRow);
   }
   SpreadsheetApp.flush();
+}
+
+// Helper: Identifies whether an order row is part of a bulk subscription
+function _isBulkOrderRow(r) {
+  if (!r) return false;
+  const src = String(r.Source || "").trim().toLowerCase();
+  const batch = String(r.Batch_ID || "").trim();
+  const plan = String(r.Bulk_Plan || "").trim();
+  return src === "bulk" || Boolean(batch) || Boolean(plan);
+}
+
+// Helper: Finds the next available working day (non-Sunday, non-closed, non-ordered)
+// for a customer and meal, starting strictly after fromDateStr (at least tomorrow).
+function _findNextNonOrderWorkingDay(mealType, fromDateStr, takenDatesMap, closedMealMap) {
+  const TZ = "Asia/Kolkata";
+  const now = new Date();
+  const todayISO = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
+
+  let baseDateStr = fromDateStr;
+  if (baseDateStr < todayISO) {
+    baseDateStr = todayISO;
+  }
+
+  let cur = new Date(baseDateStr + "T12:00:00+05:30");
+  cur = new Date(cur.getTime() + 24 * 60 * 60 * 1000); // Day + 1
+
+  let safety = 0;
+  while (safety < 180) {
+    safety++;
+    const iso = Utilities.formatDate(cur, TZ, "yyyy-MM-dd");
+    const dayName = Utilities.formatDate(cur, TZ, "EEEE");
+
+    const isSunday = (dayName === "Sunday");
+    const isClosed = closedMealMap && closedMealMap[iso] && closedMealMap[iso][mealType];
+    const isTaken = takenDatesMap && takenDatesMap[iso];
+
+    if (!isSunday && !isClosed && !isTaken) {
+      return iso;
+    }
+
+    cur = new Date(cur.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return null;
 }
 
 // ── ADMIN: BREAKFAST MASTER CRUD ─────────────────────────────

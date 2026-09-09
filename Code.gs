@@ -125,6 +125,319 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       }
       return jsonRes(autoGenerateLabels(String(p.date || ""), String(p.meal || "")));
     }
+    if (action === "findMissedOrderManual") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      const query = String(p.query || "Amol").trim().toLowerCase();
+      const ss = getSpreadsheet();
+      const report = { query: query, customers: [], webhookLog: [], orderLog: [], pendingProps: [] };
+      try {
+        const cWs = ss.getSheetByName(TAB_CUSTOMERS);
+        if (cWs && cWs.getLastRow() > 1) {
+          const cData = cWs.getDataRange().getValues();
+          const cH = cData[0] || [];
+          const nameCol = cH.indexOf("Customer_Name");
+          const phoneCol = cH.indexOf("Phone");
+          for (let r = 1; r < cData.length; r++) {
+            const rowStr = JSON.stringify(cData[r]).toLowerCase();
+            const words = query.split(/\s+/).filter(Boolean);
+            if (rowStr.indexOf(query) !== -1 || (words.length > 0 && words.every(w => rowStr.indexOf(w) !== -1))) {
+              report.customers.push({
+                row: r + 1,
+                name: cData[r][nameCol],
+                phone: cData[r][phoneCol],
+                society: cData[r][cH.indexOf("Society")],
+                flat: cData[r][cH.indexOf("Flat")],
+                area: cData[r][cH.indexOf("Area")]
+              });
+            }
+          }
+        }
+      } catch (eC) { report.custErr = eC.message; }
+
+      try {
+        const whWs = ss.getSheetByName(TAB_WEBHOOK_LOG);
+        if (whWs && whWs.getLastRow() > 1) {
+          const whData = whWs.getDataRange().getValues();
+          const whH = whData[0] || [];
+          const oidCol = whH.indexOf("Order_ID");
+          const evCol = whH.indexOf("Event_Name");
+          const rcvCol = whH.indexOf("Received_At");
+          const stCol = whH.indexOf("Status");
+          const payCol = whH.indexOf("Raw_Payload");
+          const resCol = whH.indexOf("Result");
+          for (let r = 1; r < whData.length; r++) {
+            const rowStr = JSON.stringify(whData[r]).toLowerCase();
+            const hit = rowStr.indexOf(query) !== -1;
+            const phoneHit = report.customers.some(c => c.phone && rowStr.indexOf(String(c.phone)) !== -1);
+            if (hit || phoneHit || p.allToday === "1") {
+              report.webhookLog.push({
+                row: r + 1,
+                rcv: whData[r][rcvCol],
+                rcvType: typeof whData[r][rcvCol],
+                isDate: whData[r][rcvCol] instanceof Date,
+                event: whData[r][evCol],
+                oid: whData[r][oidCol],
+                status: whData[r][stCol],
+                result: whData[r][resCol],
+                payload: whData[r][payCol]
+              });
+            }
+          }
+        }
+      } catch (eW) { report.whErr = eW.message; }
+
+      try {
+        const oLogWs = ss.getSheetByName("SK_Order_Log");
+        if (oLogWs && oLogWs.getLastRow() > 1) {
+          const olData = oLogWs.getDataRange().getValues();
+          for (let r = 1; r < olData.length; r++) {
+            const rowStr = JSON.stringify(olData[r]).toLowerCase();
+            const hit = rowStr.indexOf(query) !== -1;
+            const phoneHit = report.customers.some(c => c.phone && rowStr.indexOf(String(c.phone)) !== -1);
+            if (hit || phoneHit) {
+              report.orderLog.push({
+                row: r + 1,
+                timestamp: olData[r][0],
+                phone: olData[r][1],
+                name: olData[r][2],
+                gatewayId: olData[r][3],
+                stash: olData[r][4],
+                status: olData[r][5]
+              });
+            }
+          }
+        }
+      } catch (eOL) { report.olErr = eOL.message; }
+
+      try {
+        const props = PropertiesService.getScriptProperties();
+        const rawHdfc = props.getProperty("HDFC_PENDING_ORDERS") || "{}";
+        const hdfcMap = JSON.parse(rawHdfc);
+        report.hdfcPendingCount = Object.keys(hdfcMap).length;
+        Object.keys(hdfcMap).forEach(k => {
+          const kStr = JSON.stringify(hdfcMap[k]).toLowerCase();
+          if (kStr.indexOf(query) !== -1 || report.customers.some(c => c.phone && kStr.indexOf(String(c.phone)) !== -1)) {
+            report.pendingProps.push({ source: "HDFC_PENDING_ORDERS", key: k, data: hdfcMap[k] });
+          }
+        });
+      } catch (eP) { report.propErr = eP.message; }
+
+      return jsonRes(report);
+    }
+    if (action === "debugTriggers") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      const trs = ScriptApp.getProjectTriggers().map(t => ({
+        handler: t.getHandlerFunction(),
+        source: t.getTriggerSource().toString(),
+        type: t.getEventType().toString()
+      }));
+      return jsonRes({ count: trs.length, triggers: trs });
+    }
+    if (action === "debugAuditLost") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      return jsonRes(auditLostGatewayOrders(Number(p.monthsBack || 0)));
+    }
+    if (action === "debugMissedOrders") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      const mWs = getSpreadsheet().getSheetByName(TAB_MISSED_ORDERS);
+      const rows = mWs ? mWs.getDataRange().getValues() : [];
+      return jsonRes({ count: rows.length, rows: rows.slice(-15) });
+    }
+    if (action === "archiveMissedOrdersManual") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      return jsonRes(archiveMissedOrders());
+    }
+    if (action === "placeMissedOrderManual") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      const query = String(p.query || "Amol").trim().toLowerCase();
+      const gwIdParam = String(p.gatewayId || "").trim();
+      const ss = getSpreadsheet();
+      const oLogWs = ss.getSheetByName("SK_Order_Log");
+      if (!oLogWs || oLogWs.getLastRow() < 2) return jsonRes({ error: "SK_Order_Log is empty or missing" });
+      const olData = oLogWs.getDataRange().getValues();
+      let targetRowIdx = -1;
+      let targetEntry = null;
+      let targetGwId = "";
+
+      for (let r = olData.length - 1; r >= 1; r--) {
+        const gw = String(olData[r][3] || "").trim();
+        const ph = String(olData[r][1] || "").trim();
+        const nm = String(olData[r][2] || "").trim().toLowerCase();
+        
+        let match = false;
+        if (gwIdParam && gw === gwIdParam) match = true;
+        else if (!gwIdParam && (nm.indexOf(query) !== -1 || ph === query)) match = true;
+        
+        if (match) {
+          targetRowIdx = r + 1; // 1-indexed sheet row
+          targetGwId = gw;
+          try { targetEntry = JSON.parse(olData[r][4]); } catch(e) { targetEntry = null; }
+          break;
+        }
+      }
+
+      if (!targetEntry) {
+        return jsonRes({ error: "No matching order found in SK_Order_Log for query: " + (gwIdParam || query) });
+      }
+
+      // Check if already in SK_Orders or LS_Orders
+      let alreadyInOrders = false;
+      [TAB_ORDERS, TAB_LS_ORDERS].forEach(function (tn) {
+        if (alreadyInOrders) return;
+        const ws = ss.getSheetByName(tn);
+        if (!ws || ws.getLastRow() < 2) return;
+        const dh = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0].map(String);
+        const gwCol = dh.indexOf("Gateway_Order_ID");
+        if (gwCol === -1) return;
+        ws.getRange(2, gwCol + 1, ws.getLastRow() - 1, 1).getValues().forEach(function (v) {
+          if (String(v[0] || "").trim() === targetGwId) alreadyInOrders = true;
+        });
+      });
+
+      if (alreadyInOrders) {
+        // Ensure it is recorded in SK_Missed_Orders as recovered
+        let loggedRow = null;
+        try {
+          const mWs = ss.getSheetByName(TAB_MISSED_ORDERS);
+          if (mWs) {
+            const mData = mWs.getDataRange().getValues();
+            const mH = mData[0] || [];
+            const gwIdx = mH.indexOf("Gateway_Order_ID");
+            const alreadyInMissed = gwIdx !== -1 && mData.some(row => String(row[gwIdx] || "").trim() === targetGwId);
+            if (!alreadyInMissed) {
+              const mealDate = (targetEntry.selectedDates && targetEntry.selectedDates[0]) || Object.keys(targetEntry.orders || {})[0] || "";
+              let mealType = "";
+              try { if (targetEntry.orders && targetEntry.orders[mealDate]) mealType = Object.keys(targetEntry.orders[mealDate])[0] || ""; } catch(_) {}
+              loggedRow = _logMissedOrderRow(ss, {
+                status: "✅ Recovered & written — verified present in SK_Orders @ " + getISTTimestamp(),
+                sid: "",
+                gatewayId: targetGwId,
+                name: (targetEntry.profile && targetEntry.profile.name) || "",
+                phone: targetEntry.phone || "",
+                amount: targetEntry.amount || 0,
+                date: mealDate,
+                meal: mealType,
+                attempts: 1
+              });
+            }
+          }
+        } catch(eMiss) {}
+
+        return jsonRes({
+          success: true,
+          alreadyPresent: true,
+          message: "Order with Gateway_Order_ID " + targetGwId + " is verified present in SK_Orders!",
+          row: targetRowIdx,
+          gatewayId: targetGwId,
+          loggedToMissed: loggedRow
+        });
+      }
+
+      // Reconstruct submitOrder body
+      let submitRes;
+      if (targetEntry.bulk) {
+        const isSplit = String(targetEntry.payment_choice || "") === "Split";
+        submitRes = submitBulkOrder({
+          plan: targetEntry.bulk.plan,
+          phone: targetEntry.phone,
+          profile: targetEntry.profile,
+          storefront: String(targetEntry.storefront || "").trim().toUpperCase() === "LS" ? "LS" : "",
+          lunch: targetEntry.bulk.lunch,
+          dinner: targetEntry.bulk.dinner,
+          lunchDates: targetEntry.bulk.lunchDates,
+          dinnerDates: targetEntry.bulk.dinnerDates,
+          payment_method: isSplit ? "Bulk (Split HDFC)" : "Bulk (Gateway)",
+          payment_status: "Paid",
+          wallet_applied: isSplit ? Number(targetEntry.wallet_applied || 0) : 0,
+          gateway_order_id: targetGwId,
+          batch_id: targetGwId,
+          pin: ADMIN_PIN
+        });
+      } else {
+        const body = _buildSubmitBodyFromPending(targetGwId, targetEntry, { status: "CHARGED", confirmed: true });
+        if (!body || !body.orders || !body.orders.length) {
+          return jsonRes({ error: "Failed to construct valid submitOrder body from pending entry", entry: targetEntry });
+        }
+        body.pin = ADMIN_PIN; // Admin bypass
+        submitRes = submitOrder(body);
+      }
+
+      if (submitRes && (submitRes.success || submitRes.submission_id || submitRes.submissionIds || submitRes.submissionId)) {
+        // Mark SK_Order_Log row as recovered
+        try { oLogWs.getRange(targetRowIdx, 6).setValue("recovered"); } catch(_) {}
+
+        // Log to SK_Missed_Orders
+        const sid = submitRes.submission_id || (submitRes.submissionIds && submitRes.submissionIds[0]) || submitRes.submissionId || "";
+        const mealDate = (targetEntry.selectedDates && targetEntry.selectedDates[0]) || Object.keys(targetEntry.orders || {})[0] || "";
+        let mealType = "";
+        try {
+          if (targetEntry.orders && targetEntry.orders[mealDate]) {
+            mealType = Object.keys(targetEntry.orders[mealDate])[0] || "";
+          }
+        } catch(_) {}
+
+        _logMissedOrderRow(ss, {
+          status: "✅ Recovered & written — verified present in SK_Orders @ " + getISTTimestamp(),
+          sid: sid,
+          gatewayId: targetGwId,
+          name: (targetEntry.profile && targetEntry.profile.name) || "",
+          phone: targetEntry.phone || "",
+          amount: targetEntry.amount || 0,
+          date: mealDate,
+          meal: mealType,
+          attempts: 1
+        });
+
+        return jsonRes({
+          success: true,
+          orderPlaced: true,
+          gatewayId: targetGwId,
+          submissionId: sid,
+          customer: targetEntry.profile && targetEntry.profile.name,
+          phone: targetEntry.phone,
+          amount: targetEntry.amount,
+          date: mealDate,
+          meal: mealType,
+          submitResult: submitRes
+        });
+      } else {
+        return jsonRes({
+          success: false,
+          error: "submitOrder failed",
+          submitResult: submitRes
+        });
+      }
+    }
+    if (action === "diagLogMissed") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      const ss = getSpreadsheet();
+      const res = {};
+      try {
+        const ws = ss.getSheetByName("SK_Missed_Orders");
+        res.foundSheet = !!ws;
+        if (ws) {
+          res.lastRowBefore = ws.getLastRow();
+          res.lastCol = ws.getLastColumn();
+          res.headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
+        }
+        res.logResult = _logMissedOrderRow(ss, {
+          status: "✅ Recovered & written — verified present in SK_Orders @ " + getISTTimestamp(),
+          sid: p.sid || "SK-20260909-6873",
+          gatewayId: p.gatewayId || "SK260909GMKXT4C4L1",
+          name: p.name || "Amol Chaudhary",
+          phone: p.phone || "7798980989",
+          amount: Number(p.amount || 69),
+          date: "2026-09-09",
+          meal: "Lunch",
+          attempts: 1
+        });
+        if (ws) res.lastRowAfter = ws.getLastRow();
+      } catch(e) {
+        res.error = e.message;
+        res.stack = e.stack;
+      }
+      return jsonRes(res);
+    }
     if (action === "reconcileMissedOrders") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(reconcileMissedOrdersLog(p.debug === "1")); } // verify/restore STILL-MISSING log entries + "recovered & written" mail (debug=1: read-only diagnosis)
     if (action === "auditAmanoraTowers") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(auditAmanoraTowers()); } // read-only: Amanora tower# → society co-occurrence from customers+orders+archives
     if (action === "seedAmanoraTowerAliases") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(seedAmanoraTowerAliases(p.commit === "1")); } // owner-confirmed tower→society alias rows (dry-run unless commit=1)

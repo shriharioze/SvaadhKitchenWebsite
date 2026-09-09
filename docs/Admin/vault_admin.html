@@ -3167,11 +3167,17 @@ async function _applyKitchenClosure(iso, toClose, toOpen) {
     if (toClose.length) {
       let r = await _send(toClose, true, false);
       if (r && r.requires_confirm) {
+        let actionDesc = "Closing will <b>cancel and refund</b> all of them (wallet → instant, UPI → refund queue, On-Account → un-billed).";
+        if (r.bulkCount > 0 && r.standardCount > 0) {
+          actionDesc = `Closing will <b>cancel and refund ${r.standardCount} standard order(s)</b> (₹${r.totalAmount}) and <b>reschedule ${r.bulkCount} bulk order(s)</b> to their next non-order working day.`;
+        } else if (r.bulkCount > 0) {
+          actionDesc = `Closing will <b>reschedule ${r.bulkCount} bulk order(s)</b> to their next non-order working day (no cancellation or refund).`;
+        }
         const ok = await sConfirm(
-          `⚠️ <b>${r.orderCount}</b> active <b>${toClose.join("/")}</b> order(s) totaling <b>₹${r.totalAmount}</b> across ` +
+          `⚠️ <b>${r.orderCount}</b> active <b>${toClose.join("/")}</b> order(s) across ` +
           `<b>${r.customerCount}</b> customer(s) for <b>${iso}</b>.<br><br>` +
-          `Closing will <b>cancel and refund</b> all of them (wallet → instant, UPI → refund queue, On-Account → un-billed).<br><br>Proceed?`,
-          "Existing Orders Found", "⚠️", "", { confirmLabel: "Yes, cancel & refund", cancelLabel: "Keep open" }
+          actionDesc + `<br><br>Proceed?`,
+          "Existing Orders Found", "⚠️", "", { confirmLabel: "Yes, proceed", cancelLabel: "Keep open" }
         );
         if (ok) r = await _send(toClose, true, true);
         else r = { success: true, message: "Left those meals open." };

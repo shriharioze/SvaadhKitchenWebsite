@@ -2398,7 +2398,11 @@ function archiveMissedOrders() {
     if (colDate === -1) return { success: false, error: "No Detected_At column" };
 
     var now = Date.now();
-    var SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    var THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+    var colOrderDate = headers.indexOf("Order_Date");
+    var colStatus = headers.indexOf("Status");
+    var colGw = headers.indexOf("Gateway_Order_ID");
 
     var keep = [headers];
     var byYear = {};
@@ -2409,14 +2413,66 @@ function archiveMissedOrders() {
       if (row.join("").trim() === "") continue;
       
       var dt = row[colDate];
-      var tsMs = (dt instanceof Date) ? dt.getTime() : new Date(dt).getTime();
+      var tsMs = NaN;
+      var year = 0;
+
+      // 1. Try Detected_At
+      if (dt instanceof Date) {
+        tsMs = dt.getTime();
+        year = dt.getFullYear();
+      } else if (dt && typeof dt === "string" && dt.trim()) {
+        var parsed = new Date(dt.trim());
+        if (!isNaN(parsed.getTime())) {
+          tsMs = parsed.getTime();
+          year = parsed.getFullYear();
+        }
+      }
+
+      // 2. Fallback to Order_Date
+      if (isNaN(tsMs) && colOrderDate !== -1) {
+        var od = row[colOrderDate];
+        if (od instanceof Date) {
+          tsMs = od.getTime();
+          year = od.getFullYear();
+        } else if (od && typeof od === "string" && od.trim()) {
+          var parsedOd = new Date(od.trim());
+          if (!isNaN(parsedOd.getTime())) {
+            tsMs = parsedOd.getTime();
+            year = parsedOd.getFullYear();
+          }
+        }
+      }
+
+      // 3. Fallback to timestamp in Status string (e.g. "@ 2026-08-31 08:50:29" or "2026-09-01")
+      if (isNaN(tsMs) && colStatus !== -1) {
+        var st = String(row[colStatus] || "");
+        var stMatch = st.match(/(\d{4}-\d{2}-\d{2})/);
+        if (stMatch) {
+          var parsedSt = new Date(stMatch[1] + "T12:00:00Z");
+          if (!isNaN(parsedSt.getTime())) {
+            tsMs = parsedSt.getTime();
+            year = parsedSt.getFullYear();
+          }
+        }
+      }
+
+      // 4. Fallback to Gateway_Order_ID prefix (e.g. SK260831... -> 2026-08-31)
+      if (isNaN(tsMs) && colGw !== -1) {
+        var gw = String(row[colGw] || "").trim();
+        var gwMatch = gw.match(/^(?:SK|LS)(\d{2})(\d{2})(\d{2})/);
+        if (gwMatch) {
+          var parsedGw = new Date("20" + gwMatch[1] + "-" + gwMatch[2] + "-" + gwMatch[3] + "T12:00:00Z");
+          if (!isNaN(parsedGw.getTime())) {
+            tsMs = parsedGw.getTime();
+            year = parsedGw.getFullYear();
+          }
+        }
+      }
       
-      if (isNaN(tsMs) || (now - tsMs) <= SEVEN_DAYS_MS) {
+      if (isNaN(tsMs) || (now - tsMs) <= THREE_DAYS_MS) {
         keep.push(row);
       } else {
-        var year = (dt instanceof Date) ? dt.getFullYear() : new Date(dt).getFullYear();
-        if (isNaN(year)) year = new Date().getFullYear();
-        
+        if (!year || isNaN(year)) year = new Date().getFullYear();
         var yearStr = String(year);
         if (!byYear[yearStr]) byYear[yearStr] = [];
         byYear[yearStr].push(row);
@@ -2613,7 +2669,7 @@ function recoverFromOrderLog() {
       }
 
       if (!charged) {
-        Logger.log("recoverFromOrderLog: SKIPPING " + gwId + " (phone=" + (entry.phone || "?") + ", age=" + Math.round(ageMin) + "min) — payment NOT confirmed by any source (HDFC API / webhook log / SK_Missed_Orders)");
+        Logger.log("recoverFromOrderLog: SKIPPING " + gwId + " (phone=" + (entry.phone || "?") + ", age=" + Math.round(ageMin) + "min) — payment NOT confirmed by any source (safely ignored, no charge confirmed)");
         skipped++;
         continue;
       }
@@ -2654,6 +2710,24 @@ function recoverFromOrderLog() {
         recovered++;
         recoveredDetails.push(gwId + " (" + (entry.phone || "?") + ") via " + chargeSource);
         Logger.log("recoverFromOrderLog: RECOVERED " + gwId + " via " + chargeSource);
+        try {
+          if (typeof _logMissedOrderRow === "function") {
+            var mealD = (entry.selectedDates && entry.selectedDates[0]) || Object.keys(entry.orders || {})[0] || "";
+            var mealT = "";
+            try { if (entry.orders && entry.orders[mealD]) mealT = Object.keys(entry.orders[mealD])[0] || ""; } catch(_) {}
+            _logMissedOrderRow(ss, {
+              status: "AUTO-RECOVERED FROM ORDER LOG (" + chargeSource + ")",
+              sid: (result.submission_id || (result.submissionIds && result.submissionIds[0]) || result.submissionId || ""),
+              gatewayId: gwId,
+              name: (entry.profile && entry.profile.name) || "",
+              phone: entry.phone || "",
+              amount: entry.amount || 0,
+              date: mealD,
+              meal: mealT,
+              attempts: 1
+            });
+          }
+        } catch (eLog) { Logger.log("recoverFromOrderLog: _logMissedOrderRow error: " + eLog.message); }
       } else {
         Logger.log("recoverFromOrderLog: FAILED to write " + gwId + " despite confirmed charge: " + JSON.stringify(result));
       }
@@ -5607,11 +5681,12 @@ function sendDailyEndOfDayReport(dateOverride) {
   const missedWs = ss.getSheetByName("SK_Missed_Orders");
   if (missedWs && typeof getAllRows === "function") {
     getAllRows(missedWs).forEach(function(r) {
-      const d = r.Timestamp instanceof Date ? Utilities.formatDate(r.Timestamp, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Timestamp || "").slice(0,10);
+      const rawD = r.Detected_At || r.Timestamp || r.Order_Date;
+      const d = rawD instanceof Date ? Utilities.formatDate(rawD, "Asia/Kolkata", "yyyy-MM-dd") : String(rawD || "").slice(0,10);
       if (d === todayStr) {
         missedCount++;
-        const rec = String(r.Recovery_Status || "");
-        if (rec.indexOf("Recovered") === -1) missedUnrecovered++;
+        const rec = String(r.Status || r.Recovery_Status || "");
+        if (rec.indexOf("Recovered") === -1 && rec.indexOf("✅") === -1) missedUnrecovered++;
       }
     });
   }
