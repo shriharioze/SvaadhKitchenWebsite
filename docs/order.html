@@ -4840,7 +4840,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.08.07";
+    const APP_VERSION = "v26.09.09.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5954,6 +5954,11 @@
         return;
       }
       if ($("btnNext").disabled) return;
+      if (S.step > 0 && S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
+        toast("⚠️ Your monthly bill is overdue. Please settle your bill to continue ordering.", 4500);
+        showOnAccountBillModal();
+        return;
+      }
       if (!(await validate(S.step))) return;
       if (S.step === 0) {
         if (!S.authMode) { await lookupCustomer(); return; }
@@ -9447,6 +9452,11 @@
           });
           await sAlert(data.error + "\n\nCart quantity has been adjusted — please review and try again.", "Stock Updated", "⚡");
         }
+        else if (data.isOverdue) {
+          await sAlert(data.error || "Your previous month's bill is overdue. Please settle your outstanding balance to continue ordering.", "Bill Overdue ⚠️", "🛑");
+          showOnAccountBillModal();
+          return;
+        }
         else throw new Error(data.error || "Unknown error");
       } catch (err) {
         // ── Auto-verify for ANY error (timeout, JSON parse, network, etc.) ──
@@ -10059,7 +10069,8 @@
           ) +
           '<button id="onAccountBillPdfBtn" style="width:100%;padding:12px;border:1.5px solid #0284c7;border-radius:12px;background:#f0f9ff;color:#0369a1;font-size:0.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📄 View / Download bill (PDF)</button>' +
           (data.isOverdue 
-             ? '<div style="text-align:center;font-size:0.8rem;color:#dc2626;font-weight:700;margin-top:10px;">Your bill is overdue. Please pay to continue ordering.</div>' 
+             ? ('<button id="onAccountBillLaterBtn" disabled style="width:100%;padding:13px;border:none;border-radius:12px;background:#f1f5f9;color:#94a3b8;font-size:0.92rem;font-weight:700;cursor:not-allowed;opacity:0.6;margin-top:6px;">Remind me later (Disabled — Overdue)</button>' +
+                '<div style="text-align:center;font-size:0.8rem;color:#dc2626;font-weight:700;margin-top:10px;">⚠️ Your bill is overdue. Please settle your bill to continue ordering.</div>')
              : '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>') +
         '</div>';
 

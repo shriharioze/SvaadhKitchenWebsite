@@ -592,6 +592,23 @@ function submitBulkOrder(body) {
   const isPickup = ctx.isPickup;
   const ss = getSpreadsheet();
 
+  // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
+  // If customer is On Account (Monthly) and it is >= 10th of the month
+  // with an unpaid bill from previous month(s), block bulk orders too.
+  if (cRow && String(cRow.On_Account || "").trim().toLowerCase() === "yes" &&
+      String(cRow.Billing_Cycle || "Daily").trim().toLowerCase() === "monthly") {
+    if (typeof getOnAccountBill === "function") {
+      const billInfo = getOnAccountBill(phone);
+      if (billInfo && billInfo.due && billInfo.isOverdue) {
+        return {
+          success: false,
+          error: "Your previous month's bill is overdue. Please settle your outstanding balance of ₹" + billInfo.total + " to continue placing orders.",
+          isOverdue: true
+        };
+      }
+    }
+  }
+
   // Price — honour frozen dates (gateway passes the windows captured at checkout) so
   // storage matches the charge exactly; falls back to live windows otherwise.
   const priced = _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx,

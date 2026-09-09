@@ -4729,7 +4729,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.08.01";
+    const APP_VERSION = "v26.09.09.01";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -5822,6 +5822,11 @@
         return;
       }
       if ($("btnNext").disabled) return;
+      if (S.step > 0 && S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
+        toast("⚠️ Your monthly bill is overdue. Please settle your bill to continue ordering.", 4500);
+        showOnAccountBillModal();
+        return;
+      }
       if (!(await validate(S.step))) return;
       if (S.step === 0) {
         if (!S.authMode) { await lookupCustomer(); return; }
@@ -9004,6 +9009,11 @@
           });
           await sAlert(data.error + "\n\nCart quantity has been adjusted — please review and try again.", "Stock Updated", "⚡");
         }
+        else if (data.isOverdue) {
+          await sAlert(data.error || "Your previous month's bill is overdue. Please settle your outstanding balance to continue ordering.", "Bill Overdue ⚠️", "🛑");
+          showOnAccountBillModal();
+          return;
+        }
         else throw new Error(data.error || "Unknown error");
       } catch (err) {
         // ── Auto-verify for ANY error (timeout, JSON parse, network, etc.) ──
@@ -9379,10 +9389,10 @@
         if (billItem) billItem.style.display = "";
 
         // Auto-open once per browser session per billing period (skippable —
-        // we don't nag on every reload).
+        // we don't nag on every reload), UNLESS it is overdue, in which case we force it.
         const seenKey = `sk_bill_seen_${S.phone}_${data.periodLabel}`;
-        if (!sessionStorage.getItem(seenKey)) {
-          sessionStorage.setItem(seenKey, "1");
+        if (data.isOverdue || !sessionStorage.getItem(seenKey)) {
+          if (!data.isOverdue) sessionStorage.setItem(seenKey, "1");
           showOnAccountBillModal();
         }
       } catch (e) { /* non-blocking — bill is optional UX */ }
@@ -9445,7 +9455,10 @@
                + '</div>')
           ) +
           '<button id="onAccountBillPdfBtn" style="width:100%;padding:12px;border:1.5px solid #0284c7;border-radius:12px;background:#f0f9ff;color:#0369a1;font-size:0.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📄 View / Download bill (PDF)</button>' +
-          '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>' +
+          (data.isOverdue 
+             ? ('<button id="onAccountBillLaterBtn" disabled style="width:100%;padding:13px;border:none;border-radius:12px;background:#f1f5f9;color:#94a3af;font-size:0.92rem;font-weight:700;cursor:not-allowed;opacity:0.6;margin-top:6px;">Remind me later (Disabled — Overdue)</button>' +
+                '<div style="text-align:center;font-size:0.8rem;color:#dc2626;font-weight:700;margin-top:10px;">⚠️ Your bill is overdue. Please settle your bill to continue ordering.</div>')
+             : '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>') +
         '</div>';
 
       document.body.appendChild(overlay);
@@ -9461,13 +9474,15 @@
       // Gateway settlement button (only present when gateway is live).
       const _oaGwBtn = document.getElementById("onAccountBillGatewayBtn");
       if (_oaGwBtn) _oaGwBtn.addEventListener("click", function () {
-        overlay.remove();
+        if (!data.isOverdue) overlay.remove();
         hdfc_payOnAccountViaGateway("monthly");
       });
 
       // Skippable: tapping the dim backdrop closes it too.
-      overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
-      document.getElementById("onAccountBillLaterBtn").addEventListener("click", function () { overlay.remove(); });
+      if (!data.isOverdue) {
+        overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.remove(); });
+        document.getElementById("onAccountBillLaterBtn").addEventListener("click", function () { overlay.remove(); });
+      }
       document.getElementById("onAccountBillPdfBtn").addEventListener("click", openOnAccountBillPdf);
     }
 
