@@ -4729,7 +4729,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.09.01";
+    const APP_VERSION = "v26.09.09.02";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -5823,7 +5823,7 @@
       }
       if ($("btnNext").disabled) return;
       if (S.step > 0 && S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
-        toast("⚠️ Your monthly bill is overdue. Please settle your bill to continue ordering.", 4500);
+        toast("Friendly reminder: please clear your previous bill so we can keep your meals rolling! 😊", 4500);
         showOnAccountBillModal();
         return;
       }
@@ -6330,6 +6330,7 @@
           email: profileData.email || "",
           promoCount: pc,
           feeExempt: (profileData.feeExempt === true || String(profileData.feeExempt) === "true"),
+          isFnF: (profileData.isFnF === true || String(profileData.isFnF) === "true" || String(profileData.friends_family || profileData.Friends_Family || "").toLowerCase() === "yes"),
           onAccount: String(profileData.onAccount || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
           billingCycle: profileData.billingCycle || "Daily",
           pending_amount: Number(profileData.pending_amount) || 0
@@ -7834,7 +7835,8 @@
 
         // Retroactive discount credit: if existing orders didn't get a discount but combined now qualifies
         let discRate = 0, discLabel = "";
-        if (combinedDayTotal >= DISC_T3.min) { discRate = DISC_T3.rate; discLabel = `10% off (≥ ₹${DISC_T3.min})`; }
+        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.20; discLabel = "20% Special Discount"; }
+        else if (combinedDayTotal >= DISC_T3.min) { discRate = DISC_T3.rate; discLabel = `10% off (≥ ₹${DISC_T3.min})`; }
         else if (combinedDayTotal >= DISC_T2.min) { discRate = DISC_T2.rate; discLabel = `7.5% off (≥ ₹${DISC_T2.min})`; }
         else if (combinedDayTotal >= DISC_T1.min) { discRate = DISC_T1.rate; discLabel = `5% off (≥ ₹${DISC_T1.min})`; }
         const existingDiscountTotal = Object.values(existDay).reduce((s, m) => s + (m.discount_applied || 0), 0);
@@ -7862,7 +7864,8 @@
         let discAmt = 0;
         let loyaltyWaiverTotal = 0;
 
-        if (is6thDay) {
+        let isFnF = S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true");
+        if (is6thDay && !isFnF) {
           // Loyalty Discount triggers on Day 6: waive all surcharges across 6 days
           // (per-meal surcharge sum = exactly what was charged on this day)
           loyaltyWaiverTotal = virtualPastSurcharge + dayMealSurcharge;
@@ -9010,7 +9013,7 @@
           await sAlert(data.error + "\n\nCart quantity has been adjusted — please review and try again.", "Stock Updated", "⚡");
         }
         else if (data.isOverdue) {
-          await sAlert(data.error || "Your previous month's bill is overdue. Please settle your outstanding balance to continue ordering.", "Bill Overdue ⚠️", "🛑");
+          await sAlert(data.error || "A quick reminder from Svaadh Kitchen: please take a moment to clear your previous month's bill so we can keep preparing your fresh meals! ❤️", "Friendly Reminder 😊", "🧾");
           showOnAccountBillModal();
           return;
         }
@@ -9456,8 +9459,8 @@
           ) +
           '<button id="onAccountBillPdfBtn" style="width:100%;padding:12px;border:1.5px solid #0284c7;border-radius:12px;background:#f0f9ff;color:#0369a1;font-size:0.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📄 View / Download bill (PDF)</button>' +
           (data.isOverdue 
-             ? ('<button id="onAccountBillLaterBtn" disabled style="width:100%;padding:13px;border:none;border-radius:12px;background:#f1f5f9;color:#94a3af;font-size:0.92rem;font-weight:700;cursor:not-allowed;opacity:0.6;margin-top:6px;">Remind me later (Disabled — Overdue)</button>' +
-                '<div style="text-align:center;font-size:0.8rem;color:#dc2626;font-weight:700;margin-top:10px;">⚠️ Your bill is overdue. Please settle your bill to continue ordering.</div>')
+             ? ('<button id="onAccountBillLaterBtn" disabled style="width:100%;padding:13px;border:none;border-radius:12px;background:#fef3c7;color:#92400e;font-size:0.92rem;font-weight:700;cursor:not-allowed;opacity:0.85;margin-top:6px;">Please clear previous bill to continue</button>' +
+                '<div style="text-align:center;font-size:0.8rem;color:#b45309;font-weight:600;margin-top:10px;">Friendly reminder: please take a quick moment to clear your previous dues so we can keep your daily meals coming! 😊</div>')
              : '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>') +
         '</div>';
 
@@ -12662,6 +12665,8 @@
     };
     function _bulkInfoHtml(plan) {
       const i = BULK_PLAN_INFO[plan] || BULK_PLAN_INFO.week;
+      const isFnF = !!(S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true"));
+      const discountText = isFnF ? "<b>20% (Friends &amp; Family) off</b>" : ("<b>" + i.rate + " off</b>");
       const flexLine = i.postpone > 0
         ? '<li><b>Change of plans?</b> Postpone up to <b>' + i.postpone + ' lunch</b> + <b>' + i.postpone + ' dinner</b> days to another date — no charge, discount kept.</li>'
           + '<li>Or cancel any day before its cutoff (cancelling forfeits that meal\'s bulk discount).</li>'
@@ -12673,7 +12678,7 @@
         + '<div style="padding:18px 20px;">'
         + '<ul style="margin:0;padding-left:20px;font-size:0.86rem;line-height:1.7;color:#333;">'
         + '<li><b>' + i.days + ' working days</b> of Lunch and/or Dinner (Sundays &amp; holidays skipped).</li>'
-        + '<li><b>' + i.rate + ' off</b> every day\'s food · sabji is the chef\'s special of the day.</li>'
+        + '<li>' + discountText + ' every day\'s food · sabji is the chef\'s special of the day.</li>'
         + '<li>Same items every working day.</li>'
         + flexLine
         + '</ul>'
@@ -12902,12 +12907,14 @@
         items += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#444;"><span>' + qty + ' × ' + nm + '</span><span>₹' + (getPrice(ck, meal) * qty) + '</span></div>';
       });
       const fmt = function(v) { return Number(Number(v).toFixed(2)); };
+      const isFnF = !!(q.isFnF || (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")));
       const deliveryPerDay = rows[0].delivery || 0, smallFeePerDay = rows[0].smallFee || 0;
-      const ratePct = (q.bulkRate ? Math.round(q.bulkRate * 1000) / 10 : 5); // 5 / 7.5 / 10
+      const ratePct = isFnF ? 20 : (q.bulkRate ? Math.round(q.bulkRate * 1000) / 10 : 5); // 5 / 7.5 / 10 / 20
+      const discountLabel = isFnF ? 'Friends & Family discount (20%)' : ('Bulk discount (' + ratePct + '%)');
       let feeItems = (deliveryPerDay > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#777;"><span>🚚 Delivery</span><span>₹' + fmt(deliveryPerDay) + '</span></div>' : "")
                    + (smallFeePerDay > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#777;"><span>📦 Small-order fee</span><span>₹' + fmt(smallFeePerDay) + '</span></div>' : "");
       let lines = '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:5px 0;color:#555;border-top:1px solid #f0f0f0;margin-top:4px;"><span>Food (₹' + fmt(foodPerDay) + '/day × ' + days + ')</span><span>₹' + fmt(food) + '</span></div>'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Bulk discount (' + ratePct + '%)</span><span>−₹' + fmt(bulk) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>' + discountLabel + '</span><span>−₹' + fmt(bulk) + '</span></div>'
         + (tier > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#16a34a;"><span>Volume discount</span><span>−₹' + fmt(tier) + '</span></div>' : "")
         + '<div style="display:flex;justify-content:space-between;font-weight:700;font-size:0.85rem;color:#b45309;padding-top:4px;"><span>' + meal + ' subtotal</span><span>₹' + fmt(net) + '</span></div>';
       return '<div style="border:1px solid #fde4c8;border-radius:12px;padding:11px 13px;margin-bottom:12px;">'
@@ -12919,11 +12926,12 @@
 
     function _bulkRenderReview(q) {
       BK.quote = q; // kept for the post-payment success summary
+      const isFnF = !!(q.isFnF || (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")));
       const head = '<div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;"><div style="font-weight:800;font-size:1.05rem;">Review — ' + BULK_PLAN_LABEL[BK.plan] + '</div><div style="font-size:0.72rem;opacity:0.95;margin-top:3px;">' + q.count + ' meal-days · same items every working day</div></div>';
       const body = '<div style="padding:14px 16px;max-height:56vh;overflow-y:auto;">'
         + _bulkMealBlock("Dinner", q, "🌙") + _bulkMealBlock("Lunch", q, "☀️")
         + '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;color:#b45309;padding:8px 2px 2px;border-top:2px solid #eee;"><span>Grand Total</span><span>₹' + q.total + '</span></div>'
-        + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + ' with bulk</div>'
+        + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + (isFnF ? ' with your 20% Friends & Family discount' : ' with bulk') + '</div>'
         + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 If you cancel a day, that meal\'s bulk discount comes off the refund (lunch &amp; dinner are independent). Sabji is the chef\'s choice each day.</div></div>';
       // Payment routing — mirrors the regular order flow: On-Account users are billed
       // later (never forced to pay); a wallet balance is used first (full → wallet only,

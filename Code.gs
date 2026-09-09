@@ -235,6 +235,10 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getCustomerHistory(p.phone));
     }
+    if (action === "toggleFnF") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(toggleFnF(p.phone, p.status));
+    }
     if (action === "getDatePayments") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getDatePayments(p.date));
@@ -472,6 +476,10 @@ function doPost(e) {
     if (action === "toggleFeeExempt") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(toggleFeeExempt(body.phone, body.status));
+    }
+    if (action === "toggleFnF") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(toggleFnF(body.phone, body.status));
     }
     if (action === "approveWalletRecharge") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});

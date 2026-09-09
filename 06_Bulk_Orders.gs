@@ -411,7 +411,9 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     const isDayFree = feeExempt || (dayFood >= freeThreshold);
 
     let tierRate = 0;
-    if (dayFood >= 750) tierRate = 0.10;
+    if (ctx && ctx.isFnF) {
+      tierRate = 0; // FnF gets flat 20% on food total for all bulk plans — no daily volume tier stacking
+    } else if (dayFood >= 750) tierRate = 0.10;
     else if (dayFood >= 485) tierRate = 0.075;
     else if (dayFood >= 325) tierRate = 0.05;
     const dayTierDisc = Math.round(dayFood * tierRate);
@@ -500,10 +502,12 @@ function _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx, frozen) {
   }
   const lunchDates  = lunchFood  > 0 ? winLunch  : [];
   const dinnerDates = dinnerFood > 0 ? winDinner : [];
-  const rate = BULK_PLAN_RATES[planName] || BULK_DISCOUNT_RATE; // week 5% / 15day 7.5% / month 10%
+  const isFnF = !!(ctx && ctx.isFnF);
+  const rate = isFnF ? 0.20 : (BULK_PLAN_RATES[planName] || BULK_DISCOUNT_RATE); // FnF: flat 20% on all 3 bulk plans; else week 5% / 15day 7.5% / month 10%
   const priced = _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx, rate);
   priced.plan     = planName;
   priced.bulkRate = rate; // surfaced to the frontend review ("Bulk discount (X%)")
+  priced.isFnF    = isFnF;
   priced.lunch  = lunchFood  > 0 ? { food: lunchFood,  dates: lunchDates  } : null;
   priced.dinner = dinnerFood > 0 ? { food: dinnerFood, dates: dinnerDates } : null;
   return priced;
@@ -526,6 +530,8 @@ function _bulkFeeCtx(phone, profile, storefront) {
                  .find(function (r) { return _normalizePhone(r.Phone) === _normalizePhone(phone); }) || null;
   const area = String(profile.area || (cRow && cRow.Area) || "").trim();
   const freeAreaNames = (getAreas() || []).filter(function (a) { return a.free; }).map(function (a) { return a.name; });
+  const isFnF = !!(cRow && (cRow.Friends_Family === "Yes" || cRow.Friends_Family === true)) ||
+                !!(profile && (profile.isFnF === true || String(profile.isFnF) === "true"));
   return {
     cRow: cRow,
     name: String(profile.name || (cRow && cRow.Customer_Name) || "Customer").trim(),
@@ -533,6 +539,7 @@ function _bulkFeeCtx(phone, profile, storefront) {
     ctx: {
       isFreeArea:  freeAreaNames.indexOf(area) !== -1,
       isFeeExempt: !!(cRow && (cRow.Fee_Exempt === "Yes" || cRow.Fee_Exempt === true)),
+      isFnF:       isFnF,
       isPickup:    area.toLowerCase().indexOf("pickup") !== -1,
       // Liviano-Serio storefront marker → free delivery inside the pricing engine.
       lsFree:      _lsDeliveryFree(String(storefront || "").trim().toUpperCase() === "LS" ? "LS" : "")
@@ -602,7 +609,7 @@ function submitBulkOrder(body) {
       if (billInfo && billInfo.due && billInfo.isOverdue) {
         return {
           success: false,
-          error: "Your previous month's bill is overdue. Please settle your outstanding balance of ₹" + billInfo.total + " to continue placing orders.",
+          error: "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊",
           isOverdue: true
         };
       }
@@ -621,7 +628,7 @@ function submitBulkOrder(body) {
 
   // Dry run: return the breakdown WITHOUT writing anything.
   if (body.dryRun) {
-    return { success: true, dryRun: true, plan: priced.plan, total: priced.total, bulkRate: priced.bulkRate,
+    return { success: true, dryRun: true, plan: priced.plan, total: priced.total, bulkRate: priced.bulkRate, isFnF: priced.isFnF,
              count: priced.rows.length, totalFood: priced.totalFood, totalBulkDisc: priced.totalBulkDisc,
              totalTierDisc: priced.totalTierDisc, lunch: priced.lunch, dinner: priced.dinner,
              rows: priced.rows.map(function (r) { return { date: r.date, meal: r.meal, food: r.food, baseFood: r.baseFood, discount: r.discount, bulkDisc: r.bulkDisc, tierDisc: r.tierDisc, delivery: r.delivery, smallFee: r.smallFee, net: r.net }; }) };

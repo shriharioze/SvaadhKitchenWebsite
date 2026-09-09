@@ -2297,7 +2297,7 @@ function _submitOrderInternal(body) {
       const billInfo = getOnAccountBill(profile.phone);
       if (billInfo && billInfo.due && billInfo.isOverdue) {
         return {
-          error: "Your previous month's bill is overdue. Please settle your outstanding balance of ₹" + billInfo.total + " to continue placing orders.",
+          error: "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊",
           isOverdue: true
         };
       }
