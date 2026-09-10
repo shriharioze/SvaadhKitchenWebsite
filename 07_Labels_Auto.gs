@@ -23,7 +23,7 @@
 // after export.
 // ============================================================
 
-var LBL_AUTO_MEALS     = ["Lunch", "Dinner"]; // Breakfast excluded per spec
+var LBL_AUTO_MEALS     = [];                  // Auto-label generation stopped per owner request (was ["Lunch", "Dinner"])
 var LBL_AUTO_DELAY_MIN = 5;                   // fire N minutes after cutoff
 var LBL_AUTO_WINDOW_H  = 3;                   // don't fire if > 3h past cutoff (stale)
 var LBL_AUTO_LANG      = "Devanagari";        // kitchen staff read Marathi
@@ -322,61 +322,7 @@ function autoGenerateLabels(date, meal) {
 // (max 3 attempts). Skips entirely if more than LBL_AUTO_WINDOW_H past cutoff
 // (e.g. the trigger was installed late in the day — stale labels help nobody).
 function labelAutoTick() {
-  var TZ = "Asia/Kolkata";
-  var now = new Date();
-  var today = Utilities.formatDate(now, TZ, "yyyy-MM-dd");
-  var nowH = Number(Utilities.formatDate(now, TZ, "HH")) + Number(Utilities.formatDate(now, TZ, "mm")) / 60;
-
-  var props = PropertiesService.getScriptProperties();
-  var state = {};
-  try { state = JSON.parse(props.getProperty(LBL_AUTO_STATE_KEY) || "{}"); } catch (e) {}
-
-  // Prune entries older than 3 days so the property stays tiny.
-  Object.keys(state).forEach(function (k) {
-    if (k.slice(0, 10) < Utilities.formatDate(new Date(now.getTime() - 3 * 864e5), TZ, "yyyy-MM-dd")) delete state[k];
-  });
-
-  var cutoffs = _effectiveCutoffsForDate(today);
-
-  LBL_AUTO_MEALS.forEach(function (meal) {
-    var key = today + "_" + meal;
-    var st = state[key];
-    if (st && (st.done || (st.attempts || 0) >= 3)) return; // finished or given up
-
-    var fireAt = (Number(cutoffs[meal]) || 0) + LBL_AUTO_DELAY_MIN / 60;
-    if (nowH < fireAt) return;
-    if (nowH > fireAt + LBL_AUTO_WINDOW_H) {
-      state[key] = { done: true, skipped: "past window" };
-      return;
-    }
-
-    // Claim BEFORE generating so an overlapping tick can't double-run.
-    state[key] = { attempts: ((st && st.attempts) || 0) + 1, startedAt: Date.now() };
-    props.setProperty(LBL_AUTO_STATE_KEY, JSON.stringify(state));
-
-    try {
-      var res = autoGenerateLabels(today, meal);
-      state[key].done = true;
-      state[key].result = res && (res.name || res.note || "ok");
-      Logger.log("[labelAutoTick] " + meal + " " + today + ": " + JSON.stringify(res));
-    } catch (e) {
-      // Leave attempts count in place — next tick retries (max 3), then alerts.
-      state[key].error = String(e && e.message || e);
-      Logger.log("[labelAutoTick] " + meal + " FAILED: " + state[key].error);
-      if (state[key].attempts >= 3) {
-        state[key].done = true;
-        try {
-          var adminEmail = SP.getProperty("ADMIN_EMAIL");
-          if (adminEmail) MailApp.sendEmail(adminEmail,
-            "⚠️ Svaadh: " + meal + " label auto-generation FAILED",
-            "3 attempts failed for " + today + " " + meal + ".\nLast error: " + state[key].error
-            + "\n\nPlease generate manually from the kitchen page (the old flow still works).");
-        } catch (e2) {}
-      }
-    }
-  });
-
-  props.setProperty(LBL_AUTO_STATE_KEY, JSON.stringify(state));
+  return; // Auto-label generation stopped per owner request
 }
 
 // ── One-time setup (run from the editor) ────────────────────────────────────
@@ -386,6 +332,18 @@ function setupLabelAutoTrigger() {
   });
   ScriptApp.newTrigger("labelAutoTick").timeBased().everyMinutes(1).create();
   return "Auto-label trigger armed.";
+}
+
+// ── Remove auto-label trigger ───────────────────────────────────────────────
+function removeLabelAutoTrigger() {
+  var count = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "labelAutoTick") {
+      ScriptApp.deleteTrigger(t);
+      count++;
+    }
+  });
+  return "Removed " + count + " auto-label trigger(s).";
 }
 
 // ── CLEANUP OLD LABELS ───────────────────────────────────────

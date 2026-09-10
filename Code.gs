@@ -125,6 +125,17 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       }
       return jsonRes(autoGenerateLabels(String(p.date || ""), String(p.meal || "")));
     }
+    if (action === "removeLabelAutoTrigger") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      var _delCount = 0;
+      ScriptApp.getProjectTriggers().forEach(function (t) {
+        if (t.getHandlerFunction() === "labelAutoTick") {
+          ScriptApp.deleteTrigger(t);
+          _delCount++;
+        }
+      });
+      return jsonRes({ success: true, deleted: _delCount, message: "Removed " + _delCount + " auto-label trigger(s)." });
+    }
     if (action === "findMissedOrderManual") {
       if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
       const query = String(p.query || "Amol").trim().toLowerCase();

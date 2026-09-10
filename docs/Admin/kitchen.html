@@ -1137,7 +1137,7 @@
     // Catches up automatically: if the kitchen tab is opened AFTER the
     // trigger time but the labels haven't been fired today yet, fires
     // immediately. Plays a small chime + toast so staff know it ran.
-    const AUTO_LABEL_MEALS = ["Lunch", "Dinner"]; // Breakfast skipped per spec
+    const AUTO_LABEL_MEALS = [];                  // Auto-label generation stopped per owner request (was ["Lunch", "Dinner"])
     const AUTO_LABEL_DELAY_MIN = 5;               // fire N min after cutoff
     let _autoLabelTimers = {};
 
@@ -1164,117 +1164,11 @@
       // Clear any existing timers (we may be called multiple times per day)
       Object.values(_autoLabelTimers).forEach(t => { try { clearTimeout(t); } catch(_) {} });
       _autoLabelTimers = {};
-
-      const today = todayIST();
-      const datePicker = document.getElementById("datePicker");
-      // Only auto-fire if the kitchen view is on TODAY. If staff is browsing
-      // a future or past date, leave them alone — they're inspecting.
-      if (datePicker && datePicker.value && datePicker.value !== today) {
-        console.log("[AutoLabel] Date picker on " + datePicker.value + " (not today) — skipping schedule");
-        return;
-      }
-
-      const cutoffs = {
-        Lunch:  Number(_lastCutoffs.Lunch)  || 9,
-        Dinner: Number(_lastCutoffs.Dinner) || 16.5
-      };
-      const now = new Date();
-
-      AUTO_LABEL_MEALS.forEach(meal => {
-        if (_autoLabelFiredAlready(today, meal)) {
-          console.log("[AutoLabel] " + meal + " already fired today — skipping");
-          return;
-        }
-        const triggerAt = _autoLabelTriggerAt(cutoffs[meal]);
-        const delay = triggerAt - now;
-        if (delay <= 0) {
-          // Trigger time has already passed today but we haven't fired yet —
-          // catch up immediately (e.g., kitchen device was off at cutoff).
-          console.log("[AutoLabel] " + meal + " trigger past (was at "
-            + triggerAt.toTimeString().slice(0,5) + ") — firing now");
-          autoFireLabel(today, meal);
-        } else {
-          _autoLabelTimers[meal] = setTimeout(() => autoFireLabel(today, meal), delay);
-          console.log("[AutoLabel] " + meal + " scheduled at "
-            + triggerAt.toTimeString().slice(0,5) + " (in " + Math.round(delay/60000) + " min)");
-        }
-      });
+      return; // Auto-label generation stopped per owner request
     }
 
     async function autoFireLabel(date, meal) {
-      if (_autoLabelFiredAlready(date, meal)) return;  // double-guard
-      _autoLabelMarkFired(date, meal);                  // claim slot first to prevent races
-
-      console.log("[AutoLabel] Firing " + meal + " for " + date);
-
-      // Remember where staff was BEFORE we hijack the view. We restore
-      // this tab once the auto-save finishes (success, no-orders, or
-      // failure) so a page refresh / scheduled fire doesn't leave them
-      // stranded on the Labels tab.
-      const _prevTab = _currentTab;
-      let _switchedAway = false;
-
-      try {
-        // Switch to Labels tab so the form is rendered.
-        if (typeof switchKTab === "function" && _currentTab !== "Labels") {
-          switchKTab("Labels");
-          _switchedAway = true;
-          // Let the tab finish rendering before we poke its inputs.
-          await new Promise(r => setTimeout(r, 700));
-        }
-
-        const dEl    = document.getElementById("bulkLabelDate");
-        const mEl    = document.getElementById("bulkLabelMeal");
-        const modeEl = document.getElementById("bulkLabelMode");
-        if (!dEl || !mEl) {
-          console.warn("[AutoLabel] Labels tab form not rendered — clearing fire flag for retry");
-          try { localStorage.removeItem(_autoLabelKey(date, meal)); } catch(_) {}
-          return;
-        }
-
-        dEl.value = date;
-        mEl.value = meal;
-        if (modeEl) modeEl.value = "Actual"; // never auto-fire Test mode
-
-        // Generate (fetches orders + renders preview + populates _bulkLabelOrders)
-        await generateBulkLabels();
-
-        if (!_bulkLabelOrders || !_bulkLabelOrders.length) {
-          console.log("[AutoLabel] No " + meal + " orders for " + date + " — nothing to save");
-          if (typeof toast === "function") toast("Auto-label: no " + meal + " orders today, nothing to save", 5000);
-          return;
-        }
-
-        // Save (builds PDF + uploads to Drive — same flow as the Save button)
-        await saveBulkLabelsToDrive();
-
-        // Audible chime + visible toast
-        try {
-          // Short pleasant beep (data-URI generated tone)
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.frequency.value = 880;
-          g.gain.value = 0.15;
-          o.connect(g); g.connect(ctx.destination);
-          o.start(); o.stop(ctx.currentTime + 0.18);
-          setTimeout(() => { try { ctx.close(); } catch(_){} }, 400);
-        } catch(_) { /* audio blocked — fine, toast still shows */ }
-        if (typeof toast === "function") toast("✅ " + meal + " labels auto-generated and saved to Drive", 7000);
-      } catch (e) {
-        console.error("[AutoLabel] Failed for " + date + " " + meal + ": " + (e && e.message));
-        // Clear the fired flag so the next loadKitchen tick (5-min auto-refresh)
-        // tries again. Staff also see a toast prompting manual generation.
-        try { localStorage.removeItem(_autoLabelKey(date, meal)); } catch(_) {}
-        if (typeof toast === "function") toast("⚠️ Auto-label failed for " + meal + " — please generate manually", 9000);
-      } finally {
-        // Restore the tab staff was on before we hijacked the view.
-        // Without this, a refresh after lunch/dinner cutoff would leave
-        // staff stranded on Labels even if they were viewing Summary.
-        if (_switchedAway && _prevTab && _prevTab !== "Labels" && typeof switchKTab === "function") {
-          try { switchKTab(_prevTab); } catch(_) {}
-        }
-      }
+      return; // Auto-label generation stopped per owner request
     }
 
     // ── Marathi display names ──

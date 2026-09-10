@@ -116,6 +116,14 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Stopped Auto-Generating Labels at T+5 for Lunch and Dinner (CODE_VERSION 35.64)**
+  - **Server-side (07_Labels_Auto.gs & Code.gs):**
+    - Set `LBL_AUTO_MEALS = []` and made `labelAutoTick()` exit immediately.
+    - Added `removeLabelAutoTrigger()` helper and administrative route `action === "removeLabelAutoTrigger"` to delete the 1-minute clock trigger from Google Apps Script. Executed on production, reducing live triggers from 16 to 15.
+  - **Kitchen View Client-side (docs/Admin/kitchen.html):**
+    - Set `AUTO_LABEL_MEALS = []`.
+    - Updated `scheduleAutoLabels()` and `autoFireLabel()` to clear any timers and immediately return without scheduling or firing automatic label generation.
+    - Manual label generation remains 100% functional via the Kitchen "Labels" tab (staff can still select date/meal, click "⚡ Generate Labels", and click "💾 Save PDF to Drive").
 - **Unmark Delivered Feature & Driver Page Address Standardization Parity (CODE_VERSION 35.63)**
   - **Unmark Delivered Feature (docs/Admin/driver.html & 04_Reports_Misc.gs):**
     - Added `unmarkDelivered(body)` endpoint in `04_Reports_Misc.gs` supporting single `submissionId` or batch `submissionIds` (for Enkin consolidated cards). Clears `Delivered_At` in `SK_Deliveries` while keeping `EnRoute_At` intact.
