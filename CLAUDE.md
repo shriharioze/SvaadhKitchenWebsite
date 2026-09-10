@@ -124,6 +124,7 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
     - Safety Confirmation & UX: Prompts driver via `sConfirm`, optimistically updates UI (card state, badge, un-greying deliver button, progress counters, re-positioning above delivered cards).
     - Offline Robustness: If an order is unmarked, pending offline queue delivery entries in `localStorage` (`sk_driver_offline_queue`) are immediately purged so they won't re-deliver on reconnect. If the unmark network request fails, it queues `item.type === "unmark"` in the offline queue and `_flushOfflineQueue` retries it when back online.
     - Multi-Device Sync: `silentPoll` automatically detects remote unmarks and synchronizes card button states and counters.
+    - Button Rename: Renamed legacy `↻ Restart Delivery` to `🔓 Activate Mark Delivered (${lockedCount})` so drivers immediately understand that tapping it activates any disabled `"Mark Delivered"` buttons without resetting completed deliveries.
   - **Driver Page Address Display Parity:**
     - Standardized addresses from `SK_Orders` (`Full_Address`) and `SK_Customers` (`Meal_Addresses`) now display with full parity on the driver delivery page (`docs/Admin/driver.html`).
     - When `mealAddresses` JSON is present, `renderCard` prefers `full_address` / `fullAddress` from the standardized record. When assembling from address parts, it avoids duplicate prefixes (`Wing Wing`, `Flat Flat`, `Flat Office`, `Floor Floor`) and suppresses redundant area badges when already part of the address line.
