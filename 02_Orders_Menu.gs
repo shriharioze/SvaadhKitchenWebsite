@@ -1140,16 +1140,91 @@ function getBreakfastItemDates(itemsStr) {
   return { restrict: true, dates: (allowed || []).sort() };
 }
 
+/**
+ * Calculates the source date in the base 22-week cycle (2026-04-13 to 2026-09-13)
+ * for any future target date >= MENU_CYCLE_START (2026-09-14).
+ * Preserves the exact day of the week since 154 % 7 === 0.
+ */
+function getCycleSourceDate(targetDateStr) {
+  if (!targetDateStr || targetDateStr < MENU_CYCLE_START) return null;
+  const parts = String(targetDateStr).split("-").map(Number);
+  if (parts.length !== 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+  const targetDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+  
+  const baseParts = MENU_BASE_START.split("-").map(Number);
+  const baseDate = new Date(baseParts[0], baseParts[1] - 1, baseParts[2], 12, 0, 0);
+  
+  const diffDays = Math.round((targetDate.getTime() - baseDate.getTime()) / 86400000);
+  if (diffDays < 0) return null;
+  
+  const offset = diffDays % MENU_CYCLE_DAYS;
+  const src = new Date(baseDate.getTime() + offset * 86400000);
+  const sy = src.getFullYear();
+  const sm = String(src.getMonth() + 1).padStart(2, "0");
+  const sd = String(src.getDate()).padStart(2, "0");
+  return `${sy}-${sm}-${sd}`;
+}
+
+/**
+ * Finds the menu row for dateStr in menuRows; if absent and dateStr >= MENU_CYCLE_START,
+ * falls back to the corresponding day in the 22-week base cycle with fresh operational flags.
+ */
+function _findMenuRowOrCycle(menuRows, dateStr) {
+  if (!dateStr || !Array.isArray(menuRows)) return null;
+  const dTarget = String(dateStr).trim();
+  let r = menuRows.find(function(x) {
+    const d = x.Date instanceof Date
+      ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(x.Date || "").trim();
+    return d === dTarget;
+  });
+  if (r) return r;
+
+  if (dTarget >= MENU_CYCLE_START) {
+    const srcDate = getCycleSourceDate(dTarget);
+    if (srcDate) {
+      const srcRow = menuRows.find(function(x) {
+        const d = x.Date instanceof Date
+          ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(x.Date || "").trim();
+        return d === srcDate;
+      });
+      if (srcRow) {
+        let dinnerDry = srcRow.Dinner_Dry || "";
+        let dinnerCurry = srcRow.Dinner_Curry || "";
+        if (srcDate === "2026-08-08" && (!dinnerDry || !dinnerCurry)) {
+          dinnerDry = "French Beans";
+          dinnerCurry = "Palak corn";
+        }
+        return {
+          Date: dTarget,
+          Breakfast_JSON: srcRow.Breakfast_JSON,
+          Lunch_Dry: srcRow.Lunch_Dry,
+          Lunch_Curry: srcRow.Lunch_Curry,
+          Dinner_Dry: dinnerDry,
+          Dinner_Curry: dinnerCurry,
+          Cutoff_Breakfast: srcRow.Cutoff_Breakfast,
+          Cutoff_Lunch: srcRow.Cutoff_Lunch,
+          Cutoff_Dinner: srcRow.Cutoff_Dinner,
+          OOS_JSON: "{}",
+          Orders_Closed: "{}",
+          Stock_JSON: "{}",
+          Kitchen_Closed: false,
+          Order_Cap_JSON: "{}",
+          Cap_Alt_JSON: "{}"
+        };
+      }
+    }
+  }
+  return null;
+}
+
 function _getMenuUncached(dateStr) {
   const ss = getSpreadsheet();
   const ws = getOrCreateTab(ss, TAB_MENU, []);
   const rows = getAllRows(ws);
-  const r = rows.find(x => {
-    const d = x.Date instanceof Date
-      ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd")
-      : String(x.Date).trim();
-    return d === dateStr;
-  });
+  const r = _findMenuRowOrCycle(rows, dateStr);
+
 
   // Admin can mark a specific (non-Sunday) day as Kitchen Closed via the
   // Daily Menu tab. When set, customer calendar greys out the day and any
@@ -2548,12 +2623,7 @@ function _submitOrderInternal(body) {
   // Per-MEAL kitchen-closure guard. A day can be closed for a single meal
   // (Closed_Meals_JSON) or fully (legacy Kitchen_Closed); block only the closed meal(s).
   const _findMenuRow = function (dateISO) {
-    return menuRowsAll.find(function(mr) {
-      const d = mr.Date instanceof Date
-        ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
-        : String(mr.Date).trim();
-      return d === dateISO;
-    });
+    return _findMenuRowOrCycle(menuRowsAll, dateISO);
   };
   if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
     const closedHits = []; // [{date, meal}]
@@ -2610,12 +2680,7 @@ function _submitOrderInternal(body) {
         _wViolations.push("The kitchen is closed on Sundays (" + _d + ").");
         continue;
       }
-      const _menuRowW = menuRowsAll.find(function(mr) {
-        const md = mr.Date instanceof Date
-          ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
-          : String(mr.Date).trim();
-        return md === _d;
-      });
+      const _menuRowW = _findMenuRowOrCycle(menuRowsAll, _d);
       let _ordersClosedW = {};
       try { if (_menuRowW && _menuRowW.Orders_Closed) _ordersClosedW = JSON.parse(_menuRowW.Orders_Closed); } catch(e) {}
       // Per-meal max-order cap. Count active (non-cancelled) orders for this date

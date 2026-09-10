@@ -2512,3 +2512,244 @@ function getOrCreateFolderPath(pathParts) {
   return folder;
 }
 
+// ── ENDLESS MENU CYCLE GENERATION & GAP AUDIT ────────────────
+
+/**
+ * Patches the single missing Dinner sabji gap on Saturday 2026-08-08
+ * with owner-selected French Beans (dry) and Palak corn (curry).
+ */
+function patch20260808Menu() {
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_MENU, []);
+  const rows = getAllRows(ws);
+  const target = rows.find(function(r) {
+    const d = r.Date instanceof Date
+      ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Date || "").trim();
+    return d === "2026-08-08";
+  });
+  if (!target) return { success: false, error: "2026-08-08 row not found" };
+
+  const hIdx = headerIndex(ws);
+  if (hIdx["Dinner_Dry"]) ws.getRange(target._row, hIdx["Dinner_Dry"]).setValue("French Beans");
+  if (hIdx["Dinner_Curry"]) ws.getRange(target._row, hIdx["Dinner_Curry"]).setValue("Palak corn");
+  if (hIdx["Orders_Closed"]) ws.getRange(target._row, hIdx["Orders_Closed"]).setValue("{}");
+  if (hIdx["Kitchen_Closed"]) ws.getRange(target._row, hIdx["Kitchen_Closed"]).setValue("");
+  SpreadsheetApp.flush();
+  return { success: true, patched: "2026-08-08", dinner_dry: "French Beans", dinner_curry: "Palak corn" };
+}
+
+/**
+ * Populates a 5-month (22-week) menu cycle in SK_Daily_Menu.
+ * Cycle 1: 2026-04-13 to 2026-09-13 (base)
+ * Cycle 2: 2026-09-14 to 2027-02-14 (132 working days, Sundays skipped)
+ * Cycle N: baseStart + (N-1)*154 days
+ */
+function populateMenuCycle(cycleNum, dryRun) {
+  const cycle = parseInt(cycleNum || 2, 10);
+  if (isNaN(cycle) || cycle < 2) {
+    return { success: false, error: "Cycle number must be >= 2" };
+  }
+
+  // Ensure base gap on 2026-08-08 is filled
+  if (!dryRun) {
+    try { patch20260808Menu(); } catch(e) { console.warn("patch20260808Menu error:", e); }
+  }
+
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_MENU, [
+    "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
+    "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON"
+  ]);
+
+  const existingRows = getAllRows(ws);
+  const existingDateMap = {};
+  existingRows.forEach(function(r) {
+    const d = r.Date instanceof Date
+      ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Date || "").trim();
+    if (d) existingDateMap[d] = r;
+  });
+
+  // Base cycle rows (2026-04-13 to 2026-09-13)
+  const baseDateMap = {};
+  existingRows.forEach(function(r) {
+    const d = r.Date instanceof Date
+      ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Date || "").trim();
+    if (d >= MENU_BASE_START && d <= "2026-09-13") {
+      baseDateMap[d] = r;
+    }
+  });
+
+  const baseParts = MENU_BASE_START.split("-").map(Number);
+  const cycleStartOffsetDays = (cycle - 1) * MENU_CYCLE_DAYS; // for cycle 2: 154 days
+  const baseStartDate = new Date(baseParts[0], baseParts[1] - 1, baseParts[2], 12, 0, 0);
+
+  const newRowsToAppend = [];
+  const skippedSundays = [];
+  const alreadyExist = [];
+
+  for (let dayOffset = 0; dayOffset < MENU_CYCLE_DAYS; dayOffset++) {
+    const targetTime = baseStartDate.getTime() + (cycleStartOffsetDays + dayOffset) * 86400000;
+    const targetDateObj = new Date(targetTime);
+    const ty = targetDateObj.getFullYear();
+    const tm = String(targetDateObj.getMonth() + 1).padStart(2, "0");
+    const td = String(targetDateObj.getDate()).padStart(2, "0");
+    const targetDateStr = `${ty}-${tm}-${td}`;
+
+    // Day of week: 0 is Sunday
+    const dayOfWeek = targetDateObj.getDay();
+    if (dayOfWeek === 0) {
+      skippedSundays.push(targetDateStr);
+      continue; // Svaadh Kitchen is closed on Sundays
+    }
+
+    if (existingDateMap[targetDateStr]) {
+      alreadyExist.push(targetDateStr);
+      continue; // Don't overwrite existing row
+    }
+
+    // Find source row in base cycle (dayOffset 0..153)
+    const srcTime = baseStartDate.getTime() + dayOffset * 86400000;
+    const srcDateObj = new Date(srcTime);
+    const sy = srcDateObj.getFullYear();
+    const sm = String(srcDateObj.getMonth() + 1).padStart(2, "0");
+    const sd = String(srcDateObj.getDate()).padStart(2, "0");
+    const srcDateStr = `${sy}-${sm}-${sd}`;
+
+    const srcRow = baseDateMap[srcDateStr];
+    if (!srcRow) {
+      console.warn("Missing base row for source date: " + srcDateStr);
+      continue;
+    }
+
+    // Sabjis for source date (with 2026-08-08 gap resolution: French Beans & Palak corn)
+    let dinnerDry = srcRow.Dinner_Dry || "";
+    let dinnerCurry = srcRow.Dinner_Curry || "";
+    if (srcDateStr === "2026-08-08" && (!dinnerDry || !dinnerCurry)) {
+      dinnerDry = "French Beans";
+      dinnerCurry = "Palak corn";
+    }
+
+    const row = [
+      targetDateStr,
+      srcRow.Breakfast_JSON || "",
+      srcRow.Lunch_Dry || "",
+      srcRow.Lunch_Curry || "",
+      dinnerDry,
+      dinnerCurry,
+      srcRow.Cutoff_Breakfast || "",
+      srcRow.Cutoff_Lunch || "",
+      srcRow.Cutoff_Dinner || "",
+      JSON.stringify({ Breakfast: [], Lunch: [], Dinner: [] }), // OOS_JSON fresh
+      JSON.stringify({}),                                       // Orders_Closed fresh
+      JSON.stringify({}),                                       // Stock_JSON fresh
+      "",                                                       // Kitchen_Closed fresh (open)
+      srcRow.Order_Cap_JSON ? String(srcRow.Order_Cap_JSON) : "{}",
+      srcRow.Cap_Alt_JSON ? String(srcRow.Cap_Alt_JSON) : "{}"
+    ];
+
+    newRowsToAppend.push(row);
+  }
+
+  if (dryRun) {
+    return {
+      success: true,
+      dry_run: true,
+      cycle: cycle,
+      rows_to_append: newRowsToAppend.length,
+      sample_first: newRowsToAppend[0],
+      sample_last: newRowsToAppend[newRowsToAppend.length - 1],
+      already_exist_count: alreadyExist.length,
+      skipped_sundays_count: skippedSundays.length
+    };
+  }
+
+  if (newRowsToAppend.length > 0) {
+    const startRow = ws.getLastRow() + 1;
+    ws.getRange(startRow, 1, newRowsToAppend.length, newRowsToAppend[0].length).setValues(newRowsToAppend);
+    SpreadsheetApp.flush();
+  }
+
+  return {
+    success: true,
+    cycle: cycle,
+    rows_appended: newRowsToAppend.length,
+    startDate: newRowsToAppend[0] ? newRowsToAppend[0][0] : null,
+    endDate: newRowsToAppend[newRowsToAppend.length - 1] ? newRowsToAppend[newRowsToAppend.length - 1][0] : null,
+    already_exist_count: alreadyExist.length,
+    skipped_sundays_count: skippedSundays.length
+  };
+}
+
+/**
+ * Diagnostic & alert tool: scans upcoming working days for missing menus or kitchen closures.
+ */
+function checkUpcomingMenuGaps(daysAhead, startDateStr) {
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_MENU, []);
+  const rows = getAllRows(ws);
+  const days = parseInt(daysAhead || 30, 10);
+  
+  const istNow = getISTDate();
+  const startObj = startDateStr
+    ? new Date(startDateStr + "T12:00:00+05:30")
+    : istNow;
+
+  const gaps = [];
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  for (let i = 0; i < days; i++) {
+    const curObj = new Date(startObj.getTime() + i * 86400000);
+    const y = curObj.getFullYear();
+    const m = String(curObj.getMonth() + 1).padStart(2, "0");
+    const d = String(curObj.getDate()).padStart(2, "0");
+    const dateStr = `${y}-${m}-${d}`;
+    const dayOfWeek = curObj.getDay();
+
+    if (dayOfWeek === 0) continue; // Sunday
+
+    const menuRow = _findMenuRowOrCycle(rows, dateStr);
+    if (!menuRow) {
+      gaps.push({ date: dateStr, day: dayNames[dayOfWeek], issue: "No menu found in sheet or cycle" });
+      continue;
+    }
+
+    const issues = [];
+    if (!menuRow.Lunch_Dry) issues.push("Missing Lunch Dry sabji");
+    if (!menuRow.Lunch_Curry) issues.push("Missing Lunch Curry sabji");
+    if (!menuRow.Dinner_Dry) issues.push("Missing Dinner Dry sabji");
+    if (!menuRow.Dinner_Curry) issues.push("Missing Dinner Curry sabji");
+    if (menuRow.Kitchen_Closed === true || String(menuRow.Kitchen_Closed || "").toLowerCase() === "true") {
+      issues.push("Kitchen marked Closed");
+    }
+
+    let bf = [];
+    try { if (menuRow.Breakfast_JSON) bf = JSON.parse(menuRow.Breakfast_JSON); } catch(e) {}
+    if (!Array.isArray(bf) || bf.length === 0) {
+      issues.push("Empty Breakfast menu");
+    }
+
+    if (issues.length > 0) {
+      gaps.push({
+        date: dateStr,
+        day: dayNames[dayOfWeek],
+        issues: issues,
+        lunch: (menuRow.Lunch_Dry || "(none)") + " / " + (menuRow.Lunch_Curry || "(none)"),
+        dinner: (menuRow.Dinner_Dry || "(none)") + " / " + (menuRow.Dinner_Curry || "(none)")
+      });
+    }
+  }
+
+  return {
+    success: true,
+    scanned_days: days,
+    start_date: Utilities.formatDate(startObj, "Asia/Kolkata", "yyyy-MM-dd"),
+    gaps_count: gaps.length,
+    gaps: gaps
+  };
+}
+
+

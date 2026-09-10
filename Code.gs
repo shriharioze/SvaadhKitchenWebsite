@@ -799,6 +799,19 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes({success: true, message: setupAnalyticsTrigger()});
     }
+
+    if (action === "populateMenuCycle") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(populateMenuCycle(p.cycle, p.commit !== "1"));
+    }
+    if (action === "checkMenuGaps") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(checkUpcomingMenuGaps(p.days, p.start));
+    }
+    if (action === "patch20260808Menu") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(patch20260808Menu());
+    }
     
     // Keep-alive ping — just wakes GAS, no sheet reads
     if (action === "ping") return jsonRes({ok: true, t: new Date().toISOString()});
@@ -1173,6 +1186,21 @@ function doPost(e) {
     if (action === "saveMenu") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(saveMenu(body));
+    }
+
+    if (action === "populateMenuCycle") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(populateMenuCycle(body.cycle, body.commit !== true && body.commit !== "1"));
+    }
+
+    if (action === "checkMenuGaps") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(checkUpcomingMenuGaps(body.days, body.start));
+    }
+
+    if (action === "patch20260808Menu") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(patch20260808Menu());
     }
 
     if (action === "setDefaultCutoffs") {
