@@ -2640,15 +2640,15 @@ function populateMenuCycle(cycleNum, dryRun) {
       srcRow.Lunch_Curry || "",
       dinnerDry,
       dinnerCurry,
-      srcRow.Cutoff_Breakfast || "",
-      srcRow.Cutoff_Lunch || "",
-      srcRow.Cutoff_Dinner || "",
+      "",                                                       // Cutoff_Breakfast (site default)
+      "",                                                       // Cutoff_Lunch (site default)
+      "",                                                       // Cutoff_Dinner (site default)
       JSON.stringify({ Breakfast: [], Lunch: [], Dinner: [] }), // OOS_JSON fresh
       JSON.stringify({}),                                       // Orders_Closed fresh
       JSON.stringify({}),                                       // Stock_JSON fresh
       "",                                                       // Kitchen_Closed fresh (open)
-      srcRow.Order_Cap_JSON ? String(srcRow.Order_Cap_JSON) : "{}",
-      srcRow.Cap_Alt_JSON ? String(srcRow.Cap_Alt_JSON) : "{}"
+      JSON.stringify({}),                                       // Order_Cap_JSON fresh
+      JSON.stringify({})                                        // Cap_Alt_JSON fresh
     ];
 
     newRowsToAppend.push(row);
@@ -2751,5 +2751,112 @@ function checkUpcomingMenuGaps(daysAhead, startDateStr) {
     gaps: gaps
   };
 }
+
+/**
+ * Resets operational columns (cutoffs, caps, closures, stock, OOS) to empty defaults
+ * for all rows from 2026-09-14 onwards in SK_Daily_Menu, preserving only menu sabjis/items.
+ */
+function cleanCycleDefaults(dryRun) {
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_MENU, []);
+  const lastRow = ws.getLastRow();
+  const lastCol = ws.getLastColumn();
+  if (lastRow < 2) {
+    return { success: true, message: "No data rows in SK_Daily_Menu", modified_count: 0 };
+  }
+
+  const range = ws.getRange(1, 1, lastRow, lastCol);
+  const values = range.getValues();
+  const headers = values[0];
+
+  const colIdx = {};
+  headers.forEach((h, i) => { colIdx[String(h).trim()] = i; });
+
+  const dateCol = colIdx["Date"];
+  if (dateCol === undefined) {
+    return { success: false, error: "Date column not found in SK_Daily_Menu" };
+  }
+
+  const cutoffBfCol = colIdx["Cutoff_Breakfast"];
+  const cutoffLCol = colIdx["Cutoff_Lunch"];
+  const cutoffDCol = colIdx["Cutoff_Dinner"];
+  const oosCol = colIdx["OOS_JSON"];
+  const closedCol = colIdx["Orders_Closed"];
+  const stockCol = colIdx["Stock_JSON"];
+  const kitchenClosedCol = colIdx["Kitchen_Closed"];
+  const orderCapCol = colIdx["Order_Cap_JSON"];
+  const capAltCol = colIdx["Cap_Alt_JSON"];
+
+  let modifiedCount = 0;
+  const modifiedDates = [];
+  const emptyOos = JSON.stringify({ Breakfast: [], Lunch: [], Dinner: [] });
+
+  for (let r = 1; r < values.length; r++) {
+    const rawDate = values[r][dateCol];
+    const dateStr = rawDate instanceof Date
+      ? Utilities.formatDate(rawDate, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(rawDate || "").trim();
+
+    if (dateStr >= "2026-09-14") {
+      let changed = false;
+
+      if (cutoffBfCol !== undefined && values[r][cutoffBfCol] !== "") {
+        values[r][cutoffBfCol] = "";
+        changed = true;
+      }
+      if (cutoffLCol !== undefined && values[r][cutoffLCol] !== "") {
+        values[r][cutoffLCol] = "";
+        changed = true;
+      }
+      if (cutoffDCol !== undefined && values[r][cutoffDCol] !== "") {
+        values[r][cutoffDCol] = "";
+        changed = true;
+      }
+      if (oosCol !== undefined && values[r][oosCol] !== emptyOos) {
+        values[r][oosCol] = emptyOos;
+        changed = true;
+      }
+      if (closedCol !== undefined && values[r][closedCol] !== "{}") {
+        values[r][closedCol] = "{}";
+        changed = true;
+      }
+      if (stockCol !== undefined && values[r][stockCol] !== "{}") {
+        values[r][stockCol] = "{}";
+        changed = true;
+      }
+      if (kitchenClosedCol !== undefined && values[r][kitchenClosedCol] !== "") {
+        values[r][kitchenClosedCol] = "";
+        changed = true;
+      }
+      if (orderCapCol !== undefined && values[r][orderCapCol] !== "{}") {
+        values[r][orderCapCol] = "{}";
+        changed = true;
+      }
+      if (capAltCol !== undefined && values[r][capAltCol] !== "{}") {
+        values[r][capAltCol] = "{}";
+        changed = true;
+      }
+
+      if (changed) {
+        modifiedCount++;
+        modifiedDates.push(dateStr);
+      }
+    }
+  }
+
+  if (!dryRun && modifiedCount > 0) {
+    range.setValues(values);
+    SpreadsheetApp.flush();
+  }
+
+  return {
+    success: true,
+    dry_run: !!dryRun,
+    modified_count: modifiedCount,
+    dates_modified_sample: modifiedDates.slice(0, 10),
+    dates_modified_total: modifiedDates.length
+  };
+}
+
 
 
