@@ -247,6 +247,165 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
       return jsonRes(archiveMissedOrders());
     }
+    if (action === "getAmolSeptReport") {
+      if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
+      const ss = getSpreadsheet();
+      const oWs = ss.getSheetByName(TAB_ORDERS);
+      const oData = oWs ? oWs.getDataRange().getValues() : [];
+      const oH = oData[0] || [];
+      const colPhone = oH.indexOf("Phone");
+      const colName = oH.indexOf("Customer_Name");
+      const colDate = oH.indexOf("Order_Date");
+      const colMeal = oH.indexOf("Meal_Type");
+      const colItems = oH.indexOf("Items_JSON");
+      const colNet = oH.indexOf("Net_Total");
+      const colFood = oH.indexOf("Food_Subtotal");
+      const colDel = oH.indexOf("Delivery_Charge");
+      const colSmall = oH.indexOf("Small_Order_Fee");
+      const colDisc = oH.indexOf("Discount_Amount");
+      const colStatus = oH.indexOf("Payment_Status");
+      const colMethod = oH.indexOf("Payment_Method");
+      const colGw = oH.indexOf("Gateway_Order_ID");
+      const colSub = oH.indexOf("Submission_ID");
+      const colSubAt = oH.indexOf("Submitted_At");
+
+      const septOrders = [];
+      const gwIds = {};
+      const subIds = {};
+
+      for (let r = 1; r < oData.length; r++) {
+        const row = oData[r];
+        const ph = String(row[colPhone] || "").replace(/\D/g, "");
+        const nm = String(row[colName] || "").trim();
+        if (ph === "7798980989" || nm.toLowerCase().indexOf("amol") !== -1) {
+          const dVal = row[colDate];
+          const dStr = dVal instanceof Date ? Utilities.formatDate(dVal, "Asia/Kolkata", "yyyy-MM-dd") : String(dVal || "").trim().slice(0, 10);
+          if (dStr.indexOf("2026-09") === 0) {
+            const gw = String(row[colGw] || "").trim();
+            const sid = String(row[colSub] || "").trim();
+            if (gw) gwIds[gw] = true;
+            if (sid) subIds[sid] = true;
+            septOrders.push({
+              row: r + 1,
+              submissionId: sid,
+              orderDate: dStr,
+              mealType: row[colMeal],
+              customerName: nm,
+              phone: ph,
+              itemsJson: row[colItems],
+              netTotal: Number(row[colNet]) || 0,
+              foodSubtotal: Number(row[colFood]) || 0,
+              deliveryCharge: Number(row[colDel]) || 0,
+              smallOrderFee: colSmall >= 0 ? Number(row[colSmall]) || 0 : 0,
+              discountAmount: colDisc >= 0 ? Number(row[colDisc]) || 0 : 0,
+              status: row[colStatus],
+              method: row[colMethod],
+              gatewayOrderId: gw,
+              submittedAt: row[colSubAt] instanceof Date ? Utilities.formatDate(row[colSubAt], "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss") : String(row[colSubAt] || "")
+            });
+          }
+        }
+      }
+
+      const orderLogHits = [];
+      try {
+        const olWs = ss.getSheetByName("SK_Order_Log");
+        if (olWs && olWs.getLastRow() > 1) {
+          const olData = olWs.getDataRange().getValues();
+          for (let i = 1; i < olData.length; i++) {
+            const gw = String(olData[i][3] || "").trim();
+            const ph = String(olData[i][1] || "").replace(/\D/g, "");
+            if (gwIds[gw] || ph === "7798980989") {
+              if (gw) gwIds[gw] = true;
+              const ts = olData[i][0];
+              const tsStr = ts instanceof Date ? Utilities.formatDate(ts, "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss") : String(ts || "");
+              orderLogHits.push({
+                row: i + 1,
+                timestamp: tsStr,
+                phone: olData[i][1],
+                name: olData[i][2],
+                gatewayId: gw,
+                status: olData[i][5]
+              });
+            }
+          }
+        }
+      } catch (eOL) {}
+
+      const missedHits = [];
+      try {
+        const mWs = ss.getSheetByName(TAB_MISSED_ORDERS);
+        if (mWs && mWs.getLastRow() > 1) {
+          const mData = mWs.getDataRange().getValues();
+          for (let i = 1; i < mData.length; i++) {
+            const rowStr = JSON.stringify(mData[i]);
+            if (rowStr.indexOf("7798980989") !== -1 || rowStr.toLowerCase().indexOf("amol") !== -1) {
+              missedHits.push({ row: i + 1, data: mData[i] });
+            }
+          }
+        }
+      } catch (eM) {}
+
+      const webhooks = [];
+      function scanWhSheet(sheet, source) {
+        if (!sheet || sheet.getLastRow() < 2) return;
+        const wData = sheet.getDataRange().getValues();
+        const wH = wData[0] || [];
+        const rcvCol = wH.indexOf("Received_At");
+        const evCol = wH.indexOf("Event_Name");
+        const oidCol = wH.indexOf("Order_ID");
+        const stCol = wH.indexOf("Status");
+        const resCol = wH.indexOf("Result");
+        const payCol = wH.indexOf("Raw_Payload");
+
+        for (let i = 1; i < wData.length; i++) {
+          const wRow = wData[i];
+          const oid = String(wRow[oidCol] || "").trim();
+          const rcv = wRow[rcvCol];
+          const rcvStr = rcv instanceof Date ? Utilities.formatDate(rcv, "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss") : String(rcv || "");
+          const rcvIso = rcv instanceof Date ? rcv.toISOString() : String(rcv || "");
+          const rowText = JSON.stringify(wRow).toLowerCase();
+
+          if (gwIds[oid] || subIds[oid] || rowText.indexOf("7798980989") !== -1 || rowText.indexOf("amol") !== -1) {
+            webhooks.push({
+              source: source,
+              row: i + 1,
+              orderId: oid,
+              receivedAt: rcvStr,
+              receivedAtIso: rcvIso,
+              event: wRow[evCol],
+              status: wRow[stCol],
+              result: wRow[resCol],
+              payloadSnippet: String(wRow[payCol] || "").slice(0, 200)
+            });
+          }
+        }
+      }
+
+      scanWhSheet(ss.getSheetByName(TAB_WEBHOOK_LOG), "live_log");
+
+      function findArchiveSS(name) {
+        try {
+          const it = DriveApp.getFilesByName(name);
+          if (it.hasNext()) return SpreadsheetApp.openById(it.next().getId());
+        } catch(e) {}
+        return null;
+      }
+
+      const sepSS = findArchiveSS("Svaadh Kitchen Webhook Archive — Sep 2026");
+      if (sepSS) scanWhSheet(sepSS.getSheetByName("SK_Webhook_Log") || sepSS.getSheets()[0], "archive_sep_2026");
+
+      const augSS = findArchiveSS("Svaadh Kitchen Webhook Archive — Aug 2026");
+      if (augSS) scanWhSheet(augSS.getSheetByName("SK_Webhook_Log") || augSS.getSheets()[0], "archive_aug_2026");
+
+      return jsonRes({
+        success: true,
+        orders: septOrders,
+        webhooks: webhooks,
+        orderLogs: orderLogHits,
+        missedOrders: missedHits
+      });
+    }
     if (action === "placeMissedOrderManual") {
       if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" });
       const query = String(p.query || "Amol").trim().toLowerCase();
