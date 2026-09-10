@@ -882,7 +882,7 @@ const DEFAULT_AREAS = [
   ["Bhosale Nagar",   "Bhosale Nagar (Free Delivery)",             "TRUE"],
   ["DP Road",         "DP Road",                                   "FALSE"],
   ["Gadital",         "Gadital",                                   "FALSE"],
-  ["Mandai",          "Hadapsar Mandai",                           "FALSE"],
+  ["Hadapsar Mandai", "Hadapsar Mandai",                           "FALSE"],
   ["Kirtane Baug",    "Kirtane Baug",                              "FALSE"],
   ["Magarpatta",      "Magarpatta",                                "FALSE"],
   ["Malwadi",         "Malwadi",                                   "FALSE"],

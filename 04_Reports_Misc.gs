@@ -148,7 +148,7 @@ function buildSystemPrompt(extraMenu, page) {
     + "   • Advance / Multi-Day Ordering: You can order up to 6 days ahead (Mon–Sat) at any time! On the date calendar, tap multiple dates and set meals for each date individually. Use the 'Copy' button on the order screen to clone a meal across multiple days.\n"
     + "   • Sundays: Kitchen is closed.\n\n"
     + "3. DELIVERY AREAS, FREE ZONES & CHARGES:\n"
-    + "   • Exactly 15 Served Areas in Hadapsar: Bhosale Nagar, Triveni Nagar, Self Pickup, Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Mandai (Hadapsar Mandai), and Gadital.\n"
+    + "   • Exactly 15 Served Areas in Hadapsar: Bhosale Nagar, Triveni Nagar, Self Pickup, Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Hadapsar Mandai, and Gadital.\n"
     + "   • Always FREE Delivery Areas: Bhosale Nagar, Triveni Nagar, and Self Pickup (from A 104, Shree Laxmi Vihar Society, Bhosale Nagar).\n"
     + "   • Delivery Fee for Other 12 Areas: ₹11 per meal. BUT Delivery becomes completely FREE when the day's food subtotal reaches ₹106 (ordering 1 meal that day), ₹159 (2 meals), or ₹190 (3 meals).\n"
     + "   • Small Order Cart Fee: A small ₹11 cart fee applies to any Lunch or Dinner meal whose food subtotal is below ₹53.\n"
@@ -1061,6 +1061,292 @@ function standardizeApprovedAddressGroups(commit) {
         cache.remove("society_aliases_v2");
       } catch(e) {}
       _socAliasMemo = null;
+    }
+
+    return { success: true, committed: !!commit, report: report };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+// ── RENAME AREA 'MANDAI' TO 'HADAPSAR MANDAI' ───────────────────────────────
+function renameMandaiToHadapsarMandai(commit) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: "busy" }; }
+  try {
+    var ss = getSpreadsheet();
+    var report = {
+      areasUpdated: 0,
+      customersUpdated: 0,
+      archivedUpdated: 0,
+      ordersUpdated: 0,
+      backupTab: "",
+      details: {
+        areas: [],
+        customers: [],
+        archived: [],
+        orders: []
+      }
+    };
+
+    function fixMandaiStr(str) {
+      if (!str) return str;
+      return String(str)
+        .replace(/\bHadapsar\s+Mandai\b/gi, "__HM__")
+        .replace(/\bMandai\b/gi, "Hadapsar Mandai")
+        .replace(/__HM__/g, "Hadapsar Mandai");
+    }
+
+    // 1. Update SK_Areas
+    var areasWs = ss.getSheetByName(TAB_AREAS);
+    if (areasWs) {
+      var aData = areasWs.getDataRange().getValues();
+      if (aData.length > 1) {
+        var aHeaders = aData[0];
+        var aNameIdx = aHeaders.indexOf("Area_Name");
+        var aLabelIdx = aHeaders.indexOf("Area_Label");
+        for (var i = 1; i < aData.length; i++) {
+          var currName = String(aData[i][aNameIdx] || "").trim();
+          if (currName.toLowerCase() === "mandai") {
+            report.areasUpdated++;
+            report.details.areas.push({ row: i + 1, oldName: currName, newName: "Hadapsar Mandai" });
+            if (commit) {
+              if (aNameIdx !== -1) areasWs.getRange(i + 1, aNameIdx + 1).setValue("Hadapsar Mandai");
+              if (aLabelIdx !== -1) areasWs.getRange(i + 1, aLabelIdx + 1).setValue("Hadapsar Mandai");
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Update SK_Customers
+    var custWs = ss.getSheetByName(TAB_CUSTOMERS);
+    if (custWs) {
+      if (commit) {
+        var ts = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyyMMdd_HHmm");
+        var bTab = "SK_Customers_MandaiBackup_" + ts;
+        report.backupTab = bTab;
+        var bws = ss.insertSheet(bTab);
+        custWs.getDataRange().copyTo(bws.getRange(1, 1));
+      }
+
+      var cData = custWs.getDataRange().getValues();
+      if (cData.length > 1) {
+        var cHeaders = cData[0];
+        var cIdx = {};
+        cHeaders.forEach(function(h, idx) { cIdx[h] = idx; });
+
+        for (var ci = 1; ci < cData.length; ci++) {
+          var cRow = cData[ci];
+          var phone = _normalizePhone(cRow[cIdx["Phone"]]);
+          var name = String(cRow[cIdx["Customer_Name"]] || "");
+          var origArea = String(cRow[cIdx["Area"]] || "").trim();
+          var origFullAddr = String(cRow[cIdx["Full_Address"]] || "").trim();
+          var origMealAddrs = cIdx["Meal_Addresses"] != null ? String(cRow[cIdx["Meal_Addresses"]] || "") : "";
+
+          var areaChanged = false;
+          var newArea = origArea;
+          if (origArea.toLowerCase() === "mandai") {
+            newArea = "Hadapsar Mandai";
+            areaChanged = true;
+          }
+
+          var fullAddrChanged = false;
+          var newFullAddr = origFullAddr;
+          if (origFullAddr) {
+            var fixedAddr = fixMandaiStr(origFullAddr);
+            if (fixedAddr !== origFullAddr) {
+              newFullAddr = fixedAddr;
+              fullAddrChanged = true;
+            }
+          }
+
+          var mealAddrsChanged = false;
+          var newMealAddrs = origMealAddrs;
+          if (origMealAddrs) {
+            try {
+              var ma = JSON.parse(origMealAddrs);
+              ["Breakfast", "Lunch", "Dinner"].forEach(function(m) {
+                if (ma[m] && ma[m].area) {
+                  if (String(ma[m].area).trim().toLowerCase() === "mandai") {
+                    ma[m].area = "Hadapsar Mandai";
+                    mealAddrsChanged = true;
+                  }
+                }
+              });
+              if (mealAddrsChanged) {
+                newMealAddrs = JSON.stringify(ma);
+              }
+            } catch(e) {}
+          }
+
+          if (areaChanged || fullAddrChanged || mealAddrsChanged) {
+            report.customersUpdated++;
+            report.details.customers.push({
+              phone: phone,
+              name: name,
+              oldArea: origArea,
+              newArea: newArea,
+              oldFullAddr: origFullAddr,
+              newFullAddr: newFullAddr,
+              mealAddrsUpdated: mealAddrsChanged
+            });
+
+            if (commit) {
+              var rNum = ci + 1;
+              if (cIdx["Area"] != null && areaChanged) {
+                custWs.getRange(rNum, cIdx["Area"] + 1).setValue(newArea);
+              }
+              if (cIdx["Full_Address"] != null && fullAddrChanged) {
+                custWs.getRange(rNum, cIdx["Full_Address"] + 1).setValue(newFullAddr);
+              }
+              if (cIdx["Meal_Addresses"] != null && mealAddrsChanged) {
+                custWs.getRange(rNum, cIdx["Meal_Addresses"] + 1).setValue(newMealAddrs);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Update SK_Customers_Archive
+    var archWs = ss.getSheetByName(TAB_CUSTOMERS_ARCHIVE);
+    if (archWs) {
+      var arData = archWs.getDataRange().getValues();
+      if (arData.length > 1) {
+        var arHeaders = arData[0];
+        var arIdx = {};
+        arHeaders.forEach(function(h, idx) { arIdx[h] = idx; });
+
+        for (var ai = 1; ai < arData.length; ai++) {
+          var arRow = arData[ai];
+          var aPhone = _normalizePhone(arRow[arIdx["Phone"]]);
+          var aName = String(arRow[arIdx["Customer_Name"]] || "");
+          var aOrigArea = String(arRow[arIdx["Area"]] || "").trim();
+          var aOrigFullAddr = String(arRow[arIdx["Full_Address"]] || "").trim();
+          var aOrigMealAddrs = arIdx["Meal_Addresses"] != null ? String(arRow[arIdx["Meal_Addresses"]] || "") : "";
+
+          var aAreaChanged = false;
+          var aNewArea = aOrigArea;
+          if (aOrigArea.toLowerCase() === "mandai") {
+            aNewArea = "Hadapsar Mandai";
+            aAreaChanged = true;
+          }
+
+          var aFullAddrChanged = false;
+          var aNewFullAddr = aOrigFullAddr;
+          if (aOrigFullAddr) {
+            var aFixedAddr = fixMandaiStr(aOrigFullAddr);
+            if (aFixedAddr !== aOrigFullAddr) {
+              aNewFullAddr = aFixedAddr;
+              aFullAddrChanged = true;
+            }
+          }
+
+          var aMealAddrsChanged = false;
+          var aNewMealAddrs = aOrigMealAddrs;
+          if (aOrigMealAddrs) {
+            try {
+              var ama = JSON.parse(aOrigMealAddrs);
+              ["Breakfast", "Lunch", "Dinner"].forEach(function(m) {
+                if (ama[m] && ama[m].area) {
+                  if (String(ama[m].area).trim().toLowerCase() === "mandai") {
+                    ama[m].area = "Hadapsar Mandai";
+                    aMealAddrsChanged = true;
+                  }
+                }
+              });
+              if (aMealAddrsChanged) {
+                aNewMealAddrs = JSON.stringify(ama);
+              }
+            } catch(e) {}
+          }
+
+          if (aAreaChanged || aFullAddrChanged || aMealAddrsChanged) {
+            report.archivedUpdated++;
+            report.details.archived.push({
+              phone: aPhone,
+              name: aName,
+              oldArea: aOrigArea,
+              newArea: aNewArea,
+              mealAddrsUpdated: aMealAddrsChanged
+            });
+
+            if (commit) {
+              var aRowNum = ai + 1;
+              if (arIdx["Area"] != null && aAreaChanged) {
+                archWs.getRange(aRowNum, arIdx["Area"] + 1).setValue(aNewArea);
+              }
+              if (arIdx["Full_Address"] != null && aFullAddrChanged) {
+                archWs.getRange(aRowNum, arIdx["Full_Address"] + 1).setValue(aNewFullAddr);
+              }
+              if (arIdx["Meal_Addresses"] != null && aMealAddrsChanged) {
+                archWs.getRange(aRowNum, arIdx["Meal_Addresses"] + 1).setValue(aNewMealAddrs);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Update active/upcoming orders in SK_Orders
+    var ordersWs = ss.getSheetByName(TAB_ORDERS);
+    if (ordersWs) {
+      var oData = ordersWs.getDataRange().getValues();
+      if (oData.length > 1) {
+        var oHeaders = oData[0];
+        var oIdx = {};
+        oHeaders.forEach(function(h, idx) { oIdx[h] = idx; });
+        var todayDs = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+
+        for (var oi = 1; oi < oData.length; oi++) {
+          var oRow = oData[oi];
+          var rawDate = oRow[oIdx["Order_Date"]];
+          var dateStr = rawDate instanceof Date
+            ? Utilities.formatDate(rawDate, "Asia/Kolkata", "yyyy-MM-dd")
+            : String(rawDate || "").trim();
+
+          if (!dateStr || dateStr < todayDs) continue; // skip past orders
+
+          var status = String(oRow[oIdx["Payment_Status"]] || "").toLowerCase();
+          if (status.indexOf("cancel") !== -1) continue;
+
+          var oArea = String(oRow[oIdx["Area"]] || "").trim();
+          var oFullAddr = String(oRow[oIdx["Full_Address"]] || "").trim();
+
+          var oAreaChanged = (oArea.toLowerCase() === "mandai");
+          var oNewFullAddr = fixMandaiStr(oFullAddr);
+          var oFullAddrChanged = (oNewFullAddr !== oFullAddr);
+
+          if (oAreaChanged || oFullAddrChanged) {
+            report.ordersUpdated++;
+            report.details.orders.push({
+              sid: String(oRow[oIdx["Submission_ID"]] || ""),
+              date: dateStr,
+              oldArea: oArea,
+              newArea: "Hadapsar Mandai",
+              oldFullAddr: oFullAddr,
+              newFullAddr: oNewFullAddr
+            });
+
+            if (commit) {
+              var oRowNum = oi + 1;
+              if (oIdx["Area"] != null && oAreaChanged) {
+                ordersWs.getRange(oRowNum, oIdx["Area"] + 1).setValue("Hadapsar Mandai");
+              }
+              if (oIdx["Full_Address"] != null && oFullAddrChanged) {
+                ordersWs.getRange(oRowNum, oIdx["Full_Address"] + 1).setValue(oNewFullAddr);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (commit) {
+      SpreadsheetApp.flush();
+      _invalidateCache("areas_v1");
+      _invalidateCache("adminData_v1");
     }
 
     return { success: true, committed: !!commit, report: report };

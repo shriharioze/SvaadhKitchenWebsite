@@ -116,6 +116,11 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Delivery Area 'Mandai' Standardized to 'Hadapsar Mandai' (CODE_VERSION 35.62)**
+  - **Database Migration:** Renamed area primary key in `SK_Areas` from `"Mandai"` to `"Hadapsar Mandai"`, and updated all occurrences across `SK_Customers` (`Area` column, `Full_Address`, and `Meal_Addresses` JSON blob), `SK_Customers_Archive`, and active orders in `SK_Orders` with automated backup sheet `SK_Customers_MandaiBackup_<ts>`.
+  - **Area Dropdowns & Autocomplete:** Synced `DEFAULT_AREAS` in `03_Admin_Kitchen.gs`, `loadAreas()` in `docs/order.html` and `docs/Liviano-Serio.html` to display and submit `"Hadapsar Mandai"` for all future orders and customer profile updates.
+  - **Backward-Compatible Profile Normalization:** Added auto-normalization in `_upsertCustomer` and `submitOrder` (`02_Orders_Menu.gs`) as well as frontend login profile loading to seamlessly convert any legacy `"Mandai"` inputs to `"Hadapsar Mandai"`.
+  - **SEO & Information Surfaces:** Updated `BUSINESS_CONTEXT` (`00_Config.gs`), `Backend/business.json`, system prompt in `04_Reports_Misc.gs`, and FAQ/JSON-LD schemas in `docs/index.html`, `docs/order.html`, and `docs/Liviano-Serio.html`.
 - **Daily On-Account Payment Reminders & 7-Day Overdue Hard-Block (CODE_VERSION 35.61)**
   - **Daily On-Account Parity:** Extended `getOnAccountBill` (`04_Reports_Misc.gs`) to support Daily On-Account customers (`Billing_Cycle === "Daily"` or default) alongside Monthly accounts.
   - **7-Day "Remind Me Later" Grace Period:**

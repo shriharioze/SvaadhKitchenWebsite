@@ -76,7 +76,7 @@
   "areaServed": [
     "Bhosale Nagar", "Magarpatta", "Amanora", "DP Road", "Triveni Nagar",
     "Malwadi", "Kirtane Baug", "Tupe Patil Road", "BG Shirke Road",
-    "Vihar Chowk", "Mandai", "Gadital", "Hadapsar", "Pune"
+    "Vihar Chowk", "Hadapsar Mandai", "Gadital", "Hadapsar", "Pune"
   ],
   "hasMenu": {
     "@type": "Menu",
@@ -185,7 +185,7 @@
       "name": "Which areas in Hadapsar do you deliver to?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "We deliver to 14 areas in Hadapsar: Bhosale Nagar (free delivery), Triveni Nagar (free delivery), Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Mandai, and Gadital. Self Pickup is also available free of charge."
+        "text": "We deliver to 14 areas in Hadapsar: Bhosale Nagar (free delivery), Triveni Nagar (free delivery), Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Hadapsar Mandai, and Gadital. Self Pickup is also available free of charge."
       }
     },
     {
@@ -6451,7 +6451,7 @@
         S.isFirstTime = false;
         S.profile = {
           ...S.profile, name: profileData.name || "", first_name: fn, last_name: ln,
-          area: profileData.area || "", wing: profileData.wing || "",
+          area: (profileData.area === "Mandai" ? "Hadapsar Mandai" : (profileData.area || "")), wing: profileData.wing || "",
           flat: profileData.flat || "", floor: profileData.floor || "", society: profileData.society || "",
           delivery_point: profileData.delivery_point || "door",
           maps: profileData.maps || "", landmark: profileData.landmark || "", payment_preference: profileData.payment_preference || "Daily Payment",
@@ -10599,7 +10599,7 @@
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #3498db;">
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📍 All Delivery Areas</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.8;">
-              Magarpatta · Amanora · DP Road · Malwadi · SadeSatraNali · Kirtane Baug · Tupe Patil Road · BG Shirke Road · Pune-Solapur Road (Magarpatta Bridge to Gadital only) · Vihar Chowk · Mandai · Gadital<br><br>
+              Magarpatta · Amanora · DP Road · Malwadi · SadeSatraNali · Kirtane Baug · Tupe Patil Road · BG Shirke Road · Pune-Solapur Road (Magarpatta Bridge to Gadital only) · Vihar Chowk · Hadapsar Mandai · Gadital<br><br>
               <b>₹11 delivery charge</b> per meal applies for these areas if your day's food total is below the free threshold (₹106 for 1 meal, ₹159 for 2 meals, ₹190 for 3 meals).
             </div>
           </div>
@@ -11715,7 +11715,7 @@
         ["areaSelect", "bf_areaSelect", "l_areaSelect", "d_areaSelect"].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
-            const currentVal = el.value;
+            const currentVal = (el.value === "Mandai" ? "Hadapsar Mandai" : el.value);
             el.innerHTML = opts;
             if (currentVal) el.value = currentVal;
           }

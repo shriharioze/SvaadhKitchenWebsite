@@ -621,6 +621,7 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
     if (action === "unifyGandharvCapitalOrders") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(unifyGandharvCapitalOrders(p.commit === "1")); }
     if (action === "getAllCustomerProfilesForAudit") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(getAllCustomerProfilesForAudit()); }
     if (action === "standardizeApprovedAddressGroups") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(standardizeApprovedAddressGroups(p.commit === "1")); }
+    if (action === "renameMandaiToHadapsarMandai") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(renameMandaiToHadapsarMandai(p.commit === "1")); }
     if (action === "setPin") {
       const profile = { phone: p.phone, pin: p.pin };
   _upsertCustomer(getSpreadsheet(), profile, p.storefront === 'LS' ? 'LS' : '');

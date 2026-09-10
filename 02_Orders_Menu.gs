@@ -2377,6 +2377,18 @@ function _submitOrderInternal(body) {
     }
   }   // [{date, meals:[{type,items,notes,subtotal,area}]}]
 
+  // Normalize legacy "Mandai" to "Hadapsar Mandai"
+  if (profile.area && String(profile.area).trim().toLowerCase() === "mandai") {
+    profile.area = "Hadapsar Mandai";
+  }
+  for (let o of orders) {
+    for (let m of (o.meals || [])) {
+      if (m.area && String(m.area).trim().toLowerCase() === "mandai") {
+        m.area = "Hadapsar Mandai";
+      }
+    }
+  }
+
   const submittedAt  = getISTTimestamp();
   let   payMethod    = body.payment_method  || "UPI";
   let   payStatus    = body.payment_status  || "Pending";
@@ -3490,10 +3502,13 @@ function _upsertCustomer(ss, profile, storefront) {
   const ws = _customersTabFor(ss, storefront);
   SpreadsheetApp.flush(); // Lock in the headers before indexing
 
-  // Sanitize maps links & auto-canonicalize society names up front.
+  // Sanitize maps links & auto-canonicalize society names & area up front.
   if (profile.maps !== undefined) profile.maps = _sanitizeMapsLink(profile.maps);
   if (profile.society !== undefined && typeof _getCanonicalSocietyDisplay === "function") {
     profile.society = _getCanonicalSocietyDisplay(profile.society);
+  }
+  if (profile.area && String(profile.area).trim().toLowerCase() === "mandai") {
+    profile.area = "Hadapsar Mandai";
   }
   if (profile.meal_addresses) {
     try {
@@ -3503,6 +3518,9 @@ function _upsertCustomer(ss, profile, storefront) {
           if (_ma[m].maps !== undefined) _ma[m].maps = _sanitizeMapsLink(_ma[m].maps);
           if (_ma[m].society !== undefined && typeof _getCanonicalSocietyDisplay === "function") {
             _ma[m].society = _getCanonicalSocietyDisplay(_ma[m].society);
+          }
+          if (_ma[m].area && String(_ma[m].area).trim().toLowerCase() === "mandai") {
+            _ma[m].area = "Hadapsar Mandai";
           }
         }
       });
