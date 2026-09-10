@@ -853,7 +853,7 @@ function renderMealPanel(orders, meal) {
             ${btnAttr}>
       ${btnText}
     </button>
-    ${showRestart ? `<button class="route-btn" onclick="restartDelivery('${meal}')" title="Re-unlock delivery points still showing 'Start Delivery to Unlock' (delivered orders stay delivered)" style="background:#e67e22;">↻ Restart Delivery</button>` : ""}
+    ${showRestart ? `<button class="route-btn" onclick="activateMarkDelivered('${meal}')" title="Activate 'Mark Delivered' for orders showing 'Start Delivery to Unlock' (already-delivered orders stay untouched)" style="background:#e67e22;">🔓 Activate Mark Delivered (${lockedCount})</button>` : ""}
     ${(!isEnRoute && statusMsg) ? `<span style="font-size:0.7rem;color:#1E1240;font-weight:700;margin-left:4px;">${statusMsg}</span>` : ""}
     ${canOptimize
       ? `<button class="route-btn" onclick="optimizeRoute('${meal}')">🗺 Optimize Route</button>`
@@ -1319,16 +1319,16 @@ async function markAllEnRoute(meal) {
   }
 }
 
-// Glitch recovery: re-open only the delivery points still showing
+// Glitch recovery: activate delivery points still showing
 // "Start Delivery to Unlock" (locked, not yet delivered). Delivered orders
-// are left untouched. Use when "Start Delivery" half-failed and some cards
-// stayed locked with no way to retry.
-async function restartDelivery(meal) {
+// are left untouched. Use when "Start Delivery" half-failed or fresh orders landed
+// and stayed locked so drivers can activate their "Mark Delivered" buttons.
+async function activateMarkDelivered(meal) {
   const orders = _ordersData[meal] || [];
   const locked = orders.filter(o => !o.enRouteAt && !o.deliveredAt);
-  if (!locked.length) { await sAlert("All delivery points for " + meal + " are already unlocked.", "Nothing to restart", "ℹ️"); return; }
+  if (!locked.length) { await sAlert("All delivery points for " + meal + " are already active!", "All Active", "ℹ️"); return; }
 
-  if (!await sConfirm(`Re-unlock ${locked.length} ${meal} delivery point(s) still showing "Start Delivery to Unlock"?\n\nAlready-delivered orders stay delivered — this only re-opens the stuck ones.`, "Restart Delivery", "↻")) return;
+  if (!await sConfirm(`Activate 'Mark Delivered' buttons for ${locked.length} ${meal} order(s) still showing "Start Delivery to Unlock"?\n\nDelivered orders stay delivered — this only unlocks the pending ones.`, "Activate Mark Delivered", "🔓", "Mark Delivered बटन्स सक्रिय करा")) return;
 
   const enRouteAt = new Date().toISOString();
   const submissionIds = locked.map(o => o.submissionId);
@@ -1346,11 +1346,12 @@ async function restartDelivery(meal) {
 
     document.getElementById("panel_" + meal).innerHTML = renderMealPanel(orders, meal);
     switchTab(meal);
-    await sAlert(`Re-opened ${submissionIds.length} delivery point(s). You can now mark them delivered.`, "Delivery Restarted", "✅");
+    await sAlert(`Activated ${submissionIds.length} delivery point(s). You can now tap 'Mark Delivered' on them.`, "Buttons Activated", "✅");
   } catch (err) {
-    await sAlert("Error: " + err.message, "Restart Failed", "❌");
+    await sAlert("Error: " + err.message, "Activation Failed", "❌");
   }
 }
+const restartDelivery = activateMarkDelivered; // backwards-compatible alias
 
 function fmtTime(isoStr) {
   if (!isoStr) return "";
