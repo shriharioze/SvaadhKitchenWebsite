@@ -2587,6 +2587,15 @@ function populateMenuCycle(cycleNum, dryRun) {
   const cycleStartOffsetDays = (cycle - 1) * MENU_CYCLE_DAYS; // for cycle 2: 154 days
   const baseStartDate = new Date(baseParts[0], baseParts[1] - 1, baseParts[2], 12, 0, 0);
 
+  // Load master price map for standardizing breakfast items & prices
+  const bfWs = getOrCreateTab(ss, TAB_BF_MASTER, []);
+  const bfRows = getAllRows(bfWs);
+  const masterPriceMap = {};
+  bfRows.forEach(function(r) {
+    const nm = String(r.Name || "").trim();
+    if (nm) masterPriceMap[nm] = Number(r.Price) || 0;
+  });
+
   const newRowsToAppend = [];
   const skippedSundays = [];
   const alreadyExist = [];
@@ -2633,9 +2642,11 @@ function populateMenuCycle(cycleNum, dryRun) {
       dinnerCurry = "Palak corn";
     }
 
+    const bfJson = standardizeBreakfastJson(srcRow.Breakfast_JSON || "", masterPriceMap);
+
     const row = [
       targetDateStr,
-      srcRow.Breakfast_JSON || "",
+      bfJson,
       srcRow.Lunch_Dry || "",
       srcRow.Lunch_Curry || "",
       dinnerDry,
@@ -2857,6 +2868,142 @@ function cleanCycleDefaults(dryRun) {
     dates_modified_total: modifiedDates.length
   };
 }
+
+/**
+ * Expands obsolete breakfast combo plates into individual pieces and standardizes prices:
+ * - "Tikhi Puri" -> "Coriander Chutney" + "1 x Tikhi Puri"
+ * - "4 x Idli and 100ml Chutney" / "Idli Chutney" -> "Coconut Chutney" + "1 x Idli"
+ * - All items updated to current prices from masterPriceMap (SK_Master_Breakfast)
+ */
+function standardizeBreakfastJson(rawJson, masterPriceMap) {
+  if (!rawJson) return "[]";
+  let items = [];
+  try {
+    items = typeof rawJson === "string" ? JSON.parse(rawJson) : rawJson;
+  } catch(e) {
+    return rawJson;
+  }
+  if (!Array.isArray(items)) return "[]";
+
+  const result = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const rawName = String(it.name || "").trim();
+    const lName = rawName.toLowerCase();
+
+    // 1. Expand Tikhi Puri combo
+    if (lName === "tikhi puri" || lName === "tikhi pudi" || lName.includes("5 x tikhi")) {
+      result.push({ name: "Coriander Chutney", price: (masterPriceMap && masterPriceMap["Coriander Chutney"]) || 15 });
+      result.push({ name: "1 x Tikhi Puri", price: (masterPriceMap && masterPriceMap["1 x Tikhi Puri"]) || 10 });
+      continue;
+    }
+
+    // 2. Expand Idli combo
+    if (lName.includes("idli") && (lName.includes("chutney") || lName.includes("4 x"))) {
+      result.push({ name: "Coconut Chutney", price: (masterPriceMap && masterPriceMap["Coconut Chutney"]) || 22 });
+      result.push({ name: "1 x Idli", price: (masterPriceMap && masterPriceMap["1 x Idli"]) || 7 });
+      continue;
+    }
+
+    // 3. Normalize minor spelling variations if needed
+    let canonical = rawName;
+    if (canonical === "Palak Paratha (2 pieces)") canonical = "Palak Paratha (2 peices)";
+
+    let price = Number(it.price) || 0;
+    if (masterPriceMap && masterPriceMap[canonical] !== undefined) {
+      price = masterPriceMap[canonical];
+    } else if (masterPriceMap && masterPriceMap[rawName] !== undefined) {
+      price = masterPriceMap[rawName];
+    }
+
+    result.push({ name: canonical, price: price });
+  }
+
+  // Deduplicate by name
+  const seen = {};
+  const deduped = [];
+  for (let j = 0; j < result.length; j++) {
+    if (!seen[result[j].name]) {
+      seen[result[j].name] = true;
+      deduped.push(result[j]);
+    }
+  }
+
+  return JSON.stringify(deduped);
+}
+
+/**
+ * Standardizes breakfast items (expands Tikhi Puri & Idli combos into separate pieces)
+ * and updates all breakfast item prices to the latest prices from SK_Master_Breakfast
+ * across SK_Daily_Menu rows from fromDateStr onwards (defaults to MENU_BASE_START = 2026-04-13).
+ */
+function syncBreakfastMenuToMaster(dryRun, fromDateStr) {
+  const ss = getSpreadsheet();
+  const ws = getOrCreateTab(ss, TAB_MENU, []);
+  const lastRow = ws.getLastRow();
+  const lastCol = ws.getLastColumn();
+  if (lastRow < 2) return { success: true, message: "No menu rows", modified_count: 0 };
+
+  const bfWs = getOrCreateTab(ss, TAB_BF_MASTER, []);
+  const bfRows = getAllRows(bfWs);
+  const masterPriceMap = {};
+  bfRows.forEach(function(r) {
+    const nm = String(r.Name || "").trim();
+    if (nm) masterPriceMap[nm] = Number(r.Price) || 0;
+  });
+
+  const range = ws.getRange(1, 1, lastRow, lastCol);
+  const values = range.getValues();
+  const headers = values[0];
+
+  const colIdx = {};
+  headers.forEach((h, i) => { colIdx[String(h).trim()] = i; });
+
+  const dateCol = colIdx["Date"];
+  const bfCol = colIdx["Breakfast_JSON"];
+  if (dateCol === undefined || bfCol === undefined) {
+    return { success: false, error: "Date or Breakfast_JSON column not found" };
+  }
+
+  const minDate = fromDateStr || MENU_BASE_START;
+  let modifiedCount = 0;
+  const samples = [];
+
+  for (let r = 1; r < values.length; r++) {
+    const rawDate = values[r][dateCol];
+    const dateStr = rawDate instanceof Date
+      ? Utilities.formatDate(rawDate, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(rawDate || "").trim();
+
+    if (dateStr >= minDate) {
+      const oldVal = String(values[r][bfCol] || "").trim();
+      if (!oldVal || oldVal === "[]" || oldVal === "{}") continue;
+
+      const newVal = standardizeBreakfastJson(oldVal, masterPriceMap);
+      if (oldVal !== newVal) {
+        values[r][bfCol] = newVal;
+        modifiedCount++;
+        if (samples.length < 15) {
+          samples.push({ date: dateStr, before: oldVal, after: newVal });
+        }
+      }
+    }
+  }
+
+  if (!dryRun && modifiedCount > 0) {
+    range.setValues(values);
+    SpreadsheetApp.flush();
+  }
+
+  return {
+    success: true,
+    dry_run: !!dryRun,
+    from_date: minDate,
+    modified_count: modifiedCount,
+    samples: samples
+  };
+}
+
 
 
 

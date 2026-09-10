@@ -1196,9 +1196,15 @@ function _findMenuRowOrCycle(menuRows, dateStr) {
           dinnerDry = "French Beans";
           dinnerCurry = "Palak corn";
         }
+        let bfJson = srcRow.Breakfast_JSON || "[]";
+        try {
+          if (typeof standardizeBreakfastJson === "function") {
+            bfJson = standardizeBreakfastJson(bfJson);
+          }
+        } catch(e) {}
         return {
           Date: dTarget,
-          Breakfast_JSON: srcRow.Breakfast_JSON,
+          Breakfast_JSON: bfJson,
           Lunch_Dry: srcRow.Lunch_Dry,
           Lunch_Curry: srcRow.Lunch_Curry,
           Dinner_Dry: dinnerDry,
@@ -1240,11 +1246,6 @@ function _getMenuUncached(dateStr) {
     "Kanda Poha": "Kanda Poha [175g]",
     "Ghee Upma": "Ghee Upma [200g]",
     "Sabudana Khichdi": "Sabudana Khichdi [200g]",
-    "Tikhi Pudi": "5 x Tikhi Pudi with 100 ml coriander chutney",
-    "Tikhi Puri": "5 x Tikhi Pudi with 100 ml coriander chutney",
-    "Idli Chutney": "4 x Idli & 100ml Chutney",
-    "Idli": "4 x Idli & 100ml Chutney",
-    "4 x Idli & 100ml Chutney": "4 x Idli & 100ml Chutney",
     "Ghee Sheera": "Ghee Sheera [200g]"
   };
 
@@ -1302,8 +1303,11 @@ function _getMenuUncached(dateStr) {
   // AND inactive — inactive = rotated specials like Aloo Paratha).
   const _masterPriceByName = {};
   getAllRows(bfWs).forEach(function (x) {
-    const _nm = NAME_MAP[String(x.Name).trim()] || String(x.Name).trim();
-    _masterPriceByName[_nm] = Number(x.Price) || 0;
+    const raw = String(x.Name).trim();
+    const mapped = NAME_MAP[raw] || raw;
+    const price = Number(x.Price) || 0;
+    _masterPriceByName[raw] = price;
+    _masterPriceByName[mapped] = price;
   });
 
   // MERGE LOGIC: Start with master active items, then merge daily overrides
@@ -1311,12 +1315,17 @@ function _getMenuUncached(dateStr) {
   let dailyBf = [];
   if (r && r.Breakfast_JSON) {
     try {
-      const parsed = JSON.parse(r.Breakfast_JSON);
+      let rawBfJson = r.Breakfast_JSON;
+      if (typeof standardizeBreakfastJson === "function") {
+        rawBfJson = standardizeBreakfastJson(rawBfJson, _masterPriceByName);
+      }
+      const parsed = JSON.parse(rawBfJson);
       dailyBf = parsed.map(d => {
-        const _nm = d.name ? (NAME_MAP[d.name.trim()] || d.name) : "";
+        const rawName = d.name ? d.name.trim() : "";
+        const _nm = NAME_MAP[rawName] || rawName;
         // Price ALWAYS from the master; fall back to the JSON's own price only if the
         // item isn't in the master at all (a genuine one-off not yet added there).
-        const _mp = _masterPriceByName[_nm];
+        const _mp = _masterPriceByName[_nm] !== undefined ? _masterPriceByName[_nm] : _masterPriceByName[rawName];
         return Object.assign({}, d, { name: _nm, price: (_mp !== undefined ? _mp : (Number(d.price) || 0)) });
       });
     } catch(e) {}
