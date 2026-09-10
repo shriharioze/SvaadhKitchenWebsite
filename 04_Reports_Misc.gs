@@ -4932,6 +4932,34 @@ function batchMarkDelivered(body) {
   return {success:true, updated:updated, deliveredAt:deliveredAt};
 }
 
+// ── UNMARK DELIVERED ─────────────────────────────────────────────────────────
+// Reverts an accidental "Delivered" mark by clearing Delivered_At in SK_Deliveries.
+// Supports single submissionId or an array of submissionIds (e.g. Enkin group).
+function unmarkDelivered(body) {
+  var sid = body.submissionId;
+  var ids = body.submissionIds || (sid ? [sid] : []);
+  if (!ids || !ids.length) return {success:false, error:"submissionId or submissionIds required"};
+
+  var ss  = getSpreadsheet();
+  var ws  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
+  var rows = getAllRows(ws);
+  var hIdx = headerIndex(ws);
+
+  var existingMap = {};
+  rows.forEach(function(r) { existingMap[String(r.Submission_ID || "")] = r; });
+
+  var updated = 0;
+  ids.forEach(function(id) {
+    id = String(id);
+    if (existingMap[id]) {
+      ws.getRange(existingMap[id]._row, hIdx["Delivered_At"]).setValue("");
+      updated++;
+    }
+  });
+
+  return {success:true, updated:updated, submissionIds:ids};
+}
+
 // ── AUTO-MARK DELIVERED (daily 00:00 IST safety net) ─────────────────────────
 // If the driver forgets to tap "Mark Delivered", any order dated BEFORE today
 // is auto-marked delivered at the start of the next day. Deliveries are keyed

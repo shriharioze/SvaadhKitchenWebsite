@@ -116,6 +116,17 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Unmark Delivered Feature & Driver Page Address Standardization Parity (CODE_VERSION 35.63)**
+  - **Unmark Delivered Feature (docs/Admin/driver.html & 04_Reports_Misc.gs):**
+    - Added `unmarkDelivered(body)` endpoint in `04_Reports_Misc.gs` supporting single `submissionId` or batch `submissionIds` (for Enkin consolidated cards). Clears `Delivered_At` in `SK_Deliveries` while keeping `EnRoute_At` intact.
+    - Added route `action === "unmarkDelivered"` in `Code.gs` with strict `isStaff` authentication.
+    - Driver UI (`driver.html`): On each delivered order card, renders an undo action button: `<button class="btn-unmark">↩️ Marked by mistake? Tap to Unmark</button>`.
+    - Safety Confirmation & UX: Prompts driver via `sConfirm`, optimistically updates UI (card state, badge, un-greying deliver button, progress counters, re-positioning above delivered cards).
+    - Offline Robustness: If an order is unmarked, pending offline queue delivery entries in `localStorage` (`sk_driver_offline_queue`) are immediately purged so they won't re-deliver on reconnect. If the unmark network request fails, it queues `item.type === "unmark"` in the offline queue and `_flushOfflineQueue` retries it when back online.
+    - Multi-Device Sync: `silentPoll` automatically detects remote unmarks and synchronizes card button states and counters.
+  - **Driver Page Address Display Parity:**
+    - Standardized addresses from `SK_Orders` (`Full_Address`) and `SK_Customers` (`Meal_Addresses`) now display with full parity on the driver delivery page (`docs/Admin/driver.html`).
+    - When `mealAddresses` JSON is present, `renderCard` prefers `full_address` / `fullAddress` from the standardized record. When assembling from address parts, it avoids duplicate prefixes (`Wing Wing`, `Flat Flat`, `Flat Office`, `Floor Floor`) and suppresses redundant area badges when already part of the address line.
 - **Delivery Area 'Mandai' Standardized to 'Hadapsar Mandai' (CODE_VERSION 35.62)**
   - **Database Migration:** Renamed area primary key in `SK_Areas` from `"Mandai"` to `"Hadapsar Mandai"`, and updated all occurrences across `SK_Customers` (`Area` column, `Full_Address`, and `Meal_Addresses` JSON blob), `SK_Customers_Archive`, and active orders in `SK_Orders` with automated backup sheet `SK_Customers_MandaiBackup_<ts>`.
   - **Area Dropdowns & Autocomplete:** Synced `DEFAULT_AREAS` in `03_Admin_Kitchen.gs`, `loadAreas()` in `docs/order.html` and `docs/Liviano-Serio.html` to display and submit `"Hadapsar Mandai"` for all future orders and customer profile updates.

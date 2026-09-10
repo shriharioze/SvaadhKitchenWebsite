@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.04.01">
+  <meta name="app-version" content="v26.09.10.01">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -535,12 +535,15 @@ async function silentPoll() {
         if (!o.submissionId) return;
         const btn  = document.getElementById("dbtn_"+o.submissionId);
         const card = document.getElementById("dcard_"+o.submissionId);
+        const ubtn = document.getElementById("ubtn_"+o.submissionId);
         if (o.deliveredAt && btn && !btn.classList.contains("done")) {
           btn.className = "btn-delivered done";
+          btn.disabled = true;
           btn.innerHTML = `✅ Delivered at ${fmtTime(o.deliveredAt)}`;
           if (card) { card.classList.add("delivered"); }
           const tBadge = document.getElementById("dtag_"+o.submissionId);
           if (tBadge) { tBadge.style.display=""; tBadge.textContent = `✅ ${fmtTime(o.deliveredAt)}`; }
+          if (ubtn) ubtn.style.display = "flex";
           // Update local data + push to bottom
           const local = (_ordersData[meal]||[]).find(lo=>lo.submissionId===o.submissionId);
           if (local && !local.deliveredAt) {
@@ -548,6 +551,30 @@ async function silentPoll() {
             setTimeout(()=>{ const panel=document.getElementById("panel_"+meal); if(card&&panel)panel.appendChild(card); }, 300);
             anyUpdate = true;
           }
+        } else if (!o.deliveredAt && btn && btn.classList.contains("done")) {
+          btn.className = "btn-delivered";
+          const local = (_ordersData[meal]||[]).find(lo=>lo.submissionId===o.submissionId);
+          if (local) local.deliveredAt = "";
+          const hasEnRoute = local && local.enRouteAt;
+          const enkinIdsStr = card && card.getAttribute("data-enkin-ids");
+          const isEnkin = !!enkinIdsStr;
+          const allIds = isEnkin ? enkinIdsStr.split(",").filter(Boolean) : [];
+          if (hasEnRoute) {
+            btn.disabled = false;
+            btn.style.opacity = "";
+            btn.style.cursor = "";
+            btn.innerHTML = `<span style="float:left;">🚗</span> ${isEnkin ? `⬜ Mark All ${allIds.length} Delivered` : '⬜ Mark Delivered'}`;
+          } else {
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            btn.style.cursor = "not-allowed";
+            btn.innerHTML = "🔒 Start Delivery to Unlock";
+          }
+          if (card) card.classList.remove("delivered");
+          const tBadge = document.getElementById("dtag_"+o.submissionId);
+          if (tBadge) { tBadge.style.display="none"; tBadge.textContent = ""; }
+          if (ubtn) ubtn.style.display = "none";
+          anyUpdate = true;
         }
       });
       if (anyUpdate) updateProgress(meal);
@@ -864,14 +891,21 @@ function renderCard(o, i, meal) {
           // If profile says pickup, ensure it shows as pickup
         } else {
           // Use profile address components if it's a specific delivery location
-          const parts = [
-            mData.wing ? `Wing ${mData.wing}` : "",
-            mData.flat ? `Flat ${mData.flat}` : "",
-            mData.floor ? `${mData.floor} Floor` : "",
-            mData.society || "",
-            mData.area || ""
-          ].filter(Boolean);
-          displayAddr = parts.join(", ");
+          if (mData.full_address || mData.fullAddress) {
+            displayAddr = mData.full_address || mData.fullAddress;
+          } else {
+            const cleanWing = mData.wing ? (/^(wing|tower|bldg|building)/i.test(String(mData.wing).trim()) ? mData.wing : `Wing ${mData.wing}`) : "";
+            const cleanFlat = mData.flat ? (/^(flat|office|shop|room|#)/i.test(String(mData.flat).trim()) ? mData.flat : `Flat ${mData.flat}`) : "";
+            const cleanFloor = mData.floor ? (String(mData.floor).toLowerCase().includes("floor") ? mData.floor : `${mData.floor} Floor`) : "";
+            const parts = [
+              cleanWing,
+              cleanFlat,
+              cleanFloor,
+              mData.society || "",
+              mData.area || ""
+            ].filter(Boolean);
+            displayAddr = parts.join(", ");
+          }
           displayLandmark = mData.landmark || "";
         }
       }
@@ -909,7 +943,7 @@ function renderCard(o, i, meal) {
       ${isPickup 
         ? `<div style="color:#d32f2f; font-size:1.1rem; font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:4px;">🏠 SELF PICKUP</div><div style="font-size:0.8rem; color:#666;">Customer set "${displayArea}" in profile</div>`
         : `📍 ${displayAddr || "Address not available"}
-          ${displayArea ? `<br><span style="color:#888;font-size:0.72rem;">📌 ${displayArea}</span>` : ""}
+          ${(displayArea && !displayAddr.toLowerCase().includes(displayArea.toLowerCase())) ? `<br><span style="color:#888;font-size:0.72rem;">📌 ${displayArea}</span>` : ""}
           ${displayLandmark ? `<div class="landmark">🏢 Landmark: <span>${displayLandmark}</span></div>` : ""}`
       }
     </div>
@@ -953,6 +987,11 @@ function renderCard(o, i, meal) {
         ${o.enRouteAt && !isDelivered ? `<span style="float:left;">🚗</span>` : ""}
         ${isDelivered ? `✅ Delivered at ${fmtTime(o.deliveredAt)}` : (!o.enRouteAt ? "🔒 Start Delivery to Unlock" : (isEnkinGroup ? `⬜ Mark All ${o._enkinGroupIds.length} Delivered` : "⬜ Mark Delivered"))}
       </button>
+      <button class="btn-unmark" id="ubtn_${o.submissionId}" 
+        onclick="unmarkDelivered('${o.submissionId}','${meal}',this)" 
+        style="${isDelivered ? 'display:flex;' : 'display:none;'}width:100%;margin-top:8px;padding:9px;font-size:0.82rem;background:#fff5f5;color:#c62828;border:1.5px solid #ef9a9a;border-radius:10px;font-weight:700;cursor:pointer;align-items:center;justify-content:center;gap:6px;">
+        ↩️ Marked by mistake? Tap to Unmark
+      </button>
     </div>
   </div>`;
 }
@@ -977,6 +1016,16 @@ function _queueEnRoute(submissionIds, enRouteAt) {
   let q = [];
   try { q = JSON.parse(localStorage.getItem(_OFFLINE_KEY) || "[]"); } catch(e) {}
   q.push({ type: "enroute", submissionIds, enRouteAt, pin: D.sessionPin });
+  localStorage.setItem(_OFFLINE_KEY, JSON.stringify(q));
+  _showOfflineBadge(q.length);
+}
+// Queue an unmark action for offline retry, stripping any conflicting delivered queue items
+function _queueUnmark(submissionId, submissionIds) {
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem(_OFFLINE_KEY) || "[]"); } catch(e) {}
+  const ids = submissionIds || (submissionId ? [submissionId] : []);
+  q = q.filter(x => !ids.includes(x.submissionId));
+  q.push({ type: "unmark", submissionId, submissionIds: ids, pin: D.sessionPin });
   localStorage.setItem(_OFFLINE_KEY, JSON.stringify(q));
   _showOfflineBadge(q.length);
 }
@@ -1009,6 +1058,14 @@ async function _flushOfflineQueue() {
         if (data.success) flushed++; else remaining.push(item);
         continue;
       }
+      // Queued "Unmark Delivered"
+      if (item.type === "unmark") {
+        const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
+          body: JSON.stringify({_action:"unmarkDelivered", pin: item.pin || D.sessionPin, submissionId: item.submissionId, submissionIds: item.submissionIds})});
+        const data = await res.json();
+        if (data.success) flushed++; else remaining.push(item);
+        continue;
+      }
       const res  = await fetch(APPS_SCRIPT_URL, {method:"POST",
         body: JSON.stringify({_action:"markDelivered", pin: item.pin || D.sessionPin, submissionId: item.submissionId, deliveredAt: item.deliveredAt})});
       const data = await res.json();
@@ -1018,10 +1075,13 @@ async function _flushOfflineQueue() {
         const btn = document.getElementById("dbtn_"+item.submissionId);
         if (btn && !btn.classList.contains("done")) {
           btn.className = "btn-delivered done";
+          btn.disabled = true;
           btn.innerHTML = `✅ Delivered at ${fmtTime(item.deliveredAt)}`;
         }
         const card = document.getElementById("dcard_"+item.submissionId);
         if (card) card.classList.add("delivered");
+        const ubtn = document.getElementById("ubtn_"+item.submissionId);
+        if (ubtn) ubtn.style.display = "flex";
       } else { remaining.push(item); }
     } catch(e) { remaining.push(item); }
   }
@@ -1056,12 +1116,15 @@ async function markDelivered(submissionId, meal, btn) {
 
     // Optimistic UI
     btn.className = "btn-delivered done";
+    btn.disabled = true;
     btn.innerHTML = `✅ All ${allIds.length} delivered at ${fmtTime(deliveredAt)}`;
     if (card) card.classList.add("delivered");
     const tag = document.getElementById("dtag_"+submissionId);
     if (tag) { tag.style.display=""; tag.textContent = `✅ ${fmtTime(deliveredAt)}`; }
     const order = (_ordersData[meal]||[]).find(o=>o.submissionId===submissionId);
     if (order) order.deliveredAt = deliveredAt;
+    const ubtn = document.getElementById("ubtn_"+submissionId);
+    if (ubtn) ubtn.style.display = "flex";
     updateProgress(meal);
     setTimeout(() => { const panel = document.getElementById("panel_"+meal); if (card && panel) panel.appendChild(card); }, 500);
 
@@ -1083,12 +1146,15 @@ async function markDelivered(submissionId, meal, btn) {
 
   // Optimistically update UI immediately for better field UX
   btn.className = "btn-delivered done";
+  btn.disabled = true;
   btn.innerHTML = `✅ Delivered at ${fmtTime(deliveredAt)}`;
   if (card) card.classList.add("delivered");
   const tag = document.getElementById("dtag_"+submissionId);
   if (tag) { tag.style.display=""; tag.textContent = `✅ ${fmtTime(deliveredAt)}`; }
   const order = (_ordersData[meal]||[]).find(o=>o.submissionId===submissionId);
   if (order) order.deliveredAt = deliveredAt;
+  const ubtn = document.getElementById("ubtn_"+submissionId);
+  if (ubtn) ubtn.style.display = "flex";
   updateProgress(meal);
   setTimeout(() => { const panel = document.getElementById("panel_"+meal); if (card && panel) panel.appendChild(card); }, 500);
 
@@ -1107,6 +1173,104 @@ async function markDelivered(submissionId, meal, btn) {
   } catch(e) {
     // Network failure — queue for later sync
     _queueDelivery(submissionId, meal, deliveredAt);
+  }
+}
+
+// ── UNMARK DELIVERED (UNDO ACCIDENTAL DELIVERY) ──────────────────────────────
+async function unmarkDelivered(submissionId, meal, btn) {
+  if (!submissionId) return;
+
+  const card = document.getElementById("dcard_" + submissionId);
+  const enkinIdsStr = card && card.getAttribute("data-enkin-ids");
+  const isEnkinGroup = !!enkinIdsStr;
+  const allIds = isEnkinGroup ? enkinIdsStr.split(",").filter(Boolean) : [submissionId];
+
+  const msg = isEnkinGroup
+    ? `Unmark all ${allIds.length} orders as delivered?\n\nThis will return them to pending delivery.`
+    : `Unmark this order as delivered?\n\nThis will return it to pending delivery.`;
+
+  const confirmed = await sConfirm(msg, "Unmark Delivered", "↩️", "चुकीने Delivered झाले असल्यास परत Pending करा.");
+  if (!confirmed) return;
+
+  sBtnLoading(btn, true, "Unmarking");
+
+  // 1. Remove from localStorage offline queue if queued as markDelivered
+  try {
+    let q = JSON.parse(localStorage.getItem(_OFFLINE_KEY) || "[]");
+    q = q.filter(x => !allIds.includes(x.submissionId));
+    localStorage.setItem(_OFFLINE_KEY, JSON.stringify(q));
+    _showOfflineBadge(q.length);
+  } catch(e) {}
+
+  // 2. Optimistic UI revert
+  allIds.forEach(id => {
+    const o = (_ordersData[meal] || []).find(x => x.submissionId === id);
+    if (o) o.deliveredAt = "";
+  });
+
+  if (card) {
+    card.classList.remove("delivered");
+  }
+
+  const dtag = document.getElementById("dtag_" + submissionId);
+  if (dtag) {
+    dtag.style.display = "none";
+    dtag.textContent = "";
+  }
+
+  const dbtn = document.getElementById("dbtn_" + submissionId);
+  if (dbtn) {
+    dbtn.className = "btn-delivered";
+    const orderObj = (_ordersData[meal] || []).find(x => x.submissionId === submissionId);
+    const hasEnRoute = orderObj && orderObj.enRouteAt;
+    if (hasEnRoute) {
+      dbtn.disabled = false;
+      dbtn.style.opacity = "";
+      dbtn.style.cursor = "";
+      dbtn.innerHTML = `<span style="float:left;">🚗</span> ${isEnkinGroup ? `⬜ Mark All ${allIds.length} Delivered` : '⬜ Mark Delivered'}`;
+    } else {
+      dbtn.disabled = true;
+      dbtn.style.opacity = "0.5";
+      dbtn.style.cursor = "not-allowed";
+      dbtn.innerHTML = "🔒 Start Delivery to Unlock";
+    }
+  }
+
+  // Hide unmark button
+  btn.style.display = "none";
+  sBtnLoading(btn, false);
+
+  updateProgress(meal);
+
+  // Move card before the first delivered card in panel so active orders stay on top
+  if (card) {
+    const panel = document.getElementById("panel_" + meal);
+    if (panel) {
+      const firstDelivered = panel.querySelector(".order-card.delivered");
+      if (firstDelivered) {
+        panel.insertBefore(card, firstDelivered);
+      } else {
+        panel.appendChild(card);
+      }
+    }
+  }
+
+  // 3. Backend call or queue offline
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        _action: "unmarkDelivered",
+        pin: D.sessionPin,
+        submissionId: submissionId,
+        submissionIds: allIds
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || "Failed");
+  } catch(e) {
+    // Network failure — queue unmark for later sync
+    _queueUnmark(submissionId, allIds);
   }
 }
 
