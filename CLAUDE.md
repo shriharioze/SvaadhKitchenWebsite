@@ -116,6 +116,16 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Daily On-Account Payment Reminders & 7-Day Overdue Hard-Block (CODE_VERSION 35.61)**
+  - **Daily On-Account Parity:** Extended `getOnAccountBill` (`04_Reports_Misc.gs`) to support Daily On-Account customers (`Billing_Cycle === "Daily"` or default) alongside Monthly accounts.
+  - **7-Day "Remind Me Later" Grace Period:**
+    - If all unpaid on-account orders are within 7 days ($\le 7$ days from the oldest unpaid order date), a payment reminder modal is shown with a "Remind me later" button. Clicking it dismisses the prompt for that browser session, allowing orders to be placed freely.
+  - **Mandatory Hard-Block (> 7 Days Overdue):**
+    - If any unpaid order is older than 7 days ($> 7$ days, e.g., on Aug 28 an unpaid order from Aug 20 is 8 days old), `isOverdue` flips to `true`.
+    - Modal becomes unskippable: "Remind me later" is disabled and replaced by *"Please clear pending dues to continue"* with friendly reminder copy. Backdrop clicking is blocked.
+    - Full outstanding dues till date must be cleared before the customer can proceed.
+  - **Authoritative Backend Guard:** Hardened `submitOrder` (`02_Orders_Menu.gs`) and `submitBulkOrder` (`06_Bulk_Orders.gs`) to verify `getOnAccountBill` for both monthly (>= 10th) and daily (> 7 days) on-account customers, rejecting order placement with a descriptive error if overdue.
+  - **Settlement Parity:** HDFC Gateway one-tap payment automatically passes `scope: "all"` for daily accounts (and `"monthly"` for monthly accounts) in `docs/order.html` and `docs/Liviano-Serio.html`, settling all outstanding dues up to date.
 - **22 Approved Address Groups Standardization & Automated Backup (CODE_VERSION 35.60)**
   - **Comprehensive Multi-Account & Duplicate Address Standardization:** Processed 22 owner-approved address duplicate clusters covering 54 customer profiles in `SK_Customers` and 18 active orders in `SK_Orders` to consolidate physical delivery locations into shared delivery slots (`slotType: "shared"`).
   - **Automated Backup Safeguard:** Added `standardizeApprovedAddressGroups(commit)` in `04_Reports_Misc.gs` which creates a timestamped backup sheet `SK_Customers_AddrBackup_<yyyyMMdd_HHmm>` before applying changes (`SK_Customers_AddrBackup_20260910_1051`).

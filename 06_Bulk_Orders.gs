@@ -615,18 +615,25 @@ function submitBulkOrder(body) {
   const ss = getSpreadsheet();
 
   // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
-  // If customer is On Account (Monthly) and it is >= 10th of the month
-  // with an unpaid bill from previous month(s), block bulk orders too.
-  if (cRow && String(cRow.On_Account || "").trim().toLowerCase() === "yes" &&
-      String(cRow.Billing_Cycle || "Daily").trim().toLowerCase() === "monthly") {
-    if (typeof getOnAccountBill === "function") {
-      const billInfo = getOnAccountBill(phone);
-      if (billInfo && billInfo.due && billInfo.isOverdue) {
-        return {
-          success: false,
-          error: "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊",
-          isOverdue: true
-        };
+  // If customer is On Account and has overdue unpaid orders:
+  // - Monthly: >= 10th of month with unpaid bill from previous month(s)
+  // - Daily: has unpaid orders older than 7 days
+  // Block bulk orders too.
+  if (cRow && String(cRow.On_Account || "").trim().toLowerCase() === "yes") {
+    var bCycle = String(cRow.Billing_Cycle || "Daily").trim().toLowerCase();
+    if (bCycle === "monthly" || bCycle === "daily") {
+      if (typeof getOnAccountBill === "function") {
+        var bBillInfo = getOnAccountBill(phone);
+        if (bBillInfo && bBillInfo.due && bBillInfo.isOverdue) {
+          var bReminderMsg = (bCycle === "monthly")
+            ? "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + bBillInfo.total + " so we can keep your fresh meals coming! 😊"
+            : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues of ₹" + bBillInfo.total + " so we can keep your fresh meals coming! 😊";
+          return {
+            success: false,
+            error: bReminderMsg,
+            isOverdue: true
+          };
+        }
       }
     }
   }

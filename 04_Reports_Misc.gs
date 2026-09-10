@@ -5267,14 +5267,17 @@ function getBillingData(cycle, filterValue) {
   return { success: true, cycle, from: fromStr, to: toStr, customers, flat_orders };
 }
 
-// ── ON-ACCOUNT MONTHLY BILL (customer-facing) ────────────────────────
-// Returns the previous-month (plus any older carry-forward) UNPAID
-// On Account balance for a MONTHLY billing customer, so the order page
-// can surface a skippable "settle your bill" modal from the 1st onward.
-// Daily customers are handled by the admin from the backend → not surfaced.
-// Weekly is retired, so only "monthly" qualifies here.
-// "Paid" is implicit: when admin uses Mark Collected, those orders flip
-// out of "On Account" status and stop counting → the bill disappears.
+// ── ON-ACCOUNT BILL (customer-facing) ────────────────────────
+// Returns UNPAID On Account balance for an on-account customer so the
+// order page can surface a bill / payment reminder modal.
+// - MONTHLY cycle: previous-month (plus older carry-forward) unpaid orders.
+//   Skippably shown from the 1st of the month; hard-blocked (isOverdue=true)
+//   if it is the 10th or later of the current month.
+// - DAILY cycle: all unpaid orders up to today. Skippable ("Remind me later")
+//   if oldest unpaid order is <= 7 days old. Hard-blocked (isOverdue=true)
+//   if ANY order is older than 7 days (> 7 days).
+// "Paid" is implicit: when admin uses Mark Collected or gateway settles, those orders
+// flip out of "On Account" status and stop counting → the bill disappears.
 function getOnAccountBill(phone) {
   try {
     const phoneStr = _normalizePhone(phone);
@@ -5293,14 +5296,10 @@ function getOnAccountBill(phone) {
 
     const isOnAccount = String(prof.On_Account || "").trim().toLowerCase() === "yes";
     const cycle       = String(prof.Billing_Cycle || "Daily").trim().toLowerCase();
-    if (!isOnAccount || cycle !== "monthly") return { due: false };
+    if (!isOnAccount || (cycle !== "monthly" && cycle !== "daily")) return { due: false };
 
-    // Cutoff = first day of the current IST month. Anything strictly BEFORE
-    // this date that is still "On Account" is what the customer owes. This
-    // naturally surfaces last month's bill on the 1st and also catches any
-    // older carry-forward the admin hasn't collected yet.
     const now    = getISTDate();
-    const cutoff = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), 'Asia/Kolkata', 'yyyy-MM-dd');
+    const todayDs = Utilities.formatDate(now, 'Asia/Kolkata', 'yyyy-MM-dd');
 
     const ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
     const rows     = getAllRows(ordersWs);
@@ -5308,64 +5307,125 @@ function getOnAccountBill(phone) {
     const orders = [];
     let total = 0;
     let earliest = null;
-    rows.forEach(function (r) {
-      if (_normalizePhone(r.Phone) !== phoneStr) return;
-      if (!_isOnAccountDueStatus(r.Payment_Status)) return;
-      const ds = r.Order_Date instanceof Date
-        ? Utilities.formatDate(r.Order_Date, 'Asia/Kolkata', 'yyyy-MM-dd')
-        : String(r.Order_Date).trim();
-      if (!ds || ds >= cutoff) return; // current month is not billed yet
-      const net = Number(r.Net_Total || 0);
-      total += net;
-      if (!earliest || ds < earliest) earliest = ds;
-      orders.push({
-        date:  ds,
-        meal:  String(r.Meal_Type || ""),
-        items: String(r.Items_JSON || "{}"),
-        net:   net
+    let latest   = null;
+
+    if (cycle === "monthly") {
+      // Cutoff = first day of the current IST month. Anything strictly BEFORE
+      // this date that is still "On Account" is what the customer owes.
+      const cutoff = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 1), 'Asia/Kolkata', 'yyyy-MM-dd');
+
+      rows.forEach(function (r) {
+        if (_normalizePhone(r.Phone) !== phoneStr) return;
+        if (!_isOnAccountDueStatus(r.Payment_Status)) return;
+        const ds = r.Order_Date instanceof Date
+          ? Utilities.formatDate(r.Order_Date, 'Asia/Kolkata', 'yyyy-MM-dd')
+          : String(r.Order_Date).trim();
+        if (!ds || ds >= cutoff) return; // current month is not billed yet
+        const net = Number(r.Net_Total || 0);
+        total += net;
+        if (!earliest || ds < earliest) earliest = ds;
+        if (!latest || ds > latest) latest = ds;
+        orders.push({
+          date:  ds,
+          meal:  String(r.Meal_Type || ""),
+          items: String(r.Items_JSON || "{}"),
+          net:   net
+        });
       });
-    });
 
-    if (orders.length === 0 || total <= 0) return { due: false };
+      if (orders.length === 0 || total <= 0) return { due: false };
 
-    orders.sort(function (a, b) { return a.date.localeCompare(b.date); });
+      orders.sort(function (a, b) { return a.date.localeCompare(b.date); });
 
-    const prevMonth   = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastDayPrev = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 0), 'Asia/Kolkata', 'yyyy-MM-dd');
+      const prevMonth   = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastDayPrev = Utilities.formatDate(new Date(now.getFullYear(), now.getMonth(), 0), 'Asia/Kolkata', 'yyyy-MM-dd');
 
-    // Period label spans the ACTUAL unpaid range. The total above already sums EVERY
-    // pending month, so when dues carry across months (e.g. May still unpaid when June
-    // closes) the label must say "May–June 2026", not just the previous month — otherwise
-    // the customer sees a "June" bill whose amount is really May+June and thinks it's wrong.
-    const _ep = String(earliest).split('-');
-    const earliestDate = (_ep.length === 3)
-      ? new Date(Number(_ep[0]), Number(_ep[1]) - 1, Number(_ep[2]))
-      : prevMonth;
-    const _startMY = Utilities.formatDate(earliestDate, 'Asia/Kolkata', 'MMMM yyyy'); // "May 2026"
-    const _endMY   = Utilities.formatDate(prevMonth,    'Asia/Kolkata', 'MMMM yyyy'); // "June 2026"
-    let periodLabel;
-    if (_startMY === _endMY) {
-      periodLabel = _endMY;                                                            // single month → "June 2026"
-    } else if (earliestDate.getFullYear() === prevMonth.getFullYear()) {
-      periodLabel = Utilities.formatDate(earliestDate, 'Asia/Kolkata', 'MMMM') + '–' + _endMY; // "May–June 2026"
+      const _ep = String(earliest).split('-');
+      const earliestDate = (_ep.length === 3)
+        ? new Date(Number(_ep[0]), Number(_ep[1]) - 1, Number(_ep[2]))
+        : prevMonth;
+      const _startMY = Utilities.formatDate(earliestDate, 'Asia/Kolkata', 'MMMM yyyy'); // "May 2026"
+      const _endMY   = Utilities.formatDate(prevMonth,    'Asia/Kolkata', 'MMMM yyyy'); // "June 2026"
+      let periodLabel;
+      if (_startMY === _endMY) {
+        periodLabel = _endMY;
+      } else if (earliestDate.getFullYear() === prevMonth.getFullYear()) {
+        periodLabel = Utilities.formatDate(earliestDate, 'Asia/Kolkata', 'MMMM') + '–' + _endMY;
+      } else {
+        periodLabel = _startMY + ' – ' + _endMY;
+      }
+
+      // If today is the 10th or later of the current month, they MUST pay before ordering
+      const isOverdue = now.getDate() >= 10;
+
+      return {
+        due:         true,
+        cycle:       "monthly",
+        isOverdue:   isOverdue,
+        phone:       phoneStr,
+        name:        prof.Customer_Name || "",
+        total:       Math.round(total * 100) / 100,
+        periodLabel: periodLabel,
+        fromDate:    earliest,
+        toDate:      lastDayPrev,
+        orders:      orders
+      };
     } else {
-      periodLabel = _startMY + ' – ' + _endMY;                                         // "December 2025 – January 2026"
+      // ── DAILY ON-ACCOUNT CYCLE ─────────────────────────────────
+      // Gathers all unpaid "On Account" orders up to today.
+      rows.forEach(function (r) {
+        if (_normalizePhone(r.Phone) !== phoneStr) return;
+        if (!_isOnAccountDueStatus(r.Payment_Status)) return;
+        const ds = r.Order_Date instanceof Date
+          ? Utilities.formatDate(r.Order_Date, 'Asia/Kolkata', 'yyyy-MM-dd')
+          : String(r.Order_Date).trim();
+        if (!ds || ds > todayDs) return; // current/past unpaid orders
+        const net = Number(r.Net_Total || 0);
+        total += net;
+        if (!earliest || ds < earliest) earliest = ds;
+        if (!latest || ds > latest) latest = ds;
+        orders.push({
+          date:  ds,
+          meal:  String(r.Meal_Type || ""),
+          items: String(r.Items_JSON || "{}"),
+          net:   net
+        });
+      });
+
+      if (orders.length === 0 || total <= 0) return { due: false };
+
+      orders.sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+      // Calculate days difference between today and the oldest unpaid order
+      const _ep = String(earliest).split('-');
+      const earliestDate = new Date(Number(_ep[0]), Number(_ep[1]) - 1, Number(_ep[2]));
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dayDiff = Math.round((todayDate.getTime() - earliestDate.getTime()) / (24 * 3600 * 1000));
+      // Max they can "remind me later" is 7 days. If > 7 days, mandatory payment is required.
+      const isOverdue = dayDiff > 7;
+
+      const fmtD = function(dStr) {
+        var parts = String(dStr).split('-');
+        if (parts.length !== 3) return dStr;
+        var dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        return Utilities.formatDate(dt, 'Asia/Kolkata', 'd MMM yyyy');
+      };
+      const periodLabel = (earliest === latest) ? fmtD(earliest) : (fmtD(earliest) + ' – ' + fmtD(latest));
+
+      return {
+        due:         true,
+        cycle:       "daily",
+        isOverdue:   isOverdue,
+        daysUnpaid:  dayDiff,
+        phone:       phoneStr,
+        name:        prof.Customer_Name || "",
+        total:       Math.round(total * 100) / 100,
+        periodLabel: periodLabel,
+        fromDate:    earliest,
+        toDate:      latest,
+        orders:      orders
+      };
     }
-
-    // If today is the 10th or later of the current month, they MUST pay before ordering
-    const isOverdue = now.getDate() >= 10;
-
-    return {
-      due:         true,
-      isOverdue:   isOverdue,
-      phone:       phoneStr,
-      name:        prof.Customer_Name || "",
-      total:       Math.round(total * 100) / 100,
-      periodLabel: periodLabel,
-      fromDate:    earliest,
-      toDate:      lastDayPrev,
-      orders:      orders
-    };
   } catch (e) {
     return { due: false, error: String(e) };
   }

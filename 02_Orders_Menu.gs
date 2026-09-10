@@ -2384,18 +2384,24 @@ function _submitOrderInternal(body) {
   const payFreq      = profile.payment_preference || "Daily Payment";
 
   // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
-  // If customer is On Account (Monthly) and it is >= 10th of the month
-  // with an unpaid bill from the previous month(s), completely block
-  // them from placing new orders until the bill is paid.
-  if (String(profile.onAccount || "").toLowerCase() === "yes" &&
-      String(profile.billingCycle || "").toLowerCase() === "monthly") {
-    if (typeof getOnAccountBill === "function") {
-      const billInfo = getOnAccountBill(profile.phone);
-      if (billInfo && billInfo.due && billInfo.isOverdue) {
-        return {
-          error: "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊",
-          isOverdue: true
-        };
+  // If customer is On Account and has overdue unpaid orders:
+  // - Monthly: >= 10th of month with unpaid bill from previous month(s)
+  // - Daily: has unpaid orders older than 7 days
+  // Completely block them from placing new orders until the bill is paid.
+  if (String(profile.onAccount || "").toLowerCase() === "yes") {
+    var cycle = String(profile.billingCycle || "Daily").toLowerCase();
+    if (cycle === "monthly" || cycle === "daily") {
+      if (typeof getOnAccountBill === "function") {
+        var billInfo = getOnAccountBill(profile.phone);
+        if (billInfo && billInfo.due && billInfo.isOverdue) {
+          var reminderMsg = (cycle === "monthly")
+            ? "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊"
+            : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊";
+          return {
+            error: reminderMsg,
+            isOverdue: true
+          };
+        }
       }
     }
   }

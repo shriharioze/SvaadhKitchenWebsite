@@ -9367,17 +9367,19 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // ON-ACCOUNT MONTHLY BILL  (customer-facing, skippable)
     // ═══════════════════════════════════════════════════════════
-    // Only Monthly On-Account customers with an unpaid previous-month
-    // balance see this. Daily customers are handled by admin from the
-    // backend; Weekly is retired. The bill clears automatically when the
-    // admin runs "Mark Collected" (orders flip out of On Account status).
+    // ON-ACCOUNT BILL  (customer-facing, skippable / overdue)
+    // ═══════════════════════════════════════════════════════════
+    // Shows pending on-account dues for Monthly or Daily customers.
+    // - Monthly: skippable till the 9th; mandatory / hard-blocked from 10th.
+    // - Daily: skippable ("Remind me later") if unpaid orders <= 7 days old;
+    //   mandatory / hard-blocked if any unpaid order > 7 days old.
     async function maybeShowOnAccountBill() {
       try {
         if (!S.phone) return;
-        if (!(S.profile && S.profile.onAccount === "Yes" &&
-              String(S.profile.billingCycle || "").toLowerCase() === "monthly")) return;
+        const cycle = String((S.profile && S.profile.billingCycle) || "Daily").toLowerCase();
+        const isOnAccount = S.profile && (String(S.profile.onAccount || "").toLowerCase() === "yes");
+        if (!isOnAccount || (cycle !== "monthly" && cycle !== "daily")) return;
 
         const res = await apiFetch(
           `${APPS_SCRIPT_URL}?action=getOnAccountBill&phone=${encodeURIComponent(S.phone)}&_t=${Date.now()}`,
@@ -9393,7 +9395,7 @@
 
         // Auto-open once per browser session per billing period (skippable —
         // we don't nag on every reload), UNLESS it is overdue, in which case we force it.
-        const seenKey = `sk_bill_seen_${S.phone}_${data.periodLabel}`;
+        const seenKey = `sk_bill_seen_${S.phone}_${data.cycle || 'm'}_${data.periodLabel}`;
         if (data.isOverdue || !sessionStorage.getItem(seenKey)) {
           if (!data.isOverdue) sessionStorage.setItem(seenKey, "1");
           showOnAccountBillModal();
@@ -9408,6 +9410,7 @@
       const ex = document.getElementById("onAccountBillModal");
       if (ex) ex.remove();
 
+      const isMonthly = (data.cycle === "monthly");
       const amt  = Number(data.total).toFixed(2);
       const vpa  = "9819969682@hdfc";
       const vpaBackup = UPI_VPA_BACKUP;
@@ -9422,12 +9425,10 @@
         '<div style="background:#fff;border-radius:20px;max-width:420px;width:100%;padding:22px 20px;box-shadow:0 12px 40px rgba(0,0,0,0.3);max-height:92vh;overflow-y:auto;">' +
           '<div style="text-align:center;">' +
             '<div style="font-size:2.2rem;margin-bottom:4px;">🧾</div>' +
-            '<div style="font-size:1.15rem;font-weight:800;color:#0369a1;">Your monthly bill</div>' +
+            `<div style="font-size:1.15rem;font-weight:800;color:#0369a1;">${isMonthly ? "Your monthly bill" : "Your on-account bill"}</div>` +
             `<div style="font-size:0.8rem;color:#64748b;margin-top:2px;">${data.periodLabel} · ${data.orders.length} order${data.orders.length>1?'s':''}</div>` +
           '</div>' +
-          // Amount-due card. Gateway mode → clean amount (the manual "enter this in your
-          // UPI app · tap to copy" block is dropped; the gateway button carries the amount).
-          // Manual mode → full card with tap-to-copy for entering it in a UPI app.
+          // Amount-due card. Gateway mode → clean amount. Manual mode → full card with tap-to-copy.
           (S.gatewayEnabled
             ? ('<div style="background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border-radius:14px;padding:16px;margin:14px 0;text-align:center;">' +
                  '<div style="font-size:0.72rem;opacity:0.85;text-transform:uppercase;letter-spacing:0.6px;">Amount due</div>' +
@@ -9459,8 +9460,8 @@
           ) +
           '<button id="onAccountBillPdfBtn" style="width:100%;padding:12px;border:1.5px solid #0284c7;border-radius:12px;background:#f0f9ff;color:#0369a1;font-size:0.9rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📄 View / Download bill (PDF)</button>' +
           (data.isOverdue 
-             ? ('<button id="onAccountBillLaterBtn" disabled style="width:100%;padding:13px;border:none;border-radius:12px;background:#fef3c7;color:#92400e;font-size:0.92rem;font-weight:700;cursor:not-allowed;opacity:0.85;margin-top:6px;">Please clear previous bill to continue</button>' +
-                '<div style="text-align:center;font-size:0.8rem;color:#b45309;font-weight:600;margin-top:10px;">Friendly reminder: please take a quick moment to clear your previous dues so we can keep your daily meals coming! 😊</div>')
+             ? ('<button id="onAccountBillLaterBtn" disabled style="width:100%;padding:13px;border:none;border-radius:12px;background:#fef3c7;color:#92400e;font-size:0.92rem;font-weight:700;cursor:not-allowed;opacity:0.85;margin-top:6px;">Please clear pending dues to continue</button>' +
+                `<div style="text-align:center;font-size:0.8rem;color:#b45309;font-weight:600;margin-top:10px;">${isMonthly ? "Friendly reminder: please take a quick moment to clear your previous dues so we can keep your daily meals coming! 😊" : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues till date so we can keep your fresh meals coming! 😊"}</div>`)
              : '<button id="onAccountBillLaterBtn" style="width:100%;padding:13px;border:none;border-radius:12px;background:#e5e7eb;color:#374151;font-size:0.92rem;font-weight:700;cursor:pointer;">Remind me later</button>') +
         '</div>';
 
@@ -9478,7 +9479,7 @@
       const _oaGwBtn = document.getElementById("onAccountBillGatewayBtn");
       if (_oaGwBtn) _oaGwBtn.addEventListener("click", function () {
         if (!data.isOverdue) overlay.remove();
-        hdfc_payOnAccountViaGateway("monthly");
+        hdfc_payOnAccountViaGateway(isMonthly ? "monthly" : "all");
       });
 
       // Skippable: tapping the dim backdrop closes it too.
@@ -9493,6 +9494,7 @@
       const data = S.onAccountBill;
       if (!data || !data.due) return;
 
+      const isMonthly = (data.cycle === "monthly");
       const MEAL_ICONS = { Breakfast: "🌅", Lunch: "☀️", Dinner: "🌙" };
       const fmt = (ds) => {
         const p = String(ds).split("-");
@@ -9524,7 +9526,7 @@
         '.btn{margin-top:18px;padding:12px 18px;border:none;border-radius:10px;background:#0284c7;color:#fff;font-weight:700;font-size:0.95rem;cursor:pointer;}</style></head><body><div class="wrap">' +
         '<h1>🍱 Svaadh Kitchen</h1>' +
         '<div class="muted">Home-style vegetarian meals · Hadapsar, Pune</div>' +
-        `<div style="margin-top:14px;font-weight:700;">Monthly Bill — ${data.periodLabel}</div>` +
+        `<div style="margin-top:14px;font-weight:700;">${isMonthly ? "Monthly Bill" : "On-Account Bill"} — ${data.periodLabel}</div>` +
         `<div class="muted">${data.name || ""} · ${S.phone}</div>` +
         `<div class="muted">Orders from ${fmt(data.fromDate)} to ${fmt(data.toDate)}</div>` +
         '<table><thead><tr><th>Date</th><th>Meal</th><th style="text-align:right;">Amount</th></tr></thead><tbody>' +
