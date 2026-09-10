@@ -750,6 +750,325 @@ function unifyGandharvCapitalOrders(commit) {
   }
 }
 
+function getAllCustomerProfilesForAudit() {
+  var ss = getSpreadsheet();
+  var ws = ss.getSheetByName(TAB_CUSTOMERS);
+  if (!ws) return { success: false, error: "SK_Customers not found" };
+  var data = ws.getDataRange().getValues();
+  if (data.length < 2) return { success: true, customers: [] };
+  var idx = {}; data[0].forEach(function(h, i) { idx[h] = i; });
+  var list = [];
+  for (var i = 1; i < data.length; i++) {
+    var phone = _normalizePhone(data[i][idx["Phone"]]);
+    if (!phone) continue;
+    list.push({
+      row: i + 1,
+      phone: phone,
+      name: String(data[i][idx["Customer_Name"]] || "").trim(),
+      area: String(data[i][idx["Area"]] || "").trim(),
+      wing: idx["Wing"] != null ? String(data[i][idx["Wing"]] || "").trim() : "",
+      flat: idx["Flat"] != null ? String(data[i][idx["Flat"]] || "").trim() : "",
+      floor: idx["Floor"] != null ? String(data[i][idx["Floor"]] || "").trim() : "",
+      society: idx["Society"] != null ? String(data[i][idx["Society"]] || "").trim() : "",
+      fullAddress: idx["Full_Address"] != null ? String(data[i][idx["Full_Address"]] || "").trim() : "",
+      landmark: idx["Landmark"] != null ? String(data[i][idx["Landmark"]] || "").trim() : "",
+      mealAddresses: idx["Meal_Addresses"] != null ? String(data[i][idx["Meal_Addresses"]] || "").trim() : ""
+    });
+  }
+  return { success: true, count: list.length, customers: list };
+}
+
+// ── STANDARDIZE APPROVED ADDRESS GROUPS ──────────────────────────────────────
+// Standardizes the 22 owner-approved address groups across SK_Customers and
+// active SK_Orders so identical physical locations collapse to shared slots.
+function standardizeApprovedAddressGroups(commit) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch(e) { return { success: false, error: "busy" }; }
+  try {
+    var ss = getSpreadsheet();
+    var custWs = ss.getSheetByName(TAB_CUSTOMERS);
+    if (!custWs) return { success: false, error: "SK_Customers not found" };
+
+    var backupTabName = "";
+    if (commit) {
+      var ts = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyyMMdd_HHmm");
+      backupTabName = "SK_Customers_AddrBackup_" + ts;
+      var bws = ss.insertSheet(backupTabName);
+      custWs.getDataRange().copyTo(bws.getRange(1, 1));
+    }
+
+    var GROUPS = [
+      // 1. Gandharv Capital - Office 201 (Venkatakrishnan dvk)
+      {
+        phones: ["9689924013"],
+        flat: "201", wing: "", floor: "2", society: "Gandharv Capital", area: "Bhosale Nagar",
+        landmark: "Opp Bhosale Garden",
+        fullAddress: "Office 201, 2nd Floor, Gandharv Capital, Opp Bhosale Garden, Bhosale Nagar"
+      },
+      // 2. Marvel Fuego - Office 2120
+      {
+        phones: ["9555258312", "9696634996", "9411090739", "8691080308", "9696575398", "9125691866"],
+        flat: "2120", wing: "", floor: "2", society: "Marvel Fuego", area: "Magarpatta",
+        landmark: "Opp Seasons Mall",
+        fullAddress: "Office 2120, 2nd Floor, Marvel Fuego, Magarpatta"
+      },
+      // 3. Cosmopolis - Office 803
+      {
+        phones: ["8983282508", "9373673214", "9764238354", "8329054774"],
+        flat: "803", wing: "", floor: "8", society: "Cosmopolis", area: "Magarpatta",
+        landmark: "Opp Seasons Mall",
+        fullAddress: "Office 803, 8th Floor, Cosmopolis, Opp Seasons Mall, Magarpatta"
+      },
+      // 4. City Centre - Office 302
+      {
+        phones: ["9623220335", "9103327557"],
+        flat: "302", wing: "", floor: "3", society: "City Centre", area: "Magarpatta",
+        landmark: "Opp Mega Centre",
+        fullAddress: "Office 302 (Webcof), 3rd Floor, City Centre, Magarpatta"
+      },
+      // 5. Konark Icon - Office 505
+      {
+        phones: ["7387557702", "9922150126"],
+        flat: "505", wing: "", floor: "5", society: "Konark Icon", area: "Kirtane Baug",
+        landmark: "Near Magarpatta Road",
+        fullAddress: "Office 505, 5th Floor, Konark Icon, Kirtane Baug"
+      },
+      // 6. Cybercity Tower 11
+      {
+        phones: ["9552506724", "9404269728", "7039137115"],
+        flat: "", wing: "", floor: "6", society: "Cybercity Tower 11", area: "Magarpatta",
+        landmark: "Magarpatta Cybercity",
+        fullAddress: "Cybercity Tower 11, Magarpatta"
+      },
+      // 7. Amanora Elevate Towers - Tower 47, Flat 1702
+      {
+        phones: ["7208682329", "8623046623"],
+        flat: "1702", wing: "47", floor: "17", society: "Amanora Elevate Towers", area: "Amanora",
+        landmark: "Amanora Park Town",
+        fullAddress: "Wing 47, Flat 1702, 17 Floor, Amanora Elevate Towers, Amanora"
+      },
+      // 8. Amanora Future Towers - Tower 52, Flat 4
+      {
+        phones: ["9755510348", "8302968466"],
+        flat: "4", wing: "52", floor: "", society: "Amanora Future Towers", area: "Amanora",
+        landmark: "Amanora Park Town",
+        fullAddress: "Wing 52, Flat 4, Amanora Future Towers, Amanora"
+      },
+      // 9. Amanora Gold Towers - Tower 44, Flat 1408
+      {
+        phones: ["9604663191", "7012119738"],
+        flat: "1408", wing: "44", floor: "14", society: "Amanora Gold Towers", area: "Amanora",
+        landmark: "Amanora Park Town",
+        fullAddress: "Wing 44, Flat 1408, 14 Floor, Amanora Gold Towers, Amanora"
+      },
+      // 10. Laburnum Park - Wing B, Flat 503
+      {
+        phones: ["9585602888", "8078078942", "8273836233"],
+        flat: "503", wing: "B", floor: "5", society: "Laburnum Park", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing B, Flat 503, 5 Floor, Laburnum Park, Magarpatta"
+      },
+      // 11. Laburnum Park - Wing P, Flat 701
+      {
+        phones: ["7709108775", "9043270456", "8240027526"],
+        flat: "701", wing: "P", floor: "7", society: "Laburnum Park", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing P, Flat 701, 7 Floor, Laburnum Park, Magarpatta"
+      },
+      // 12. Laburnum Park - Wing C, Flat 701
+      {
+        phones: ["9423760113", "8237700189"],
+        flat: "701", wing: "C", floor: "7", society: "Laburnum Park", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing C, Flat 701, 7 Floor, Laburnum Park, Magarpatta"
+      },
+      // 13. Laburnum Park - Wing A, Flat 403
+      {
+        phones: ["9850431338", "7620154426"],
+        flat: "403", wing: "A", floor: "4", society: "Laburnum Park", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing A, Flat 403, 4 Floor, Laburnum Park, Magarpatta"
+      },
+      // 14. Cosmos - Wing K, Flat 103
+      {
+        phones: ["9082196998", "8054506660", "6267213234", "9310345451"],
+        flat: "103", wing: "K", floor: "1", society: "Cosmos", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing K, Flat 103, 1 Floor, Cosmos, Magarpatta"
+      },
+      // 15. Brick Castle - Wing A, Flat 602
+      {
+        phones: ["9867373944", "7718034399"],
+        flat: "602", wing: "A", floor: "6", society: "Brick Castle", area: "Bhosale Nagar",
+        landmark: "Opp Bhosale Garden",
+        fullAddress: "Wing A, Flat 602, 6 Floor, Brick Castle, Bhosale Nagar"
+      },
+      // 16. Kumar Paradise - Wing A1A, Flat 303
+      {
+        phones: ["9764073084", "9028077280"],
+        flat: "303", wing: "A1A", floor: "3", society: "Kumar Paradise", area: "Kirtane Baug",
+        landmark: "Near Konark Icon",
+        fullAddress: "Wing A1A, Flat 303, 3 Floor, Kumar Paradise, Kirtane Baug"
+      },
+      // 17. Trillium - Wing C, Flat 404
+      {
+        phones: ["9870522734", "8691858160"],
+        flat: "404", wing: "C", floor: "4", society: "Trillium", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing C, Flat 404, 4 Floor, Trillium, Magarpatta"
+      },
+      // 18. Imperial Heights - Wing B, Flat 204
+      {
+        phones: ["9260961916", "7559138520"],
+        flat: "204", wing: "B", floor: "2", society: "Imperial Heights", area: "Bhosale Nagar",
+        landmark: "Near Bhosale Garden",
+        fullAddress: "Wing B, Flat 204, 2 Floor, Imperial Heights, Bhosale Nagar"
+      },
+      // 19. Heliconia 1 - Wing P, Flat 304
+      {
+        phones: ["9422291240", "9172716279"],
+        flat: "304", wing: "P", floor: "3", society: "Heliconia 1", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing P, Flat 304, 3 Floor, Heliconia 1, Magarpatta"
+      },
+      // 20. Simil Aggarwal - Kumar Prospera (Flat A1-1602)
+      {
+        phones: ["9930705550", "8850485319"],
+        flat: "1602", wing: "A1", floor: "16", society: "Kumar Prospera", area: "Magarpatta",
+        landmark: "Magarpatta Road",
+        fullAddress: "Wing A1, Flat 1602, 16 Floor, Kumar Prospera, Magarpatta"
+      },
+      // 21. Manjush Tupe - Laxman Villa (Wing B, Flat 202)
+      {
+        phones: ["9370317070", "9552184595"],
+        flat: "202", wing: "B", floor: "2", society: "Laxman Villa", area: "Bhosale Nagar",
+        landmark: "Near Bhosale Garden",
+        fullAddress: "Wing B, Flat 202, 2 Floor, Laxman Villa, Bhosale Nagar"
+      },
+      // 22. Ranjita Patgar - Laburnum Park (Wing P, Flat 1002)
+      {
+        phones: ["6362717712", "8668648501"],
+        flat: "1002", wing: "P", floor: "10", society: "Laburnum Park", area: "Magarpatta",
+        landmark: "Magarpatta City",
+        fullAddress: "Wing P, Flat 1002, 10 Floor, Laburnum Park, Magarpatta"
+      }
+    ];
+
+    var phoneMap = {};
+    GROUPS.forEach(function(g) {
+      g.phones.forEach(function(p) {
+        phoneMap[_normalizePhone(p)] = g;
+      });
+    });
+
+    var custData = custWs.getDataRange().getValues();
+    var cIdx = {}; custData[0].forEach(function(h, i) { cIdx[h] = i; });
+
+    var report = {
+      backupTab: backupTabName,
+      customersUpdated: [],
+      ordersUpdated: []
+    };
+
+    // 1. Update SK_Customers
+    for (var i = 1; i < custData.length; i++) {
+      var p = _normalizePhone(custData[i][cIdx["Phone"]]);
+      if (!p || !phoneMap[p]) continue;
+
+      var g = phoneMap[p];
+      var rowNum = i + 1;
+      var custName = String(custData[i][cIdx["Customer_Name"]] || "").trim();
+
+      report.customersUpdated.push({
+        row: rowNum,
+        phone: p,
+        name: custName,
+        society: g.society,
+        flat: g.flat,
+        wing: g.wing
+      });
+
+      if (commit) {
+        if (cIdx["Flat"] != null) custWs.getRange(rowNum, cIdx["Flat"] + 1).setValue(g.flat);
+        if (cIdx["Wing"] != null) custWs.getRange(rowNum, cIdx["Wing"] + 1).setValue(g.wing);
+        if (cIdx["Floor"] != null) custWs.getRange(rowNum, cIdx["Floor"] + 1).setValue(g.floor);
+        if (cIdx["Society"] != null) custWs.getRange(rowNum, cIdx["Society"] + 1).setValue(g.society);
+        if (cIdx["Area"] != null) custWs.getRange(rowNum, cIdx["Area"] + 1).setValue(g.area);
+        if (cIdx["Landmark"] != null) custWs.getRange(rowNum, cIdx["Landmark"] + 1).setValue(g.landmark);
+        if (cIdx["Full_Address"] != null) custWs.getRange(rowNum, cIdx["Full_Address"] + 1).setValue(g.fullAddress);
+
+        // Update Meal_Addresses JSON if present
+        if (cIdx["Meal_Addresses"] != null) {
+          var maRaw = String(custData[i][cIdx["Meal_Addresses"]] || "");
+          if (maRaw) {
+            try {
+              var maObj = JSON.parse(maRaw);
+              ["Breakfast", "Lunch", "Dinner"].forEach(function(mKey) {
+                if (maObj[mKey]) {
+                  maObj[mKey].flat = g.flat;
+                  maObj[mKey].wing = g.wing;
+                  maObj[mKey].floor = g.floor;
+                  maObj[mKey].society = g.society;
+                  maObj[mKey].area = g.area;
+                  maObj[mKey].landmark = g.landmark;
+                  maObj[mKey].full_address = g.fullAddress;
+                }
+              });
+              custWs.getRange(rowNum, cIdx["Meal_Addresses"] + 1).setValue(JSON.stringify(maObj));
+            } catch(e) {}
+          }
+        }
+      }
+    }
+
+    // 2. Update SK_Orders for active upcoming/today's orders
+    var ordWs = ss.getSheetByName(TAB_ORDERS);
+    if (ordWs) {
+      var ordData = ordWs.getDataRange().getValues();
+      var oIdx = {}; ordData[0].forEach(function(h, i) { oIdx[h] = i; });
+      var todayIso = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+
+      for (var j = 1; j < ordData.length; j++) {
+        var rDate = ordData[j][oIdx["Order_Date"]];
+        var dStr = rDate instanceof Date ? Utilities.formatDate(rDate, "Asia/Kolkata", "yyyy-MM-dd") : String(rDate || "").trim();
+        var rPhone = _normalizePhone(ordData[j][oIdx["Phone"]]);
+        var rStatus = String(ordData[j][oIdx["Payment_Status"]] || "");
+        var rSid = String(ordData[j][oIdx["Submission_ID"]] || "");
+
+        if (dStr >= todayIso && phoneMap[rPhone] && !_isOrderCancelled(rStatus)) {
+          var g = phoneMap[rPhone];
+          var ordRowNum = j + 1;
+          report.ordersUpdated.push({ row: ordRowNum, sid: rSid, phone: rPhone, date: dStr });
+          if (commit) {
+            if (oIdx["Flat"] != null) ordWs.getRange(ordRowNum, oIdx["Flat"] + 1).setValue(g.flat);
+            if (oIdx["Wing"] != null) ordWs.getRange(ordRowNum, oIdx["Wing"] + 1).setValue(g.wing);
+            if (oIdx["Floor"] != null) ordWs.getRange(ordRowNum, oIdx["Floor"] + 1).setValue(g.floor);
+            if (oIdx["Society"] != null) ordWs.getRange(ordRowNum, oIdx["Society"] + 1).setValue(g.society);
+            if (oIdx["Area"] != null) ordWs.getRange(ordRowNum, oIdx["Area"] + 1).setValue(g.area);
+            if (oIdx["Landmark"] != null) ordWs.getRange(ordRowNum, oIdx["Landmark"] + 1).setValue(g.landmark);
+            if (oIdx["Full_Address"] != null) ordWs.getRange(ordRowNum, oIdx["Full_Address"] + 1).setValue(g.fullAddress);
+          }
+        }
+      }
+    }
+
+    if (commit) {
+      SpreadsheetApp.flush();
+      try {
+        var cache = CacheService.getScriptCache();
+        cache.remove("adminData_v1");
+        cache.remove("order_summary_" + todayIso);
+        cache.remove("society_aliases_v2");
+      } catch(e) {}
+      _socAliasMemo = null;
+    }
+
+    return { success: true, committed: !!commit, report: report };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
 // ── GET UNPAID CUSTOMERS (reconciliation) ────────────────────────────────────
 function getUnpaidCustomers(p) {
   const dateFrom = p.dateFrom;

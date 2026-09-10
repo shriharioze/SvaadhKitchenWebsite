@@ -868,9 +868,10 @@ function _normSocietyKey(s) {
       base.indexOf("luburnum") !== -1 || base.indexOf("lumburnum") !== -1 ||
       base.indexOf("labournam") !== -1) return "laburnumpark";
   if (base === "cosmo") return "cosmos"; // exact match only — avoids "cosmopolis"
-  if (base.indexOf("gandharv") !== -1 || base.indexOf("gandharva") !== -1 ||
+  if (base.indexOf("serenity") === -1 && (
+      base.indexOf("gandharv") !== -1 || base.indexOf("gandharva") !== -1 ||
       base.indexOf("gamdharv") !== -1 || base.indexOf("gandharav") !== -1 ||
-      (base.indexOf("gandhar") !== -1 && base.indexOf("serenity") === -1)) {
+      base.indexOf("gandhar") !== -1)) {
     return "gandharvcapital";
   }
   return base;
