@@ -4840,7 +4840,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.09.02";
+    const APP_VERSION = "v26.09.10.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5625,6 +5625,16 @@
     }
 
     function renderStreakBanner(...ids) {
+      // Friends & Family receive flat 20% discount (no streak rewards) — hide streak banners completely
+      const isFnF = !!(S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true"));
+      if (isFnF) {
+        ids.forEach(id => {
+          const el = $(id);
+          if (el) { el.innerHTML = ""; el.style.display = "none"; }
+        });
+        return;
+      }
+
       // Smart Projection:
       const cartDatesWithFood = (S.selectedDates || []).filter(d => {
         const dayOrders = S.orders[d] || {};
@@ -8045,8 +8055,13 @@
       // ── Streak progress badge ──────────────────────────────────────────────
       {
         const streakBadge = $("streakProgressBadge");
+        const isFnF = !!(S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true"));
         if (streakBadge) {
-          const cartDatesWithFood = S.selectedDates.filter(d => {
+          if (isFnF) {
+            streakBadge.style.display = "none";
+            streakBadge.innerHTML = "";
+          } else {
+            const cartDatesWithFood = S.selectedDates.filter(d => {
             const dayOrders = S.orders[d] || {};
             return ["Breakfast", "Lunch", "Dinner"].some(m => (dayOrders[m]?.subtotal || 0) > 0);
           });
@@ -8112,6 +8127,7 @@
                 </div>
               </div>`;
             streakBadge.style.display = "block";
+          }
           }
         }
       }
@@ -8262,7 +8278,7 @@
 
         // Retroactive discount credit: if existing orders didn't get a discount but combined now qualifies
         let discRate = 0, discLabel = "";
-        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.20; discLabel = "20% Special Discount"; }
+        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.20; discLabel = "20% Friends & Family Discount"; }
         else if (combinedDayTotal >= DISC_T3.min) { discRate = DISC_T3.rate; discLabel = `10% off (≥ ₹${DISC_T3.min})`; }
         else if (combinedDayTotal >= DISC_T2.min) { discRate = DISC_T2.rate; discLabel = `7.5% off (≥ ₹${DISC_T2.min})`; }
         else if (combinedDayTotal >= DISC_T1.min) { discRate = DISC_T1.rate; discLabel = `5% off (≥ ₹${DISC_T1.min})`; }
@@ -8337,7 +8353,7 @@
           html += `<div style="font-size:0.75rem;color:#d35400;background:#fff3e0;padding:8px 12px;border-radius:8px;margin-bottom:10px;font-weight:700;border:1.5px dashed #ffb74d;display:flex;align-items:center;gap:8px;">
             <span>🌟</span> <span>VIP Benefit: <strong>Free Delivery & No Small Cart Fee</strong> applied to your account!</span>
           </div>`;
-        } else if (is6thDay) {
+        } else if (is6thDay && !isFnF) {
           html += `<div style="font-size:0.75rem;background:linear-gradient(135deg,#f1c40f,#f39c12);color:#fff;padding:12px 14px;border-radius:10px;margin-bottom:12px;font-weight:700;box-shadow:0 4px 10px rgba(243,156,18,0.3);display:flex;align-items:center;gap:10px;">
             <span style="font-size:1.4rem;">🎉</span>
             <span><strong>6-Day Streak!</strong> ${_v2 ? "Here's your loyalty reward — 5% of your 6 days' food bill, back in your pocket" : "We're giving back all your market surcharges — ~6% of your food bill, back in your pocket"}. You've earned it! Total reward: <strong>₹${loyaltyWaiverTotal}</strong></span>
@@ -8349,21 +8365,23 @@
           </div>`;
         }
 
-        if (combinedDayTotal < DISC_T1.min) {
-          const diff = DISC_T1.min - combinedDayTotal;
-          html += `<div style="font-size:0.72rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
-        🎯 Add <strong>₹${diff}</strong> more to this day's order to get <strong>5% off</strong> your total!
-      </div>`;
-        } else if (combinedDayTotal < DISC_T2.min) {
-          const diff = DISC_T2.min - combinedDayTotal;
-          html += `<div style="font-size:0.75rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
-        🎯 Add <strong>₹${diff}</strong> more to upgrade to <strong>7.5% off</strong>!
-      </div>`;
-        } else if (combinedDayTotal < DISC_T3.min) {
-          const diff = DISC_T3.min - combinedDayTotal;
-          html += `<div style="font-size:0.75rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
-        🎯 Add <strong>₹${diff}</strong> more to upgrade to <strong>10% off</strong>!
-      </div>`;
+        if (!isFnF) {
+          if (combinedDayTotal < DISC_T1.min) {
+            const diff = DISC_T1.min - combinedDayTotal;
+            html += `<div style="font-size:0.72rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
+          🎯 Add <strong>₹${diff}</strong> more to this day's order to get <strong>5% off</strong> your total!
+        </div>`;
+          } else if (combinedDayTotal < DISC_T2.min) {
+            const diff = DISC_T2.min - combinedDayTotal;
+            html += `<div style="font-size:0.75rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
+          🎯 Add <strong>₹${diff}</strong> more to upgrade to <strong>7.5% off</strong>!
+        </div>`;
+          } else if (combinedDayTotal < DISC_T3.min) {
+            const diff = DISC_T3.min - combinedDayTotal;
+            html += `<div style="font-size:0.75rem;color:#8e44ad;background:#f5eef8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-weight:500;border:1px solid #e8d5f5;">
+          🎯 Add <strong>₹${diff}</strong> more to upgrade to <strong>10% off</strong>!
+        </div>`;
+          }
         }
         let totalDelivery = 0;
         let totalSmallOrderFee = 0;
@@ -9645,14 +9663,17 @@
         tipCard.style.display = "block";
       }
 
-      // Streak banner — below delivery tip, above review promo
-      // The just-placed order isn't in S.pastOrders yet (fetched before submit),
-      // so bump the count by 1 to reflect today's order on the success screen.
-      if (!S.loyaltyInfo) S.loyaltyInfo = { count: 0, surcharge: 0 };
-      S.loyaltyInfo.count = Math.min(6, (S.loyaltyInfo.count || 0) + 1);
-      renderStreakBanner("streakProgressBadge");
+      // Streak banner — below delivery tip, above review promo (suppressed for Friends & Family)
+      const isSuccessFnF = !!(S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true"));
       const sb = $("streakProgressBadge");
-      if (sb) sb.style.display = "block";
+      if (!isSuccessFnF) {
+        if (!S.loyaltyInfo) S.loyaltyInfo = { count: 0, surcharge: 0 };
+        S.loyaltyInfo.count = Math.min(6, (S.loyaltyInfo.count || 0) + 1);
+        renderStreakBanner("streakProgressBadge");
+        if (sb) sb.style.display = "block";
+      } else {
+        if (sb) { sb.innerHTML = ""; sb.style.display = "none"; }
+      }
 
       window.scrollTo(0, 0);
 

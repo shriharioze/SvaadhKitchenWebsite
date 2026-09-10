@@ -208,6 +208,7 @@ function verifyLogin(phone, pin, storefront) {
       })(r.Review_Promo_Count),
       wallet_balance:     _calculateWalletBalance(phone, undefined, storefront),
       feeExempt:          (r.Fee_Exempt === "Yes" || r.Fee_Exempt === true),
+      isFnF:              (r.Friends_Family === "Yes" || r.Friends_Family === true),
       onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
       billingCycle:       r.Billing_Cycle || "Daily",
       pending_amount:     pendingAmount
@@ -2575,6 +2576,13 @@ function _submitOrderInternal(body) {
       payMethod = "On Account";
       payStatus = "On Account";
     }
+    // Server-authoritative F&F and VIP status
+    if (cRows[cRowIdx].Friends_Family === "Yes" || cRows[cRowIdx].Friends_Family === true) {
+      profile.isFnF = true;
+    }
+    if (cRows[cRowIdx].Fee_Exempt === "Yes" || cRows[cRowIdx].Fee_Exempt === true) {
+      profile.feeExempt = true;
+    }
   }
 
   // Masters for ID -> Name resolution in sheet columns. Lightweight masters-only
@@ -2724,7 +2732,8 @@ function _submitOrderInternal(body) {
           // always allowed even when the meal is full. Contains-match ("Enkin Kumar",
           // "Enkin 2" …) — must stay in sync with _countActiveMealOrders + order.html.
           const _isEnkinOrderW = String(profile.name || "").toLowerCase().indexOf("enkin") !== -1;
-          if (!_isEnkinOrderW) {
+          const _isFnFOrderW = !!(profile.isFnF === true || String(profile.isFnF) === "true");
+          if (!_isEnkinOrderW && !_isFnFOrderW) {
           // Cap is a DELIVERY limit. Self Pickup / Porter bypass it ONLY when the
           // admin left alternatives ON for this meal (default). If turned OFF, the
           // meal is a hard sold-out — block delivery AND pickup/porter.
