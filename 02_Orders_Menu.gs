@@ -751,7 +751,13 @@ function seedCanonicalSocietyAliases(commit) {
     ["Cybercity Tower 9", "Cybercity Tower 9"],
     ["Cybercity Tower 10", "Cybercity Tower 10"],
     ["Cybercity Tower 11", "Cybercity Tower 11"],
-    ["Cybercity Tower 12", "Cybercity Tower 12"]
+    ["Cybercity Tower 12", "Cybercity Tower 12"],
+    ["Gandharv Capital", "Gandharv Capital"],
+    ["*gandharv capital", "Gandharv Capital"],
+    ["*gandharva capital", "Gandharv Capital"],
+    ["*gamdharv capital", "Gandharv Capital"],
+    ["*gandharav", "Gandharv Capital"],
+    ["*ucon pt gandharva", "Gandharv Capital"]
   ];
 
   const existing = {};
@@ -830,7 +836,8 @@ function _getCanonicalSocietyDisplay(s) {
     "amanoradesiretowers": "Amanora Desire Towers",
     "amanoragatewaytowers": "Amanora Gateway Towers",
     "amanoraneotowers": "Amanora Neo Towers",
-    "elevatetowers": "Amanora Elevate Towers"
+    "elevatetowers": "Amanora Elevate Towers",
+    "gandharvcapital": "Gandharv Capital"
   };
   return DISPLAY_TITLES[key] || String(s).trim();
 }
@@ -861,6 +868,11 @@ function _normSocietyKey(s) {
       base.indexOf("luburnum") !== -1 || base.indexOf("lumburnum") !== -1 ||
       base.indexOf("labournam") !== -1) return "laburnumpark";
   if (base === "cosmo") return "cosmos"; // exact match only — avoids "cosmopolis"
+  if (base.indexOf("gandharv") !== -1 || base.indexOf("gandharva") !== -1 ||
+      base.indexOf("gamdharv") !== -1 || base.indexOf("gandharav") !== -1 ||
+      (base.indexOf("gandhar") !== -1 && base.indexOf("serenity") === -1)) {
+    return "gandharvcapital";
+  }
   return base;
 }
 
@@ -1004,6 +1016,9 @@ function _countActiveMealOrders(rows, dateStr) {
     var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
     var w = String(r.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(r.Society) : _normSocietyBase(r.Society || "");
+    if (w && sStr && (sStr.indexOf(w) !== -1 || w.indexOf(sStr) !== -1 || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === sStr))) {
+      w = "";
+    }
     var addrKey = "";
     if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
 

@@ -532,8 +532,8 @@ function standardizeCustomerAddresses(commit) {
         sClean = "Livogue Society"; wing = wing || "C"; flat = flat || "1101";
       } else if (sLower.indexOf("amar ornate") !== -1 && sClean.indexOf("902") !== -1) {
         sClean = "Amar Ornate"; wing = wing || "D"; flat = flat || "902";
-      } else if (sLower.indexOf("gandharav") !== -1 && sClean.indexOf("201") !== -1) {
-        sClean = "Gandharav"; floor = floor || "2"; flat = flat || "201";
+      } else if ((sLower.indexOf("gandharav") !== -1 || sLower.indexOf("gandharv") !== -1 || sLower.indexOf("gamdharv") !== -1) && sClean.indexOf("201") !== -1) {
+        sClean = "Gandharv Capital"; floor = floor || "2"; flat = flat || "201"; wing = "";
       } else if (sLower.indexOf("tower s4") !== -1 && sClean.indexOf("202") !== -1) {
         sClean = "Cybercity"; wing = wing || "Tower S4"; flat = flat || "202";
       } else if (sLower.indexOf("tower12") !== -1 && sLower.indexOf("cybercity") !== -1) {
@@ -623,6 +623,130 @@ function standardizeCustomerAddresses(commit) {
     };
   } finally {
     lock.releaseLock();
+  }
+}
+
+// ── UNIFY GANDHARV CAPITAL ORDERS & CUSTOMER PROFILES ────────────────────────
+// Unifies the address fields for Aniket Belhekar (9730157106), Nitupriya Ekorge
+// (8411824400), and Supriya Ekorge (8411827977) so their orders collapse into
+// a single shared delivery slot at 201 Gandharv Capital, Bhosale Nagar.
+function unifyGandharvCapitalOrders(commit) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: "busy" }; }
+  try {
+    var ss = getSpreadsheet();
+    var phones = ["9730157106", "8411824400", "8411827977"];
+    var standardized = {
+      flat: "201",
+      wing: "",
+      floor: "2",
+      society: "Gandharv Capital",
+      area: "Bhosale Nagar",
+      landmark: "Opp Bhosale Garden",
+      fullAddress: "Office 201, 2nd Floor, Gandharv Capital, Opp Bhosale Garden, Bhosale Nagar"
+    };
+
+    var report = {
+      customersUpdated: [],
+      ordersUpdated: [],
+      aliasesSeeded: null
+    };
+
+    // 1. Update SK_Customers
+    var custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+    var custData = custWs.getDataRange().getValues();
+    var cIdx = {};
+    custData[0].forEach(function(h, i) { cIdx[h] = i; });
+
+    phones.forEach(function(phone) {
+      var normP = _normalizePhone(phone);
+      for (var i = 1; i < custData.length; i++) {
+        if (_normalizePhone(custData[i][cIdx["Phone"]]) === normP) {
+          var rowNum = i + 1;
+          var custName = String(custData[i][cIdx["Customer_Name"]] || "").trim();
+          report.customersUpdated.push({ row: rowNum, name: custName, phone: phone });
+          if (commit) {
+            if (cIdx["Flat"] != null) custWs.getRange(rowNum, cIdx["Flat"] + 1).setValue(standardized.flat);
+            if (cIdx["Wing"] != null) custWs.getRange(rowNum, cIdx["Wing"] + 1).setValue(standardized.wing);
+            if (cIdx["Floor"] != null) custWs.getRange(rowNum, cIdx["Floor"] + 1).setValue(standardized.floor);
+            if (cIdx["Society"] != null) custWs.getRange(rowNum, cIdx["Society"] + 1).setValue(standardized.society);
+            if (cIdx["Area"] != null) custWs.getRange(rowNum, cIdx["Area"] + 1).setValue(standardized.area);
+            if (cIdx["Landmark"] != null) custWs.getRange(rowNum, cIdx["Landmark"] + 1).setValue(standardized.landmark);
+            if (cIdx["Full_Address"] != null) custWs.getRange(rowNum, cIdx["Full_Address"] + 1).setValue(standardized.fullAddress);
+
+            // Update Meal_Addresses if present
+            if (cIdx["Meal_Addresses"] != null) {
+              var maRaw = String(custData[i][cIdx["Meal_Addresses"]] || "");
+              if (maRaw) {
+                try {
+                  var maObj = JSON.parse(maRaw);
+                  ["Breakfast", "Lunch", "Dinner"].forEach(function(mKey) {
+                    if (maObj[mKey]) {
+                      maObj[mKey].flat = standardized.flat;
+                      maObj[mKey].wing = standardized.wing;
+                      maObj[mKey].floor = standardized.floor;
+                      maObj[mKey].society = standardized.society;
+                      maObj[mKey].area = standardized.area;
+                      maObj[mKey].landmark = standardized.landmark;
+                      maObj[mKey].full_address = standardized.fullAddress;
+                    }
+                  });
+                  custWs.getRange(rowNum, cIdx["Meal_Addresses"] + 1).setValue(JSON.stringify(maObj));
+                } catch(e) {}
+              }
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    // 2. Update SK_Orders for today's active lunch orders (and any active orders for these phones on 2026-09-10)
+    var ordWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    var ordData = ordWs.getDataRange().getValues();
+    var oIdx = {};
+    ordData[0].forEach(function(h, i) { oIdx[h] = i; });
+
+    for (var j = 1; j < ordData.length; j++) {
+      var rDate = ordData[j][oIdx["Order_Date"]];
+      var dStr = rDate instanceof Date ? Utilities.formatDate(rDate, "Asia/Kolkata", "yyyy-MM-dd") : String(rDate || "").trim();
+      var rPhone = _normalizePhone(ordData[j][oIdx["Phone"]]);
+      var rStatus = String(ordData[j][oIdx["Payment_Status"]] || "");
+      var rSid = String(ordData[j][oIdx["Submission_ID"]] || "");
+      if (dStr === "2026-09-10" && phones.indexOf(rPhone) !== -1 && !_isOrderCancelled(rStatus)) {
+        var ordRowNum = j + 1;
+        report.ordersUpdated.push({ row: ordRowNum, sid: rSid, phone: rPhone });
+        if (commit) {
+          if (oIdx["Flat"] != null) ordWs.getRange(ordRowNum, oIdx["Flat"] + 1).setValue(standardized.flat);
+          if (oIdx["Wing"] != null) ordWs.getRange(ordRowNum, oIdx["Wing"] + 1).setValue(standardized.wing);
+          if (oIdx["Floor"] != null) ordWs.getRange(ordRowNum, oIdx["Floor"] + 1).setValue(standardized.floor);
+          if (oIdx["Society"] != null) ordWs.getRange(ordRowNum, oIdx["Society"] + 1).setValue(standardized.society);
+          if (oIdx["Area"] != null) ordWs.getRange(ordRowNum, oIdx["Area"] + 1).setValue(standardized.area);
+          if (oIdx["Landmark"] != null) ordWs.getRange(ordRowNum, oIdx["Landmark"] + 1).setValue(standardized.landmark);
+          if (oIdx["Full_Address"] != null) ordWs.getRange(ordRowNum, oIdx["Full_Address"] + 1).setValue(standardized.fullAddress);
+        }
+      }
+    }
+
+    // 3. Seed SK_Society_Aliases
+    if (commit && typeof seedCanonicalSocietyAliases === "function") {
+      report.aliasesSeeded = seedCanonicalSocietyAliases(true);
+    }
+
+    if (commit) {
+      SpreadsheetApp.flush();
+      try {
+        var c = CacheService.getScriptCache();
+        c.remove("society_aliases_v2");
+        c.remove("adminData_v1");
+        c.remove("order_summary_2026-09-10");
+      } catch(e) {}
+      _socAliasMemo = null;
+    }
+
+    return { success: true, committed: !!commit, report: report };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
   }
 }
 

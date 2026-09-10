@@ -116,6 +116,12 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Gandharv Capital Shared Slot Consolidation & Address Standardization (CODE_VERSION 35.59)**
+  - **Shared Slot Grouping:** Consolidated customer profiles and active orders for Aniket Belhekar (`9730157106`), Nitupriya Ekorge (`8411824400`), and Supriya Ekorge (`8411827977`) at Office 201 Gandharv Capital (Bhosale Nagar) into a single shared delivery slot (Primary Slot #22, others `slotType: "shared"`, reducing stop consumption from 3 slots to 1 slot).
+  - **Unified Address Profile:** `Flat: 201`, `Wing: ""` (cleared to avoid wing mismatch in single-building complexes), `Floor: 2`, `Society: Gandharv Capital`, `Area: Bhosale Nagar`, `Landmark: Opp Bhosale Garden`, `Full_Address: Office 201, 2nd Floor, Gandharv Capital, Opp Bhosale Garden, Bhosale Nagar`.
+  - **Society Typo Normalization:** Added typo and spelling variation mappings in `_normSocietyKey` (`02_Orders_Menu.gs`) mapping `gandharv`, `gandharva`, `gamdharv`, and `gandharav` to `gandharvcapital`, and added canonical display name to `DISPLAY_TITLES`.
+  - **Wing-Society Auto-Collapse Guard:** Synchronized in both `_countActiveMealOrders` (`02_Orders_Menu.gs`) and `_getAdminDataUncached` / `getOrderSummary` (`03_Admin_Kitchen.gs`): if a user enters the building or society name into the `Wing` input (e.g. `w === "gandharvcapital"`), `w` auto-normalizes to `""` so orders never split into separate delivery slots.
+  - **Alias Seeding:** Seeded `SK_Society_Aliases` tab with `Gandharv Capital`, `*gandharv capital`, `*gandharva capital`, `*gamdharv capital`, `*gandharav`, `*ucon pt gandharva`.
 - **Bulk Order Auto-Rescheduling on Kitchen Closure (CODE_VERSION 35.57)**
   - **Involuntary Kitchen Closure Reschedule:** When the admin closes a kitchen date/meal via `setKitchenClosed` (`03_Admin_Kitchen.gs`), active bulk orders (`Source === "Bulk"`, `Batch_ID`, or `Bulk_Plan`) are **no longer cancelled or refunded**.
   - **Next Available Non-Order Working Day:** Each affected bulk meal is automatically rescheduled to the customer's next available working day (`_findNextNonOrderWorkingDay`), strictly skipping Sundays, admin-closed dates for that meal, and dates where the customer already has an active order for that meal.

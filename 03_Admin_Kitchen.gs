@@ -107,6 +107,9 @@ function _getAdminDataUncached() {
           var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
           var w = String(row.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
           var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(row.Society) : _normSocietyBase(row.Society || "");
+          if (w && sStr && (sStr.indexOf(w) !== -1 || w.indexOf(sStr) !== -1 || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === sStr))) {
+            w = "";
+          }
           var addrKey = "";
           if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
 
@@ -2189,6 +2192,9 @@ function getOrderSummary(date) {
         var sStr = typeof _normSocietyKey === "function" 
           ? _normSocietyKey(r.Society) 
           : (typeof _normSocietyBase === "function" ? _normSocietyBase(r.Society || "") : String(r.Society || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+        if (w && sStr && (sStr.indexOf(w) !== -1 || w.indexOf(sStr) !== -1 || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === sStr))) {
+          w = "";
+        }
         var addrKey = (f && sStr) ? "addr|" + w + "|" + f + "|" + sStr : "";
 
         var towerKey = "";
