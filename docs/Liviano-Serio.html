@@ -1000,6 +1000,51 @@
       margin-top: 1px;
     }
 
+    .item-clarity-row {
+      margin-top: 3px;
+    }
+
+    .clarity-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      background: #fdf8f5;
+      border: 1px solid #ebdcd5;
+      border-radius: 6px;
+      color: #8c4a2f;
+      font-size: 0.67rem;
+      font-weight: 600;
+      cursor: pointer;
+      line-height: 1.35;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .clarity-chip:hover {
+      background: #faece5;
+      border-color: #dcb3a2;
+      color: #6d331c;
+    }
+
+    .clarity-chip:active {
+      transform: scale(0.97);
+    }
+
+    .clarity-info-i {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #eed8ce;
+      color: #5c301e;
+      font-size: 0.62rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
     /* QTY CONTROL */
     .qty-control {
       display: flex;
@@ -1832,6 +1877,23 @@
 
     [data-theme="dark"] .item-name {
       color: #e0e0e0;
+    }
+
+    [data-theme="dark"] .clarity-chip {
+      background: #2b2333;
+      border-color: #493b54;
+      color: #dfceea;
+    }
+
+    [data-theme="dark"] .clarity-chip:hover {
+      background: #362c40;
+      border-color: #634f73;
+      color: #f3ebf8;
+    }
+
+    [data-theme="dark"] .clarity-info-i {
+      background: #503d63;
+      color: #f3ebf8;
     }
 
     [data-theme="dark"] .qty-btn {
@@ -4967,7 +5029,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.15.08";
+    const APP_VERSION = "v26.09.15.09";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -5373,6 +5435,453 @@
       const txt = STOCK_TEXT_ITEMS[colKey];
       const label = txt || `Only ${remaining} left`;
       return `<span style="font-size:0.7rem;font-weight:600;color:#e67e22;background:#fef9ec;padding:3px 10px;border-radius:20px;border:1px solid #f5cba7;">⚡ ${label}</span>`;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FOOD CLARITY & NUTRITION TRANSPARENCY (Option A)
+    // ═══════════════════════════════════════════════════════════
+    const FOOD_CLARITY_DATA = {
+      // ── ROTI & BHAKRI ─────────────────────────────────────
+      "Chapati": {
+        name: "Chapati",
+        icon: "🫓",
+        category: "Whole Wheat Flatbread",
+        pillText: '📏 7" · 🔥 104 kcal',
+        size: '7 inches diameter',
+        weight: '~35g per pc',
+        thickness: 'Thin & soft, 3-layer fold',
+        calories: 104,
+        macros: { protein: "3.1g", carbs: "18.5g", fat: "2.1g", fiber: "2.8g" },
+        ingredients: "100% MP Sharbati whole wheat atta, water, pinch of salt, refined sunflower oil.",
+        prepNotes: "Hand-rolled and tawa roasted with a very light brush of oil. 100% Atta, 0% Maida, no preservatives.",
+        packaging: "Wrapped in food-grade insulated silver foil to retain heat & softness.",
+        tags: ["100% Whole Wheat", "0% Maida", "Light Oil", "Vegan"]
+      },
+      "Without Oil Chapati": {
+        name: "Without Oil Chapati",
+        icon: "🫓",
+        category: "Zero Oil Diet Chapati",
+        pillText: '📏 7" · 🔥 85 kcal (0 Oil)',
+        size: '7 inches diameter',
+        weight: '~32g per pc',
+        thickness: 'Thin & soft, dry roasted',
+        calories: 85,
+        macros: { protein: "3.1g", carbs: "18.0g", fat: "0.4g", fiber: "2.8g" },
+        ingredients: "100% MP Sharbati whole wheat atta, water, pinch of salt (No oil used).",
+        prepNotes: "Completely dry tawa roasted with zero added oil. Ideal for strict diets, cholesterol/BP management & weight loss.",
+        packaging: "Wrapped in food-grade insulated silver foil.",
+        tags: ["Zero Oil", "Diet Friendly", "100% Whole Wheat", "0% Maida", "Vegan"]
+      },
+      "Phulka": {
+        name: "Phulka",
+        icon: "🫓",
+        category: "Oil-Free Flame Puffed Bread",
+        pillText: '📏 6" · 🔥 72 kcal (0 Oil)',
+        size: '6 inches diameter',
+        weight: '~28g per pc',
+        thickness: 'Paper-thin, light balloon puff',
+        calories: 72,
+        macros: { protein: "2.6g", carbs: "15.2g", fat: "0.3g", fiber: "2.3g" },
+        ingredients: "100% Sharbati whole wheat atta, filtered water (Zero oil).",
+        prepNotes: "Cooked lightly on tawa and puffed directly on open flame. Extremely light, oil-free, and easy on the stomach.",
+        packaging: "Packed in warm food-grade foil wrap.",
+        tags: ["Zero Oil", "Flame Puffed", "Ultra Light", "0% Maida", "Vegan"]
+      },
+      "Ghee Phulka": {
+        name: "Ghee Phulka",
+        icon: "🫓",
+        category: "Desi Ghee Flame Puffed Bread",
+        pillText: '📏 6" · 🔥 102 kcal (Desi Ghee)',
+        size: '6 inches diameter',
+        weight: '~31g per pc',
+        thickness: 'Paper-thin, puffed & ghee brushed',
+        calories: 102,
+        macros: { protein: "2.6g", carbs: "15.2g", fat: "3.6g", fiber: "2.3g" },
+        ingredients: "100% Sharbati whole wheat atta, filtered water, pure cow ghee.",
+        prepNotes: "Puffed on open flame and brushed with warm pure cow ghee while hot for rich aroma and soft texture.",
+        packaging: "Packed in warm food-grade foil wrap.",
+        tags: ["Pure Cow Ghee", "Flame Puffed", "100% Whole Wheat", "0% Maida"]
+      },
+      "Jowar Bhakri": {
+        name: "Jowar Bhakri",
+        icon: "🫓",
+        category: "Traditional Gluten-Free Millet Flatbread",
+        pillText: '📏 7.5"–8" · 🔥 175 kcal (GF)',
+        size: '7.5 – 8 inches diameter',
+        weight: '~70g per pc',
+        thickness: 'Traditional hand-patted, soft center',
+        calories: 175,
+        macros: { protein: "4.8g", carbs: "36.2g", fat: "1.4g", fiber: "5.6g" },
+        ingredients: "100% Pure Jowar (Sorghum) flour, warm water, pinch of salt (Zero oil, Gluten-Free).",
+        prepNotes: "Authentic Maharashtrian hand-patted bhakri, roasted on iron tawa with water glaze. High fiber, low GI, complex carbs.",
+        packaging: "Wrapped in food-grade foil to lock in softness.",
+        tags: ["Gluten-Free", "High Fiber", "Zero Oil", "Hand Patted", "Diabetic Friendly"]
+      },
+      "Bajra Bhakri": {
+        name: "Bajra Bhakri",
+        icon: "🫓",
+        category: "Iron-Rich Millet Flatbread",
+        pillText: '📏 7.5"–8" · 🔥 190 kcal (GF)',
+        size: '7.5 – 8 inches diameter',
+        weight: '~70g per pc',
+        thickness: 'Hand-patted, wholesome rustic texture',
+        calories: 190,
+        macros: { protein: "5.2g", carbs: "38.0g", fat: "2.2g", fiber: "6.1g" },
+        ingredients: "100% Pure Bajra (Pearl Millet) flour, warm water, pinch of salt (Zero oil, Gluten-Free).",
+        prepNotes: "Traditional hand-patted bhakri roasted on tawa. Naturally rich in iron, zinc, magnesium and dietary fiber.",
+        packaging: "Wrapped in food-grade foil wrap.",
+        tags: ["Gluten-Free", "Iron Rich", "Zero Oil", "Hand Patted", "High Energy"]
+      },
+
+      // ── SABJIS ───────────────────────────────────────────
+      "Dry Sabji Mini [100ml]": {
+        name: "Dry Sabji Mini",
+        icon: "🥗",
+        category: "Today's Dry Sabji (Individual Serving)",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml round container (~1 bowl)",
+        weight: "~95g net wt",
+        thickness: "Dry / semi-dry homestyle preparation",
+        calories: 120,
+        macros: { protein: "3.5g", carbs: "14g", fat: "5.5g", fiber: "3.8g" },
+        ingredients: "Fresh seasonal vegetables, cold-pressed sunflower oil, mustard seeds, cumin, turmeric, mild spices.",
+        prepNotes: "Homestyle daily preparation with controlled spices and light oil. No artificial food coloring or soda.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Homestyle", "No Artificial Colors", "Light Oil", "Vegan"]
+      },
+      "Dry Sabji Full [250ml]": {
+        name: "Dry Sabji Full",
+        icon: "🥗",
+        category: "Today's Dry Sabji (Share / Large Serving)",
+        pillText: "🥣 250ml · ~280 kcal",
+        size: "250ml round container (~2.5 bowls)",
+        weight: "~240g net wt",
+        thickness: "Dry / semi-dry homestyle preparation",
+        calories: 280,
+        macros: { protein: "8.5g", carbs: "34g", fat: "13g", fiber: "9g" },
+        ingredients: "Fresh seasonal vegetables, cold-pressed sunflower oil, mustard seeds, cumin, turmeric, mild spices.",
+        prepNotes: "Homestyle daily preparation with controlled spices and light oil. Serves 2 comfortably.",
+        packaging: "250ml food-grade tamper-evident container.",
+        tags: ["Homestyle", "Generous Portion", "No Food Colors", "Vegan"]
+      },
+      "Curry Sabji Mini [100ml]": {
+        name: "Curry Sabji Mini",
+        icon: "🍲",
+        category: "Today's Curry Sabji (Individual Serving)",
+        pillText: "🥣 100ml · ~130 kcal",
+        size: "100ml container (~1 bowl)",
+        weight: "~105g net wt",
+        thickness: "Smooth homestyle gravy (Rassa / Curry)",
+        calories: 130,
+        macros: { protein: "4.0g", carbs: "13g", fat: "6.5g", fiber: "3.2g" },
+        ingredients: "Seasonal vegetables / legumes, onion-tomato base or roasted coconut-coriander gravy, mild spices.",
+        prepNotes: "Slow simmered homestyle gravy without heavy cream or cashew paste. Wholesome and easy to digest.",
+        packaging: "100ml airtight leak-proof container.",
+        tags: ["Homestyle Gravy", "No Cream", "Digestive", "Gluten-Free"]
+      },
+      "Curry Sabji Full [250ml]": {
+        name: "Curry Sabji Full",
+        icon: "🍲",
+        category: "Today's Curry Sabji (Share / Large Serving)",
+        pillText: "🥣 250ml · ~310 kcal",
+        size: "250ml container (~2.5 bowls)",
+        weight: "~260g net wt",
+        thickness: "Smooth homestyle gravy (Rassa / Curry)",
+        calories: 310,
+        macros: { protein: "9.5g", carbs: "31g", fat: "15g", fiber: "7.5g" },
+        ingredients: "Seasonal vegetables / legumes, onion-tomato base or roasted coconut-coriander gravy, mild spices.",
+        prepNotes: "Slow simmered homestyle gravy. Generous serving for 2 people.",
+        packaging: "250ml airtight leak-proof container.",
+        tags: ["Homestyle Gravy", "Generous Portion", "No Cream", "Gluten-Free"]
+      },
+
+      // ── DAL / RICE / EXTRAS ──────────────────────────────
+      "Dal [200ml]": {
+        name: "Dal (Tadka)",
+        icon: "🥣",
+        category: "Homestyle Lentil Curry",
+        pillText: "🥣 200ml · 135 kcal · 7g Pro",
+        size: "200ml container (~1.5 bowls)",
+        weight: "~210g net wt",
+        thickness: "Medium consistency homestyle dal",
+        calories: 135,
+        macros: { protein: "7.2g", carbs: "21.0g", fat: "2.8g", fiber: "4.5g" },
+        ingredients: "Toor dal & Moong dal, tempered with jeera, mustard seeds, curry leaves, hing, green chili, turmeric.",
+        prepNotes: "Traditional light homestyle tadka dal. Easy on the stomach, cooked fresh for every meal.",
+        packaging: "200ml food-grade leak-proof container.",
+        tags: ["Protein Rich", "Light Tadka", "Hing Tempering", "Gluten-Free"]
+      },
+      "Dal Fry [200ml]": {
+        name: "Dal Fry",
+        icon: "🥣",
+        category: "Aromatic Fried Lentil Curry",
+        pillText: "🥣 200ml · 175 kcal · 7.5g Pro",
+        size: "200ml container (~1.5 bowls)",
+        weight: "~210g net wt",
+        thickness: "Rich & aromatic tempered dal",
+        calories: 175,
+        macros: { protein: "7.5g", carbs: "22.5g", fat: "6.2g", fiber: "4.5g" },
+        ingredients: "Toor dal, golden fried onions, fresh tomatoes, garlic, ginger, pure cow ghee tadka.",
+        prepNotes: "Restaurant-style aroma with home kitchen purity. Double tempered in cow ghee.",
+        packaging: "200ml food-grade leak-proof container.",
+        tags: ["Pure Cow Ghee Tadka", "Garlic & Onion", "Protein Rich"]
+      },
+      "Rice [100g]": {
+        name: "Steamed Rice",
+        icon: "🍚",
+        category: "Fresh Steamed White Rice",
+        pillText: "🍚 100g · 130 kcal",
+        size: "100g cooked net weight",
+        weight: "100g net wt",
+        thickness: "Soft, separate steamed grains",
+        calories: 130,
+        macros: { protein: "2.7g", carbs: "28.5g", fat: "0.3g", fiber: "0.5g" },
+        ingredients: "Premium Kolam / Sonamasuri rice, filtered water, pinch of salt (Zero oil).",
+        prepNotes: "Steamed to fluffy perfection. Completely oil-free and freshly prepared.",
+        packaging: "Food-grade meal container.",
+        tags: ["Zero Oil", "Gluten-Free", "Steamed Fresh", "Vegan"]
+      },
+      "Salad [40g]": {
+        name: "Fresh Salad",
+        icon: "🥗",
+        category: "Raw Cut Seasonal Salad",
+        pillText: "🥕 40g · ~15 kcal",
+        size: "40g portion",
+        weight: "~40g net wt",
+        thickness: "Crisp fresh cuts with lemon wedge",
+        calories: 15,
+        macros: { protein: "0.5g", carbs: "3.2g", fat: "0.1g", fiber: "1.2g" },
+        ingredients: "Fresh cucumber, carrot, beetroot/onion cuts, fresh lemon wedge.",
+        prepNotes: "Thoroughly washed in filtered water and freshly sliced right before packing.",
+        packaging: "Separate fresh salad pouch/cup.",
+        tags: ["Raw & Fresh", "Low Calorie", "Immunity Boost", "Vegan"]
+      },
+      "Curd [50g]": {
+        name: "Fresh Curd",
+        icon: "🥛",
+        category: "Fresh Set Homestyle Dahi",
+        pillText: "🥛 50g · ~35 kcal",
+        size: "50g cup",
+        weight: "~50g net wt",
+        thickness: "Thick, creamy set curd",
+        calories: 35,
+        macros: { protein: "1.8g", carbs: "2.2g", fat: "2.0g", fiber: "0g" },
+        ingredients: "Pasteurized fresh milk, natural active live cultures.",
+        prepNotes: "Freshly set homestyle curd. Natural probiotics for gut health.",
+        packaging: "50g sealed hygienic cup.",
+        tags: ["Probiotic", "Gut Health", "Calcium Rich", "Gluten-Free"]
+      },
+      "B_CURD": {
+        name: "Fresh Curd",
+        icon: "🥛",
+        category: "Fresh Set Homestyle Dahi",
+        pillText: "🥛 50g · ~35 kcal",
+        size: "50g cup",
+        weight: "~50g net wt",
+        thickness: "Thick, creamy set curd",
+        calories: 35,
+        macros: { protein: "1.8g", carbs: "2.2g", fat: "2.0g", fiber: "0g" },
+        ingredients: "Pasteurized fresh milk, natural active live cultures.",
+        prepNotes: "Freshly set homestyle curd. Natural probiotics for gut health.",
+        packaging: "50g sealed hygienic cup.",
+        tags: ["Probiotic", "Gut Health", "Calcium Rich", "Gluten-Free"]
+      },
+
+      // ── BREAKFAST ────────────────────────────────────────
+      "Kanda Poha [175g]": {
+        name: "Kanda Poha",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Breakfast",
+        pillText: "🥣 175g · ~240 kcal",
+        size: "175g portion",
+        weight: "~175g net wt",
+        thickness: "Fluffy flattened rice with roasted peanuts",
+        calories: 240,
+        macros: { protein: "5.5g", carbs: "42g", fat: "6.0g", fiber: "3.5g" },
+        ingredients: "Thick rice poha, sauteed onions, roasted groundnuts, curry leaves, mustard seeds, green chillies, fresh coriander, lemon.",
+        prepNotes: "Cooked fresh every morning with minimal oil and crunchy peanuts.",
+        packaging: "Food-grade insulated container with lemon wedge.",
+        tags: ["Maharashtrian Classic", "High Energy", "Crunchy Peanuts", "Vegan"]
+      },
+      "Ghee Upma [200g]": {
+        name: "Ghee Upma",
+        icon: "🥣",
+        category: "Wholesome Semolina Breakfast",
+        pillText: "🥣 200g · ~260 kcal (Desi Ghee)",
+        size: "200g portion",
+        weight: "~200g net wt",
+        thickness: "Soft, roasted suji tempered in ghee",
+        calories: 260,
+        macros: { protein: "6.2g", carbs: "44g", fat: "7.0g", fiber: "2.8g" },
+        ingredients: "Roasted wheat semolina (Rawa), pure cow ghee, mustard seeds, curry leaves, ginger, cashew bits, green chillies.",
+        prepNotes: "Slow roasted in pure cow ghee for authentic aroma and rich soft texture.",
+        packaging: "Food-grade insulated container.",
+        tags: ["Pure Cow Ghee", "Wholesome Rawa", "Morning Energy"]
+      },
+      "Sabudana Khichdi [200g]": {
+        name: "Sabudana Khichdi",
+        icon: "🥣",
+        category: "Fasting & Morning Classic",
+        pillText: "🥣 200g · ~320 kcal (Peanuts & Ghee)",
+        size: "200g portion",
+        weight: "~200g net wt",
+        thickness: "Non-sticky, soft pearls with crushed peanuts",
+        calories: 320,
+        macros: { protein: "5.0g", carbs: "58g", fat: "9.0g", fiber: "2.5g" },
+        ingredients: "Well-soaked premium tapioca pearls, coarsely ground roasted peanuts, boiled potatoes, cumin, green chillies, rock salt / sendha namak.",
+        prepNotes: "Cooked non-sticky in ghee/oil. Fasting/Upwas compliant.",
+        packaging: "Insulated food-grade container.",
+        tags: ["Upwas / Fasting", "Non-Sticky", "Gluten-Free", "High Energy"]
+      },
+      "Paneer Paratha": {
+        name: "Paneer Paratha",
+        icon: "🫓",
+        category: "Protein-Packed Stuffed Flatbread",
+        pillText: '📏 7.5" · ~290 kcal · 12g Pro',
+        size: '7.5 inches diameter',
+        weight: '~135g per pc',
+        thickness: 'Generously stuffed with spiced paneer',
+        calories: 290,
+        macros: { protein: "12.5g", carbs: "32g", fat: "12.0g", fiber: "3.5g" },
+        ingredients: "Fresh malai paneer, 100% whole wheat atta, green chillies, fresh coriander, ajwain, mild spices, butter/ghee.",
+        prepNotes: "Hand-grated fresh cottage cheese filling rolled inside 100% whole wheat dough. Tawa roasted golden.",
+        packaging: "Wrapped in insulated silver foil with pickle/ketchup.",
+        tags: ["High Protein", "100% Whole Wheat", "Fresh Paneer", "0% Maida"]
+      },
+      "Aloo Paratha": {
+        name: "Aloo Paratha",
+        icon: "🫓",
+        category: "Classic Spiced Potato Stuffed Bread",
+        pillText: '📏 7.5" · ~245 kcal',
+        size: '7.5 inches diameter',
+        weight: '~135g per pc',
+        thickness: 'Generously stuffed with spiced potato mash',
+        calories: 245,
+        macros: { protein: "5.8g", carbs: "42g", fat: "6.5g", fiber: "4.0g" },
+        ingredients: "Boiled mashed potatoes, 100% whole wheat atta, cumin, coriander, ajwain, green chillies, ginger, light oil/ghee.",
+        prepNotes: "Traditional spiced aloo stuffing inside 100% wheat dough. Crisp outside, soft inside.",
+        packaging: "Wrapped in insulated silver foil.",
+        tags: ["Classic Favorite", "100% Whole Wheat", "0% Maida", "Vegan"]
+      }
+    };
+
+    function getFoodClarity(key) {
+      if (!key) return null;
+      if (FOOD_CLARITY_DATA[key]) return FOOD_CLARITY_DATA[key];
+      const stripped = String(key).replace(/\s*\[.*?\]/g, '').trim();
+      if (FOOD_CLARITY_DATA[stripped]) return FOOD_CLARITY_DATA[stripped];
+      return null;
+    }
+
+    function showFoodClarityModal(itemKey) {
+      const info = getFoodClarity(itemKey);
+      if (!info) return;
+
+      const ex = document.getElementById("foodClarityModal");
+      if (ex) ex.remove();
+
+      const isDark = document.body.getAttribute("data-theme") === "dark";
+      const bg = isDark ? "#1e1b29" : "#ffffff";
+      const textCol = isDark ? "#eee" : "#1E1240";
+      const cardBg = isDark ? "#282337" : "#faf7f5";
+      const cardBorder = isDark ? "#3f3657" : "#ede3dc";
+      const subText = isDark ? "#aaa" : "#64748b";
+      const macroBg = isDark ? "#312a42" : "#ffffff";
+
+      const tagsHtml = (info.tags || []).map(t =>
+        `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.68rem;font-weight:700;background:${isDark ? '#3b3350' : '#f0e6e0'};color:${isDark ? '#c4b5fd' : '#7c432d'};">${t}</span>`
+      ).join(" ");
+
+      const overlay = document.createElement("div");
+      overlay.id = "foodClarityModal";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;backdrop-filter:blur(3px);";
+      overlay.innerHTML = `
+        <div style="background:${bg};color:${textCol};border-radius:20px;max-width:440px;width:100%;padding:22px 20px;box-shadow:0 16px 48px rgba(0,0,0,0.35);text-align:left;position:relative;animation:fadeIn 0.2s ease;max-height:90vh;overflow-y:auto;">
+          <button type="button" id="foodClarityCloseX" aria-label="Close" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:1.2rem;color:${subText};cursor:pointer;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;">✕</button>
+          
+          <!-- Header -->
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding-right:24px;">
+            <div style="font-size:2.2rem;line-height:1;">${info.icon || "🍱"}</div>
+            <div>
+              <div style="font-size:1.15rem;font-weight:800;color:${textCol};line-height:1.25;">${info.name}</div>
+              <div style="font-size:0.75rem;color:${subText};margin-top:2px;">${info.category || "Svaadh Kitchen · Fresh Preparation"}</div>
+            </div>
+          </div>
+
+          <!-- Tags -->
+          ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;">${tagsHtml}</div>` : ""}
+
+          <!-- 1. Physical Specs (Size / Portion) -->
+          <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+            <div style="font-size:0.72rem;font-weight:700;color:${isDark ? '#c4b5fd' : '#8c4a2f'};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+              <span>📏</span> Size &amp; Portion
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.82rem;">
+              <div><span style="color:${subText};font-size:0.72rem;display:block;">Size / Dimension</span><strong>${info.size || "Standard"}</strong></div>
+              <div><span style="color:${subText};font-size:0.72rem;display:block;">Net Weight</span><strong>${info.weight || "—"}</strong></div>
+              ${info.thickness ? `<div style="grid-column:span 2;"><span style="color:${subText};font-size:0.72rem;display:block;">Texture / Type</span><strong>${info.thickness}</strong></div>` : ""}
+            </div>
+          </div>
+
+          <!-- 2. Nutrition & Calories -->
+          <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:14px;padding:12px 14px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div style="font-size:0.72rem;font-weight:700;color:${isDark ? '#c4b5fd' : '#8c4a2f'};text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;gap:6px;">
+                <span>⚡</span> Nutrition (Approx.)
+              </div>
+              <div style="font-size:0.92rem;font-weight:800;color:#d97706;">${info.calories} kcal <span style="font-size:0.68rem;font-weight:600;color:${subText};">/ serving</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;text-align:center;">
+              <div style="background:${macroBg};border:1px solid ${cardBorder};border-radius:8px;padding:6px 2px;">
+                <div style="font-size:0.82rem;font-weight:800;color:${textCol};">${info.macros?.protein || "—"}</div>
+                <div style="font-size:0.64rem;color:${subText};font-weight:600;text-transform:uppercase;">Protein</div>
+              </div>
+              <div style="background:${macroBg};border:1px solid ${cardBorder};border-radius:8px;padding:6px 2px;">
+                <div style="font-size:0.82rem;font-weight:800;color:${textCol};">${info.macros?.carbs || "—"}</div>
+                <div style="font-size:0.64rem;color:${subText};font-weight:600;text-transform:uppercase;">Carbs</div>
+              </div>
+              <div style="background:${macroBg};border:1px solid ${cardBorder};border-radius:8px;padding:6px 2px;">
+                <div style="font-size:0.82rem;font-weight:800;color:${textCol};">${info.macros?.fat || "—"}</div>
+                <div style="font-size:0.64rem;color:${subText};font-weight:600;text-transform:uppercase;">Fat</div>
+              </div>
+              <div style="background:${macroBg};border:1px solid ${cardBorder};border-radius:8px;padding:6px 2px;">
+                <div style="font-size:0.82rem;font-weight:800;color:${textCol};">${info.macros?.fiber || "—"}</div>
+                <div style="font-size:0.64rem;color:${subText};font-weight:600;text-transform:uppercase;">Fiber</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Ingredients & Preparation -->
+          <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:14px;padding:12px 14px;margin-bottom:10px;font-size:0.8rem;line-height:1.45;">
+            <div style="font-size:0.72rem;font-weight:700;color:${isDark ? '#c4b5fd' : '#8c4a2f'};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+              <span>🌾</span> Ingredients &amp; Preparation
+            </div>
+            <div style="margin-bottom:4px;"><strong>Ingredients:</strong> <span style="color:${isDark ? '#ddd' : '#333'};">${info.ingredients || "Fresh home ingredients."}</span></div>
+            <div><strong>Kitchen Notes:</strong> <span style="color:${subText};">${info.prepNotes || "Prepared fresh with homestyle hygiene."}</span></div>
+          </div>
+
+          <!-- 4. Packaging -->
+          ${info.packaging ? `
+          <div style="background:${isDark ? '#262330' : '#f8fafc'};border:1px solid ${cardBorder};border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:0.76rem;color:${subText};display:flex;align-items:center;gap:8px;">
+            <span>📦</span>
+            <span><strong>Packaging:</strong> ${info.packaging}</span>
+          </div>` : ""}
+
+          <button type="button" id="foodClarityDoneBtn" style="width:100%;padding:11px;border:none;border-radius:12px;background:${isDark ? '#6d28d9' : '#1E1240'};color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;">Got it</button>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      overlay.addEventListener("click", function(e) {
+        if (e.target === overlay) overlay.remove();
+      });
+      document.getElementById("foodClarityCloseX").addEventListener("click", function() {
+        overlay.remove();
+      });
+      document.getElementById("foodClarityDoneBtn").addEventListener("click", function() {
+        overlay.remove();
+      });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -7432,9 +7941,18 @@
       const remaining  = (STOREFRONT === "LS") ? undefined : ((menu.units_remaining || {})[meal] || {})[colKey];
       const isStockOOS = (remaining !== undefined && remaining <= 0);
       const isLowStock = (remaining !== undefined && remaining > 0 && remaining <= 10);
+      const clarity = getFoodClarity(colKey) || getFoodClarity(name);
+      const safeColKey = colKey.replace(/"/g, '&quot;');
+      const clarityPill = clarity ? `
+        <div class="item-clarity-row">
+          <button type="button" class="clarity-chip" onclick="event.stopPropagation(); showFoodClarityModal('${safeColKey}')" title="Tap to view size, calories & ingredients">
+            <span>${clarity.pillText || (clarity.size + ' · ' + clarity.calories + ' kcal')}</span>
+            <span class="clarity-info-i">ⓘ</span>
+          </button>
+        </div>` : '';
       if (isOOS) {
         return `<div class="item-row" style="opacity:0.45;pointer-events:none;">
-    <div><div class="item-name">${name}</div><div class="item-price">₹${price} each</div></div>
+    <div><div class="item-name">${name}</div><div class="item-price">₹${price} each</div>${clarityPill}</div>
     <div class="qty-control">
       <span style="font-size:0.72rem;font-weight:700;color:#c0392b;background:#fdf0ee;padding:4px 10px;border-radius:20px;border:1px solid #f4c6c0;">Order Limit Reached</span>
     </div>
@@ -7442,7 +7960,7 @@
       }
       if (isStockOOS) {
         return `<div class="item-row" style="opacity:0.45;pointer-events:none;">
-    <div><div class="item-name">${name}</div><div class="item-price">₹${price} each</div></div>
+    <div><div class="item-name">${name}</div><div class="item-price">₹${price} each</div>${clarityPill}</div>
     <div class="qty-control">
       <span style="font-size:0.72rem;font-weight:700;color:#c0392b;background:#fdf0ee;padding:4px 10px;border-radius:20px;border:1px solid #f4c6c0;">Sold Out</span>
     </div>
@@ -7454,11 +7972,11 @@
       const eid = `qty_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
       const pid = `plus_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
       const bid = `badge_${date}_${meal}_${colKey}`.replace(/[^a-zA-Z0-9_]/g, "_");
-      const safeColKey = colKey.replace(/"/g, '&quot;');
       return `<div class="item-row">
     <div>
       <div class="item-name">${name}</div>
       <div class="item-price">₹${price} each</div>
+      ${clarityPill}
       <div id="${bid}" style="margin-top:4px;${isLowStock ? '' : 'display:none;'}">${isLowStock ? getStockBadge(colKey, remaining) : ''}</div>
     </div>
     <div class="qty-control${qty > 0 ? ' qty-active' : ''}">
