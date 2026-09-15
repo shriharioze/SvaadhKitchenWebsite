@@ -3727,9 +3727,6 @@
           <div id="pickupCard_single" class="pickup-info-card hidden">
             <h4>📍 Pickup your order from</h4>
             <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
-            <a href="https://maps.app.goo.gl/fLcdt8qMhm6VhnLXA" target="_blank" class="pickup-link">
-              🗺️ View on Google Maps
-            </a>
           </div>
           <div id="deliveryFields_single">
             <div class="form-group">
@@ -3810,9 +3807,6 @@
             <div id="pickupCard_bf" class="pickup-info-card hidden">
               <h4>📍 Pickup your order from</h4>
               <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
-              <a href="https://maps.app.goo.gl/fLcdt8qMhm6VhnLXA" target="_blank" class="pickup-link">
-                🗺️ View on Google Maps
-              </a>
             </div>
             <div id="deliveryFields_bf">
               <div class="form-group">
@@ -3870,9 +3864,6 @@
             <div id="pickupCard_l" class="pickup-info-card hidden">
               <h4>📍 Pickup your order from</h4>
               <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
-              <a href="https://maps.app.goo.gl/fLcdt8qMhm6VhnLXA" target="_blank" class="pickup-link">
-                🗺️ View on Google Maps
-              </a>
             </div>
             <div id="deliveryFields_l">
               <div class="form-group">
@@ -3930,9 +3921,6 @@
             <div id="pickupCard_d" class="pickup-info-card hidden">
               <h4>📍 Pickup your order from</h4>
               <p><strong>Address:</strong> G2 804, Ganga Serio, Kharadi</p>
-              <a href="https://maps.app.goo.gl/fLcdt8qMhm6VhnLXA" target="_blank" class="pickup-link">
-                🗺️ View on Google Maps
-              </a>
             </div>
             <div id="deliveryFields_d">
               <div class="form-group">
@@ -4979,7 +4967,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.15.07";
+    const APP_VERSION = "v26.09.15.08";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -8825,7 +8813,6 @@
     // whole order's area (both waive our delivery fee).
     const PORTER_TIMES = { Breakfast: "8:30 AM", Lunch: "12:00 PM", Dinner: "7:30 PM" };
     const PICKUP_ADDRESS = "G2 804, Ganga Serio, Kharadi, Pune 411014";
-    const PICKUP_MAPS = "https://maps.app.goo.gl/fLcdt8qMhm6VhnLXA";
     // What fulfilment did the just-placed order use? Self Pickup / Porter switch
     // the order-level area, so profile.area (and per-meal areas) reflect it.
     function _orderFulfilmentType() {
@@ -9468,9 +9455,6 @@
                   ${PICKUP_ADDRESS}
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-                  <a href="${PICKUP_MAPS}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#92400e;color:#fff;border-radius:8px;text-decoration:none;font-size:0.75rem;font-weight:700;box-shadow:0 2px 6px rgba(146,64,14,0.2);">
-                    🗺️ Open in Google Maps
-                  </a>
                   <button type="button" onclick="copyToClip('${PICKUP_ADDRESS}', '📍 Pickup address copied!'); const orig=this.innerHTML; this.innerHTML='✅ Copied!'; setTimeout(()=>this.innerHTML=orig, 2000);" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#fff;color:#92400e;border:1px solid #d97706;border-radius:8px;font-size:0.75rem;font-weight:700;cursor:pointer;">
                     📋 Copy Address
                   </button>
@@ -10085,7 +10069,6 @@
       const ex = document.getElementById("pickupLocationModal");
       if (ex) ex.remove();
       const addr = "G2 804, Ganga Serio, Kharadi, Pune 411014";
-      const mapUrl = "https://maps.app.goo.gl/fLcdt8qMhm6VhnLXA";
       const isDark = document.body.getAttribute("data-theme") === "dark";
       const bg = isDark ? "#221f2d" : "#fff";
       const textCol = isDark ? "#eee" : "#1E1240";
@@ -10110,12 +10093,9 @@
             <div style="font-size:0.92rem;font-weight:600;line-height:1.45;color:${isDark ? '#f3f4f6' : '#1f2937'};margin-bottom:14px;">
               ${addr}
             </div>
-            <div style="display:flex;gap:10px;">
-              <a href="${mapUrl}" target="_blank" rel="noopener" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:#1E1240;color:#fff;border-radius:10px;text-decoration:none;font-size:0.82rem;font-weight:700;box-shadow:0 2px 8px rgba(30,18,64,0.25);">
-                🗺️ Open in Maps
-              </a>
-              <button type="button" id="pickupCopyBtn" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;background:${isDark ? '#3b3350' : '#fff'};color:${textCol};border:1.5px solid ${cardBorder};border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;">
-                📋 Copy
+            <div>
+              <button type="button" id="pickupCopyBtn" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;background:${isDark ? '#3b3350' : '#fff'};color:${textCol};border:1.5px solid ${cardBorder};border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;">
+                📋 Copy Address
               </button>
             </div>
           </div>
