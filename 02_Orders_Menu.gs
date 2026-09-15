@@ -1466,8 +1466,19 @@ function getKitchenClosedDates() {
   });
 }
 
-// ── GET WEEKLY MENU (next 7 days) ────────────────────────────
+// ── GET WEEKLY MENU (next 1 month / 30 days) ──────────────────
 function getWeeklyMenu() {
+  const today = getISTDate();
+  const todayStr = Utilities.formatDate(today, "Asia/Kolkata", "yyyy-MM-dd");
+  return _cachedData("weekly_menu_1m_" + todayStr, 900, function() {
+    return _getWeeklyMenuUncached(today, todayStr);
+  });
+}
+
+function _getWeeklyMenuUncached(today, todayStr) {
+  if (!today) today = getISTDate();
+  if (!todayStr) todayStr = Utilities.formatDate(today, "Asia/Kolkata", "yyyy-MM-dd");
+
   const ss = getSpreadsheet();
   const ws = getOrCreateTab(ss, TAB_MENU, []);
   const rows = getAllRows(ws);
@@ -1486,13 +1497,14 @@ function getWeeklyMenu() {
     menuMap[d] = x;
   });
 
-  // Show all dates from today onwards that have a menu row set
-  const today = getISTDate();
-  const todayStr = Utilities.formatDate(today, "Asia/Kolkata", "yyyy-MM-dd");
+  // Limit window to next 30 days (1 month) from today to cut payload size and load time
+  const maxDate = new Date(today.getTime());
+  maxDate.setDate(maxDate.getDate() + 30);
+  const maxDateStr = Utilities.formatDate(maxDate, "Asia/Kolkata", "yyyy-MM-dd");
 
-  // Collect all future/today dates that have a menu row, sorted ascending
+  // Collect all future/today dates in the 1-month window that have a menu row, sorted ascending
   const futureDates = Object.keys(menuMap)
-    .filter(d => d >= todayStr)
+    .filter(d => d >= todayStr && d <= maxDateStr)
     .sort();
 
   const days = [];
@@ -1534,7 +1546,7 @@ function getWeeklyMenu() {
     });
   });
 
-  return { success: true, days: days };
+  return { success: true, days: days, count: days.length };
 }
 
 // ── WALLET LOGIC ───────────────────────────────────────────────

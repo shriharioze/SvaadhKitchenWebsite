@@ -330,8 +330,9 @@ function saveMenu(body) {
   } else {
     ws.appendRow(newRow);
   }
-  // Bust per-date menu cache and the aggregated admin-data cache
+  // Bust per-date menu cache, weekly menu cache, and the aggregated admin-data cache
   _invalidateCache("menu_v2_" + dateStr, "adminData_v1", "kitchen_closed_dates_v1");
+  _invalidateWeeklyMenuCache();
   return {success: true, action: existing ? "updated" : "saved"};
 }
 
@@ -365,6 +366,14 @@ function _closedMealsObj(menuRow) {
   return obj;
 }
 function _isMealKitchenClosed(menuRow, meal) { return !!_closedMealsObj(menuRow)[meal]; }
+
+function _invalidateWeeklyMenuCache() {
+  try {
+    const today = getISTDate();
+    const todayStr = Utilities.formatDate(today, "Asia/Kolkata", "yyyy-MM-dd");
+    _invalidateCache("weekly_menu_1m_" + todayStr);
+  } catch(e) {}
+}
 
 function setKitchenClosed(body) {
   const pin = String(body && body.pin || "").trim();
@@ -587,6 +596,7 @@ function setKitchenClosed(body) {
       cacheKeys.push("menu_v2_" + d);
     });
     _invalidateCache.apply(null, cacheKeys);
+    _invalidateWeeklyMenuCache();
 
     const closedList = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
     const isFullDay = closedList.length === 3;
@@ -632,6 +642,7 @@ function setKitchenClosed(body) {
   meals.forEach(function (m) { newClosed[m] = false; });
   _writeClosedMeals(menuWs, mIdx, dateStr, newClosed);
   _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "kitchen_closed_set_v1", "kitchen_closed_mealset_v1", "adminData_v1");
+  _invalidateWeeklyMenuCache();
   const stillClosed = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
   return {
     success: true, isClosed: false, closedMeals: stillClosed, fullDay: false,

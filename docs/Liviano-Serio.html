@@ -2849,6 +2849,60 @@
       color: #fbbf24;
     }
 
+    @media (max-width: 480px) {
+      .wm-sheet {
+        max-height: 88vh;
+        border-radius: 16px 16px 0 0;
+      }
+      .wm-tabs-wrapper {
+        padding: 4px 6px 4px;
+        gap: 4px;
+      }
+      .wm-tab-arrow {
+        width: 28px;
+        height: 28px;
+        font-size: 1.1rem;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .wm-tabs {
+        padding: 4px 2px 6px;
+        gap: 5px;
+        touch-action: pan-x;
+      }
+      .wm-tab {
+        padding: 6px 11px;
+        font-size: 0.72rem;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .wm-body {
+        padding: 10px 14px 20px;
+        touch-action: pan-y;
+      }
+      .wm-day-nav-bar {
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .wm-day-nav-btn {
+        padding: 4px 8px;
+        font-size: 0.72rem;
+        touch-action: manipulation;
+      }
+      .wm-day-title-text {
+        font-size: 0.78rem;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wm-footer-nav-btn {
+        padding: 8px 10px;
+        font-size: 0.75rem;
+        touch-action: manipulation;
+      }
+    }
+
     .wa-group-banner {
       display: flex;
       align-items: center;
@@ -4946,7 +5000,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.15.01";
+    const APP_VERSION = "v26.09.15.02";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -11422,6 +11476,57 @@
           closeWeeklyMenu();
         }
       });
+
+      // Mobile touch swipe gestures on wmBody: swipe left for next day, swipe right for previous day
+      const wmBody = $("wmBody");
+      if (wmBody) {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        wmBody.addEventListener("touchstart", (e) => {
+          if (e.touches && e.touches.length === 1) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+          }
+        }, { passive: true });
+
+        wmBody.addEventListener("touchend", (e) => {
+          if (!e.changedTouches || e.changedTouches.length === 0) return;
+          const diffX = e.changedTouches[0].clientX - touchStartX;
+          const diffY = e.changedTouches[0].clientY - touchStartY;
+          // Trigger when horizontal swipe > 45px and predominantly horizontal
+          if (Math.abs(diffX) > 45 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+            if (diffX < 0) {
+              if (wmCurrentIdx < wmDays.length - 1) renderWeeklyDay(wmCurrentIdx + 1);
+            } else {
+              if (wmCurrentIdx > 0) renderWeeklyDay(wmCurrentIdx - 1);
+            }
+          }
+        }, { passive: true });
+      }
+    }
+
+    async function prefetchWeeklyMenu() {
+      if (wmLoaded) return;
+      const todayISO = new Date().toLocaleDateString("en-CA");
+      const cacheKey = "svaadh_wm_1m_" + todayISO;
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            wmDays = parsed;
+            wmLoaded = true;
+            return;
+          }
+        }
+        const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getWeeklyMenu`);
+        const data = await res.json();
+        if (data.success && data.days && data.days.length) {
+          wmDays = data.days;
+          wmLoaded = true;
+          try { sessionStorage.setItem(cacheKey, JSON.stringify(wmDays)); } catch(_) {}
+        }
+      } catch(_) {}
     }
 
     async function openWeeklyMenu() {
@@ -11429,23 +11534,42 @@
       document.body.style.overflow = "hidden";
 
       if (!wmLoaded) {
-        $("wmBody").innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="border-top-color:#2D1A5E;margin:0 auto;"></div><p style="font-size:0.75rem;color:var(--muted);margin-top:12px;">Fetching the freshest menus…</p></div>`;
+        const todayISO = new Date().toLocaleDateString("en-CA");
+        const cacheKey = "svaadh_wm_1m_" + todayISO;
+        try {
+          const cached = sessionStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              wmDays = parsed;
+              wmLoaded = true;
+              renderWeeklyTabs();
+              renderWeeklyDay(0);
+              return;
+            }
+          }
+        } catch(_) {}
+
+        $("wmBody").innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="border-top-color:#2D1A5E;margin:0 auto;"></div><p style="font-size:0.75rem;color:var(--muted);margin-top:12px;">Fetching this month's tentative menus…</p></div>`;
         try {
           const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getWeeklyMenu`);
           const data = await res.json();
           if (data.success && data.days) {
             wmDays = data.days;
             wmLoaded = true;
+            try { sessionStorage.setItem(cacheKey, JSON.stringify(wmDays)); } catch(_) {}
             renderWeeklyTabs();
             renderWeeklyDay(0); // auto-select today
           } else {
             throw new Error(data.error);
           }
         } catch (err) {
-          $("wmBody").innerHTML = `<div style="text-align:center;padding:30px;color:var(--red);">Failed to load weekly menu. Please try again later.</div>`;
+          $("wmBody").innerHTML = `<div style="text-align:center;padding:30px;color:var(--red);">Failed to load menu. Please try again later.</div>`;
           await sAlert("Failed to load official menu. Please check your data connection.", "Failed to Fetch", "🌐");
         }
       } else {
+        renderWeeklyTabs();
+        renderWeeklyDay(wmCurrentIdx || 0);
         setTimeout(updateWmNavButtons, 100);
       }
     }
@@ -13553,6 +13677,7 @@
       // _promptUpdateIfStale auto-reloads SILENTLY when the cart is empty; only asks
       // when a reload would clear a filled cart; never interrupts an active payment.
       setTimeout(function () { try { _promptUpdateIfStale(); } catch (_) {} }, 2500);
+      setTimeout(function () { try { prefetchWeeklyMenu(); } catch (_) {} }, 3000);
       let _lastVerCheckTs = Date.now();
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState !== "visible") return;
