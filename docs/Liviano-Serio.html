@@ -5029,7 +5029,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.15.15";
+    const APP_VERSION = "v26.09.15.16";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -5601,9 +5601,9 @@
         icon: "🥣",
         category: "Homestyle Lentil Curry",
         pillText: "🥣 200ml · 135 kcal · 7g Pro",
-        size: "200ml container (~1.5 bowls)",
-        weight: "~210g net wt",
-        thickness: "Medium consistency homestyle dal",
+        size: "200ml container (~1.25 bowls)",
+        weight: "",
+        thickness: "Medium thick consistency homestyle dal",
         calories: 135,
         macros: { protein: "7.2g", carbs: "21.0g", fat: "2.8g", fiber: "4.5g" },
         ingredients: "Toor dal & Moong dal, tempered with jeera, mustard seeds, curry leaves, hing, green chili, turmeric.",
@@ -5816,10 +5816,10 @@
             <div style="font-size:0.72rem;font-weight:700;color:${isDark ? '#c4b5fd' : '#8c4a2f'};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
               <span>📏</span> Size &amp; Portion
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.82rem;">
+            <div style="display:grid;grid-template-columns:${info.weight ? '1fr 1fr' : '1fr'};gap:8px;font-size:0.82rem;">
               <div><span style="color:${subText};font-size:0.72rem;display:block;">Size / Dimension</span><strong>${info.size || "Standard"}</strong></div>
-              <div><span style="color:${subText};font-size:0.72rem;display:block;">Net Weight</span><strong>${info.weight || "—"}</strong></div>
-              ${info.thickness ? `<div style="grid-column:span 2;"><span style="color:${subText};font-size:0.72rem;display:block;">Texture / Type</span><strong>${info.thickness}</strong></div>` : ""}
+              ${info.weight ? `<div><span style="color:${subText};font-size:0.72rem;display:block;">Net Weight</span><strong>${info.weight}</strong></div>` : ""}
+              ${info.thickness ? `<div style="${info.weight ? 'grid-column:span 2;' : ''}"><span style="color:${subText};font-size:0.72rem;display:block;">Texture / Type</span><strong>${info.thickness}</strong></div>` : ""}
             </div>
           </div>
 
