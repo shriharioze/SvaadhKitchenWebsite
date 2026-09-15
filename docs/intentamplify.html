@@ -1289,7 +1289,7 @@
     function showPickupLocationModal() {
       const ex = document.getElementById("pickupLocationModal");
       if (ex) ex.remove();
-      const addr = "A 104, Shree Laxmi Vihar Society, Bhosale Nagar, Hadapsar, Pune 411028";
+      const addr = "Security Cabin, Shree Laxmi Vihar Society, Bhosale Nagar, Hadapsar, Pune 411028";
       const mapUrl = "https://maps.app.goo.gl/uWSGMzGUY8PpTZfz5";
       const bg = "#fff";
       const textCol = "#1E1240";
@@ -1307,9 +1307,9 @@
           <div style="font-size:1.15rem;font-weight:800;color:${textCol};margin-bottom:4px;">Pickup Address &amp; Location</div>
           <div style="font-size:0.78rem;color:${subText};margin-bottom:16px;">Svaadh Kitchen · Hadapsar Self Pickup Point</div>
           
-          <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:14px;padding:16px 14px;margin-bottom:16px;text-align:left;">
+          <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:14px;padding:16px 14px;margin-bottom:14px;text-align:left;">
             <div style="font-size:0.72rem;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
-              <span>🏠</span> Full Address
+              <span>🏠</span> Collection Address
             </div>
             <div style="font-size:0.92rem;font-weight:600;line-height:1.45;color:#1f2937;margin-bottom:14px;">
               ${addr}
@@ -1324,12 +1324,20 @@
             </div>
           </div>
 
-          <div style="background:#f8fafc;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:0.78rem;text-align:left;line-height:1.5;color:${subText};">
+          <div style="background:#f8fafc;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:0.78rem;text-align:left;line-height:1.55;color:${subText};">
             <div style="font-weight:700;color:${textCol};margin-bottom:4px;display:flex;align-items:center;gap:6px;">
               <span>🕒</span> Pickup Timings
             </div>
-            <div>• Lunch: <b>12:30 PM – 2:00 PM</b></div>
-            <div>• Dinner: <b>7:30 PM – 9:30 PM</b></div>
+            <div>• Lunch: <b>11:00 AM onwards</b> (anytime)</div>
+            <div>• Dinner: <b>6:30 PM onwards</b> (anytime)</div>
+          </div>
+
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:0.77rem;text-align:left;line-height:1.5;color:#166534;">
+            <div style="font-weight:700;color:#15803d;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+              <span>💡</span> Collection Note
+            </div>
+            <div style="margin-bottom:4px;">• <b>Hassle-free pickup:</b> Kept at the <b>Main Gate Security Cabin</b> for quick collection without climbing stairs.</div>
+            <div>• <b>Prefer kitchen collection?</b> Add a note in <b>Kitchen Notes</b> at checkout or message us to collect directly from <b>Flat A-104</b>.</div>
           </div>
 
           <button type="button" id="pickupDoneBtn" style="width:100%;padding:12px;border:none;border-radius:12px;background:#1E1240;color:#fff;font-size:0.92rem;font-weight:700;cursor:pointer;">Done</button>
