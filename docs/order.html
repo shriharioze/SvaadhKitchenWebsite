@@ -5129,7 +5129,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.15.04";
+    const APP_VERSION = "v26.09.15.05";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9284,8 +9284,8 @@
     // (menu.sold_out) but the customer is ordering it for delivery, we offer the
     // two non-delivery routes that bypass the cap. Self Pickup / Porter switch the
     // whole order's area (both waive our delivery fee).
-    const PORTER_TIMES = { Breakfast: "8:30 AM", Lunch: "11:00 AM", Dinner: "7:00 PM" };
-    const PICKUP_ADDRESS = "A 104, Shree Laxmi Vihar Society, Hadapsar";
+    const PORTER_TIMES = { Breakfast: "8:30 AM", Lunch: "11:00 AM", Dinner: "6:30 PM" };
+    const PICKUP_ADDRESS = "Security Cabin, Shree Laxmi Vihar Society, Bhosale Nagar, Hadapsar, Pune 411028";
     const PICKUP_MAPS = "https://maps.app.goo.gl/uWSGMzGUY8PpTZfz5";
     // What fulfilment did the just-placed order use? Self Pickup / Porter switch
     // the order-level area, so profile.area (and per-meal areas) reflect it.
@@ -9936,17 +9936,35 @@
       if (tipCard) {
         const _ftype = _orderFulfilmentType();
         if (_ftype === "pickup" || _ftype === "porter") {
+          const isPorter = _ftype === "porter";
           tipCard.innerHTML =
-            `<div style="display:flex;align-items:flex-start;gap:10px;">
-              <div style="font-size:1.5rem;line-height:1;flex-shrink:0;">${_ftype === "porter" ? "🛵" : "📦"}</div>
-              <div>
-                <div style="font-size:0.85rem;font-weight:700;color:#92400e;margin-bottom:4px;">${_ftype === "porter" ? "Porter — Pickup Point" : "Self Pickup — Collect From"}</div>
-                <div style="font-size:0.8rem;color:#78350f;line-height:1.55;">
-                  <b>${PICKUP_ADDRESS}</b><br>
-                  <a href="${PICKUP_MAPS}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline;">🗺️ Open in Google Maps</a>
-                  ${_ftype === "porter"
-                    ? `<br><span style="margin-top:6px;display:inline-block;">After your food is ready, book a courier (Porter/Borzo etc.) from here to your address and pay the courier directly.</span>`
-                    : ""}
+            `<div style="display:flex;align-items:flex-start;gap:12px;">
+              <div style="font-size:1.6rem;line-height:1;flex-shrink:0;">${isPorter ? "🛵" : "📍"}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.9rem;font-weight:800;color:#92400e;margin-bottom:4px;">
+                  ${isPorter ? "Porter — Pickup Location" : "Self Pickup — Collection Details"}
+                </div>
+                <div style="font-size:0.84rem;font-weight:700;color:#1f2937;line-height:1.45;margin-bottom:8px;">
+                  ${PICKUP_ADDRESS}
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                  <a href="${PICKUP_MAPS}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#92400e;color:#fff;border-radius:8px;text-decoration:none;font-size:0.75rem;font-weight:700;box-shadow:0 2px 6px rgba(146,64,14,0.2);">
+                    🗺️ Open in Google Maps
+                  </a>
+                  <button type="button" onclick="copyToClip('${PICKUP_ADDRESS}', '📍 Pickup address copied!'); const orig=this.innerHTML; this.innerHTML='✅ Copied!'; setTimeout(()=>this.innerHTML=orig, 2000);" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#fff;color:#92400e;border:1px solid #d97706;border-radius:8px;font-size:0.75rem;font-weight:700;cursor:pointer;">
+                    📋 Copy Address
+                  </button>
+                </div>
+                <div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:0.77rem;color:#78350f;line-height:1.5;">
+                  <div style="font-weight:700;margin-bottom:3px;">🕒 Pickup Timings:</div>
+                  <div>• Lunch: <b>11:00 AM onwards</b> (anytime)</div>
+                  <div>• Dinner: <b>6:30 PM onwards</b> (anytime)</div>
+                </div>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:0.76rem;color:#166534;line-height:1.45;">
+                  <div style="font-weight:700;margin-bottom:3px;">💡 Collection Note:</div>
+                  <div>• Kept at the <b>Main Gate Security Cabin</b> for hassle-free collection without climbing stairs.</div>
+                  <div style="margin-top:3px;">• To collect directly from <b>Flat A-104</b> instead, drop us a message on WhatsApp or add to Kitchen Notes.</div>
+                  ${isPorter ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #86efac;color:#92400e;">🛵 Book your courier (Porter/Borzo/Swiggy Genie) from this location once food is ready and pay the courier directly.</div>` : ""}
                 </div>
               </div>
             </div>`;
