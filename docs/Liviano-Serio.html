@@ -5029,7 +5029,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.01";
+    const APP_VERSION = "v26.09.16.02";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -6057,10 +6057,16 @@
 
           <!-- 4. Packaging -->
           ${info.packaging ? `
-          <div style="background:${isDark ? '#262330' : '#f8fafc'};border:1px solid ${cardBorder};border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:0.76rem;color:${subText};display:flex;align-items:center;gap:8px;">
+          <div style="background:${isDark ? '#262330' : '#f8fafc'};border:1px solid ${cardBorder};border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:0.76rem;color:${subText};display:flex;align-items:center;gap:8px;">
             <span>📦</span>
             <span><strong>Packaging:</strong> ${info.packaging}</span>
           </div>` : ""}
+
+          <!-- 5. Disclaimer -->
+          <div style="font-size:0.68rem;color:${subText};line-height:1.4;margin-bottom:14px;background:${isDark ? '#262135' : '#f8f6f4'};border:1px dashed ${cardBorder};border-radius:10px;padding:8px 10px;display:flex;align-items:flex-start;gap:6px;">
+            <span style="font-size:0.8rem;line-height:1;flex-shrink:0;">ℹ️</span>
+            <span><strong>Disclaimer:</strong> We strive to provide transparent and accurate nutritional &amp; ingredient details. As our food is prepared homestyle with fresh seasonal produce, slight natural variations in portions, weights, and values may occur.</span>
+          </div>
 
           <button type="button" id="foodClarityDoneBtn" style="width:100%;padding:11px;border:none;border-radius:12px;background:${isDark ? '#6d28d9' : '#1E1240'};color:#fff;font-size:0.88rem;font-weight:700;cursor:pointer;">Got it</button>
         </div>
