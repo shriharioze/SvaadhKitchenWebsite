@@ -2426,16 +2426,86 @@
       padding: 4px 8px;
     }
 
+    .wm-tabs-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      padding: 6px 12px 4px;
+      gap: 6px;
+      background: inherit;
+    }
+
+    .wm-tab-arrow {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid #d8d0e8;
+      background: #ffffff;
+      color: #2D1A5E;
+      font-size: 1.3rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(45, 26, 94, 0.08);
+      transition: all 0.2s ease;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .wm-tab-arrow:hover:not(:disabled) {
+      background: #2D1A5E;
+      color: #ffffff;
+      border-color: #2D1A5E;
+      transform: scale(1.05);
+    }
+
+    .wm-tab-arrow:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    .wm-tab-arrow:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+      pointer-events: none;
+      box-shadow: none;
+    }
+
     .wm-tabs {
+      flex: 1;
       display: flex;
       gap: 6px;
-      padding: 12px 16px 8px;
+      padding: 6px 4px 8px;
       overflow-x: auto;
+      scroll-behavior: smooth;
       -webkit-overflow-scrolling: touch;
+      cursor: grab;
+    }
+
+    .wm-tabs.grabbing {
+      cursor: grabbing;
+      user-select: none;
     }
 
     .wm-tabs::-webkit-scrollbar {
-      display: none;
+      height: 4px;
+      display: block;
+    }
+
+    .wm-tabs::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 99px;
+    }
+
+    .wm-tabs::-webkit-scrollbar-thumb {
+      background: #d4cde3;
+      border-radius: 99px;
+    }
+
+    .wm-tabs::-webkit-scrollbar-thumb:hover {
+      background: #2D1A5E;
     }
 
     .wm-tab {
@@ -2472,6 +2542,92 @@
       flex: 1;
       overflow-y: auto;
       padding: 12px 18px 24px;
+    }
+
+    .wm-day-nav-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+
+    .wm-day-nav-btn {
+      background: white;
+      border: 1.5px solid #e0daec;
+      color: #2D1A5E;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+
+    .wm-day-nav-btn:hover:not(:disabled) {
+      background: #f4efff;
+      border-color: #2D1A5E;
+    }
+
+    .wm-day-nav-btn:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .wm-day-title-text {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #1E1240;
+      text-align: center;
+      flex: 1;
+    }
+
+    .wm-footer-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed #e8e2d8;
+      gap: 10px;
+    }
+
+    .wm-footer-nav-btn {
+      flex: 1;
+      background: white;
+      border: 1.5px solid #e0daec;
+      color: #2D1A5E;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+
+    .wm-footer-nav-btn:hover:not(:disabled) {
+      background: #2D1A5E;
+      color: white;
+      border-color: #2D1A5E;
+    }
+
+    .wm-footer-nav-btn:disabled {
+      opacity: 0.2;
+      cursor: not-allowed;
+      pointer-events: none;
+      visibility: hidden;
     }
 
     .wm-day-title {
@@ -2591,6 +2747,31 @@
       color: #888;
     }
 
+    [data-theme="dark"] .wm-tab-arrow {
+      background: #282433;
+      border-color: #4a405e;
+      color: #cbbceb;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    [data-theme="dark"] .wm-tab-arrow:hover:not(:disabled) {
+      background: #7C5CC4;
+      border-color: #7C5CC4;
+      color: #ffffff;
+    }
+
+    [data-theme="dark"] .wm-tabs::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    [data-theme="dark"] .wm-tabs::-webkit-scrollbar-thumb {
+      background: #4a405e;
+    }
+
+    [data-theme="dark"] .wm-tabs::-webkit-scrollbar-thumb:hover {
+      background: #7C5CC4;
+    }
+
     [data-theme="dark"] .wm-tab {
       background: #242424;
       border-color: #444;
@@ -2601,6 +2782,38 @@
       background: #5A3B9E;
       border-color: #7C5CC4;
       color: white;
+    }
+
+    [data-theme="dark"] .wm-day-nav-btn {
+      background: #242424;
+      border-color: #444;
+      color: #d1c4e9;
+    }
+
+    [data-theme="dark"] .wm-day-nav-btn:hover:not(:disabled) {
+      background: #382d52;
+      border-color: #7C5CC4;
+      color: #fff;
+    }
+
+    [data-theme="dark"] .wm-day-title-text {
+      color: #eee;
+    }
+
+    [data-theme="dark"] .wm-footer-nav {
+      border-top-color: #383838;
+    }
+
+    [data-theme="dark"] .wm-footer-nav-btn {
+      background: #242424;
+      border-color: #444;
+      color: #d1c4e9;
+    }
+
+    [data-theme="dark"] .wm-footer-nav-btn:hover:not(:disabled) {
+      background: #7C5CC4;
+      border-color: #7C5CC4;
+      color: #ffffff;
     }
 
     [data-theme="dark"] .wm-day-title {
@@ -3112,7 +3325,11 @@
         <h3>📅 Upcoming Days' Tentative Menu</h3>
         <button class="wm-close" onclick="closeWeeklyMenu()">✕</button>
       </div>
-      <div class="wm-tabs" id="wmTabs"></div>
+      <div class="wm-tabs-wrapper">
+        <button class="wm-tab-arrow prev" id="wmTabPrev" onclick="scrollWmTabs(-1)" aria-label="Previous days" title="Scroll left">‹</button>
+        <div class="wm-tabs" id="wmTabs"></div>
+        <button class="wm-tab-arrow next" id="wmTabNext" onclick="scrollWmTabs(1)" aria-label="Next days" title="Scroll right">›</button>
+      </div>
       <div class="wm-body" id="wmBody">
         <div style="text-align:center;padding:40px;">
           <div class="spinner"></div>
@@ -4729,7 +4946,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.10.02";
+    const APP_VERSION = "v26.09.15.01";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -5457,6 +5674,8 @@
       { q: "How do discounts work?", a: "If your total for a single day is ₹325+, you get <strong>5% off</strong>. ₹485+, you get <strong>7.5% off</strong>. ₹750+, you get <strong>10% off</strong>. Applied automatically on the bill screen. Discounts are per-day, not per-order." },
       { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, you get <strong>5% of your 6 days' food total</strong> back as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
       { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. To make corrections, <strong>delete</strong> the existing order from Manage Orders and place a <strong>new</strong> one before the cutoff. Wallet payments are refunded instantly to the wallet; UPI refunds are processed within 1–2 working days." },
+      { q: "Can I check the menu for upcoming days in advance?", a: "Yes! Tap <strong>📅 View Upcoming Days' Tentative Menu</strong> on Step 2 or Step 3. You can see tentative lunch and dinner menus days and weeks in advance based on our 22-week seasonal cycle. Use the left and right arrows (‹ / ›), drag, or day steppers to browse future dates seamlessly." },
+      { q: "What is the Friends & Family privilege?", a: "Accounts verified under Friends & Family automatically receive an exclusive flat <strong>20% discount</strong> on all food items (<strong>🌟 Exclusive Privilege (20% off)</strong>) and are exempt from delivery slot limits." },
       { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
       { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. If it's missing, place again and choose 'Already Paid' if you've already completed the UPI payment." },
     ];
@@ -10056,16 +10275,7 @@
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               The dry sabji and curry sabji change daily based on what's fresh and in season.<br>
               Today's sabji is <b>shown live</b> on the order form when you pick Lunch or Dinner.<br>
-              You can also check the <b>This Week's Menu</b> button on the homepage for upcoming sabjis.
-            </div>
-          </div>
-
-          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #27ae60;">
-            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🥘 Lunch &amp; Dinner Only</div>
-            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              The dry sabji and curry sabji change daily based on what's fresh and in season.<br>
-              Today's sabji is <b>shown live</b> on the order form when you pick Lunch or Dinner.<br>
-              You can also check the <b>This Week's Menu</b> button for upcoming sabjis.
+              You can preview upcoming sabjis weeks ahead via the <b>📅 View Upcoming Days' Tentative Menu</b> button!
             </div>
           </div>
 
@@ -11133,6 +11343,86 @@
     ═════════════════════════════════════════════════ */
     let wmLoaded = false;
     let wmDays = [];
+    let wmCurrentIdx = 0;
+    let wmTabsInited = false;
+
+    function scrollWmTabs(dir) {
+      const el = $("wmTabs");
+      if (!el) return;
+      el.scrollBy({ left: dir * 180, behavior: "smooth" });
+      setTimeout(updateWmNavButtons, 220);
+    }
+
+    function updateWmNavButtons() {
+      const el = $("wmTabs");
+      const prevBtn = $("wmTabPrev");
+      const nextBtn = $("wmTabNext");
+      if (!el || !prevBtn || !nextBtn) return;
+      const canScrollLeft = el.scrollLeft > 4;
+      const canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      prevBtn.disabled = !canScrollLeft;
+      nextBtn.disabled = !canScrollRight;
+    }
+
+    function initWmTabsInteractions() {
+      if (wmTabsInited) return;
+      const tabs = $("wmTabs");
+      if (!tabs) return;
+      wmTabsInited = true;
+
+      tabs.addEventListener("scroll", () => {
+        updateWmNavButtons();
+      }, { passive: true });
+
+      // Vertical mouse-wheel translates to horizontal scrolling on desktop
+      tabs.addEventListener("wheel", (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          tabs.scrollLeft += e.deltaY;
+          updateWmNavButtons();
+        }
+      }, { passive: false });
+
+      // Click & drag mouse panning for desktop
+      let isDown = false;
+      let startX = 0;
+      let scrollLeft = 0;
+
+      tabs.addEventListener("mousedown", (e) => {
+        isDown = true;
+        tabs.classList.add("grabbing");
+        startX = e.pageX - tabs.offsetLeft;
+        scrollLeft = tabs.scrollLeft;
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (!isDown) return;
+        isDown = false;
+        tabs.classList.remove("grabbing");
+      });
+
+      tabs.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - tabs.offsetLeft;
+        const walk = (x - startX) * 1.5;
+        tabs.scrollLeft = scrollLeft - walk;
+        updateWmNavButtons();
+      });
+
+      // Keyboard left/right arrows while weekly menu is open
+      document.addEventListener("keydown", (e) => {
+        const overlay = $("wmOverlay");
+        if (!overlay || !overlay.classList.contains("active")) return;
+        if (e.key === "ArrowLeft") {
+          if (wmCurrentIdx > 0) renderWeeklyDay(wmCurrentIdx - 1);
+        } else if (e.key === "ArrowRight") {
+          if (wmCurrentIdx < wmDays.length - 1) renderWeeklyDay(wmCurrentIdx + 1);
+        } else if (e.key === "Escape") {
+          closeWeeklyMenu();
+        }
+      });
+    }
 
     async function openWeeklyMenu() {
       $("wmOverlay").classList.add("active");
@@ -11155,6 +11445,8 @@
           $("wmBody").innerHTML = `<div style="text-align:center;padding:30px;color:var(--red);">Failed to load weekly menu. Please try again later.</div>`;
           await sAlert("Failed to load official menu. Please check your data connection.", "Failed to Fetch", "🌐");
         }
+      } else {
+        setTimeout(updateWmNavButtons, 100);
       }
     }
 
@@ -11164,6 +11456,7 @@
     }
 
     function renderWeeklyTabs() {
+      initWmTabsInteractions();
       const todayISO = new Date().toLocaleDateString("en-CA"); // yyyy-MM-dd in local time
       $("wmTabs").innerHTML = wmDays.map((d, i) => {
         let classes = "wm-tab";
@@ -11173,25 +11466,67 @@
         const txt = isToday ? "Today" : (isTomorrow ? "Tomorrow" : d.displayDate);
         return `<button class="${classes}" id="wmTab_${i}" onclick="renderWeeklyDay(${i})">${txt}</button>`;
       }).join("");
+      setTimeout(updateWmNavButtons, 60);
     }
 
     function renderWeeklyDay(idx) {
+      if (idx < 0 || idx >= wmDays.length) return;
+      wmCurrentIdx = idx;
+
       // Update active tab styles
       document.querySelectorAll(".wm-tab").forEach((el, i) => {
         el.classList.toggle("active", i === idx);
       });
 
+      // Smoothly auto-scroll the selected tab into view (centered)
+      const activeTab = $(`wmTab_${idx}`);
+      if (activeTab) {
+        activeTab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+      setTimeout(updateWmNavButtons, 220);
+
       const d = wmDays[idx];
+      const _todayISO2 = new Date().toLocaleDateString("en-CA");
+      const titleText = d.date === _todayISO2 ? "Today (" + d.dayName + ")" : d.dayName + ", " + d.displayDate;
+
+      const prevDisabled = idx === 0 ? "disabled" : "";
+      const nextDisabled = idx >= wmDays.length - 1 ? "disabled" : "";
+      const prevLabel = idx > 0 ? (wmDays[idx - 1].displayDate || "Prev") : "";
+      const nextLabel = idx < wmDays.length - 1 ? (wmDays[idx + 1].displayDate || "Next") : "";
+
+      const navHeaderHtml = `
+        <div class="wm-day-nav-bar">
+          <button class="wm-day-nav-btn" onclick="renderWeeklyDay(${idx - 1})" ${prevDisabled} title="Previous Day">
+            ‹ ${idx > 0 ? wmDays[idx - 1].displayDate : "Prev"}
+          </button>
+          <div class="wm-day-title-text">${titleText}</div>
+          <button class="wm-day-nav-btn" onclick="renderWeeklyDay(${idx + 1})" ${nextDisabled} title="Next Day">
+            ${idx < wmDays.length - 1 ? wmDays[idx + 1].displayDate : "Next"} ›
+          </button>
+        </div>
+      `;
+
+      const navFooterHtml = `
+        <div class="wm-footer-nav">
+          <button class="wm-footer-nav-btn" onclick="renderWeeklyDay(${idx - 1})" ${prevDisabled}>
+            ‹ Previous (${prevLabel || "Day"})
+          </button>
+          <button class="wm-footer-nav-btn" onclick="renderWeeklyDay(${idx + 1})" ${nextDisabled}>
+            Next (${nextLabel || "Day"}) ›
+          </button>
+        </div>
+      `;
 
       if (!d.menuSet) {
         $("wmBody").innerHTML = `
-      <div class="wm-day-title">${d.dayName}, ${d.displayDate}</div>
-      <div style="text-align:center;padding:40px 20px;">
-        <div style="font-size:2rem;margin-bottom:8px;">👨‍🍳</div>
-        <div style="font-size:1rem;font-weight:600;color:#1E1240;margin-bottom:4px;">Menu Yet to be Fixed</div>
-        <p style="font-size:0.8rem;color:#888;">We're currently planning a delicious homemade meal for this day. Check back soon!</p>
-      </div>
-    `;
+          ${navHeaderHtml}
+          <div style="text-align:center;padding:40px 20px;">
+            <div style="font-size:2rem;margin-bottom:8px;">👨‍🍳</div>
+            <div style="font-size:1rem;font-weight:600;color:#1E1240;margin-bottom:4px;">Menu Yet to be Fixed</div>
+            <p style="font-size:0.8rem;color:#888;">We're currently planning a delicious homemade meal for this day. Check back soon!</p>
+          </div>
+          ${navFooterHtml}
+        `;
         return;
       }
 
@@ -11216,28 +11551,30 @@
         if (d.dinner_curry) dnContent += `<div style="margin-top:6px;"><div class="wm-sabji-name">${d.dinner_curry} <span class="wm-sabji-type">(Curry)</span></div></div>`;
       }
 
-      const _todayISO2 = new Date().toLocaleDateString("en-CA");
       // LS storefront: no Breakfast card in the weekly menu
       const _bfCardLS = (typeof STOREFRONT !== "undefined" && STOREFRONT === "LS") ? "" : `
-    <div class="wm-meal-card">
-      <div class="wm-meal-label bf">☀️ Breakfast Menu</div>
-      <div class="wm-bf-list">${bfChips}</div>
-    </div>`;
+        <div class="wm-meal-card">
+          <div class="wm-meal-label bf">☀️ Breakfast Menu</div>
+          <div class="wm-bf-list">${bfChips}</div>
+        </div>`;
+
       $("wmBody").innerHTML = `
-    <div class="wm-day-title">${d.date === _todayISO2 ? "Today's Menu (" + d.dayName + ")" : d.dayName + ", " + d.displayDate}</div>
-    
-    ${_bfCardLS}
-    
-    <div class="wm-meal-card">
-      <div class="wm-meal-label ln">🍱 Lunch Sabjis</div>
-      <div>${lnContent}</div>
-    </div>
-    
-    <div class="wm-meal-card">
-      <div class="wm-meal-label dn">🌙 Dinner Sabjis</div>
-      <div>${dnContent}</div>
-    </div>
-  `;
+        ${navHeaderHtml}
+        
+        ${_bfCardLS}
+        
+        <div class="wm-meal-card">
+          <div class="wm-meal-label ln">🍱 Lunch Sabjis</div>
+          <div>${lnContent}</div>
+        </div>
+        
+        <div class="wm-meal-card">
+          <div class="wm-meal-label dn">🌙 Dinner Sabjis</div>
+          <div>${dnContent}</div>
+        </div>
+
+        ${navFooterHtml}
+      `;
     }
 
 

@@ -168,9 +168,25 @@
     .wm-handle-bar{text-align:center;padding:10px 0 4px;} .wm-handle-bar span{display:inline-block;width:36px;height:4px;border-radius:99px;background:#ccc;}
     .wm-header{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 12px;border-bottom:1px solid #eee;}
     .wm-header h3{font-size:1.05rem;font-weight:700;color:#1E1240;}
-    .wm-close{background:none;border:none;font-size:1.3rem;cursor:pointer;color:#888;padding:4px 8px;}
-    .wm-tabs{display:flex;gap:6px;padding:12px 16px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
-    .wm-tabs::-webkit-scrollbar{display:none;}
+    .wm-tabs-wrapper{position:relative;display:flex;align-items:center;padding:6px 12px 4px;gap:6px;background:inherit;}
+    .wm-tab-arrow{width:32px;height:32px;border-radius:50%;border:1.5px solid #d8d0e8;background:#fff;color:#2D1A5E;font-size:1.3rem;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(45,26,94,.08);transition:all .2s ease;user-select:none;}
+    .wm-tab-arrow:hover:not(:disabled){background:#2D1A5E;color:#fff;border-color:#2D1A5E;transform:scale(1.05);}
+    .wm-tab-arrow:disabled{opacity:.25;cursor:not-allowed;pointer-events:none;}
+    .wm-tabs{flex:1;display:flex;gap:6px;padding:6px 4px 8px;overflow-x:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;cursor:grab;}
+    .wm-tabs.grabbing{cursor:grabbing;user-select:none;}
+    .wm-tabs::-webkit-scrollbar{height:4px;display:block;}
+    .wm-tabs::-webkit-scrollbar-track{background:rgba(0,0,0,.04);border-radius:99px;}
+    .wm-tabs::-webkit-scrollbar-thumb{background:#d4cde3;border-radius:99px;}
+    .wm-tabs::-webkit-scrollbar-thumb:hover{background:#2D1A5E;}
+    .wm-day-nav-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;}
+    .wm-day-nav-btn{background:#fff;border:1.5px solid #e0daec;color:#2D1A5E;padding:5px 12px;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .15s ease;white-space:nowrap;font-family:inherit;}
+    .wm-day-nav-btn:hover:not(:disabled){background:#f4efff;border-color:#2D1A5E;}
+    .wm-day-nav-btn:disabled{opacity:.25;cursor:not-allowed;pointer-events:none;}
+    .wm-day-title-text{font-size:.85rem;font-weight:700;color:#1E1240;text-align:center;flex:1;}
+    .wm-footer-nav{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px dashed #e8e2d8;gap:10px;}
+    .wm-footer-nav-btn{flex:1;background:#fff;border:1.5px solid #e0daec;color:#2D1A5E;padding:9px 12px;border-radius:10px;font-size:.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s ease;font-family:inherit;}
+    .wm-footer-nav-btn:hover:not(:disabled){background:#2D1A5E;color:#fff;border-color:#2D1A5E;}
+    .wm-footer-nav-btn:disabled{opacity:.2;cursor:not-allowed;pointer-events:none;visibility:hidden;}
     .wm-tab{flex-shrink:0;padding:7px 14px;border-radius:99px;font-size:.76rem;font-weight:600;border:1.5px solid #ddd;background:#fff;color:#555;cursor:pointer;transition:.15s;}
     .wm-tab.active{border-color:#2D1A5E;background:#2D1A5E;color:#fff;}
     .wm-tab.today{border-color:#27ae60;} .wm-tab.today.active{background:#27ae60;border-color:#27ae60;}
@@ -259,7 +275,11 @@
         <h3>📅 Upcoming Days' Tentative Menu</h3>
         <button class="wm-close" onclick="closeWeeklyMenu()">✕</button>
       </div>
-      <div class="wm-tabs" id="wmTabs"></div>
+      <div class="wm-tabs-wrapper">
+        <button class="wm-tab-arrow prev" id="wmTabPrev" onclick="scrollWmTabs(-1)" aria-label="Previous days">‹</button>
+        <div class="wm-tabs" id="wmTabs"></div>
+        <button class="wm-tab-arrow next" id="wmTabNext" onclick="scrollWmTabs(1)" aria-label="Next days">›</button>
+      </div>
       <div class="wm-body" id="wmBody">
         <div style="text-align:center;padding:40px;"><p style="font-size:0.8rem;color:#888;">Loading menu...</p></div>
       </div>
@@ -525,7 +545,67 @@
     }
 
     // ── WEEKLY MENU LOGIC ──
-    let wmLoaded=false, wmDays=[];
+    let wmLoaded = false, wmDays = [], wmCurrentIdx = 0, wmTabsInited = false;
+
+    function scrollWmTabs(dir) {
+      const el = $("wmTabs");
+      if (!el) return;
+      el.scrollBy({ left: dir * 180, behavior: "smooth" });
+      setTimeout(updateWmNavButtons, 220);
+    }
+
+    function updateWmNavButtons() {
+      const el = $("wmTabs"), prevBtn = $("wmTabPrev"), nextBtn = $("wmTabNext");
+      if (!el || !prevBtn || !nextBtn) return;
+      const canScrollLeft = el.scrollLeft > 4;
+      const canScrollRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      prevBtn.disabled = !canScrollLeft;
+      nextBtn.disabled = !canScrollRight;
+    }
+
+    function initWmTabsInteractions() {
+      if (wmTabsInited) return;
+      const tabs = $("wmTabs");
+      if (!tabs) return;
+      wmTabsInited = true;
+
+      tabs.addEventListener("scroll", updateWmNavButtons, { passive: true });
+      tabs.addEventListener("wheel", (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          tabs.scrollLeft += e.deltaY;
+          updateWmNavButtons();
+        }
+      }, { passive: false });
+
+      let isDown = false, startX = 0, scrollLeft = 0;
+      tabs.addEventListener("mousedown", (e) => {
+        isDown = true;
+        tabs.classList.add("grabbing");
+        startX = e.pageX - tabs.offsetLeft;
+        scrollLeft = tabs.scrollLeft;
+      });
+      window.addEventListener("mouseup", () => {
+        if (!isDown) return;
+        isDown = false;
+        tabs.classList.remove("grabbing");
+      });
+      tabs.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        tabs.scrollLeft = scrollLeft - ((e.pageX - tabs.offsetLeft) - startX) * 1.5;
+        updateWmNavButtons();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        const overlay = $("wmOverlay");
+        if (!overlay || !overlay.classList.contains("active")) return;
+        if (e.key === "ArrowLeft" && wmCurrentIdx > 0) renderWeeklyDay(wmCurrentIdx - 1);
+        else if (e.key === "ArrowRight" && wmCurrentIdx < wmDays.length - 1) renderWeeklyDay(wmCurrentIdx + 1);
+        else if (e.key === "Escape") closeWeeklyMenu();
+      });
+    }
+
     async function openWeeklyMenu(){
       $("wmOverlay").classList.add("active");
       document.body.style.overflow="hidden";
@@ -541,6 +621,8 @@
         }catch(e){
           $("wmBody").innerHTML=`<div style="text-align:center;padding:30px;color:#c0392b;">Failed to load menu. Please try again.</div>`;
         }
+      } else {
+        setTimeout(updateWmNavButtons, 100);
       }
     }
     function closeWeeklyMenu(){
@@ -548,6 +630,7 @@
       document.body.style.overflow="";
     }
     function renderWeeklyTabs(){
+      initWmTabsInteractions();
       const todayISO=new Date().toLocaleDateString("en-CA");
       $("wmTabs").innerHTML=wmDays.map((d,i)=>{
         let classes="wm-tab";
@@ -557,12 +640,52 @@
         const txt=isToday?"Today":(isTomorrow?"Tomorrow":d.displayDate);
         return `<button class="${classes}" id="wmTab_${i}" onclick="renderWeeklyDay(${i})">${txt}</button>`;
       }).join("");
+      setTimeout(updateWmNavButtons, 60);
     }
     function renderWeeklyDay(idx){
+      if (idx < 0 || idx >= wmDays.length) return;
+      wmCurrentIdx = idx;
       document.querySelectorAll(".wm-tab").forEach((el,i)=>el.classList.toggle("active",i===idx));
+
+      const activeTab = $(`wmTab_${idx}`);
+      if (activeTab) {
+        activeTab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+      setTimeout(updateWmNavButtons, 220);
+
       const d=wmDays[idx];
-      if(!d.menuSet){ $("wmBody").innerHTML=`<div class="wm-day-title">${d.displayDate}</div><div class="wm-meal-card"><div class="wm-not-set">Menu hasn't been set for this date yet.</div></div>`; return; }
-      let html=`<div class="wm-day-title">${d.displayDate}</div>`;
+      const prevDisabled = idx === 0 ? "disabled" : "";
+      const nextDisabled = idx >= wmDays.length - 1 ? "disabled" : "";
+      const prevLabel = idx > 0 ? (wmDays[idx - 1].displayDate || "Prev") : "";
+      const nextLabel = idx < wmDays.length - 1 ? (wmDays[idx + 1].displayDate || "Next") : "";
+
+      const navHeaderHtml = `
+        <div class="wm-day-nav-bar">
+          <button class="wm-day-nav-btn" onclick="renderWeeklyDay(${idx - 1})" ${prevDisabled}>
+            ‹ ${idx > 0 ? wmDays[idx - 1].displayDate : "Prev"}
+          </button>
+          <div class="wm-day-title-text">${d.displayDate}</div>
+          <button class="wm-day-nav-btn" onclick="renderWeeklyDay(${idx + 1})" ${nextDisabled}>
+            ${idx < wmDays.length - 1 ? wmDays[idx + 1].displayDate : "Next"} ›
+          </button>
+        </div>
+      `;
+      const navFooterHtml = `
+        <div class="wm-footer-nav">
+          <button class="wm-footer-nav-btn" onclick="renderWeeklyDay(${idx - 1})" ${prevDisabled}>
+            ‹ Previous (${prevLabel || "Day"})
+          </button>
+          <button class="wm-footer-nav-btn" onclick="renderWeeklyDay(${idx + 1})" ${nextDisabled}>
+            Next (${nextLabel || "Day"}) ›
+          </button>
+        </div>
+      `;
+
+      if(!d.menuSet){
+        $("wmBody").innerHTML=`${navHeaderHtml}<div class="wm-meal-card"><div class="wm-not-set">Menu hasn't been set for this date yet.</div></div>${navFooterHtml}`;
+        return;
+      }
+      let html=navHeaderHtml;
       if(d.breakfast_items&&d.breakfast_items.length){
         html+=`<div class="wm-meal-card"><div class="wm-meal-label bf">🌅 Breakfast Items</div><div class="wm-bf-list">`;
         d.breakfast_items.forEach(itm=>{ html+=`<span class="wm-bf-chip">${itm}</span>`; });
@@ -580,6 +703,7 @@
         if(d.dinner_curry) html+=`<div class="wm-sabji-name" style="margin-top:8px;">${d.dinner_curry} <div class="wm-sabji-type">Curry Sabji</div></div>`;
         html+=`</div>`;
       }
+      html += navFooterHtml;
       $("wmBody").innerHTML=html;
     }
 
