@@ -242,6 +242,9 @@
         <span class="pd-icon">🛒</span><span class="pd-label">Manage Orders</span>
       </button>
       <div class="pd-sep"></div>
+      <button type="button" class="pd-item" onclick="closeDrawer(); showPickupLocationModal();">
+        <span class="pd-icon">📍</span><span class="pd-label">Pickup Location <span class="pd-sub">(Address &amp; Map)</span></span>
+      </button>
       <a class="pd-item" href="https://wa.me/919322246765" target="_blank" rel="noopener" onclick="closeDrawer()">
         <span class="pd-icon">📞</span><span class="pd-label">Contact us <span class="pd-sub">(WhatsApp)</span></span>
       </a>
@@ -1283,6 +1286,83 @@
     }
     function openDrawer(){ $("pdOverlay").style.display="block"; $("pdDrawer").classList.add("open"); }
     function closeDrawer(){ $("pdOverlay").style.display="none"; $("pdDrawer").classList.remove("open"); }
+    function showPickupLocationModal() {
+      const ex = document.getElementById("pickupLocationModal");
+      if (ex) ex.remove();
+      const addr = "A 104, Shree Laxmi Vihar Society, Bhosale Nagar, Hadapsar, Pune 411028";
+      const mapUrl = "https://maps.app.goo.gl/uWSGMzGUY8PpTZfz5";
+      const bg = "#fff";
+      const textCol = "#1E1240";
+      const cardBg = "#fbf9ff";
+      const cardBorder = "#e9e4f5";
+      const subText = "#64748b";
+
+      const overlay = document.createElement("div");
+      overlay.id = "pickupLocationModal";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60000;display:flex;align-items:center;justify-content:center;padding:18px;overflow-y:auto;backdrop-filter:blur(2px);";
+      overlay.innerHTML = `
+        <div style="background:${bg};color:${textCol};border-radius:20px;max-width:420px;width:100%;padding:24px 20px;box-shadow:0 16px 48px rgba(0,0,0,0.35);text-align:center;position:relative;animation:fadeIn 0.2s ease;">
+          <button type="button" id="pickupCloseX" aria-label="Close" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:1.2rem;color:${subText};cursor:pointer;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;">✕</button>
+          <div style="font-size:2rem;margin-bottom:4px;">📍</div>
+          <div style="font-size:1.15rem;font-weight:800;color:${textCol};margin-bottom:4px;">Pickup Address &amp; Location</div>
+          <div style="font-size:0.78rem;color:${subText};margin-bottom:16px;">Svaadh Kitchen · Hadapsar Self Pickup Point</div>
+          
+          <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:14px;padding:16px 14px;margin-bottom:16px;text-align:left;">
+            <div style="font-size:0.72rem;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+              <span>🏠</span> Full Address
+            </div>
+            <div style="font-size:0.92rem;font-weight:600;line-height:1.45;color:#1f2937;margin-bottom:14px;">
+              ${addr}
+            </div>
+            <div style="display:flex;gap:10px;">
+              <a href="${mapUrl}" target="_blank" rel="noopener" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:#1E1240;color:#fff;border-radius:10px;text-decoration:none;font-size:0.82rem;font-weight:700;box-shadow:0 2px 8px rgba(30,18,64,0.25);">
+                🗺️ Open in Maps
+              </a>
+              <button type="button" id="pickupCopyBtn" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;background:#fff;color:${textCol};border:1.5px solid ${cardBorder};border-radius:10px;font-size:0.82rem;font-weight:700;cursor:pointer;">
+                📋 Copy
+              </button>
+            </div>
+          </div>
+
+          <div style="background:#f8fafc;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:0.78rem;text-align:left;line-height:1.5;color:${subText};">
+            <div style="font-weight:700;color:${textCol};margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+              <span>🕒</span> Pickup Timings
+            </div>
+            <div>• Lunch: <b>12:30 PM – 2:00 PM</b></div>
+            <div>• Dinner: <b>7:30 PM – 9:30 PM</b></div>
+          </div>
+
+          <button type="button" id="pickupDoneBtn" style="width:100%;padding:12px;border:none;border-radius:12px;background:#1E1240;color:#fff;font-size:0.92rem;font-weight:700;cursor:pointer;">Done</button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      overlay.addEventListener("click", function(e) {
+        if (e.target === overlay) overlay.remove();
+      });
+      document.getElementById("pickupCloseX").addEventListener("click", function() {
+        overlay.remove();
+      });
+      document.getElementById("pickupDoneBtn").addEventListener("click", function() {
+        overlay.remove();
+      });
+      document.getElementById("pickupCopyBtn").addEventListener("click", function() {
+        const btn = this;
+        const orig = btn.innerHTML;
+        btn.innerHTML = "✅ Copied!";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(addr).then(() => {
+            if (typeof toast === "function") toast("📍 Pickup address copied to clipboard!");
+          });
+        } else {
+          const el = document.createElement("input"); el.value = addr; document.body.appendChild(el);
+          el.select(); document.execCommand("copy"); document.body.removeChild(el);
+          if (typeof toast === "function") toast("📍 Pickup address copied to clipboard!");
+        }
+        setTimeout(() => { btn.innerHTML = orig; }, 2000);
+      });
+      if (typeof trackGA === "function") trackGA("pickup_location_modal_opened");
+    }
     function logoutIA(){
       try{ localStorage.removeItem("ia_phone"); localStorage.removeItem("ia_pin"); localStorage.removeItem("ia_name"); }catch(_){}
       location.reload();
