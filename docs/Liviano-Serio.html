@@ -5029,7 +5029,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.03";
+    const APP_VERSION = "v26.09.16.04";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -6458,20 +6458,21 @@
         packaging: "Food-grade leak-proof container.",
         tags: ["High Protein", "Superfood", "Filtered Groundnut Oil", "Vegan"]
       },
+      // ── SABJIS (CURRY) ───────────────────────────────────
       "Curry Sabji Mini [100ml]": {
         name: "Curry Sabji Mini",
         icon: "🍲",
         category: "Today's Curry Sabji (Individual Serving)",
         pillText: "🥣 100ml · ~130 kcal",
         size: "100ml container (~1 bowl)",
-        weight: "~105g net wt",
+        weight: "",
         thickness: "Smooth homestyle gravy (Rassa / Curry)",
         calories: 130,
         macros: { protein: "4.0g", carbs: "13g", fat: "6.5g", fiber: "3.2g" },
-        ingredients: "Seasonal vegetables / legumes, onion-tomato base or roasted coconut-coriander gravy, mild spices.",
+        ingredients: "Seasonal vegetables / legumes, kanda-tamatar or roasted khobara-kothimbir vatan, filtered groundnut oil, mild homestyle spices.",
         prepNotes: "Slow simmered homestyle gravy without heavy cream or cashew paste. Wholesome and easy to digest.",
         packaging: "100ml airtight leak-proof container.",
-        tags: ["Homestyle Gravy", "No Cream", "Digestive", "Gluten-Free"]
+        tags: ["Homestyle Rassa", "Filtered Groundnut Oil", "No Cream", "Gluten-Free"]
       },
       "Curry Sabji Full [250ml]": {
         name: "Curry Sabji Full",
@@ -6479,14 +6480,899 @@
         category: "Today's Curry Sabji (Share / Large Serving)",
         pillText: "🥣 250ml · ~310 kcal",
         size: "250ml container (~2.5 bowls)",
-        weight: "~260g net wt",
+        weight: "",
         thickness: "Smooth homestyle gravy (Rassa / Curry)",
         calories: 310,
         macros: { protein: "9.5g", carbs: "31g", fat: "15g", fiber: "7.5g" },
-        ingredients: "Seasonal vegetables / legumes, onion-tomato base or roasted coconut-coriander gravy, mild spices.",
+        ingredients: "Seasonal vegetables / legumes, kanda-tamatar or roasted khobara-kothimbir vatan, filtered groundnut oil, mild homestyle spices.",
         prepNotes: "Slow simmered homestyle gravy. Generous serving for 2 people.",
         packaging: "250ml airtight leak-proof container.",
-        tags: ["Homestyle Gravy", "Generous Portion", "No Cream", "Gluten-Free"]
+        tags: ["Homestyle Rassa", "Generous Portion", "Filtered Groundnut Oil", "No Cream", "Gluten-Free"]
+      },
+
+      // 13. Shev Bhaji (Maharashtrian / Khandeshi Gravy)
+      "Shev Bhaji [100ml]": {
+        name: "Shev Bhaji",
+        icon: "🍲",
+        category: "Regional Specialty Curry",
+        pillText: "🥣 100ml · ~145 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Medium-thick aromatic kanda-khobara rassa served with spicy ghati sev",
+        calories: 145,
+        macros: { protein: "3.5g", carbs: "15.5g", fat: "7.8g", fiber: "2.8g" },
+        ingredients: "Roasted kanda (onion) & sukha khobara (dry coconut) vatan, adrak-lasun, Maharashtrian kala masala, lal mirchi, besan sev, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Authentic slow-simmered rassa made the traditional way with fresh roasted vatan. Spicy, flavorful, and pairs legendary with Bhakri or Chapati.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Signature", "Spicy Rassa", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Shev Bhaji [250ml]": {
+        name: "Shev Bhaji",
+        icon: "🍲",
+        category: "Regional Specialty Curry",
+        pillText: "🥣 250ml · ~360 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Medium-thick aromatic kanda-khobara rassa served with spicy ghati sev",
+        calories: 360,
+        macros: { protein: "8.8g", carbs: "38.5g", fat: "19.5g", fiber: "7.0g" },
+        ingredients: "Roasted kanda (onion) & sukha khobara (dry coconut) vatan, adrak-lasun, Maharashtrian kala masala, lal mirchi, besan sev, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Authentic slow-simmered rassa made the traditional way with fresh roasted vatan. Spicy, flavorful, and pairs legendary with Bhakri or Chapati.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Signature", "Spicy Rassa", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Shev bhaji [100ml]": {
+        name: "Shev Bhaji",
+        icon: "🍲",
+        category: "Regional Specialty Curry",
+        pillText: "🥣 100ml · ~145 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Medium-thick aromatic kanda-khobara rassa served with spicy ghati sev",
+        calories: 145,
+        macros: { protein: "3.5g", carbs: "15.5g", fat: "7.8g", fiber: "2.8g" },
+        ingredients: "Roasted kanda (onion) & sukha khobara (dry coconut) vatan, adrak-lasun, Maharashtrian kala masala, lal mirchi, besan sev, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Authentic slow-simmered rassa made the traditional way with fresh roasted vatan. Spicy, flavorful, and pairs legendary with Bhakri or Chapati.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Signature", "Spicy Rassa", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Shev bhaji [250ml]": {
+        name: "Shev Bhaji",
+        icon: "🍲",
+        category: "Regional Specialty Curry",
+        pillText: "🥣 250ml · ~360 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Medium-thick aromatic kanda-khobara rassa served with spicy ghati sev",
+        calories: 360,
+        macros: { protein: "8.8g", carbs: "38.5g", fat: "19.5g", fiber: "7.0g" },
+        ingredients: "Roasted kanda (onion) & sukha khobara (dry coconut) vatan, adrak-lasun, Maharashtrian kala masala, lal mirchi, besan sev, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Authentic slow-simmered rassa made the traditional way with fresh roasted vatan. Spicy, flavorful, and pairs legendary with Bhakri or Chapati.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Signature", "Spicy Rassa", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Shev bhaji": {
+        name: "Shev Bhaji",
+        icon: "🍲",
+        category: "Regional Specialty Curry",
+        pillText: "🥣 ~145 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Medium-thick aromatic kanda-khobara rassa served with spicy ghati sev",
+        calories: 145,
+        macros: { protein: "3.5g", carbs: "15.5g", fat: "7.8g", fiber: "2.8g" },
+        ingredients: "Roasted kanda (onion) & sukha khobara (dry coconut) vatan, adrak-lasun, Maharashtrian kala masala, lal mirchi, besan sev, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Authentic slow-simmered rassa made the traditional way with fresh roasted vatan. Spicy, flavorful, and pairs legendary with Bhakri or Chapati.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Signature", "Spicy Rassa", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Shev Bhaji": {
+        name: "Shev Bhaji",
+        icon: "🍲",
+        category: "Regional Specialty Curry",
+        pillText: "🥣 ~145 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Medium-thick aromatic kanda-khobara rassa served with spicy ghati sev",
+        calories: 145,
+        macros: { protein: "3.5g", carbs: "15.5g", fat: "7.8g", fiber: "2.8g" },
+        ingredients: "Roasted kanda (onion) & sukha khobara (dry coconut) vatan, adrak-lasun, Maharashtrian kala masala, lal mirchi, besan sev, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Authentic slow-simmered rassa made the traditional way with fresh roasted vatan. Spicy, flavorful, and pairs legendary with Bhakri or Chapati.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Signature", "Spicy Rassa", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+
+      // 14. Rajma (Homestyle Kidney Bean Curry)
+      "Rajma [100ml]": {
+        name: "Rajma",
+        icon: "🫘",
+        category: "High-Protein Homestyle Curry",
+        pillText: "🥣 100ml · ~135 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Melt-in-mouth red rajma simmered in luscious tamatar-kanda gravy",
+        calories: 135,
+        macros: { protein: "6.5g", carbs: "20.0g", fat: "3.5g", fiber: "4.8g" },
+        ingredients: "Premium rajma (soaked overnight), pureed tamatar, sautéed kanda, adrak, lasun, jeera, dhaniya powder, mild garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked until the beans naturally thicken the homestyle gravy without any added cream paste. Ideal with Basmati Rice or Chapati.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "North-Indian Classic", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Rajma [250ml]": {
+        name: "Rajma",
+        icon: "🫘",
+        category: "High-Protein Homestyle Curry",
+        pillText: "🥣 250ml · ~335 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Melt-in-mouth red rajma simmered in luscious tamatar-kanda gravy",
+        calories: 335,
+        macros: { protein: "16.2g", carbs: "50.0g", fat: "8.8g", fiber: "12.0g" },
+        ingredients: "Premium rajma (soaked overnight), pureed tamatar, sautéed kanda, adrak, lasun, jeera, dhaniya powder, mild garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked until the beans naturally thicken the homestyle gravy without any added cream paste. Ideal with Basmati Rice or Chapati.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "North-Indian Classic", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Rajma": {
+        name: "Rajma",
+        icon: "🫘",
+        category: "High-Protein Homestyle Curry",
+        pillText: "🥣 ~135 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Melt-in-mouth red rajma simmered in luscious tamatar-kanda gravy",
+        calories: 135,
+        macros: { protein: "6.5g", carbs: "20.0g", fat: "3.5g", fiber: "4.8g" },
+        ingredients: "Premium rajma (soaked overnight), pureed tamatar, sautéed kanda, adrak, lasun, jeera, dhaniya powder, mild garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked until the beans naturally thicken the homestyle gravy without any added cream paste. Ideal with Basmati Rice or Chapati.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "North-Indian Classic", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 15. Chhole (Homestyle Chana Masala)
+      "Chhole [100ml]": {
+        name: "Chhole (Homestyle Chana Masala)",
+        icon: "🫘",
+        category: "High-Protein Homestyle Curry",
+        pillText: "🥣 100ml · ~140 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Soft Kabuli chana simmered in spiced kanda-tamatar homestyle gravy",
+        calories: 140,
+        macros: { protein: "6.8g", carbs: "21.0g", fat: "3.8g", fiber: "5.0g" },
+        ingredients: "Kabuli chana (soaked overnight), kanda-tamatar gravy, adrak-lasun, tej patta, chana masala spices, kasuri methi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked homestyle with light oil and balanced spices, keeping it light and easy on the digestive system.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Comfort Food", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Chhole [250ml]": {
+        name: "Chhole (Homestyle Chana Masala)",
+        icon: "🫘",
+        category: "High-Protein Homestyle Curry",
+        pillText: "🥣 250ml · ~350 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Soft Kabuli chana simmered in spiced kanda-tamatar homestyle gravy",
+        calories: 350,
+        macros: { protein: "17.0g", carbs: "52.5g", fat: "9.5g", fiber: "12.5g" },
+        ingredients: "Kabuli chana (soaked overnight), kanda-tamatar gravy, adrak-lasun, tej patta, chana masala spices, kasuri methi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked homestyle with light oil and balanced spices, keeping it light and easy on the digestive system.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Comfort Food", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Chhole": {
+        name: "Chhole (Homestyle Chana Masala)",
+        icon: "🫘",
+        category: "High-Protein Homestyle Curry",
+        pillText: "🥣 ~140 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Soft Kabuli chana simmered in spiced kanda-tamatar homestyle gravy",
+        calories: 140,
+        macros: { protein: "6.8g", carbs: "21.0g", fat: "3.8g", fiber: "5.0g" },
+        ingredients: "Kabuli chana (soaked overnight), kanda-tamatar gravy, adrak-lasun, tej patta, chana masala spices, kasuri methi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked homestyle with light oil and balanced spices, keeping it light and easy on the digestive system.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Comfort Food", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 16. Akha Masoor (Whole Brown Lentil Curry)
+      "Akha Masoor [100ml]": {
+        name: "Akha Masoor",
+        icon: "🥣",
+        category: "Regional High-Protein Curry",
+        pillText: "🥣 100ml · ~130 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Earthy whole brown masoor simmered in rustic, lasun-rich Kolhapuri homestyle rassa",
+        calories: 130,
+        macros: { protein: "7.2g", carbs: "19.0g", fat: "3.2g", fiber: "4.8g" },
+        ingredients: "Akha (whole) brown masoor, roasted kanda paste, crushed lasun, tamatar, Maharashtrian kala masala, lal mirchi, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Whole lentils keep their outer fiber jacket intact for slow-release energy. Rich, rustic, and protein-packed.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Rustic Flavor", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Akha Masoor [250ml]": {
+        name: "Akha Masoor",
+        icon: "🥣",
+        category: "Regional High-Protein Curry",
+        pillText: "🥣 250ml · ~325 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Earthy whole brown masoor simmered in rustic, lasun-rich Kolhapuri homestyle rassa",
+        calories: 325,
+        macros: { protein: "18.0g", carbs: "47.5g", fat: "8.0g", fiber: "12.0g" },
+        ingredients: "Akha (whole) brown masoor, roasted kanda paste, crushed lasun, tamatar, Maharashtrian kala masala, lal mirchi, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Whole lentils keep their outer fiber jacket intact for slow-release energy. Rich, rustic, and protein-packed.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Rustic Flavor", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Akha Masoor": {
+        name: "Akha Masoor",
+        icon: "🥣",
+        category: "Regional High-Protein Curry",
+        pillText: "🥣 ~130 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Earthy whole brown masoor simmered in rustic, lasun-rich Kolhapuri homestyle rassa",
+        calories: 130,
+        macros: { protein: "7.2g", carbs: "19.0g", fat: "3.2g", fiber: "4.8g" },
+        ingredients: "Akha (whole) brown masoor, roasted kanda paste, crushed lasun, tamatar, Maharashtrian kala masala, lal mirchi, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Whole lentils keep their outer fiber jacket intact for slow-release energy. Rich, rustic, and protein-packed.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Rustic Flavor", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 17. Kofta Curry (Homestyle Veg / Lauki Kofta)
+      "Kofta [100ml]": {
+        name: "Kofta Curry (Veg / Lauki Kofta)",
+        icon: "🧆",
+        category: "Homestyle Gravy Specialty",
+        pillText: "🥣 100ml · ~135 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Soft vegetable dumplings gently simmered in a spiced tomato-onion curd curry",
+        calories: 135,
+        macros: { protein: "3.8g", carbs: "16.0g", fat: "6.5g", fiber: "3.0g" },
+        ingredients: "Grated dudhi (lauki) / seasonal veggies, gram flour (besan), kanda-tamatar & fresh dahi (curd) gravy, adrak-lasun, haldi, jeera, garam masala, filtered groundnut oil (for gravy), sunflower oil (for kofta pan-sauté/fry), salt.",
+        prepNotes: "Homestyle dumplings that absorb the aromatic curry without turning heavy or greasy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Specialty Curry", "Melt-in-Mouth", "Groundnut & Sunflower Oil", "Vegetarian"]
+      },
+      "Kofta [250ml]": {
+        name: "Kofta Curry (Veg / Lauki Kofta)",
+        icon: "🧆",
+        category: "Homestyle Gravy Specialty",
+        pillText: "🥣 250ml · ~335 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Soft vegetable dumplings gently simmered in a spiced tomato-onion curd curry",
+        calories: 335,
+        macros: { protein: "9.5g", carbs: "40.0g", fat: "16.2g", fiber: "7.5g" },
+        ingredients: "Grated dudhi (lauki) / seasonal veggies, gram flour (besan), kanda-tamatar & fresh dahi (curd) gravy, adrak-lasun, haldi, jeera, garam masala, filtered groundnut oil (for gravy), sunflower oil (for kofta pan-sauté/fry), salt.",
+        prepNotes: "Homestyle dumplings that absorb the aromatic curry without turning heavy or greasy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Specialty Curry", "Melt-in-Mouth", "Groundnut & Sunflower Oil", "Vegetarian"]
+      },
+      "Kofta": {
+        name: "Kofta Curry (Veg / Lauki Kofta)",
+        icon: "🧆",
+        category: "Homestyle Gravy Specialty",
+        pillText: "🥣 ~135 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Soft vegetable dumplings gently simmered in a spiced tomato-onion curd curry",
+        calories: 135,
+        macros: { protein: "3.8g", carbs: "16.0g", fat: "6.5g", fiber: "3.0g" },
+        ingredients: "Grated dudhi (lauki) / seasonal veggies, gram flour (besan), kanda-tamatar & fresh dahi (curd) gravy, adrak-lasun, haldi, jeera, garam masala, filtered groundnut oil (for gravy), sunflower oil (for kofta pan-sauté/fry), salt.",
+        prepNotes: "Homestyle dumplings that absorb the aromatic curry without turning heavy or greasy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Specialty Curry", "Melt-in-Mouth", "Groundnut & Sunflower Oil", "Vegetarian"]
+      },
+
+      // 18. Palak Corn (Spinach & Sweet Corn Gravy)
+      "Palak Corn [100ml]": {
+        name: "Palak Corn",
+        icon: "🍲",
+        category: "Mild & Nutrient-Rich Curry",
+        pillText: "🥣 100ml · ~95 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Smooth, vibrant green spinach puree with sweet, juicy corn kernels",
+        calories: 95,
+        macros: { protein: "3.0g", carbs: "14.0g", fat: "3.5g", fiber: "3.5g" },
+        ingredients: "Fresh farm palak (spinach blanched & pureed), sweet makka (corn) dana, lasun, adrak, green chillies, jeera, touch of kasuri methi, filtered groundnut oil, salt.",
+        prepNotes: "Pureed fresh without artificial colorants. Sweetness of corn complements the earthy, iron-rich spinach gravy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Iron Rich", "Immunity Booster", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Palak Corn [250ml]": {
+        name: "Palak Corn",
+        icon: "🍲",
+        category: "Mild & Nutrient-Rich Curry",
+        pillText: "🥣 250ml · ~235 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Smooth, vibrant green spinach puree with sweet, juicy corn kernels",
+        calories: 235,
+        macros: { protein: "7.5g", carbs: "35.0g", fat: "8.8g", fiber: "8.8g" },
+        ingredients: "Fresh farm palak (spinach blanched & pureed), sweet makka (corn) dana, lasun, adrak, green chillies, jeera, touch of kasuri methi, filtered groundnut oil, salt.",
+        prepNotes: "Pureed fresh without artificial colorants. Sweetness of corn complements the earthy, iron-rich spinach gravy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Iron Rich", "Immunity Booster", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Palak corn [100ml]": {
+        name: "Palak Corn",
+        icon: "🍲",
+        category: "Mild & Nutrient-Rich Curry",
+        pillText: "🥣 100ml · ~95 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Smooth, vibrant green spinach puree with sweet, juicy corn kernels",
+        calories: 95,
+        macros: { protein: "3.0g", carbs: "14.0g", fat: "3.5g", fiber: "3.5g" },
+        ingredients: "Fresh farm palak (spinach blanched & pureed), sweet makka (corn) dana, lasun, adrak, green chillies, jeera, touch of kasuri methi, filtered groundnut oil, salt.",
+        prepNotes: "Pureed fresh without artificial colorants. Sweetness of corn complements the earthy, iron-rich spinach gravy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Iron Rich", "Immunity Booster", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Palak corn [250ml]": {
+        name: "Palak Corn",
+        icon: "🍲",
+        category: "Mild & Nutrient-Rich Curry",
+        pillText: "🥣 250ml · ~235 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Smooth, vibrant green spinach puree with sweet, juicy corn kernels",
+        calories: 235,
+        macros: { protein: "7.5g", carbs: "35.0g", fat: "8.8g", fiber: "8.8g" },
+        ingredients: "Fresh farm palak (spinach blanched & pureed), sweet makka (corn) dana, lasun, adrak, green chillies, jeera, touch of kasuri methi, filtered groundnut oil, salt.",
+        prepNotes: "Pureed fresh without artificial colorants. Sweetness of corn complements the earthy, iron-rich spinach gravy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Iron Rich", "Immunity Booster", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Palak corn": {
+        name: "Palak Corn",
+        icon: "🍲",
+        category: "Mild & Nutrient-Rich Curry",
+        pillText: "🥣 ~95 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Smooth, vibrant green spinach puree with sweet, juicy corn kernels",
+        calories: 95,
+        macros: { protein: "3.0g", carbs: "14.0g", fat: "3.5g", fiber: "3.5g" },
+        ingredients: "Fresh farm palak (spinach blanched & pureed), sweet makka (corn) dana, lasun, adrak, green chillies, jeera, touch of kasuri methi, filtered groundnut oil, salt.",
+        prepNotes: "Pureed fresh without artificial colorants. Sweetness of corn complements the earthy, iron-rich spinach gravy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Iron Rich", "Immunity Booster", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Palak Corn": {
+        name: "Palak Corn",
+        icon: "🍲",
+        category: "Mild & Nutrient-Rich Curry",
+        pillText: "🥣 ~95 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Smooth, vibrant green spinach puree with sweet, juicy corn kernels",
+        calories: 95,
+        macros: { protein: "3.0g", carbs: "14.0g", fat: "3.5g", fiber: "3.5g" },
+        ingredients: "Fresh farm palak (spinach blanched & pureed), sweet makka (corn) dana, lasun, adrak, green chillies, jeera, touch of kasuri methi, filtered groundnut oil, salt.",
+        prepNotes: "Pureed fresh without artificial colorants. Sweetness of corn complements the earthy, iron-rich spinach gravy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Iron Rich", "Immunity Booster", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 19. Matki Usal / Rassa (Sprouted Moth Bean Curry)
+      "Matki [100ml]": {
+        name: "Matki Usal / Rassa",
+        icon: "🌱",
+        category: "Traditional Maharashtrian Sprouted Curry",
+        pillText: "🥣 100ml · ~115 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Sprouted matki simmered in a thin-to-medium spiced rassa",
+        calories: 115,
+        macros: { protein: "6.0g", carbs: "16.5g", fat: "3.2g", fiber: "4.5g" },
+        ingredients: "House-sprouted moth beans, adrak-lasun, kanda, tamatar, Goda / Kala masala, kadi patta, mohri (mustard), haldi, hing, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Wholesome sprouted legume rassa bursting with traditional Maharashtrian aroma and clean protein.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Sprouted Nutrition", "Traditional Rassa", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki [250ml]": {
+        name: "Matki Usal / Rassa",
+        icon: "🌱",
+        category: "Traditional Maharashtrian Sprouted Curry",
+        pillText: "🥣 250ml · ~285 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Sprouted matki simmered in a thin-to-medium spiced rassa",
+        calories: 285,
+        macros: { protein: "15.0g", carbs: "41.0g", fat: "8.0g", fiber: "11.2g" },
+        ingredients: "House-sprouted moth beans, adrak-lasun, kanda, tamatar, Goda / Kala masala, kadi patta, mohri (mustard), haldi, hing, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Wholesome sprouted legume rassa bursting with traditional Maharashtrian aroma and clean protein.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Sprouted Nutrition", "Traditional Rassa", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki": {
+        name: "Matki Usal / Rassa",
+        icon: "🌱",
+        category: "Traditional Maharashtrian Sprouted Curry",
+        pillText: "🥣 ~115 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Sprouted matki simmered in a thin-to-medium spiced rassa",
+        calories: 115,
+        macros: { protein: "6.0g", carbs: "16.5g", fat: "3.2g", fiber: "4.5g" },
+        ingredients: "House-sprouted moth beans, adrak-lasun, kanda, tamatar, Goda / Kala masala, kadi patta, mohri (mustard), haldi, hing, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Wholesome sprouted legume rassa bursting with traditional Maharashtrian aroma and clean protein.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Sprouted Nutrition", "Traditional Rassa", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 20. Green Moong Curry (Sabut Moong Gravy)
+      "Green Moong [100ml]": {
+        name: "Green Moong Curry",
+        icon: "🌱",
+        category: "Everyday Wholesome Lentil Curry",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender whole green moong simmered into a mild homestyle kanda-tamatar gravy",
+        calories: 120,
+        macros: { protein: "6.5g", carbs: "17.5g", fat: "3.0g", fiber: "4.2g" },
+        ingredients: "Sabut (whole) green moong, chopped kanda, tamatar puree, adrak-lasun, jeera, haldi, dhaniya powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Mildly spiced, soothing, and light on the digestive tract while offering rich plant-based protein.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Easy to Digest", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green Moong [250ml]": {
+        name: "Green Moong Curry",
+        icon: "🌱",
+        category: "Everyday Wholesome Lentil Curry",
+        pillText: "🥣 250ml · ~300 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender whole green moong simmered into a mild homestyle kanda-tamatar gravy",
+        calories: 300,
+        macros: { protein: "16.2g", carbs: "43.5g", fat: "7.5g", fiber: "10.5g" },
+        ingredients: "Sabut (whole) green moong, chopped kanda, tamatar puree, adrak-lasun, jeera, haldi, dhaniya powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Mildly spiced, soothing, and light on the digestive tract while offering rich plant-based protein.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Easy to Digest", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green moong [100ml]": {
+        name: "Green Moong Curry",
+        icon: "🌱",
+        category: "Everyday Wholesome Lentil Curry",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender whole green moong simmered into a mild homestyle kanda-tamatar gravy",
+        calories: 120,
+        macros: { protein: "6.5g", carbs: "17.5g", fat: "3.0g", fiber: "4.2g" },
+        ingredients: "Sabut (whole) green moong, chopped kanda, tamatar puree, adrak-lasun, jeera, haldi, dhaniya powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Mildly spiced, soothing, and light on the digestive tract while offering rich plant-based protein.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Easy to Digest", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green moong [250ml]": {
+        name: "Green Moong Curry",
+        icon: "🌱",
+        category: "Everyday Wholesome Lentil Curry",
+        pillText: "🥣 250ml · ~300 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender whole green moong simmered into a mild homestyle kanda-tamatar gravy",
+        calories: 300,
+        macros: { protein: "16.2g", carbs: "43.5g", fat: "7.5g", fiber: "10.5g" },
+        ingredients: "Sabut (whole) green moong, chopped kanda, tamatar puree, adrak-lasun, jeera, haldi, dhaniya powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Mildly spiced, soothing, and light on the digestive tract while offering rich plant-based protein.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Easy to Digest", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green Moong": {
+        name: "Green Moong Curry",
+        icon: "🌱",
+        category: "Everyday Wholesome Lentil Curry",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender whole green moong simmered into a mild homestyle kanda-tamatar gravy",
+        calories: 120,
+        macros: { protein: "6.5g", carbs: "17.5g", fat: "3.0g", fiber: "4.2g" },
+        ingredients: "Sabut (whole) green moong, chopped kanda, tamatar puree, adrak-lasun, jeera, haldi, dhaniya powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Mildly spiced, soothing, and light on the digestive tract while offering rich plant-based protein.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Easy to Digest", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green moong": {
+        name: "Green Moong Curry",
+        icon: "🌱",
+        category: "Everyday Wholesome Lentil Curry",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender whole green moong simmered into a mild homestyle kanda-tamatar gravy",
+        calories: 120,
+        macros: { protein: "6.5g", carbs: "17.5g", fat: "3.0g", fiber: "4.2g" },
+        ingredients: "Sabut (whole) green moong, chopped kanda, tamatar puree, adrak-lasun, jeera, haldi, dhaniya powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Mildly spiced, soothing, and light on the digestive tract while offering rich plant-based protein.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Easy to Digest", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 21. Chowli / Lobia (Black-Eyed Peas Curry)
+      "Chowli [100ml]": {
+        name: "Chowli (Lobia Curry)",
+        icon: "🫘",
+        category: "High-Protein Legume Curry",
+        pillText: "🥣 100ml · ~125 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Soft black-eyed chavli simmered in an aromatic kanda-tamatar homestyle gravy",
+        calories: 125,
+        macros: { protein: "6.2g", carbs: "18.5g", fat: "3.2g", fiber: "4.2g" },
+        ingredients: "Soaked chavli (lobia), chopped kanda, tamatar, adrak-lasun, jeera, garam masala, haldi, lal mirchi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Naturally creamy texture as the beans release starch during slow simmering. Rich in zinc, iron, and folate.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Creamy Rassa", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Chowli [250ml]": {
+        name: "Chowli (Lobia Curry)",
+        icon: "🫘",
+        category: "High-Protein Legume Curry",
+        pillText: "🥣 250ml · ~310 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Soft black-eyed chavli simmered in an aromatic kanda-tamatar homestyle gravy",
+        calories: 310,
+        macros: { protein: "15.5g", carbs: "46.0g", fat: "8.0g", fiber: "10.5g" },
+        ingredients: "Soaked chavli (lobia), chopped kanda, tamatar, adrak-lasun, jeera, garam masala, haldi, lal mirchi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Naturally creamy texture as the beans release starch during slow simmering. Rich in zinc, iron, and folate.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Creamy Rassa", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Chowli": {
+        name: "Chowli (Lobia Curry)",
+        icon: "🫘",
+        category: "High-Protein Legume Curry",
+        pillText: "🥣 ~125 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Soft black-eyed chavli simmered in an aromatic kanda-tamatar homestyle gravy",
+        calories: 125,
+        macros: { protein: "6.2g", carbs: "18.5g", fat: "3.2g", fiber: "4.2g" },
+        ingredients: "Soaked chavli (lobia), chopped kanda, tamatar, adrak-lasun, jeera, garam masala, haldi, lal mirchi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Naturally creamy texture as the beans release starch during slow simmering. Rich in zinc, iron, and folate.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Creamy Rassa", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 22. Kala Chana (Black Chickpea Curry)
+      "Kala Chana [100ml]": {
+        name: "Kala Chana (Desi Chana Curry)",
+        icon: "🫘",
+        category: "High-Protein Rustic Curry",
+        pillText: "🥣 100ml · ~135 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender desi kala chana in a spiced, adrak-lasun infused dark homestyle rassa",
+        calories: 135,
+        macros: { protein: "6.8g", carbs: "20.0g", fat: "3.5g", fiber: "5.2g" },
+        ingredients: "Desi kala chana (soaked overnight), kanda, tamatar, adrak-lasun, roasted jeera-dhaniya powder, amchur, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked until tender yet holding their shape. High fiber content promotes prolonged fullness and steady energy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Fiber", "Power Packed", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kala Chana [250ml]": {
+        name: "Kala Chana (Desi Chana Curry)",
+        icon: "🫘",
+        category: "High-Protein Rustic Curry",
+        pillText: "🥣 250ml · ~335 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender desi kala chana in a spiced, adrak-lasun infused dark homestyle rassa",
+        calories: 335,
+        macros: { protein: "17.0g", carbs: "50.0g", fat: "8.8g", fiber: "13.0g" },
+        ingredients: "Desi kala chana (soaked overnight), kanda, tamatar, adrak-lasun, roasted jeera-dhaniya powder, amchur, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked until tender yet holding their shape. High fiber content promotes prolonged fullness and steady energy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Fiber", "Power Packed", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kala chana [100ml]": {
+        name: "Kala Chana (Desi Chana Curry)",
+        icon: "🫘",
+        category: "High-Protein Rustic Curry",
+        pillText: "🥣 100ml · ~135 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender desi kala chana in a spiced, adrak-lasun infused dark homestyle rassa",
+        calories: 135,
+        macros: { protein: "6.8g", carbs: "20.0g", fat: "3.5g", fiber: "5.2g" },
+        ingredients: "Desi kala chana (soaked overnight), kanda, tamatar, adrak-lasun, roasted jeera-dhaniya powder, amchur, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked until tender yet holding their shape. High fiber content promotes prolonged fullness and steady energy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Fiber", "Power Packed", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kala chana [250ml]": {
+        name: "Kala Chana (Desi Chana Curry)",
+        icon: "🫘",
+        category: "High-Protein Rustic Curry",
+        pillText: "🥣 250ml · ~335 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender desi kala chana in a spiced, adrak-lasun infused dark homestyle rassa",
+        calories: 335,
+        macros: { protein: "17.0g", carbs: "50.0g", fat: "8.8g", fiber: "13.0g" },
+        ingredients: "Desi kala chana (soaked overnight), kanda, tamatar, adrak-lasun, roasted jeera-dhaniya powder, amchur, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked until tender yet holding their shape. High fiber content promotes prolonged fullness and steady energy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Fiber", "Power Packed", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kala Chana": {
+        name: "Kala Chana (Desi Chana Curry)",
+        icon: "🫘",
+        category: "High-Protein Rustic Curry",
+        pillText: "🥣 ~135 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender desi kala chana in a spiced, adrak-lasun infused dark homestyle rassa",
+        calories: 135,
+        macros: { protein: "6.8g", carbs: "20.0g", fat: "3.5g", fiber: "5.2g" },
+        ingredients: "Desi kala chana (soaked overnight), kanda, tamatar, adrak-lasun, roasted jeera-dhaniya powder, amchur, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked until tender yet holding their shape. High fiber content promotes prolonged fullness and steady energy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Fiber", "Power Packed", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kala chana": {
+        name: "Kala Chana (Desi Chana Curry)",
+        icon: "🫘",
+        category: "High-Protein Rustic Curry",
+        pillText: "🥣 ~135 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender desi kala chana in a spiced, adrak-lasun infused dark homestyle rassa",
+        calories: 135,
+        macros: { protein: "6.8g", carbs: "20.0g", fat: "3.5g", fiber: "5.2g" },
+        ingredients: "Desi kala chana (soaked overnight), kanda, tamatar, adrak-lasun, roasted jeera-dhaniya powder, amchur, haldi, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Cooked until tender yet holding their shape. High fiber content promotes prolonged fullness and steady energy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Fiber", "Power Packed", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 23. Gavari (Cluster Beans Curry / Bhaji)
+      "Gavari [100ml]": {
+        name: "Gavari (Gavar Sheng Bhaji)",
+        icon: "🌿",
+        category: "Traditional Maharashtrian Vegetable Curry",
+        pillText: "🥣 100ml · ~105 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender gavar simmered with roasted peanut powder (danyacha koot) and mild rassa",
+        calories: 105,
+        macros: { protein: "3.8g", carbs: "12.5g", fat: "4.8g", fiber: "4.2g" },
+        ingredients: "Fresh snapped gavar (cluster beans), coarse roasted danyacha koot (peanut powder), lasun, mohri (mustard), jeera, goda masala, haldi, lal mirchi, filtered groundnut oil, salt.",
+        prepNotes: "Coarse roasted danyacha koot tempers the mild natural bitterness of gavar, creating an authentic rustic Maharashtrian taste.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Classic", "High Fiber", "Danyacha Koot", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Gavari [250ml]": {
+        name: "Gavari (Gavar Sheng Bhaji)",
+        icon: "🌿",
+        category: "Traditional Maharashtrian Vegetable Curry",
+        pillText: "🥣 250ml · ~260 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender gavar simmered with roasted peanut powder (danyacha koot) and mild rassa",
+        calories: 260,
+        macros: { protein: "9.5g", carbs: "31.0g", fat: "12.0g", fiber: "10.5g" },
+        ingredients: "Fresh snapped gavar (cluster beans), coarse roasted danyacha koot (peanut powder), lasun, mohri (mustard), jeera, goda masala, haldi, lal mirchi, filtered groundnut oil, salt.",
+        prepNotes: "Coarse roasted danyacha koot tempers the mild natural bitterness of gavar, creating an authentic rustic Maharashtrian taste.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Classic", "High Fiber", "Danyacha Koot", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Gavari": {
+        name: "Gavari (Gavar Sheng Bhaji)",
+        icon: "🌿",
+        category: "Traditional Maharashtrian Vegetable Curry",
+        pillText: "🥣 ~105 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender gavar simmered with roasted peanut powder (danyacha koot) and mild rassa",
+        calories: 105,
+        macros: { protein: "3.8g", carbs: "12.5g", fat: "4.8g", fiber: "4.2g" },
+        ingredients: "Fresh snapped gavar (cluster beans), coarse roasted danyacha koot (peanut powder), lasun, mohri (mustard), jeera, goda masala, haldi, lal mirchi, filtered groundnut oil, salt.",
+        prepNotes: "Coarse roasted danyacha koot tempers the mild natural bitterness of gavar, creating an authentic rustic Maharashtrian taste.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Classic", "High Fiber", "Danyacha Koot", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 24. Aloo Rassa (Homestyle Potato Curry)
+      "Aloo Curry [100ml]": {
+        name: "Aloo (Homestyle Aloo Rassa)",
+        icon: "🥔",
+        category: "Comforting Homestyle Curry",
+        pillText: "🥣 100ml · ~110 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Chunky boiled aloo in a light, flavorful tamatar-kothimbir rassa",
+        calories: 110,
+        macros: { protein: "2.0g", carbs: "18.0g", fat: "3.8g", fiber: "2.2g" },
+        ingredients: "Boiled aloo (coarsely hand-broken), desi tamatar, adrak-hari mirchi, jeera, haldi, hing, fresh kothimbir, filtered groundnut oil, salt.",
+        prepNotes: "Light, soul-satisfying gravy with no heavy spices or dairy. Wonderful with hot Phulkas or Poori.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Light Gravy", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Aloo Curry [250ml]": {
+        name: "Aloo (Homestyle Aloo Rassa)",
+        icon: "🥔",
+        category: "Comforting Homestyle Curry",
+        pillText: "🥣 250ml · ~275 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Chunky boiled aloo in a light, flavorful tamatar-kothimbir rassa",
+        calories: 275,
+        macros: { protein: "5.0g", carbs: "45.0g", fat: "9.5g", fiber: "5.5g" },
+        ingredients: "Boiled aloo (coarsely hand-broken), desi tamatar, adrak-hari mirchi, jeera, haldi, hing, fresh kothimbir, filtered groundnut oil, salt.",
+        prepNotes: "Light, soul-satisfying gravy with no heavy spices or dairy. Wonderful with hot Phulkas or Poori.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Light Gravy", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Aloo Curry": {
+        name: "Aloo (Homestyle Aloo Rassa)",
+        icon: "🥔",
+        category: "Comforting Homestyle Curry",
+        pillText: "🥣 ~110 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Chunky boiled aloo in a light, flavorful tamatar-kothimbir rassa",
+        calories: 110,
+        macros: { protein: "2.0g", carbs: "18.0g", fat: "3.8g", fiber: "2.2g" },
+        ingredients: "Boiled aloo (coarsely hand-broken), desi tamatar, adrak-hari mirchi, jeera, haldi, hing, fresh kothimbir, filtered groundnut oil, salt.",
+        prepNotes: "Light, soul-satisfying gravy with no heavy spices or dairy. Wonderful with hot Phulkas or Poori.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Light Gravy", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 25. Mix Veg Curry (Homestyle Vegetable Gravy)
+      "Mix Veg Curry [100ml]": {
+        name: "Mix Veg Curry",
+        icon: "🥗",
+        category: "Nutritious Multi-Veg Curry",
+        pillText: "🥣 100ml · ~95 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Assorted seasonal vegetables simmered in a smooth kanda-tamatar curry",
+        calories: 95,
+        macros: { protein: "2.5g", carbs: "13.5g", fat: "3.8g", fiber: "3.5g" },
+        ingredients: "Gajar, beans, matar, aloo, phool gobi, kanda-tamatar masala, adrak-lasun, haldi, garam masala, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Hearty homestyle gravy packed with diverse micronutrients and dietary fiber from 5 vegetables.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Balanced Nutrition", "Colorful Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix Veg Curry [250ml]": {
+        name: "Mix Veg Curry",
+        icon: "🥗",
+        category: "Nutritious Multi-Veg Curry",
+        pillText: "🥣 250ml · ~235 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Assorted seasonal vegetables simmered in a smooth kanda-tamatar curry",
+        calories: 235,
+        macros: { protein: "6.2g", carbs: "33.5g", fat: "9.5g", fiber: "8.8g" },
+        ingredients: "Gajar, beans, matar, aloo, phool gobi, kanda-tamatar masala, adrak-lasun, haldi, garam masala, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Hearty homestyle gravy packed with diverse micronutrients and dietary fiber from 5 vegetables.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Balanced Nutrition", "Colorful Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix Veg Curry": {
+        name: "Mix Veg Curry",
+        icon: "🥗",
+        category: "Nutritious Multi-Veg Curry",
+        pillText: "🥣 ~95 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Assorted seasonal vegetables simmered in a smooth kanda-tamatar curry",
+        calories: 95,
+        macros: { protein: "2.5g", carbs: "13.5g", fat: "3.8g", fiber: "3.5g" },
+        ingredients: "Gajar, beans, matar, aloo, phool gobi, kanda-tamatar masala, adrak-lasun, haldi, garam masala, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Hearty homestyle gravy packed with diverse micronutrients and dietary fiber from 5 vegetables.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Balanced Nutrition", "Colorful Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 26. Soyabean (Soya Chunks Curry)
+      "Soyabean [100ml]": {
+        name: "Soyabean (Soya Chunks Curry)",
+        icon: "🌱",
+        category: "High-Protein Curry",
+        pillText: "🥣 100ml · ~135 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Spongy, juicy soya chunks cooked in a rich, slow-simmered onion-garlic gravy",
+        calories: 135,
+        macros: { protein: "9.5g", carbs: "12.0g", fat: "4.2g", fiber: "3.8g" },
+        ingredients: "Soya chunks (well-rinsed and squeezed), kanda, tamatar, adrak-lasun paste, dhaniya powder, jeera, garam masala, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Highest protein content among vegetarian curries. Chunks are boiled and thoroughly rinsed so they drink up the curry flavors.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Ultra High Protein", "Gym Favorite", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Soyabean [250ml]": {
+        name: "Soyabean (Soya Chunks Curry)",
+        icon: "🌱",
+        category: "High-Protein Curry",
+        pillText: "🥣 250ml · ~335 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Spongy, juicy soya chunks cooked in a rich, slow-simmered onion-garlic gravy",
+        calories: 335,
+        macros: { protein: "23.8g", carbs: "30.0g", fat: "10.5g", fiber: "9.5g" },
+        ingredients: "Soya chunks (well-rinsed and squeezed), kanda, tamatar, adrak-lasun paste, dhaniya powder, jeera, garam masala, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Highest protein content among vegetarian curries. Chunks are boiled and thoroughly rinsed so they drink up the curry flavors.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Ultra High Protein", "Gym Favorite", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Soyabean": {
+        name: "Soyabean (Soya Chunks Curry)",
+        icon: "🌱",
+        category: "High-Protein Curry",
+        pillText: "🥣 ~135 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Spongy, juicy soya chunks cooked in a rich, slow-simmered onion-garlic gravy",
+        calories: 135,
+        macros: { protein: "9.5g", carbs: "12.0g", fat: "4.2g", fiber: "3.8g" },
+        ingredients: "Soya chunks (well-rinsed and squeezed), kanda, tamatar, adrak-lasun paste, dhaniya powder, jeera, garam masala, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "Highest protein content among vegetarian curries. Chunks are boiled and thoroughly rinsed so they drink up the curry flavors.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Ultra High Protein", "Gym Favorite", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 27. Masoor (Whole Masoor Dal Gravy)
+      "Masoor [100ml]": {
+        name: "Masoor (Masoor Dal Curry)",
+        icon: "🥣",
+        category: "Light Lentil Curry",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender whole red/brown masoor in a light kanda-tamatar homestyle rassa",
+        calories: 120,
+        macros: { protein: "6.8g", carbs: "17.0g", fat: "3.0g", fiber: "4.0g" },
+        ingredients: "Whole masoor lentils, chopped kanda, tamatar, adrak-lasun, jeera, haldi, lal mirchi powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "A milder, homestyle lentil preparation. Easy on the stomach, providing sustained plant-based energy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Everyday Lentil", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Masoor [250ml]": {
+        name: "Masoor (Masoor Dal Curry)",
+        icon: "🥣",
+        category: "Light Lentil Curry",
+        pillText: "🥣 250ml · ~300 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender whole red/brown masoor in a light kanda-tamatar homestyle rassa",
+        calories: 300,
+        macros: { protein: "17.0g", carbs: "42.5g", fat: "7.5g", fiber: "10.0g" },
+        ingredients: "Whole masoor lentils, chopped kanda, tamatar, adrak-lasun, jeera, haldi, lal mirchi powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "A milder, homestyle lentil preparation. Easy on the stomach, providing sustained plant-based energy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Everyday Lentil", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Masoor": {
+        name: "Masoor (Masoor Dal Curry)",
+        icon: "🥣",
+        category: "Light Lentil Curry",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender whole red/brown masoor in a light kanda-tamatar homestyle rassa",
+        calories: 120,
+        macros: { protein: "6.8g", carbs: "17.0g", fat: "3.0g", fiber: "4.0g" },
+        ingredients: "Whole masoor lentils, chopped kanda, tamatar, adrak-lasun, jeera, haldi, lal mirchi powder, filtered groundnut oil, fresh kothimbir, salt.",
+        prepNotes: "A milder, homestyle lentil preparation. Easy on the stomach, providing sustained plant-based energy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Everyday Lentil", "Filtered Groundnut Oil", "Vegan"]
       },
 
       // ── DAL / RICE / EXTRAS ──────────────────────────────
@@ -9043,16 +9929,53 @@
       // orders — owner rule). Admin-marked OOS still applies (genuine availability).
       const remaining  = (STOREFRONT === "LS") ? undefined : ((menu.units_remaining || {})[meal] || {})[colKey];
       const isStockOOS = (remaining !== undefined && remaining <= 0);
+      const isLowStock = (remaining !== undefined && remaining > 0 && remaining <= 10);
       let clarityKey = colKey;
       if (colKey === "Dry Sabji Mini [100ml]") {
         const dName = (meal === "Lunch" ? menu.lunch_dry : menu.dinner_dry) || "";
-        if (dName && getFoodClarity(dName.trim() + " [100ml]")) {
-          clarityKey = dName.trim() + " [100ml]";
+        if (dName) {
+          let lookup = dName.trim();
+          if (lookup.toLowerCase() === "aloo") lookup = "Sukha Aloo";
+          if (getFoodClarity(lookup + " [100ml]")) {
+            clarityKey = lookup + " [100ml]";
+          } else if (getFoodClarity(dName.trim() + " [100ml]")) {
+            clarityKey = dName.trim() + " [100ml]";
+          }
         }
       } else if (colKey === "Dry Sabji Full [250ml]") {
         const dName = (meal === "Lunch" ? menu.lunch_dry : menu.dinner_dry) || "";
-        if (dName && getFoodClarity(dName.trim() + " [250ml]")) {
-          clarityKey = dName.trim() + " [250ml]";
+        if (dName) {
+          let lookup = dName.trim();
+          if (lookup.toLowerCase() === "aloo") lookup = "Sukha Aloo";
+          if (getFoodClarity(lookup + " [250ml]")) {
+            clarityKey = lookup + " [250ml]";
+          } else if (getFoodClarity(dName.trim() + " [250ml]")) {
+            clarityKey = dName.trim() + " [250ml]";
+          }
+        }
+      } else if (colKey === "Curry Sabji Mini [100ml]") {
+        const cName = (meal === "Lunch" ? menu.lunch_curry : menu.dinner_curry) || "";
+        if (cName) {
+          let lookup = cName.trim();
+          if (lookup.toLowerCase() === "aloo") lookup = "Aloo Curry";
+          if (lookup.toLowerCase() === "mix veg" || lookup.toLowerCase() === "mixveg") lookup = "Mix Veg Curry";
+          if (getFoodClarity(lookup + " [100ml]")) {
+            clarityKey = lookup + " [100ml]";
+          } else if (getFoodClarity(cName.trim() + " [100ml]")) {
+            clarityKey = cName.trim() + " [100ml]";
+          }
+        }
+      } else if (colKey === "Curry Sabji Full [250ml]") {
+        const cName = (meal === "Lunch" ? menu.lunch_curry : menu.dinner_curry) || "";
+        if (cName) {
+          let lookup = cName.trim();
+          if (lookup.toLowerCase() === "aloo") lookup = "Aloo Curry";
+          if (lookup.toLowerCase() === "mix veg" || lookup.toLowerCase() === "mixveg") lookup = "Mix Veg Curry";
+          if (getFoodClarity(lookup + " [250ml]")) {
+            clarityKey = lookup + " [250ml]";
+          } else if (getFoodClarity(cName.trim() + " [250ml]")) {
+            clarityKey = cName.trim() + " [250ml]";
+          }
         }
       }
       const clarity = getFoodClarity(clarityKey) || getFoodClarity(colKey) || getFoodClarity(name);
