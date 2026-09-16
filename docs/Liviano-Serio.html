@@ -5029,7 +5029,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.05";
+    const APP_VERSION = "v26.09.16.06";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -7397,7 +7397,7 @@
         category: "Aromatic Fried Lentil Curry",
         pillText: "🥣 200ml · 175 kcal · 7.5g Pro",
         size: "200ml container (~1.5 bowls)",
-        weight: "~210g net wt",
+        weight: "",
         thickness: "Rich & aromatic tempered dal",
         calories: 175,
         macros: { protein: "7.5g", carbs: "22.5g", fat: "6.2g", fiber: "4.5g" },
@@ -7778,6 +7778,8 @@
           portionNote = "Portioned in a standard 100ml food-grade container (calibrated by 100ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies across sabjis based on vegetable density and moisture.";
         } else if (keyOrSize.includes("250ml")) {
           portionNote = "Portioned in a standard 250ml food-grade container (calibrated by 250ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies across sabjis based on vegetable density and gravy consistency.";
+        } else if (keyOrSize.includes("200ml")) {
+          portionNote = "Portioned in a standard 200ml food-grade container (calibrated by 200ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies based on lentil consistency and tempering.";
         }
       }
       const tagsHtml = (info.tags || []).map(t =>

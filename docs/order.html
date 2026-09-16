@@ -5191,7 +5191,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.05";
+    const APP_VERSION = "v26.09.16.06";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5892,6 +5892,98 @@
         prepNotes: "Sourced fresh daily from trusted dairy. Thick, creamy set curd with natural probiotics for gut health.",
         packaging: "50g sealed hygienic cup.",
         tags: ["Trusted Dairy", "Probiotic", "Gut Health", "Calcium Rich", "Gluten-Free"]
+      },
+
+      // ── ROTI & BHAKRI ─────────────────────────────────────
+      "Chapati": {
+        name: "Chapati",
+        icon: "🫓",
+        category: "Whole Wheat Flatbread",
+        pillText: '📏 8" · 🔥 104 kcal',
+        size: '8 inches diameter',
+        weight: '~38g per pc',
+        thickness: 'Thin & soft, 3-layer fold',
+        calories: 104,
+        macros: { protein: "3.1g", carbs: "18.5g", fat: "2.1g", fiber: "2.8g" },
+        ingredients: "100% Lokwan whole wheat atta, water, pinch of salt, refined sunflower oil.",
+        prepNotes: "Hand-rolled and tawa roasted with a very light brush of oil. 100% Atta, 0% Maida, no preservatives.",
+        packaging: "Wrapped in food-grade insulated silver foil pouch to retain heat & softness.",
+        tags: ["100% Whole Wheat", "0% Maida", "Sunflower Oil", "Vegan"]
+      },
+      "Without Oil Chapati": {
+        name: "Without Oil Chapati",
+        icon: "🫓",
+        category: "Zero Oil Diet Chapati",
+        pillText: '📏 8" · 🔥 85 kcal (0 Oil)',
+        size: '8 inches diameter',
+        weight: '~35g per pc',
+        thickness: 'Thin & soft, 3-layer fold (Dry roasted)',
+        calories: 85,
+        macros: { protein: "3.1g", carbs: "18.0g", fat: "0.4g", fiber: "2.8g" },
+        ingredients: "100% Lokwan whole wheat atta, water, pinch of salt (No oil used).",
+        prepNotes: "Completely dry tawa roasted with zero added oil. 100% Atta, 0% Maida, no preservatives. Ideal for strict diets, cholesterol/BP management & weight loss.",
+        packaging: "Wrapped in food-grade insulated silver foil pouch to retain heat & softness.",
+        tags: ["Zero Oil", "Diet Friendly", "100% Whole Wheat", "0% Maida", "Vegan"]
+      },
+      "Phulka": {
+        name: "Phulka",
+        icon: "🫓",
+        category: "Oil-Free Flame Puffed Bread",
+        pillText: '📏 6" · 🔥 72 kcal (0 Oil)',
+        size: '6 inches diameter',
+        weight: '~28g per pc',
+        thickness: 'Paper-thin, light balloon puff',
+        calories: 72,
+        macros: { protein: "2.6g", carbs: "15.2g", fat: "0.3g", fiber: "2.3g" },
+        ingredients: "100% Lokwan whole wheat atta, filtered water (Zero oil).",
+        prepNotes: "Cooked lightly on tawa and puffed directly on open flame. 100% Atta, 0% Maida, no preservatives. Extremely light, oil-free, and easy on the stomach.",
+        packaging: "Wrapped in food-grade insulated silver foil pouch to retain heat & softness.",
+        tags: ["Zero Oil", "Flame Puffed", "Ultra Light", "100% Whole Wheat", "0% Maida", "Vegan"]
+      },
+      "Ghee Phulka": {
+        name: "Ghee Phulka",
+        icon: "🫓",
+        category: "Desi Ghee Flame Puffed Bread",
+        pillText: '📏 6" · 🔥 102 kcal (Desi Ghee)',
+        size: '6 inches diameter',
+        weight: '~31g per pc',
+        thickness: 'Paper-thin, puffed & ghee brushed',
+        calories: 102,
+        macros: { protein: "2.6g", carbs: "15.2g", fat: "3.6g", fiber: "2.3g" },
+        ingredients: "100% Lokwan whole wheat atta, filtered water, pure cow ghee.",
+        prepNotes: "Puffed on open flame and brushed with warm pure cow ghee while hot for rich aroma and soft texture. 100% Atta, 0% Maida.",
+        packaging: "Wrapped in food-grade insulated silver foil pouch to retain heat & softness.",
+        tags: ["Pure Cow Ghee", "Flame Puffed", "100% Whole Wheat", "0% Maida"]
+      },
+      "Jowar Bhakri": {
+        name: "Jowar Bhakri",
+        icon: "🫓",
+        category: "Traditional Gluten-Free Millet Flatbread",
+        pillText: '📏 10" · 🔥 195 kcal (GF)',
+        size: '10 inches diameter',
+        weight: '~80g per pc',
+        thickness: 'Traditional hand-patted, soft center',
+        calories: 195,
+        macros: { protein: "5.2g", carbs: "41.0g", fat: "1.4g", fiber: "5.6g" },
+        ingredients: "80% Pure Jowar (Sorghum) flour, 20% Rice flour (for natural pliability & long-lasting softness), warm water, pinch of salt (Zero oil, Gluten-Free).",
+        prepNotes: "Authentic Maharashtrian hand-patted bhakri, roasted on iron tawa with water glaze. High fiber, low GI, complex carbs.",
+        packaging: "Wrapped in food-grade foil to lock in softness.",
+        tags: ["Gluten-Free", "High Fiber", "Zero Oil", "Hand Patted", "Diabetic Friendly"]
+      },
+      "Bajra Bhakri": {
+        name: "Bajra Bhakri",
+        icon: "🫓",
+        category: "Iron-Rich Millet Flatbread",
+        pillText: '📏 10" · 🔥 210 kcal (GF)',
+        size: '10 inches diameter',
+        weight: '~80g per pc',
+        thickness: 'Hand-patted, wholesome rustic texture',
+        calories: 210,
+        macros: { protein: "5.6g", carbs: "39.5g", fat: "2.6g", fiber: "6.0g" },
+        ingredients: "80% Pure Bajra (Pearl Millet) flour, 20% Rice flour (for natural pliability & long-lasting softness), warm water, pinch of salt (Zero oil, Gluten-Free).",
+        prepNotes: "Authentic Maharashtrian hand-patted bhakri, roasted on iron tawa with water glaze. Naturally rich in iron, zinc, magnesium and dietary fiber.",
+        packaging: "Wrapped in food-grade foil to lock in softness.",
+        tags: ["Gluten-Free", "Iron Rich", "Zero Oil", "Hand Patted", "High Energy"]
       },
 
       // ── SABJIS (DRY) ─────────────────────────────────────
@@ -7736,6 +7828,98 @@
         tags: ["High Protein", "Everyday Lentil", "Filtered Groundnut Oil", "Vegan"]
       },
 
+      // ── DAL / RICE / EXTRAS ──────────────────────────────
+      "Dal [200ml]": {
+        name: "Dal (Tadka)",
+        icon: "🥣",
+        category: "Homestyle Lentil Curry",
+        pillText: "🥣 200ml · 135 kcal · 7g Pro",
+        size: "200ml container (~1.25 bowls)",
+        weight: "",
+        thickness: "Medium consistency homestyle dal",
+        calories: 135,
+        macros: { protein: "7.2g", carbs: "21.0g", fat: "2.8g", fiber: "4.5g" },
+        ingredients: "Toor dal & Moong dal, tempered with jeera, mustard seeds, curry leaves, hing, green chili, turmeric.",
+        prepNotes: "Traditional light homestyle tadka dal. Easy on the stomach, cooked fresh for every meal.",
+        packaging: "200ml food-grade leak-proof container.",
+        tags: ["Protein Rich", "Light Tadka", "Hing Tempering", "Gluten-Free"]
+      },
+      "Dal Fry [200ml]": {
+        name: "Dal Fry",
+        icon: "🥣",
+        category: "Aromatic Fried Lentil Curry",
+        pillText: "🥣 200ml · 175 kcal · 7.5g Pro",
+        size: "200ml container (~1.5 bowls)",
+        weight: "",
+        thickness: "Rich & aromatic tempered dal",
+        calories: 175,
+        macros: { protein: "7.5g", carbs: "22.5g", fat: "6.2g", fiber: "4.5g" },
+        ingredients: "Toor dal, golden fried onions, fresh tomatoes, garlic, ginger, pure cow ghee tadka.",
+        prepNotes: "Restaurant-style aroma with home kitchen purity. Double tempered in cow ghee.",
+        packaging: "200ml food-grade leak-proof container.",
+        tags: ["Pure Cow Ghee Tadka", "Garlic & Onion", "Protein Rich"]
+      },
+      "Rice [100g]": {
+        name: "Steamed Rice",
+        icon: "🍚",
+        category: "Aromatic Steamed White Rice",
+        pillText: "🍚 100g · 130 kcal",
+        size: "100g cooked net weight",
+        weight: "100g net wt",
+        thickness: "Soft, fragrant separate steamed grains",
+        calories: 130,
+        macros: { protein: "2.7g", carbs: "28.5g", fat: "0.3g", fiber: "0.5g" },
+        ingredients: "Broken Basmati Mogra rice, filtered water, pinch of salt (Zero oil).",
+        prepNotes: "Steamed to fluffy perfection. Naturally aromatic, completely oil-free, and freshly prepared.",
+        packaging: "Food-grade meal container.",
+        tags: ["Broken Basmati Mogra", "Zero Oil", "Gluten-Free", "Steamed Fresh", "Vegan"]
+      },
+      "Salad [40g]": {
+        name: "Fresh Salad",
+        icon: "🥗",
+        category: "Raw Cut Seasonal Salad",
+        pillText: "🥕 40g · ~15 kcal",
+        size: "40g portion",
+        weight: "~40g net wt",
+        thickness: "Crisp, freshly diced & mixed crunchy salad",
+        calories: 15,
+        macros: { protein: "0.5g", carbs: "3.2g", fat: "0.1g", fiber: "1.2g" },
+        ingredients: "Fresh cucumber, carrot, beetroot, diced and mixed well.",
+        prepNotes: "Thoroughly washed in filtered water, freshly diced and mixed right before packing.",
+        packaging: "Separate fresh salad pouch.",
+        tags: ["Fresh & Diced", "Raw Salad", "Low Calorie", "Immunity Boost", "Vegan"]
+      },
+      "Curd [50g]": {
+        name: "Fresh Curd",
+        icon: "🥛",
+        category: "Fresh Set Dairy Dahi",
+        pillText: "🥛 50g · ~35 kcal",
+        size: "50g cup",
+        weight: "~50g net wt",
+        thickness: "Thick, creamy set curd",
+        calories: 35,
+        macros: { protein: "1.8g", carbs: "2.2g", fat: "2.0g", fiber: "0g" },
+        ingredients: "Pasteurized fresh milk, natural active live cultures.",
+        prepNotes: "Sourced fresh daily from trusted dairy. Thick, creamy set curd with natural probiotics for gut health.",
+        packaging: "50g sealed hygienic cup.",
+        tags: ["Trusted Dairy", "Probiotic", "Gut Health", "Calcium Rich", "Gluten-Free"]
+      },
+      "B_CURD": {
+        name: "Fresh Curd",
+        icon: "🥛",
+        category: "Fresh Set Dairy Dahi",
+        pillText: "🥛 50g · ~35 kcal",
+        size: "50g cup",
+        weight: "~50g net wt",
+        thickness: "Thick, creamy set curd",
+        calories: 35,
+        macros: { protein: "1.8g", carbs: "2.2g", fat: "2.0g", fiber: "0g" },
+        ingredients: "Pasteurized fresh milk, natural active live cultures.",
+        prepNotes: "Sourced fresh daily from trusted dairy. Thick, creamy set curd with natural probiotics for gut health.",
+        packaging: "50g sealed hygienic cup.",
+        tags: ["Trusted Dairy", "Probiotic", "Gut Health", "Calcium Rich", "Gluten-Free"]
+      },
+
     };
 
     function getFoodClarity(key) {
@@ -7776,6 +7960,8 @@
           portionNote = "Portioned in a standard 100ml food-grade container (calibrated by 100ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies across sabjis based on vegetable density and moisture.";
         } else if (keyOrSize.includes("250ml")) {
           portionNote = "Portioned in a standard 250ml food-grade container (calibrated by 250ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies across sabjis based on vegetable density and gravy consistency.";
+        } else if (keyOrSize.includes("200ml")) {
+          portionNote = "Portioned in a standard 200ml food-grade container (calibrated by 200ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies based on lentil consistency and tempering.";
         }
       }
       const tagsHtml = (info.tags || []).map(t =>
