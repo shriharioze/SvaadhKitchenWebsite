@@ -174,7 +174,31 @@
       "name": "What meals and items are available?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "We offer a Make-Your-Own-Meal system — no fixed thali. Lunch and Dinner: Chapati ₹10, Without Oil Chapati ₹9, Phulka ₹8, Ghee Phulka ₹11, Jowar Bhakri ₹22, Bajra Bhakri ₹22, Dry Sabji Mini ₹24, Dry Sabji Full ₹48, Curry Sabji Mini ₹24, Curry Sabji Full ₹48, Dal ₹24, Rice ₹13, Salad ₹8, Curd ₹13. Breakfast rotates daily — Kanda Poha, Upma, Sabudana Khichdi, Sheera and more."
+        "text": "We offer a Make-Your-Own-Meal system — no fixed thali. Lunch and Dinner: Chapati ₹10 (~7\"), Without Oil Chapati ₹9 (~7\"), Phulka (5–5.5\") ₹8, Ghee Phulka (5–5.5\") ₹11, Jowar Bhakri ₹22, Bajra Bhakri ₹22, Dry Sabji Mini [100ml] ₹24, Dry Sabji Full [250ml] ₹48, Curry Sabji Mini [100ml] ₹24, Curry Sabji Full [250ml] ₹48, Dal [200ml] ₹24, Dal Fry [200ml] ₹40, Rice [100g] ₹13, Salad [40g] ₹8, Curd [50g] ₹13. Breakfast rotates daily — Kanda Poha, Upma, Sabudana Khichdi, Sheera and more."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What do the 100ml and 250ml sabji portion sizes mean?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "100ml (Mini) and 250ml (Full) indicate the liquid volumetric capacity of the food-grade container (water volume equivalent). Physical weight in grams naturally varies by vegetable density and gravy consistency. Dal is served in 200ml containers."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How can I check nutrition, ingredients, and calories?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tap the ℹ️ chip next to any item on the order page to view full nutritional facts (Calories, Protein, Carbs, Fats, Fiber), complete ingredient transparency, and chef kitchen notes."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What cooking oils do you use?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We use Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas and frying, Pure Cow Ghee for Ghee Phulkas & breakfast specials, and Zero Oil for Without Oil Chapatis. 100% Pure Vegetarian kitchen."
       }
     },
     {
@@ -740,9 +764,47 @@
         </button>
         <div class="faq-answer">
           We follow a <strong>Make Your Own Meal</strong> model — no fixed thali! Pick exactly what you want:
-          <strong>Dal ₹24</strong>, <strong>Sabji Mini ₹24</strong> or <strong>Full ₹48</strong>,
-          <strong>Rice ₹13</strong>, <strong>Chapati ₹10</strong> or <strong>Ghee Phulka ₹11</strong>,
-          <strong>Salad ₹8</strong>, <strong>Curd ₹13</strong>. Mix and match to create your perfect meal!
+          <strong>Dal [200ml] ₹24</strong>, <strong>Dal Fry [200ml] ₹40</strong>, <strong>Sabji Mini [100ml] ₹24</strong> or <strong>Full [250ml] ₹48</strong>,
+          <strong>Rice [100g] ₹13</strong>, <strong>Chapati (~7\") ₹10</strong>, <strong>Phulka (5–5.5\") ₹8</strong>, <strong>Ghee Phulka (5–5.5\") ₹11</strong>, <strong>Jowar/Bajra Bhakri ₹22</strong>,
+          <strong>Salad [40g] ₹8</strong>, <strong>Curd [50g] ₹13</strong>, plus daily rotating <strong>Breakfast (₹35–₹70)</strong>. Mix and match to create your perfect meal!
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          <span>How are sabji portion sizes measured? (100ml vs 250ml)</span>
+          <span>+</span>
+        </button>
+        <div class="faq-answer">
+          <strong>100ml (Mini)</strong> and <strong>250ml (Full)</strong> represent the <strong>liquid volumetric capacity</strong> of our food-grade leak-proof containers (equivalent to the volume of water the container holds).<br><br>
+          <em>Please note:</em> Physical weight in grams naturally varies by dish based on vegetable density, moisture, and gravy style (e.g., leafy greens vs hearty potato or bean curries). Dal and Dal Fry are served in <strong>200ml</strong> containers, Rice in <strong>100g</strong>, Salad in <strong>40g</strong>, and Curd in <strong>50g</strong>.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          <span>How can I check nutrition, ingredients, and calories?</span>
+          <span>+</span>
+        </button>
+        <div class="faq-answer">
+          Every item on our order page features <strong>1-Tap Food Clarity &amp; Nutrition Transparency</strong>! Simply tap the <strong>ℹ️ chip</strong> next to any dish name to see its approximate <strong>Calories, Protein, Carbs, Fats, and Fiber</strong>, complete ingredients list, chef's cooking notes, and dietary tags.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" onclick="toggleFAQ(this)">
+          <span>What cooking oils and standards do you use?</span>
+          <span>+</span>
+        </button>
+        <div class="faq-answer">
+          We maintain rigorous homestyle cooking standards:
+          <ul style="margin: 8px 0 0 18px; line-height: 1.7;">
+            <li><strong>Sabjis (Dry &amp; Curry):</strong> Cooked exclusively in <strong>Refined Groundnut Oil</strong>.</li>
+            <li><strong>Chapatis, Parathas &amp; Frying:</strong> Prepared with <strong>Sunflower Oil</strong>.</li>
+            <li><strong>Ghee Phulkas &amp; Breakfast:</strong> Prepared with <strong>Pure Cow Ghee</strong>.</li>
+            <li><strong>Diet Options:</strong> <strong>Without Oil Chapati</strong> is 100% oil-free.</li>
+            <li><strong>100% Pure Vegetarian:</strong> Freshly cooked daily in small batches, no eggs or preservatives.</li>
+          </ul>
         </div>
       </div>
 

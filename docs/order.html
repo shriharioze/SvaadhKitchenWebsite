@@ -5191,7 +5191,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.07";
+    const APP_VERSION = "v26.09.16.08";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8416,7 +8416,10 @@
       { q: "What is Svaadh Wallet (Prepaid Credits)?", a: "Svaadh Wallet is a prepaid system for <strong>1-tap instant ordering</strong>. Recharge ₹100+ through the secure payment gateway — the balance credits <strong>instantly</strong>. Your balance is always visible at the top-left wallet chip from Step 2 onwards. To add funds, tap the wallet chip or open the avatar drawer → <strong>Wallet</strong>. Cancellation refunds land here instantly." },
       { q: "How do I track my delivery in real-time?", a: "Open avatar drawer → <strong>Manage Orders</strong>. Once our driver marks your order as 'Out for Delivery', a <strong>🚗 Out for Delivery</strong> badge appears next to that order's timing. To call the delivery partner directly, use <strong>🛵 Call delivery partner (Abhijeet · 86055 12646)</strong> from the drawer." },
       { q: "Can I install this as an App on my phone?", a: "Yes! Look for the <strong>📲 Install App</strong> button on the home screen. This adds Svaadh Kitchen to your home screen for fast, one-tap access just like a regular app." },
-      { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹10 · Without Oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar/Bajra Bhakri ₹22<br>🥘 <strong>Sabji</strong>: Mini 100ml ₹24 · Full 250ml ₹48 (changes daily)<br>🍲 <strong>Dal</strong> 200ml ₹24 · <strong>Dal Fry</strong> 200ml ₹40 · <strong>Rice</strong> 100g ₹13 · <strong>Salad</strong> 40g ₹8 · <strong>Curd</strong> 50g ₹13<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha &amp; more." },
+      { q: "What's included in your thali / meals?", a: "We follow a <strong>Make Your Own Meal</strong> model — pick exactly what you want:<br>🫓 <strong>Breads</strong>: Chapati ₹10 (~7\") · Without Oil Chapati ₹9 (~7\") · Phulka (5–5.5\") ₹8 · Ghee Phulka (5–5.5\") ₹11 · Jowar/Bajra Bhakri ₹22<br>🥘 <strong>Sabji</strong>: Mini [100ml] ₹24 · Full [250ml] ₹48 (changes daily)<br>🍲 <strong>Dal</strong> [200ml] ₹24 · <strong>Dal Fry</strong> [200ml] ₹40 · <strong>Rice</strong> [100g] ₹13 · <strong>Salad</strong> [40g] ₹8 · <strong>Curd</strong> [50g] ₹13<br>🌅 <strong>Breakfast</strong>: Rotating daily items (₹35–₹70) — Poha, Upma, Paratha &amp; more." },
+      { q: "What do the 100ml and 250ml sabji portion sizes mean?", a: "<strong>100ml (Mini)</strong> and <strong>250ml (Full)</strong> represent the <strong>liquid volumetric capacity</strong> of our food-grade leak-proof containers (equivalent to the volume of water the container holds). <em>Please note:</em> the actual physical weight in grams naturally varies for each dish depending on vegetable density, moisture, and gravy style (e.g. leafy vegetables vs dense root veggies or curries). Dal and Dal Fry are served in <strong>200ml</strong> containers." },
+      { q: "How do I check calories, ingredients, and nutrition for each dish?", a: "We provide complete transparency through our <strong>1-Tap Food Clarity &amp; Nutrition</strong> feature! Next to every item on the menu, simply tap the <strong>ℹ️ chip</strong> to open a full breakdown showing approx <strong>Calories, Protein, Carbs, Fats, Dietary Fiber</strong>, complete ingredients, chef's preparation notes, container sizing, and dietary tags (Homestyle, High Protein, Low Calorie, Vegan, Pure Ghee, Zero Oil)." },
+      { q: "What cooking oils and standards do you use?", a: "We cook wholesome homemade food in small batches with strict ingredient standards:<br>• <strong>Sabjis (Dry &amp; Curry):</strong> Cooked in <strong>Refined Groundnut Oil</strong>.<br>• <strong>Chapatis, Parathas &amp; Frying:</strong> Made with <strong>Sunflower Oil</strong>.<br>• <strong>Ghee Phulkas &amp; Breakfast:</strong> Prepared with <strong>Pure Cow Ghee</strong>.<br>• <strong>Diet Options:</strong> <strong>Without Oil Chapati</strong> has zero oil.<br>• <strong>100% Pure Vegetarian:</strong> No eggs, no meat. Prepared daily with fresh ingredients." },
       { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
       { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually. Use the <strong>Copy</strong> button to clone a meal you built to other selected dates." },
       { q: "What are the ⚡ Bulk meal plans?", a: "Order many days in one go and save on every day's food: <strong>Week</strong> = 6 working days with <strong>5% off</strong> · <strong>15-Day</strong> = 13 days with <strong>7.5% off</strong> · <strong>Month</strong> = 26 days with <strong>10% off</strong>. Pick your Lunch and/or Dinner items once — the sabji each day is the chef's special. Sundays &amp; kitchen holidays are skipped automatically, and the daily discount tiers stack on top." },
@@ -13655,9 +13658,29 @@
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🎯 Make Your Own Meal</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               Pick exactly what you want, in the quantities you want. No bundle, no thali, no wastage.<br><br>
-              <b>Breads:</b> Chapati ₹10 · Without Oil Chapati ₹9 · Phulka ₹8 · Ghee Phulka ₹11 · Jowar Bhakri ₹22 · Bajra Bhakri ₹22<br>
-              <b>Sabji:</b> Dry Mini ₹24 · Dry Full ₹48 · Curry Mini ₹24 · Curry Full ₹48<br>
-              <b>Basics:</b> Dal ₹24 · Dal Fry ₹40 · Rice ₹13 · Salad ₹8 · Curd ₹13
+              <b>Breads:</b> Chapati ₹10 (~7\") · Without Oil Chapati ₹9 (~7\") · Phulka ₹8 (5–5.5\") · Ghee Phulka ₹11 (5–5.5\") · Jowar Bhakri ₹22 · Bajra Bhakri ₹22<br>
+              <b>Sabji:</b> Dry Mini [100ml] ₹24 · Dry Full [250ml] ₹48 · Curry Mini [100ml] ₹24 · Curry Full [250ml] ₹48<br>
+              <b>Basics:</b> Dal [200ml] ₹24 · Dal Fry [200ml] ₹40 · Rice [100g] ₹13 · Salad [40g] ₹8 · Curd [50g] ₹13
+            </div>
+          </div>
+
+          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #16a085;">
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🥗 1-Tap Food Clarity & Nutrition Transparency</div>
+            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
+              Tap the <b>ℹ️ info chip</b> next to any item name on the order screen to see:<br>
+              • <b>Nutritional Facts:</b> Calories, Protein, Carbs, Fats, and Fiber.<br>
+              • <b>Exact Ingredients:</b> Complete transparency on vegetables, spices, and cooking oils.<br>
+              • <b>Chef Kitchen Notes:</b> Preparation techniques, cooking method, and texture guidance.<br>
+              • <b>Portion Guidance:</b> Clear volume capacity and food-grade packaging details.
+            </div>
+          </div>
+
+          <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #e67e22;">
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">📏 Portion Sizes — Volume vs. Weight</div>
+            <div style="font-size:0.78rem;color:#444;line-height:1.7;">
+              <b>Sabji Containers:</b> Mini is <b>100ml</b> and Full is <b>250ml</b>. These indicate the <b>liquid volumetric capacity</b> of the food-grade container (equivalent to the volume of water the container holds). The net physical weight in grams naturally varies by vegetable density and gravy consistency.<br>
+              <b>Dal Containers:</b> Dal &amp; Dal Fry are served in <b>200ml</b> leak-proof containers.<br>
+              <b>Breads:</b> Chapatis are ~7 inches, and Phulkas are <b>5–5.5 inches</b> diameter.
             </div>
           </div>
 
@@ -13681,11 +13704,14 @@
           </div>
 
           <div style="background:#f8f9fa;border-radius:12px;padding:14px 16px;margin-bottom:12px;border-left:4px solid #3498db;">
-            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🙏 Special Dietary Needs</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🍳 Cooking Standards & Pure Ingredients</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
-              <b>Oil-free:</b> Without Oil Chapati available.<br>
-              <b>Millet options:</b> Jowar Bhakri and Bajra Bhakri available daily.<br><br>
-              We use <b>Pure Ghee</b> and <b>Groundnut refined oil</b>. 100% Pure Vegetarian kitchen.
+              • <b>Sabjis:</b> Cooked in <b>Refined Groundnut Oil</b>.<br>
+              • <b>Breads &amp; Frying:</b> Chapatis, Parathas, and frying use <b>Sunflower Oil</b>.<br>
+              • <b>Pure Ghee:</b> Used for Ghee Phulkas, Sheera, Upma, and breakfast specials.<br>
+              • <b>Oil-Free Diet:</b> <b>Without Oil Chapati</b> has zero oil.<br>
+              • <b>Millet flatbreads:</b> Fresh Jowar Bhakri and Bajra Bhakri daily.<br>
+              • <b>100% Pure Vegetarian:</b> Homestyle recipes cooked fresh in small batches daily.
             </div>
           </div>
 

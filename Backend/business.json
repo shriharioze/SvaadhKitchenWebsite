@@ -6,7 +6,23 @@
     "summary": "Svaadh Kitchen is a home-based vegetarian cloud kitchen in Hadapsar, Pune, serving fresh and wholesome homemade meals since August 2023.",
     "description": "We specialize in homemade vegetarian food, offering breakfast, lunch, and dinner with a changing daily sabji menu — fully Make-Your-Own-Meal, no fixed thali. Our delivery network covers 14 major areas in Hadapsar, with Free Delivery for Bhosale Nagar, Triveni Nagar, and all Self Pickup orders. We serve Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Hadapsar Mandai, and Gadital. Meals are cooked fresh daily in small batches using quality ingredients and traditional recipes."
   },
-  "locations_served": ["Amanora Town", "BG Shirke Road", "Bhosale Nagar (Free)", "DP Road", "Gadital", "Hadapsar Mandai", "Kirtane Baug", "Magarpatta", "Malwadi", "Pune-Solapur Road (Magarpatta Bridge to Gadital only)", "SadeSatraNali", "Triveni Nagar (Free)", "Tupe Patil Road", "Vihar Chowk", "Self Pickup (Free)"],
+  "locations_served": [
+    "Amanora Town",
+    "BG Shirke Road",
+    "Bhosale Nagar (Free)",
+    "DP Road",
+    "Gadital",
+    "Hadapsar Mandai",
+    "Kirtane Baug",
+    "Magarpatta",
+    "Malwadi",
+    "Pune-Solapur Road (Magarpatta Bridge to Gadital only)",
+    "SadeSatraNali",
+    "Triveni Nagar (Free)",
+    "Tupe Patil Road",
+    "Vihar Chowk",
+    "Self Pickup (Free)"
+  ],
   "order_cutoffs": {
     "breakfast": "before 7:00 AM",
     "lunch": "before 9:00 AM",
@@ -25,34 +41,121 @@
   "menu": {
     "note": "Today's sabji (dry and curry) changes daily and is shown in the order form. Breakfast items also rotate daily.",
     "breads": [
-      { "name": "Chapati",              "price": 10, "unit": "per piece" },
-      { "name": "Without Oil Chapati",  "price": 9,  "unit": "per piece" },
-      { "name": "Phulka",               "price": 8,  "unit": "per piece" },
-      { "name": "Ghee Phulka",          "price": 11, "unit": "per piece" },
-      { "name": "Jowar Bhakri",         "price": 22, "unit": "per piece" },
-      { "name": "Bajra Bhakri",         "price": 22, "unit": "per piece" }
+      {
+        "name": "Chapati",
+        "price": 10,
+        "unit": "per piece",
+        "size": "Standard ~7 inches diameter"
+      },
+      {
+        "name": "Without Oil Chapati",
+        "price": 9,
+        "unit": "per piece",
+        "size": "Standard ~7 inches diameter",
+        "oil": "Zero Oil"
+      },
+      {
+        "name": "Phulka",
+        "price": 8,
+        "unit": "per piece",
+        "size": "5–5.5 inches diameter",
+        "oil": "Zero Oil (dry puffed)"
+      },
+      {
+        "name": "Ghee Phulka",
+        "price": 11,
+        "unit": "per piece",
+        "size": "5–5.5 inches diameter",
+        "oil": "Brushed with Pure Cow Ghee"
+      },
+      {
+        "name": "Jowar Bhakri",
+        "price": 22,
+        "unit": "per piece",
+        "size": "Traditional thick handcrafted millet flatbread"
+      },
+      {
+        "name": "Bajra Bhakri",
+        "price": 22,
+        "unit": "per piece",
+        "size": "Traditional thick handcrafted millet flatbread"
+      }
     ],
     "sabji": [
-      { "name": "Dry Sabji Mini [100ml]",   "price": 24 },
-      { "name": "Dry Sabji Full [250ml]",   "price": 48 },
-      { "name": "Curry Sabji Mini [100ml]", "price": 24 },
-      { "name": "Curry Sabji Full [250ml]", "price": 48 }
+      {
+        "name": "Dry Sabji Mini [100ml]",
+        "price": 24,
+        "portion_type": "Liquid volume capacity [100ml food-grade container]"
+      },
+      {
+        "name": "Dry Sabji Full [250ml]",
+        "price": 48,
+        "portion_type": "Liquid volume capacity [250ml food-grade container]"
+      },
+      {
+        "name": "Curry Sabji Mini [100ml]",
+        "price": 24,
+        "portion_type": "Liquid volume capacity [100ml food-grade container]"
+      },
+      {
+        "name": "Curry Sabji Full [250ml]",
+        "price": 48,
+        "portion_type": "Liquid volume capacity [250ml food-grade container]"
+      }
     ],
     "basics": [
-      { "name": "Dal [200ml]",  "price": 24 },
-      { "name": "Rice [100g]", "price": 13 },
-      { "name": "Salad [40g]", "price": 8  },
-      { "name": "Curd [50g]",  "price": 13 }
+      {
+        "name": "Dal [200ml]",
+        "price": 24,
+        "container": "200ml food-grade leak-proof container"
+      },
+      {
+        "name": "Dal Fry [200ml]",
+        "price": 40,
+        "container": "200ml food-grade leak-proof container"
+      },
+      {
+        "name": "Rice [100g]",
+        "price": 13,
+        "portion": "100g"
+      },
+      {
+        "name": "Salad [40g]",
+        "price": 8,
+        "portion": "40g"
+      },
+      {
+        "name": "Curd [50g]",
+        "price": 13,
+        "portion": "50g"
+      }
     ],
     "breakfast": "Rotating daily menu — items like Kanda Poha, Upma, Sabudana Khichdi, Paratha, Sheera (₹35–₹70 range). Check the order form for today's breakfast options.",
-    "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹105 before discounts. Build lighter or bigger — you only pay for what you pick."
+    "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹105 before discounts. Build lighter or bigger — you only pay for what you pick.",
+    "portion_clarity": {
+      "sabji_portions": "100ml (Mini) and 250ml (Full) denote the volumetric liquid capacity of the food-grade container (water volume equivalent). The net physical weight in grams varies naturally depending on vegetable density and gravy consistency.",
+      "dal_portions": "Dal and Dal Fry are served in 200ml food-grade leak-proof containers.",
+      "sides_portions": "Rice [100g], Salad [40g], Curd [50g]."
+    }
   },
   "bulk_plans": {
     "summary": "Bulk meal plans — order many days in one go and save on every day's food. Lunch and/or Dinner; the sabji each day is the chef's special of the day.",
     "plans": [
-      { "name": "Week Plan",   "working_days": 6,  "discount": "5% off every day's food" },
-      { "name": "15-Day Plan", "working_days": 13, "discount": "7.5% off every day's food" },
-      { "name": "Month Plan",  "working_days": 26, "discount": "10% off every day's food" }
+      {
+        "name": "Week Plan",
+        "working_days": 6,
+        "discount": "5% off every day's food"
+      },
+      {
+        "name": "15-Day Plan",
+        "working_days": 13,
+        "discount": "7.5% off every day's food"
+      },
+      {
+        "name": "Month Plan",
+        "working_days": 26,
+        "discount": "10% off every day's food"
+      }
     ],
     "how_it_works": "Pick a plan on the order page (⚡ Bulk card), choose your Lunch and/or Dinner items once, and the same meal is delivered every working day — Sundays and kitchen holidays are skipped automatically. The daily-total discount tiers stack on top of the plan discount.",
     "postpone": "Change of plans? On the 15-Day plan you can postpone up to 2 lunch days + 2 dinner days to another date (within 30 days); on the Month plan up to 4 + 4. Postponing keeps the same items, price, and discount — no extra charge.",
@@ -68,7 +171,12 @@
     "note": "All discounts are applied automatically when you place an order online."
   },
   "payment": {
-    "options": ["UPI / Cards via secure HDFC payment gateway (instant)", "Svaadh Wallet (prepaid credits)", "Wallet + Gateway split payment", "On Account (for approved regular customers)"],
+    "options": [
+      "UPI / Cards via secure HDFC payment gateway (instant)",
+      "Svaadh Wallet (prepaid credits)",
+      "Wallet + Gateway split payment",
+      "On Account (for approved regular customers)"
+    ],
     "gateway": "Payments are processed instantly through the HDFC SmartGateway — pay by UPI or card and your order confirms automatically, no screenshots or manual verification needed.",
     "wallet": {
       "name": "Svaadh Wallet",
@@ -99,5 +207,22 @@
     "email": "svaadh.kitchen@gmail.com",
     "google_page": "https://share.google/UnZM2xcLOF2QVO9cj"
   },
-  "vision": "To make homemade vegetarian meals easily accessible and affordable for everyone, while maintaining taste, quality, and consistency."
+  "vision": "To make homemade vegetarian meals easily accessible and affordable for everyone, while maintaining taste, quality, and consistency.",
+  "cooking_standards": {
+    "sabji_oil": "Refined Groundnut Oil for all dry and curry sabjis",
+    "breads_and_frying_oil": "Sunflower Oil for chapatis, parathas, and frying (e.g. koftas)",
+    "ghee": "Pure Cow Ghee for Ghee Phulkas, Sheera, Ghee Upma, and breakfast specials",
+    "diet_oil": "Zero Oil for Without Oil Chapatis",
+    "pure_veg": "100% Pure Vegetarian kitchen (no eggs, no meat). Freshly cooked in small batches daily."
+  },
+  "food_clarity": {
+    "system": "1-Tap Food Clarity & Nutrition Transparency modal across all 45+ items on the order page",
+    "features": [
+      "Nutritional breakdown (approx Calories, Protein, Carbohydrates, Total Fats, Dietary Fiber)",
+      "Complete exact ingredient transparency (e.g. fresh vegetables, spices, oils)",
+      "Chef kitchen notes explaining preparation techniques and texture",
+      "Food-grade packaging and container volume specifications",
+      "Dietary and allergen tags (Homestyle, High Protein, Low Calorie, Vegan, Pure Ghee, Zero Oil)"
+    ]
+  }
 }
