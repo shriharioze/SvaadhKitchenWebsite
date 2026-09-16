@@ -5029,7 +5029,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.02";
+    const APP_VERSION = "v26.09.16.03";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -5533,36 +5533,930 @@
         tags: ["Gluten-Free", "Iron Rich", "Zero Oil", "Hand Patted", "High Energy"]
       },
 
-      // ── SABJIS ───────────────────────────────────────────
+      // ── SABJIS (DRY) ─────────────────────────────────────
       "Dry Sabji Mini [100ml]": {
         name: "Dry Sabji Mini",
         icon: "🥗",
         category: "Today's Dry Sabji (Individual Serving)",
         pillText: "🥣 100ml · ~120 kcal",
-        size: "100ml round container (~1 bowl)",
-        weight: "~95g net wt",
+        size: "100ml container (~1 bowl)",
+        weight: "",
         thickness: "Dry / semi-dry homestyle preparation",
         calories: 120,
         macros: { protein: "3.5g", carbs: "14g", fat: "5.5g", fiber: "3.8g" },
-        ingredients: "Fresh seasonal vegetables, cold-pressed sunflower oil, mustard seeds, cumin, turmeric, mild spices.",
+        ingredients: "Fresh seasonal vegetables, filtered groundnut oil, mustard seeds, cumin, turmeric, mild spices.",
         prepNotes: "Homestyle daily preparation with controlled spices and light oil. No artificial food coloring or soda.",
         packaging: "100ml food-grade leak-proof container.",
-        tags: ["Homestyle", "No Artificial Colors", "Light Oil", "Vegan"]
+        tags: ["Homestyle", "No Artificial Colors", "Filtered Groundnut Oil", "Vegan"]
       },
       "Dry Sabji Full [250ml]": {
         name: "Dry Sabji Full",
         icon: "🥗",
         category: "Today's Dry Sabji (Share / Large Serving)",
         pillText: "🥣 250ml · ~280 kcal",
-        size: "250ml round container (~2.5 bowls)",
-        weight: "~240g net wt",
+        size: "250ml container (~2.5 bowls)",
+        weight: "",
         thickness: "Dry / semi-dry homestyle preparation",
         calories: 280,
         macros: { protein: "8.5g", carbs: "34g", fat: "13g", fiber: "9g" },
-        ingredients: "Fresh seasonal vegetables, cold-pressed sunflower oil, mustard seeds, cumin, turmeric, mild spices.",
+        ingredients: "Fresh seasonal vegetables, filtered groundnut oil, mustard seeds, cumin, turmeric, mild spices.",
         prepNotes: "Homestyle daily preparation with controlled spices and light oil. Serves 2 comfortably.",
         packaging: "250ml food-grade tamper-evident container.",
-        tags: ["Homestyle", "Generous Portion", "No Food Colors", "Vegan"]
+        tags: ["Homestyle", "Generous Portion", "No Food Colors", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 1. Cabbage (Patta Gobhi)
+      "Cabbage [100ml]": {
+        name: "Cabbage (Patta Gobhi)",
+        icon: "🥬",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~85 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Shredded tender cabbage sauteed with mild green chillies, urad dal (split black gram), and mustard tempering",
+        calories: 85,
+        macros: { protein: "1.8g", carbs: "9.5g", fat: "4.2g", fiber: "2.8g" },
+        ingredients: "Fresh shredded green cabbage, green chillies, mustard seeds, cumin seeds, turmeric, hing, fresh coriander, filtered groundnut oil, salt, urad dal (as per availability).",
+        prepNotes: "Sautéed lightly on low flame to preserve crunch and natural sweetness without turning soggy. Easy to digest.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Homestyle", "Low Calorie", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Cabbage [250ml]": {
+        name: "Cabbage (Patta Gobhi)",
+        icon: "🥬",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~210 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Shredded tender cabbage sauteed with mild green chillies, urad dal (split black gram), and mustard tempering",
+        calories: 210,
+        macros: { protein: "4.5g", carbs: "24.0g", fat: "10.5g", fiber: "7.0g" },
+        ingredients: "Fresh shredded green cabbage, green chillies, mustard seeds, cumin seeds, turmeric, hing, fresh coriander, filtered groundnut oil, salt, urad dal (as per availability).",
+        prepNotes: "Sautéed lightly on low flame to preserve crunch and natural sweetness without turning soggy. Easy to digest.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Homestyle", "Low Calorie", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Cabbage": {
+        name: "Cabbage (Patta Gobhi)",
+        icon: "🥬",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~85 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Shredded tender cabbage sauteed with mild green chillies, urad dal (split black gram), and mustard tempering",
+        calories: 85,
+        macros: { protein: "1.8g", carbs: "9.5g", fat: "4.2g", fiber: "2.8g" },
+        ingredients: "Fresh shredded green cabbage, green chillies, mustard seeds, cumin seeds, turmeric, hing, fresh coriander, filtered groundnut oil, salt, urad dal (as per availability).",
+        prepNotes: "Sautéed lightly on low flame to preserve crunch and natural sweetness without turning soggy. Easy to digest.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Homestyle", "Low Calorie", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 2. Sukha Aloo (Aloo Kanda / Kachre)
+      "Sukha Aloo [100ml]": {
+        name: "Sukha Aloo (Aloo Kanda / Kachre)",
+        icon: "🥔",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Boiled Potato / Diced potatoes tossed with roasted jeera, turmeric, and fresh coriander, onion",
+        calories: 120,
+        macros: { protein: "2.2g", carbs: "19.5g", fat: "4.0g", fiber: "2.2g" },
+        ingredients: "Diced boiled potatoes, onions, cumin seeds (jeera), green chillies, turmeric, curry leaves, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Classical homestyle jeera aloo with a dry golden sauté and aromatic tempering.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Energy Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Sukha Aloo [250ml]": {
+        name: "Sukha Aloo (Aloo Kanda / Kachre)",
+        icon: "🥔",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~295 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Boiled Potato / Diced potatoes tossed with roasted jeera, turmeric, and fresh coriander, onion",
+        calories: 295,
+        macros: { protein: "5.5g", carbs: "48.0g", fat: "10.0g", fiber: "5.5g" },
+        ingredients: "Diced boiled potatoes, onions, cumin seeds (jeera), green chillies, turmeric, curry leaves, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Classical homestyle jeera aloo with a dry golden sauté and aromatic tempering.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Energy Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Aloo [100ml]": {
+        name: "Sukha Aloo (Aloo Kanda / Kachre)",
+        icon: "🥔",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Boiled Potato / Diced potatoes tossed with roasted jeera, turmeric, and fresh coriander, onion",
+        calories: 120,
+        macros: { protein: "2.2g", carbs: "19.5g", fat: "4.0g", fiber: "2.2g" },
+        ingredients: "Diced boiled potatoes, onions, cumin seeds (jeera), green chillies, turmeric, curry leaves, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Classical homestyle jeera aloo with a dry golden sauté and aromatic tempering.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Energy Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Aloo [250ml]": {
+        name: "Sukha Aloo (Aloo Kanda / Kachre)",
+        icon: "🥔",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~295 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Boiled Potato / Diced potatoes tossed with roasted jeera, turmeric, and fresh coriander, onion",
+        calories: 295,
+        macros: { protein: "5.5g", carbs: "48.0g", fat: "10.0g", fiber: "5.5g" },
+        ingredients: "Diced boiled potatoes, onions, cumin seeds (jeera), green chillies, turmeric, curry leaves, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Classical homestyle jeera aloo with a dry golden sauté and aromatic tempering.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Energy Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Sukha Aloo": {
+        name: "Sukha Aloo (Aloo Kanda / Kachre)",
+        icon: "🥔",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Boiled Potato / Diced potatoes tossed with roasted jeera, turmeric, and fresh coriander, onion",
+        calories: 120,
+        macros: { protein: "2.2g", carbs: "19.5g", fat: "4.0g", fiber: "2.2g" },
+        ingredients: "Diced boiled potatoes, onions, cumin seeds (jeera), green chillies, turmeric, curry leaves, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Classical homestyle jeera aloo with a dry golden sauté and aromatic tempering.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Energy Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Aloo": {
+        name: "Sukha Aloo (Aloo Kanda / Kachre)",
+        icon: "🥔",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Boiled Potato / Diced potatoes tossed with roasted jeera, turmeric, and fresh coriander, onion",
+        calories: 120,
+        macros: { protein: "2.2g", carbs: "19.5g", fat: "4.0g", fiber: "2.2g" },
+        ingredients: "Diced boiled potatoes, onions, cumin seeds (jeera), green chillies, turmeric, curry leaves, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Classical homestyle jeera aloo with a dry golden sauté and aromatic tempering.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Comfort Classic", "Energy Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 3. Dal Kanda (Maharashtrian Chana Dal & Onion)
+      "Dal Kanda [100ml]": {
+        name: "Dal Kanda (Chana Dal & Onion)",
+        icon: "🌱",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 100ml · ~135 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Chana dal cooked dry with sweet sautéed tomatoes and onions and mild spices",
+        calories: 135,
+        macros: { protein: "5.8g", carbs: "18.0g", fat: "4.5g", fiber: "4.2g" },
+        ingredients: "Soaked split Bengal gram (Chana dal), finely chopped onions, coconut, ginger-garlic paste, red chilli powder, turmeric, mustard, cumin, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Dal is gently steamed so each grain stays separate and soft without becoming mushy. Protein-dense and pairs perfectly with Bhakri or Chapati.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Protein Rich", "Maharashtrian Classic", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Dal Kanda [250ml]": {
+        name: "Dal Kanda (Chana Dal & Onion)",
+        icon: "🌱",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 250ml · ~330 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Chana dal cooked dry with sweet sautéed tomatoes and onions and mild spices",
+        calories: 330,
+        macros: { protein: "14.5g", carbs: "44.0g", fat: "11.0g", fiber: "10.5g" },
+        ingredients: "Soaked split Bengal gram (Chana dal), finely chopped onions, coconut, ginger-garlic paste, red chilli powder, turmeric, mustard, cumin, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Dal is gently steamed so each grain stays separate and soft without becoming mushy. Protein-dense and pairs perfectly with Bhakri or Chapati.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Protein Rich", "Maharashtrian Classic", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Dal Kanda": {
+        name: "Dal Kanda (Chana Dal & Onion)",
+        icon: "🌱",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 ~135 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Chana dal cooked dry with sweet sautéed tomatoes and onions and mild spices",
+        calories: 135,
+        macros: { protein: "5.8g", carbs: "18.0g", fat: "4.5g", fiber: "4.2g" },
+        ingredients: "Soaked split Bengal gram (Chana dal), finely chopped onions, coconut, ginger-garlic paste, red chilli powder, turmeric, mustard, cumin, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Dal is gently steamed so each grain stays separate and soft without becoming mushy. Protein-dense and pairs perfectly with Bhakri or Chapati.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Protein Rich", "Maharashtrian Classic", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 4. Bhindi (Okra)
+      "Bhindi [100ml]": {
+        name: "Bhindi (Okra)",
+        icon: "🌿",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~95 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Non-sticky, tender sliced ladyfinger sautéed with onions and dry spices",
+        calories: 95,
+        macros: { protein: "2.0g", carbs: "11.0g", fat: "4.8g", fiber: "3.5g" },
+        ingredients: "Fresh ladyfinger (Bhindi), sliced onions, cumin seeds, coriander powder, turmeric, red chilli powder, amchur (dry mango powder), filtered groundnut oil, salt.",
+        prepNotes: "Prepared with gentle dry roasting so bhindi retains its vibrant green color with zero stickiness.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Fiber Rich", "Homestyle Favorite", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Bhindi [250ml]": {
+        name: "Bhindi (Okra)",
+        icon: "🌿",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~235 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Non-sticky, tender sliced ladyfinger sautéed with onions and dry spices",
+        calories: 235,
+        macros: { protein: "5.0g", carbs: "27.5g", fat: "12.0g", fiber: "8.8g" },
+        ingredients: "Fresh ladyfinger (Bhindi), sliced onions, cumin seeds, coriander powder, turmeric, red chilli powder, amchur (dry mango powder), filtered groundnut oil, salt.",
+        prepNotes: "Prepared with gentle dry roasting so bhindi retains its vibrant green color with zero stickiness.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Fiber Rich", "Homestyle Favorite", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Bhindi": {
+        name: "Bhindi (Okra)",
+        icon: "🌿",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~95 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Non-sticky, tender sliced ladyfinger sautéed with onions and dry spices",
+        calories: 95,
+        macros: { protein: "2.0g", carbs: "11.0g", fat: "4.8g", fiber: "3.5g" },
+        ingredients: "Fresh ladyfinger (Bhindi), sliced onions, cumin seeds, coriander powder, turmeric, red chilli powder, amchur (dry mango powder), filtered groundnut oil, salt.",
+        prepNotes: "Prepared with gentle dry roasting so bhindi retains its vibrant green color with zero stickiness.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Fiber Rich", "Homestyle Favorite", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 5. Mix Veg (Dry)
+      "Mix Veg (Dry) [100ml]": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 100ml · ~90 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 90,
+        macros: { protein: "2.4g", carbs: "12.5g", fat: "3.8g", fiber: "3.2g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix Veg (Dry) [250ml]": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 250ml · ~225 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 225,
+        macros: { protein: "6.0g", carbs: "31.0g", fat: "9.5g", fiber: "8.0g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix Veg [100ml]": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 100ml · ~90 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 90,
+        macros: { protein: "2.4g", carbs: "12.5g", fat: "3.8g", fiber: "3.2g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix Veg [250ml]": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 250ml · ~225 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 225,
+        macros: { protein: "6.0g", carbs: "31.0g", fat: "9.5g", fiber: "8.0g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix veg [100ml]": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 100ml · ~90 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 90,
+        macros: { protein: "2.4g", carbs: "12.5g", fat: "3.8g", fiber: "3.2g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix veg [250ml]": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 250ml · ~225 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 225,
+        macros: { protein: "6.0g", carbs: "31.0g", fat: "9.5g", fiber: "8.0g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Mix Veg": {
+        name: "Mix Veg (Dry)",
+        icon: "🥗",
+        category: "Wholesome Seasonal Sabji",
+        pillText: "🥣 ~90 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Medley of colorful seasonal vegetables sautéed in light homestyle masala",
+        calories: 90,
+        macros: { protein: "2.4g", carbs: "12.5g", fat: "3.8g", fiber: "3.2g" },
+        ingredients: "Diced carrots, French beans, green peas, potatoes, cauliflower, capsicum, tomatoes, corn, cumin, turmeric, coriander powder, garam masala, filtered groundnut oil, salt.",
+        prepNotes: "Balanced blend of fresh seasonal market vegetables, lightly spiced to retain natural flavors and nutrition.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Balanced Diet", "Seasonal Veggies", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 6. Matki Masala (Sprouted Moth Beans Dry)
+      "Matki Masala [100ml]": {
+        name: "Matki Masala",
+        icon: "🌱",
+        category: "Protein-Rich Sprouted Legume Sabji",
+        pillText: "🥣 100ml · ~125 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender sprouted moth beans dry-sautéed with tomatoes and onions, curry leaves, and spices",
+        calories: 125,
+        macros: { protein: "6.5g", carbs: "17.0g", fat: "3.5g", fiber: "4.8g" },
+        ingredients: "Fresh house-sprouted matki (moth beans), chopped onions, tomatoes, mustard seeds, cumin, curry leaves, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Sprouted fresh for maximum bioavailability and digestion. Packed with plant protein and dietary fiber.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "Sprouted Goodness", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki Masala [250ml]": {
+        name: "Matki Masala",
+        icon: "🌱",
+        category: "Protein-Rich Sprouted Legume Sabji",
+        pillText: "🥣 250ml · ~310 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender sprouted moth beans dry-sautéed with tomatoes and onions, curry leaves, and spices",
+        calories: 310,
+        macros: { protein: "16.0g", carbs: "42.0g", fat: "8.8g", fiber: "12.0g" },
+        ingredients: "Fresh house-sprouted matki (moth beans), chopped onions, tomatoes, mustard seeds, cumin, curry leaves, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Sprouted fresh for maximum bioavailability and digestion. Packed with plant protein and dietary fiber.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "Sprouted Goodness", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki masala [100ml]": {
+        name: "Matki Masala",
+        icon: "🌱",
+        category: "Protein-Rich Sprouted Legume Sabji",
+        pillText: "🥣 100ml · ~125 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender sprouted moth beans dry-sautéed with tomatoes and onions, curry leaves, and spices",
+        calories: 125,
+        macros: { protein: "6.5g", carbs: "17.0g", fat: "3.5g", fiber: "4.8g" },
+        ingredients: "Fresh house-sprouted matki (moth beans), chopped onions, tomatoes, mustard seeds, cumin, curry leaves, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Sprouted fresh for maximum bioavailability and digestion. Packed with plant protein and dietary fiber.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "Sprouted Goodness", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki masala [250ml]": {
+        name: "Matki Masala",
+        icon: "🌱",
+        category: "Protein-Rich Sprouted Legume Sabji",
+        pillText: "🥣 250ml · ~310 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender sprouted moth beans dry-sautéed with tomatoes and onions, curry leaves, and spices",
+        calories: 310,
+        macros: { protein: "16.0g", carbs: "42.0g", fat: "8.8g", fiber: "12.0g" },
+        ingredients: "Fresh house-sprouted matki (moth beans), chopped onions, tomatoes, mustard seeds, cumin, curry leaves, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Sprouted fresh for maximum bioavailability and digestion. Packed with plant protein and dietary fiber.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "Sprouted Goodness", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki Masala": {
+        name: "Matki Masala",
+        icon: "🌱",
+        category: "Protein-Rich Sprouted Legume Sabji",
+        pillText: "🥣 ~125 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender sprouted moth beans dry-sautéed with tomatoes and onions, curry leaves, and spices",
+        calories: 125,
+        macros: { protein: "6.5g", carbs: "17.0g", fat: "3.5g", fiber: "4.8g" },
+        ingredients: "Fresh house-sprouted matki (moth beans), chopped onions, tomatoes, mustard seeds, cumin, curry leaves, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Sprouted fresh for maximum bioavailability and digestion. Packed with plant protein and dietary fiber.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "Sprouted Goodness", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Matki masala": {
+        name: "Matki Masala",
+        icon: "🌱",
+        category: "Protein-Rich Sprouted Legume Sabji",
+        pillText: "🥣 ~125 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender sprouted moth beans dry-sautéed with tomatoes and onions, curry leaves, and spices",
+        calories: 125,
+        macros: { protein: "6.5g", carbs: "17.0g", fat: "3.5g", fiber: "4.8g" },
+        ingredients: "Fresh house-sprouted matki (moth beans), chopped onions, tomatoes, mustard seeds, cumin, curry leaves, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Sprouted fresh for maximum bioavailability and digestion. Packed with plant protein and dietary fiber.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "High Fiber", "Sprouted Goodness", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 7. Sev Tomato (Sev Tamatar)
+      "Sev Tomato [100ml]": {
+        name: "Sev Tomato (Sev Tamatar)",
+        icon: "🍅",
+        category: "Sweet & Tangy Dry/Semi-Dry Sabji",
+        pillText: "🥣 100ml · ~130 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Juicy spiced tomato reduction tossed with crunchy sev",
+        calories: 130,
+        macros: { protein: "3.2g", carbs: "15.0g", fat: "6.5g", fiber: "2.5g" },
+        ingredients: "Ripe farm tomatoes, crunchy gram flour sev, ginger, cumin, mustard seeds, turmeric, red chilli, a touch of jaggery, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Balanced sweet, tangy, and mildly spicy tomato base. Sev adds texture and flavor.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Tangy & Flavorful", "Popular Classic", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Sev Tomato [250ml]": {
+        name: "Sev Tomato (Sev Tamatar)",
+        icon: "🍅",
+        category: "Sweet & Tangy Dry/Semi-Dry Sabji",
+        pillText: "🥣 250ml · ~320 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Juicy spiced tomato reduction tossed with crunchy sev",
+        calories: 320,
+        macros: { protein: "8.0g", carbs: "37.0g", fat: "16.0g", fiber: "6.2g" },
+        ingredients: "Ripe farm tomatoes, crunchy gram flour sev, ginger, cumin, mustard seeds, turmeric, red chilli, a touch of jaggery, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Balanced sweet, tangy, and mildly spicy tomato base. Sev adds texture and flavor.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Tangy & Flavorful", "Popular Classic", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Sev tomato [100ml]": {
+        name: "Sev Tomato (Sev Tamatar)",
+        icon: "🍅",
+        category: "Sweet & Tangy Dry/Semi-Dry Sabji",
+        pillText: "🥣 100ml · ~130 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Juicy spiced tomato reduction tossed with crunchy sev",
+        calories: 130,
+        macros: { protein: "3.2g", carbs: "15.0g", fat: "6.5g", fiber: "2.5g" },
+        ingredients: "Ripe farm tomatoes, crunchy gram flour sev, ginger, cumin, mustard seeds, turmeric, red chilli, a touch of jaggery, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Balanced sweet, tangy, and mildly spicy tomato base. Sev adds texture and flavor.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Tangy & Flavorful", "Popular Classic", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Sev tomato [250ml]": {
+        name: "Sev Tomato (Sev Tamatar)",
+        icon: "🍅",
+        category: "Sweet & Tangy Dry/Semi-Dry Sabji",
+        pillText: "🥣 250ml · ~320 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Juicy spiced tomato reduction tossed with crunchy sev",
+        calories: 320,
+        macros: { protein: "8.0g", carbs: "37.0g", fat: "16.0g", fiber: "6.2g" },
+        ingredients: "Ripe farm tomatoes, crunchy gram flour sev, ginger, cumin, mustard seeds, turmeric, red chilli, a touch of jaggery, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Balanced sweet, tangy, and mildly spicy tomato base. Sev adds texture and flavor.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Tangy & Flavorful", "Popular Classic", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Sev Tomato": {
+        name: "Sev Tomato (Sev Tamatar)",
+        icon: "🍅",
+        category: "Sweet & Tangy Dry/Semi-Dry Sabji",
+        pillText: "🥣 ~130 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Juicy spiced tomato reduction tossed with crunchy sev",
+        calories: 130,
+        macros: { protein: "3.2g", carbs: "15.0g", fat: "6.5g", fiber: "2.5g" },
+        ingredients: "Ripe farm tomatoes, crunchy gram flour sev, ginger, cumin, mustard seeds, turmeric, red chilli, a touch of jaggery, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Balanced sweet, tangy, and mildly spicy tomato base. Sev adds texture and flavor.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Tangy & Flavorful", "Popular Classic", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+      "Sev tomato": {
+        name: "Sev Tomato (Sev Tamatar)",
+        icon: "🍅",
+        category: "Sweet & Tangy Dry/Semi-Dry Sabji",
+        pillText: "🥣 ~130 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Juicy spiced tomato reduction tossed with crunchy sev",
+        calories: 130,
+        macros: { protein: "3.2g", carbs: "15.0g", fat: "6.5g", fiber: "2.5g" },
+        ingredients: "Ripe farm tomatoes, crunchy gram flour sev, ginger, cumin, mustard seeds, turmeric, red chilli, a touch of jaggery, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Balanced sweet, tangy, and mildly spicy tomato base. Sev adds texture and flavor.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Tangy & Flavorful", "Popular Classic", "Filtered Groundnut Oil", "Vegetarian"]
+      },
+
+      // 8. Kanda Besan
+      "Kanda Besan [100ml]": {
+        name: "Kanda Besan",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 100ml · ~140 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Semi-dry spiced roasted gram flour (besan) cooked with generous sautéed onions",
+        calories: 140,
+        macros: { protein: "5.5g", carbs: "16.5g", fat: "6.2g", fiber: "3.8g" },
+        ingredients: "Roasted Bengal gram flour (Besan), sliced onions, crushed garlic, red chilly powder, mustard seeds, cumin, curry leaves, turmeric, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked in a traditional kadai so the besan is fully roasted with zero raw taste. The ultimate soul food paired with Jowar or Bajra Bhakri.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Heritage", "Bhakri's Best Friend", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kanda Besan [250ml]": {
+        name: "Kanda Besan",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 250ml · ~345 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Semi-dry spiced roasted gram flour (besan) cooked with generous sautéed onions",
+        calories: 345,
+        macros: { protein: "13.5g", carbs: "41.0g", fat: "15.5g", fiber: "9.5g" },
+        ingredients: "Roasted Bengal gram flour (Besan), sliced onions, crushed garlic, red chilly powder, mustard seeds, cumin, curry leaves, turmeric, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked in a traditional kadai so the besan is fully roasted with zero raw taste. The ultimate soul food paired with Jowar or Bajra Bhakri.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Heritage", "Bhakri's Best Friend", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kanda besan [100ml]": {
+        name: "Kanda Besan",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 100ml · ~140 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Semi-dry spiced roasted gram flour (besan) cooked with generous sautéed onions",
+        calories: 140,
+        macros: { protein: "5.5g", carbs: "16.5g", fat: "6.2g", fiber: "3.8g" },
+        ingredients: "Roasted Bengal gram flour (Besan), sliced onions, crushed garlic, red chilly powder, mustard seeds, cumin, curry leaves, turmeric, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked in a traditional kadai so the besan is fully roasted with zero raw taste. The ultimate soul food paired with Jowar or Bajra Bhakri.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Heritage", "Bhakri's Best Friend", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kanda besan [250ml]": {
+        name: "Kanda Besan",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 250ml · ~345 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Semi-dry spiced roasted gram flour (besan) cooked with generous sautéed onions",
+        calories: 345,
+        macros: { protein: "13.5g", carbs: "41.0g", fat: "15.5g", fiber: "9.5g" },
+        ingredients: "Roasted Bengal gram flour (Besan), sliced onions, crushed garlic, red chilly powder, mustard seeds, cumin, curry leaves, turmeric, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked in a traditional kadai so the besan is fully roasted with zero raw taste. The ultimate soul food paired with Jowar or Bajra Bhakri.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Heritage", "Bhakri's Best Friend", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kanda Besan": {
+        name: "Kanda Besan",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 ~140 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Semi-dry spiced roasted gram flour (besan) cooked with generous sautéed onions",
+        calories: 140,
+        macros: { protein: "5.5g", carbs: "16.5g", fat: "6.2g", fiber: "3.8g" },
+        ingredients: "Roasted Bengal gram flour (Besan), sliced onions, crushed garlic, red chilly powder, mustard seeds, cumin, curry leaves, turmeric, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked in a traditional kadai so the besan is fully roasted with zero raw taste. The ultimate soul food paired with Jowar or Bajra Bhakri.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Heritage", "Bhakri's Best Friend", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Kanda besan": {
+        name: "Kanda Besan",
+        icon: "🥣",
+        category: "Traditional Maharashtrian Dry Sabji",
+        pillText: "🥣 ~140 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Semi-dry spiced roasted gram flour (besan) cooked with generous sautéed onions",
+        calories: 140,
+        macros: { protein: "5.5g", carbs: "16.5g", fat: "6.2g", fiber: "3.8g" },
+        ingredients: "Roasted Bengal gram flour (Besan), sliced onions, crushed garlic, red chilly powder, mustard seeds, cumin, curry leaves, turmeric, hing, fresh coriander, filtered groundnut oil, salt.",
+        prepNotes: "Slow-cooked in a traditional kadai so the besan is fully roasted with zero raw taste. The ultimate soul food paired with Jowar or Bajra Bhakri.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Heritage", "Bhakri's Best Friend", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 9. French Beans (Beans Masala)
+      "French Beans [100ml]": {
+        name: "French Beans (Beans Masala)",
+        icon: "🫘",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~80 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Finely chopped crisp tender French beans tossed with mild spices and grated coconut / groundnuts",
+        calories: 80,
+        macros: { protein: "2.0g", carbs: "10.5g", fat: "3.5g", fiber: "3.2g" },
+        ingredients: "Fresh tender French beans, mustard seeds, cumin seeds, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Steamed lightly and sautéed to retain crispness and vibrant green chlorophyll. Light and healthy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Low Calorie", "High Fiber", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "French Beans [250ml]": {
+        name: "French Beans (Beans Masala)",
+        icon: "🫘",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~200 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Finely chopped crisp tender French beans tossed with mild spices and grated coconut / groundnuts",
+        calories: 200,
+        macros: { protein: "5.0g", carbs: "26.0g", fat: "8.8g", fiber: "8.0g" },
+        ingredients: "Fresh tender French beans, mustard seeds, cumin seeds, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Steamed lightly and sautéed to retain crispness and vibrant green chlorophyll. Light and healthy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Low Calorie", "High Fiber", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Beans [100ml]": {
+        name: "French Beans (Beans Masala)",
+        icon: "🫘",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~80 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Finely chopped crisp tender French beans tossed with mild spices and grated coconut / groundnuts",
+        calories: 80,
+        macros: { protein: "2.0g", carbs: "10.5g", fat: "3.5g", fiber: "3.2g" },
+        ingredients: "Fresh tender French beans, mustard seeds, cumin seeds, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Steamed lightly and sautéed to retain crispness and vibrant green chlorophyll. Light and healthy.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Low Calorie", "High Fiber", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Beans [250ml]": {
+        name: "French Beans (Beans Masala)",
+        icon: "🫘",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~200 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Finely chopped crisp tender French beans tossed with mild spices and grated coconut / groundnuts",
+        calories: 200,
+        macros: { protein: "5.0g", carbs: "26.0g", fat: "8.8g", fiber: "8.0g" },
+        ingredients: "Fresh tender French beans, mustard seeds, cumin seeds, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Steamed lightly and sautéed to retain crispness and vibrant green chlorophyll. Light and healthy.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Low Calorie", "High Fiber", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "French Beans": {
+        name: "French Beans (Beans Masala)",
+        icon: "🫘",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~80 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Finely chopped crisp tender French beans tossed with mild spices and grated coconut / groundnuts",
+        calories: 80,
+        macros: { protein: "2.0g", carbs: "10.5g", fat: "3.5g", fiber: "3.2g" },
+        ingredients: "Fresh tender French beans, mustard seeds, cumin seeds, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Steamed lightly and sautéed to retain crispness and vibrant green chlorophyll. Light and healthy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Low Calorie", "High Fiber", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Beans": {
+        name: "French Beans (Beans Masala)",
+        icon: "🫘",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~80 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Finely chopped crisp tender French beans tossed with mild spices and grated coconut / groundnuts",
+        calories: 80,
+        macros: { protein: "2.0g", carbs: "10.5g", fat: "3.5g", fiber: "3.2g" },
+        ingredients: "Fresh tender French beans, mustard seeds, cumin seeds, green chillies, turmeric, hing, filtered groundnut oil, salt.",
+        prepNotes: "Steamed lightly and sautéed to retain crispness and vibrant green chlorophyll. Light and healthy.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Low Calorie", "High Fiber", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 10. Cauliflower (Gobi Masala)
+      "Cauliflower [100ml]": {
+        name: "Cauliflower (Gobi Masala)",
+        icon: "🥦",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~85 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Tender cauliflower florets sautéed with potatoes, green peas, tomatoes and warm spices",
+        calories: 85,
+        macros: { protein: "2.2g", carbs: "11.5g", fat: "3.8g", fiber: "2.8g" },
+        ingredients: "Fresh cauliflower florets, diced potatoes/peas, ginger, cumin seeds, turmeric, coriander-cumin powder, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Florets are thoroughly washed, blanched, and pan-cooked so they remain whole and flavorful without turning soft.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Homestyle Comfort", "Low Carb", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Cauliflower [250ml]": {
+        name: "Cauliflower (Gobi Masala)",
+        icon: "🥦",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~215 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Tender cauliflower florets sautéed with potatoes, green peas, tomatoes and warm spices",
+        calories: 215,
+        macros: { protein: "5.5g", carbs: "29.0g", fat: "9.5g", fiber: "7.0g" },
+        ingredients: "Fresh cauliflower florets, diced potatoes/peas, ginger, cumin seeds, turmeric, coriander-cumin powder, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Florets are thoroughly washed, blanched, and pan-cooked so they remain whole and flavorful without turning soft.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Homestyle Comfort", "Low Carb", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Cauliflower": {
+        name: "Cauliflower (Gobi Masala)",
+        icon: "🥦",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~85 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Tender cauliflower florets sautéed with potatoes, green peas, tomatoes and warm spices",
+        calories: 85,
+        macros: { protein: "2.2g", carbs: "11.5g", fat: "3.8g", fiber: "2.8g" },
+        ingredients: "Fresh cauliflower florets, diced potatoes/peas, ginger, cumin seeds, turmeric, coriander-cumin powder, filtered groundnut oil, fresh coriander, salt.",
+        prepNotes: "Florets are thoroughly washed, blanched, and pan-cooked so they remain whole and flavorful without turning soft.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Homestyle Comfort", "Low Carb", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 11. Shimla Besan
+      "Shimla Besan [100ml]": {
+        name: "Shimla Besan",
+        icon: "🫑",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Diced green capsicum coated with spiced roasted besan (gram flour) crumble",
+        calories: 120,
+        macros: { protein: "4.8g", carbs: "14.0g", fat: "5.2g", fiber: "3.2g" },
+        ingredients: "Fresh green capsicum (bell pepper), roasted besan (gram flour), mustard seeds, cumin, turmeric, red chilli, hing, filtered groundnut oil, salt.",
+        prepNotes: "Capsicum maintains a gentle crunch while the roasted besan absorbs the aromatics, creating a flavorful coating.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Favorite", "Protein Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Shimla Besan [250ml]": {
+        name: "Shimla Besan",
+        icon: "🫑",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~295 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Diced green capsicum coated with spiced roasted besan (gram flour) crumble",
+        calories: 295,
+        macros: { protein: "12.0g", carbs: "35.0g", fat: "13.0g", fiber: "8.0g" },
+        ingredients: "Fresh green capsicum (bell pepper), roasted besan (gram flour), mustard seeds, cumin, turmeric, red chilli, hing, filtered groundnut oil, salt.",
+        prepNotes: "Capsicum maintains a gentle crunch while the roasted besan absorbs the aromatics, creating a flavorful coating.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Favorite", "Protein Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Shimla besan [100ml]": {
+        name: "Shimla Besan",
+        icon: "🫑",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 100ml · ~120 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Diced green capsicum coated with spiced roasted besan (gram flour) crumble",
+        calories: 120,
+        macros: { protein: "4.8g", carbs: "14.0g", fat: "5.2g", fiber: "3.2g" },
+        ingredients: "Fresh green capsicum (bell pepper), roasted besan (gram flour), mustard seeds, cumin, turmeric, red chilli, hing, filtered groundnut oil, salt.",
+        prepNotes: "Capsicum maintains a gentle crunch while the roasted besan absorbs the aromatics, creating a flavorful coating.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Favorite", "Protein Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Shimla besan [250ml]": {
+        name: "Shimla Besan",
+        icon: "🫑",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 250ml · ~295 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Diced green capsicum coated with spiced roasted besan (gram flour) crumble",
+        calories: 295,
+        macros: { protein: "12.0g", carbs: "35.0g", fat: "13.0g", fiber: "8.0g" },
+        ingredients: "Fresh green capsicum (bell pepper), roasted besan (gram flour), mustard seeds, cumin, turmeric, red chilli, hing, filtered groundnut oil, salt.",
+        prepNotes: "Capsicum maintains a gentle crunch while the roasted besan absorbs the aromatics, creating a flavorful coating.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["Maharashtrian Favorite", "Protein Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Shimla Besan": {
+        name: "Shimla Besan",
+        icon: "🫑",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Diced green capsicum coated with spiced roasted besan (gram flour) crumble",
+        calories: 120,
+        macros: { protein: "4.8g", carbs: "14.0g", fat: "5.2g", fiber: "3.2g" },
+        ingredients: "Fresh green capsicum (bell pepper), roasted besan (gram flour), mustard seeds, cumin, turmeric, red chilli, hing, filtered groundnut oil, salt.",
+        prepNotes: "Capsicum maintains a gentle crunch while the roasted besan absorbs the aromatics, creating a flavorful coating.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Favorite", "Protein Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Shimla besan": {
+        name: "Shimla Besan",
+        icon: "🫑",
+        category: "Homestyle Dry Sabji",
+        pillText: "🥣 ~120 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Diced green capsicum coated with spiced roasted besan (gram flour) crumble",
+        calories: 120,
+        macros: { protein: "4.8g", carbs: "14.0g", fat: "5.2g", fiber: "3.2g" },
+        ingredients: "Fresh green capsicum (bell pepper), roasted besan (gram flour), mustard seeds, cumin, turmeric, red chilli, hing, filtered groundnut oil, salt.",
+        prepNotes: "Capsicum maintains a gentle crunch while the roasted besan absorbs the aromatics, creating a flavorful coating.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["Maharashtrian Favorite", "Protein Rich", "Filtered Groundnut Oil", "Vegan"]
+      },
+
+      // 12. Green Moong Masala (Dry Sabut Moong)
+      "Green Moong Masala [100ml]": {
+        name: "Green Moong Masala",
+        icon: "🌱",
+        category: "Protein-Dense Dry Sabji",
+        pillText: "🥣 100ml · ~130 kcal",
+        size: "100ml container",
+        weight: "",
+        thickness: "Soft cooked whole green gram tossed with onions, tomatoes, garlic, and homestyle spices",
+        calories: 130,
+        macros: { protein: "7.0g", carbs: "18.5g", fat: "3.2g", fiber: "4.5g" },
+        ingredients: "Whole green moong, chopped onions, tomatoes, crushed garlic, mustard seeds, cumin, curry leaves, turmeric, red chilli powder, filtered groundnut oil, salt.",
+        prepNotes: "Whole moong is slow-simmered until tender then tempered dry. High in clean plant protein and gentle on the stomach.",
+        packaging: "100ml food-grade leak-proof container.",
+        tags: ["High Protein", "Superfood", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green Moong Masala [250ml]": {
+        name: "Green Moong Masala",
+        icon: "🌱",
+        category: "Protein-Dense Dry Sabji",
+        pillText: "🥣 250ml · ~325 kcal",
+        size: "250ml container",
+        weight: "",
+        thickness: "Soft cooked whole green gram tossed with onions, tomatoes, garlic, and homestyle spices",
+        calories: 325,
+        macros: { protein: "17.5g", carbs: "46.0g", fat: "8.0g", fiber: "11.2g" },
+        ingredients: "Whole green moong, chopped onions, tomatoes, crushed garlic, mustard seeds, cumin, curry leaves, turmeric, red chilli powder, filtered groundnut oil, salt.",
+        prepNotes: "Whole moong is slow-simmered until tender then tempered dry. High in clean plant protein and gentle on the stomach.",
+        packaging: "250ml food-grade leak-proof container.",
+        tags: ["High Protein", "Superfood", "Filtered Groundnut Oil", "Vegan"]
+      },
+      "Green Moong Masala": {
+        name: "Green Moong Masala",
+        icon: "🌱",
+        category: "Protein-Dense Dry Sabji",
+        pillText: "🥣 ~130 kcal",
+        size: "Standard container",
+        weight: "",
+        thickness: "Soft cooked whole green gram tossed with onions, tomatoes, garlic, and homestyle spices",
+        calories: 130,
+        macros: { protein: "7.0g", carbs: "18.5g", fat: "3.2g", fiber: "4.5g" },
+        ingredients: "Whole green moong, chopped onions, tomatoes, crushed garlic, mustard seeds, cumin, curry leaves, turmeric, red chilli powder, filtered groundnut oil, salt.",
+        prepNotes: "Whole moong is slow-simmered until tender then tempered dry. High in clean plant protein and gentle on the stomach.",
+        packaging: "Food-grade leak-proof container.",
+        tags: ["High Protein", "Superfood", "Filtered Groundnut Oil", "Vegan"]
       },
       "Curry Sabji Mini [100ml]": {
         name: "Curry Sabji Mini",
@@ -5965,6 +6859,14 @@
       if (FOOD_CLARITY_DATA[key]) return FOOD_CLARITY_DATA[key];
       const stripped = String(key).replace(/\s*\[.*?\]/g, '').trim();
       if (FOOD_CLARITY_DATA[stripped]) return FOOD_CLARITY_DATA[stripped];
+      const lk = String(key).toLowerCase().trim();
+      const lkStripped = stripped.toLowerCase().trim();
+      for (const k in FOOD_CLARITY_DATA) {
+        const kl = k.toLowerCase().trim();
+        if (kl === lk || kl === lkStripped) {
+          return FOOD_CLARITY_DATA[k];
+        }
+      }
       return null;
     }
 
@@ -8141,9 +9043,20 @@
       // orders — owner rule). Admin-marked OOS still applies (genuine availability).
       const remaining  = (STOREFRONT === "LS") ? undefined : ((menu.units_remaining || {})[meal] || {})[colKey];
       const isStockOOS = (remaining !== undefined && remaining <= 0);
-      const isLowStock = (remaining !== undefined && remaining > 0 && remaining <= 10);
-      const clarity = getFoodClarity(colKey) || getFoodClarity(name);
-      const safeColKey = colKey.replace(/"/g, '&quot;');
+      let clarityKey = colKey;
+      if (colKey === "Dry Sabji Mini [100ml]") {
+        const dName = (meal === "Lunch" ? menu.lunch_dry : menu.dinner_dry) || "";
+        if (dName && getFoodClarity(dName.trim() + " [100ml]")) {
+          clarityKey = dName.trim() + " [100ml]";
+        }
+      } else if (colKey === "Dry Sabji Full [250ml]") {
+        const dName = (meal === "Lunch" ? menu.lunch_dry : menu.dinner_dry) || "";
+        if (dName && getFoodClarity(dName.trim() + " [250ml]")) {
+          clarityKey = dName.trim() + " [250ml]";
+        }
+      }
+      const clarity = getFoodClarity(clarityKey) || getFoodClarity(colKey) || getFoodClarity(name);
+      const safeColKey = clarityKey.replace(/"/g, '&quot;');
       const clarityPill = clarity ? `
         <div class="item-clarity-row">
           <button type="button" class="clarity-chip" onclick="event.stopPropagation(); showFoodClarityModal('${safeColKey}')" title="Tap to view size, calories & ingredients">
