@@ -108,7 +108,7 @@ SK_Orders · SK_Customers · SK_Wallet · SK_Daily_Menu · SK_Areas · SK_Refund
 Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec`
 
 ## Facts that get answered wrong from stale data
-- PRICING_V2 LIVE: Chapati 10, WO-Chapati 9, Phulka 8, Ghee Phulka 11, Bhakri 22, Sabji Mini 24/Full 48, Dal 24, Dal Fry 40, Rice 13, Salad 8, Curd 13. No market surcharge (Inflation_Surcharge = loyalty accrual only).
+- PRICING_V2 LIVE: Chapati 10 (8"), WO-Chapati 9 (8"), Phulka 8 (5–5.5"), Ghee Phulka 11 (5–5.5"), Bhakri 22 (10"), Sabji Mini 24 [100ml] / Full 48 [250ml], Dal 24 [200ml], Dal Fry 40 [200ml], Rice 13 [100g], Salad 8 [40g], Curd 13 [50g]. No market surcharge (Inflation_Surcharge = loyalty accrual only).
 - Cutoffs (verify live): B 7:00 / L 9:00 / D 16:30. Sundays closed. Caps: B 11 / L 24 / D 23.
 - Bulk plans PUBLIC: Week 6d 5% / 15-Day 13d 7.5% / Month 26d 10%; postpone 2+2 / 4+4 within 30 days; cancel forfeits that meal's bulk discount.
 - LS storefront: Ganga Serio Kharadi, wings A–G2 (A–D=Liviano, E1–G2=Serio), Lunch & Dinner only, free delivery, pickup at G2 804, unlisted page.
@@ -116,6 +116,36 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (September 2026)
+- **Food Clarity & Nutrition Transparency System (APP_VERSION v26.09.16.07)**
+  - **Full Catalog Transparency Across Both Storefronts (`docs/order.html` & `docs/Liviano-Serio.html`):**
+    - Integrated interactive micro-chips on item cards (e.g. `🥣 175g · ~245 kcal ⓘ`, `📏 8" · 🔥 104 kcal ⓘ`) that launch a mobile-optimized Food Clarity modal with 5 structured transparent sections: Physical Specs (Size/Dimension, Net Weight, Texture), Nutrition & Macros (Calories, Protein, Carbs, Fat, Fiber), Ingredients & Kitchen Notes, Packaging, and Disclaimer. Fully supports native light and dark theme styling.
+  - **Complete 45+ Item Catalog Covered:**
+    - **Breakfast (12 Items):** Kanda Poha [175g], Ghee Upma [200g], Sabudana Khichdi [200g], Ghee Sheera [200g], Thalipeeth (10", ~310 kcal), Paneer Paratha (8", 13g Pro), Aloo Paratha (8"), Methi Paratha (2 pcs), Palak Paratha (2 pcs), Tikhi Puri (1 pc) & Coriander Chutney (100ml), Steamed Idli (1 pc) & Coconut Chutney (100ml), Fresh Curd [50g].
+    - **Roti & Bhakri (6 Items):** Chapati (8", ~38g, 104 kcal, sunflower oil), Without Oil Chapati (8", ~35g, 85 kcal, zero oil), Phulka (5–5.5", ~28g, 72 kcal, flame puffed, zero oil), Ghee Phulka (5–5.5", ~31g, 102 kcal, flame puffed, pure cow ghee brushed), Jowar Bhakri (10", ~80g, 195 kcal, GF, 80% Jowar + 20% Rice), Bajra Bhakri (10", ~80g, 210 kcal, GF, 80% Bajra + 20% Rice).
+    - **12 Master Dry Sabjis:** Cabbage (Patta Gobhi), Sukha Aloo (Aloo Kanda / Kachre), Dal Kanda, Bhindi, Mix Veg, Matki Masala, Sev Tomato, Kanda Besan (Pithla / Zunka), French Beans, Cauliflower, Shimla Besan, Green Moong Masala. Standardized with Filtered Groundnut Oil, dual volume sizing (Mini 100ml & Full 250ml), and zero grams displayed in weight fields.
+    - **15 Master Curry Sabjis:** Shev Bhaji, Rajma, Chhole, Akha Masoor, Kofta Curry (dudhi/lauki dumplings pan-fried in sunflower oil, gravy in filtered groundnut oil with fresh curd/dahi), Palak Corn, Matki Usal / Rassa, Green Moong Curry, Chowli (Lobia), Kala Chana, Gavari, Aloo (Homestyle Aloo Rassa), Mix Veg Curry, Soyabean, Masoor. Standardized with Filtered Groundnut Oil and volume sizing.
+    - **Dal, Rice & Extras (5 Items):** Dal [200ml] (homestyle toor/moong tadka dal, 200ml container volume), Dal Fry [200ml] (pure cow ghee double-tempered, 200ml container volume), Rice [100g] (broken Basmati Mogra, steamed fluffy, zero oil), Salad [40g] (fresh diced cucumber, carrot, beetroot), Curd [50g] (fresh set probiotic dahi).
+  - **Dynamic Menu Cycle Resolution in `itemRow`:**
+    - Automated dynamic lookup in `itemRow` for Lunch & Dinner items: maps generic `Dry Sabji Mini [100ml]`, `Dry Sabji Full [250ml]`, `Curry Sabji Mini [100ml]`, and `Curry Sabji Full [250ml]` directly to that day's scheduled sabji from the 22-week menu cycle (`menu.lunch_dry`, `menu.lunch_curry`, `menu.dinner_dry`, `menu.dinner_curry`).
+    - Built-in disambiguation rules:
+      - `"Aloo"` on Curry maps to `Aloo (Homestyle Aloo Rassa)` (distinct from Dry Sukha Aloo).
+      - `"Mix Veg"` on Curry maps to `Mix Veg Curry` (distinct from Dry Mix Veg).
+      - `"Green Moong"` on Curry maps to `Green Moong Curry` (distinct from Dry Green Moong Masala).
+      - Case-insensitive fallback and comprehensive alias matching across both storefronts.
+  - **Volume vs. Weight Customer Clarification Note:**
+    - Standardized formal clarification note embedded within the **Size & Portion** card to resolve customer confusion between liquid volume capacity (ml) and food weight (grams):
+      - **100ml Portions:** *Portioned in a standard 100ml food-grade container (calibrated by 100ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies across sabjis based on vegetable density and moisture.*
+      - **200ml Portions (Dal & Dal Fry):** *Portioned in a standard 200ml food-grade container (calibrated by 200ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies based on lentil consistency and tempering.*
+      - **250ml Portions:** *Portioned in a standard 250ml food-grade container (calibrated by 250ml water volume capacity). Please note that volume (ml) and net weight (grams) are not identical — actual weight in grams naturally varies across sabjis based on vegetable density and gravy consistency.*
+  - **Universal Homestyle Disclaimer:**
+    - Every modal card includes the honest variation notice: *"We strive to provide transparent and accurate nutritional & ingredient details. As our food is prepared homestyle with fresh seasonal produce, slight natural variations in portions, weights, and values may occur."*
+  - **Cooking Oil & Ingredient Standards:**
+    - Sabjis & Gravies: Filtered Groundnut Oil exclusively.
+    - Chapatis, Parathas & Kofta Pan-Frying: Refined Sunflower Oil.
+    - Pure Cow Ghee: Ghee Upma, Sabudana Khichdi, Ghee Sheera, Ghee Phulka, Dal Fry.
+    - Zero Oil: Without Oil Chapati, Phulka, Jowar Bhakri, Bajra Bhakri, Steamed Idli, Rice.
+    - Local Marathi/Hindi Terminology used throughout (*kanda, tamatar, adrak-lasun, jeera, mohri, kadi patta, kothimbir, danyacha koot, vatan, rassa, dudhi/lauki*).
+  - **Bug Fix in LS `itemRow`:** Added missing `isLowStock` declaration in `Liviano-Serio.html` `itemRow` that previously threw a `ReferenceError`.
 - **Breakfast Combo Expansion & Dynamic Master Price Synchronization (CODE_VERSION 35.67)**
   - **Obsolete Combo Expansion (`03_Admin_Kitchen.gs` & `02_Orders_Menu.gs`):**
     - `standardizeBreakfastJson(rawJson, masterPriceMap)` expands historical combo plates into individual item pieces:
