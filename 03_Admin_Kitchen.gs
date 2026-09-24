@@ -1585,8 +1585,12 @@ function buildDeliveryRoute(days) {
       byMealDay[meal][od].push({ soc: soc, t: t });
     });
 
-    // Most-used raw spelling per canonical key → readable Society column.
+    // Canonical display name per key, falling back to most-used raw spelling.
     var prettyOf = function (soc) {
+      var canon = _getCanonicalSocietyDisplay(soc);
+      // _getCanonicalSocietyDisplay returns the key itself if no DISPLAY_TITLES entry,
+      // so fall back to the most-used raw spelling from orders for readability.
+      if (canon && canon !== soc) return canon;
       var m = prettyAcc[soc] || {};
       var best = "", n = -1;
       Object.keys(m).forEach(function (raw) { if (m[raw] > n) { best = raw; n = m[raw]; } });
@@ -1610,16 +1614,28 @@ function buildDeliveryRoute(days) {
           (posAcc[soc] = posAcc[soc] || []).push(seen[soc]);
         });
       });
+      // Confidence-weighted ranking: societies with few samples get blended
+      // toward mid-route (0.5) so a single lucky delivery can't claim rank #1.
+      // CONFIDENCE_THRESHOLD = minimum samples needed for full confidence (1.0).
+      var CONFIDENCE_THRESHOLD = 5;
+      var DEFAULT_POSITION = 0.5; // mid-route for low-confidence entries
       var stats = Object.keys(posAcc).map(function (soc) {
+        // Skip non-delivery entries (Self Pickup has no geographic position).
+        if (soc === "selfpickup" || soc === "self pickup") return null;
         var arr = posAcc[soc].slice().sort(function (a, b) { return a - b; });
         var mid = Math.floor(arr.length / 2);
         var med = (arr.length % 2) ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
-        return { soc: soc, med: med, samples: arr.length };
-      });
-      // Earlier median position → earlier in route. Ties: more samples first.
-      stats.sort(function (a, b) { return (a.med - b.med) || (b.samples - a.samples); });
+        // Blend median with default position based on sample confidence.
+        var confidence = Math.min(arr.length / CONFIDENCE_THRESHOLD, 1.0);
+        var blended = confidence * med + (1 - confidence) * DEFAULT_POSITION;
+        return { soc: soc, med: med, blended: blended, samples: arr.length };
+      }).filter(function (s) { return s !== null; });
+      // Sort by blended position (confidence-weighted). Ties: more samples first.
+      stats.sort(function (a, b) { return (a.blended - b.blended) || (b.samples - a.samples); });
       byMealRows[meal] = stats.map(function (s, i) {
-        // Society = readable most-used spelling; Key = canonical matching key.
+        // Society = canonical display name; Key = canonical matching key.
+        // Avg_Position shows the RAW median (unblended) for transparency;
+        // the sort order reflects the blended (confidence-weighted) ranking.
         return [prettyOf(s.soc), i + 1, Math.round(s.med * 1000) / 1000, s.samples, s.soc];
       });
     });
