@@ -995,15 +995,17 @@ function _countActiveMealOrders(rows, dateStr) {
     // VIP exemption: VIPs don't count towards the delivery limit at all
     const phoneTrim = String(r.Phone || "").trim();
     if (vips[phoneTrim]) continue;
+    // Metapercept slot-free exemption: 0 slots counted towards delivery limit
+    const cName = String(r.Customer_Name || "").toLowerCase();
+    if (phoneTrim === "7517913755" || cName.indexOf("metapercept") !== -1) continue;
     // The cap is a DELIVERY limit — Self Pickup / Porter orders don't use a
     // delivery slot, so they neither count toward the cap nor get blocked by it.
-    // Shree Laxmi Vihar society orders and Momstory (Sahyadari Momstory Hospital)
-    // orders also don't consume a delivery slot (building beside our kitchen, 0 effort desk drop)
-    // — excluded from the count entirely.
+    // Shree Laxmi Vihar society, Momstory, and Metapercept orders also don't consume
+    // a delivery slot (0 effort desk drop / exempt) — excluded from the count entirely.
     const ar = String(r.Area || "").toLowerCase();
     if (ar.indexOf("pickup") !== -1 || ar === "porter") continue;
     const addrFull = _normSocietyBase(String(r.Society || "") + " " + String(r.Full_Address || "") + " " + String(r.Flat || "") + " " + String(r.Landmark || ""));
-    if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1) continue;
+    if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1 || addrFull.indexOf("metapercept") !== -1) continue;
     const mt = String(r.Meal_Type || "").trim();
     if (c[mt] === undefined) continue;
     if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; }
@@ -2745,7 +2747,8 @@ function _submitOrderInternal(body) {
           // "Enkin 2" …) — must stay in sync with _countActiveMealOrders + order.html.
           const _isEnkinOrderW = String(profile.name || "").toLowerCase().indexOf("enkin") !== -1;
           const _isFnFOrderW = !!(profile.isFnF === true || String(profile.isFnF) === "true");
-          if (!_isEnkinOrderW && !_isFnFOrderW) {
+          const _isMetaperceptW = (String(profile.phone || "").trim() === "7517913755" || String(profile.name || "").toLowerCase().indexOf("metapercept") !== -1);
+          if (!_isEnkinOrderW && !_isFnFOrderW && !_isMetaperceptW) {
           // Cap is a DELIVERY limit. Self Pickup / Porter bypass it ONLY when the
           // admin left alternatives ON for this meal (default). If turned OFF, the
           // meal is a hard sold-out — block delivery AND pickup/porter.
@@ -2780,10 +2783,10 @@ function _submitOrderInternal(body) {
             // Owner-approved exempt LOCATIONS (WeWork; Cybercity Magarpatta towers
             // 1–12 — customers collect at the gate) keep delivery even at the cap.
             const _locExemptW = _isCapExemptLocation(_m.society || profile.society, _m.area || profile.area);
-            // Shree Laxmi Vihar society & Momstory — don't count toward cap AND never blocked
+            // Shree Laxmi Vihar society, Momstory & Metapercept — don't count toward cap AND never blocked
             // (owner-approved, synced with _countActiveMealOrders).
             const _exAddrW = _normSocietyBase(String(_m.society || profile.society || "") + " " + String(_m.address || profile.address || profile.full_address || "") + " " + String(_m.flat || profile.flat || "") + " " + String(_m.landmark || profile.landmark || ""));
-            const _isExemptLocW = _exAddrW.indexOf("shreelaxmivihar") !== -1 || _exAddrW.indexOf("momstory") !== -1;
+            const _isExemptLocW = _exAddrW.indexOf("shreelaxmivihar") !== -1 || _exAddrW.indexOf("momstory") !== -1 || _exAddrW.indexOf("metapercept") !== -1;
             // Per-meal bypass CAPPED MEAL keeps delivery even at the cap (big orders
             // are worth the slot) — but only while alternatives are ON; a cap_alt=false
             // HARD close (kitchen out of capacity) is never bypassed. Uses the

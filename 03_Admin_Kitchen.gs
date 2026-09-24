@@ -86,14 +86,17 @@ function _getAdminDataUncached() {
     if (mealOrderCounts[dd][meal] !== undefined) {
       let isDelivery = true;
       const phoneTrim = String(row.Phone || "").trim();
+      const cName = String(row.Customer_Name || "").toLowerCase();
       if (vips[phoneTrim]) {
         isDelivery = false; // VIPs count as 0 slots
+      } else if (phoneTrim === "7517913755" || cName.indexOf("metapercept") !== -1) {
+        isDelivery = false; // Metapercept is slot-free (0 delivery slots)
       } else {
         const ar = String(row.Area || "").toLowerCase();
         if (ar.indexOf("pickup") !== -1 || ar === "porter") isDelivery = false;
         else {
           const addrFull = _normSocietyBase(String(row.Society || "") + " " + String(row.Full_Address || "") + " " + String(row.Flat || "") + " " + String(row.Landmark || ""));
-          if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1) isDelivery = false;
+          if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1 || addrFull.indexOf("metapercept") !== -1) isDelivery = false;
         }
       }
       
@@ -2155,6 +2158,9 @@ function getOrderSummary(date) {
     } else if (ar === "porter") {
       slotType = "exempt";
       slotReason = "Porter Courier";
+    } else if (phoneTrim === "7517913755" || rawCustName.toLowerCase().indexOf("metapercept") !== -1 || addrFull.indexOf("metapercept") !== -1) {
+      slotType = "exempt";
+      slotReason = "Metapercept";
     } else if (addrFull.indexOf("shreelaxmivihar") !== -1) {
       slotType = "exempt";
       slotReason = "Shree Laxmi Vihar (Home Base)";

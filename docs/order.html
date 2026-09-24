@@ -5191,7 +5191,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.16.08";
+    const APP_VERSION = "v26.09.24.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5218,6 +5218,7 @@
     // may still see the warning yet be delivered. IA orders use a different page entirely.
     function _mealKeepsDeliveryAtCap(meal, addr, sub) {
       if (String((S.profile && S.profile.name) || "").toLowerCase().indexOf("enkin") !== -1) return true;
+      if (S.profile && (String(S.profile.phone || "").trim() === "7517913755" || String(S.profile.name || "").toLowerCase().indexOf("metapercept") !== -1)) return true;
       const a = String((addr && addr.area) || "").toLowerCase();
       if (a.indexOf("pickup") !== -1 || a === "porter") return true;
       const isBhosaleOrTriveni = a.includes("bhosale") || a.includes("triveni");
@@ -5226,14 +5227,14 @@
       if (addr && FREE_AREAS.includes(addr.area)) return true;
       if ((Number(sub) || 0) >= (CAP_BYPASS_MIN[meal] || 200)) return true;
       if (_capExemptLocation((addr && addr.society) || (S.profile && S.profile.society), (addr && addr.area) || (S.profile && S.profile.area))) return true;
-      // Shree Laxmi Vihar society & Momstory — don't count toward cap AND never blocked
+      // Shree Laxmi Vihar society, Momstory & Metapercept — don't count toward cap AND never blocked
       // (owner-approved, synced with backend _countActiveMealOrders).
       var _exAddr = String((addr && addr.society) || (S.profile && S.profile.society) || "") + " " +
                     String((addr && addr.address) || (S.profile && S.profile.address) || "") + " " +
                     String((addr && addr.flat) || (S.profile && S.profile.flat) || "") + " " +
                     String((addr && addr.landmark) || (S.profile && S.profile.landmark) || "");
       var _normExAddr = _exAddr.toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (_normExAddr.indexOf("shreelaxmivihar") !== -1 || _normExAddr.indexOf("momstory") !== -1) return true;
+      if (_normExAddr.indexOf("shreelaxmivihar") !== -1 || _normExAddr.indexOf("momstory") !== -1 || _normExAddr.indexOf("metapercept") !== -1) return true;
       return false;
     }
     // Owner-approved exempt LOCATIONS that keep delivery even at the cap — MIRRORS the
