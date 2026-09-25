@@ -756,7 +756,7 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
     }
     if (action === "adminCreditWallet") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
-      return jsonRes(adminCreditWallet(body));
+      return jsonRes(adminCreditWallet(typeof body !== "undefined" ? body : p));
     }
     if (action === "getChurnReport") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});

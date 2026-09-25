@@ -2416,20 +2416,31 @@ function adminCreditWallet(body) {
   var phone  = String(body.phone || "").trim();
   var amount = Number(body.amount);
   if (!phone || phone.length < 10) return {success:false, error:"Valid phone required"};
-  if (!amount || amount <= 0)      return {success:false, error:"Amount must be > 0"};
+  if (isNaN(amount) || amount === 0) return {success:false, error:"Amount must be non-zero (positive to credit, negative to debit)"};
 
   // Look up customer name
-  var ss      = getSpreadsheet();
-  var profWs  = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var ss       = getSpreadsheet();
+  var profWs   = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   var profRows = getAllRows(profWs);
   var profile  = profRows.find(function(r){ return String(r.Phone||"").trim() === phone; });
   var name     = profile ? (String(profile.Customer_Name||"").trim() || "Customer") : "Customer";
 
-  _appendWalletTransaction(phone, name, "Admin Credit", amount, true, "ADMIN-" + Date.now());
-  const settleRes = _autoSettlePendingOrders(phone);
-  var newBalance = _calculateWalletBalance(phone);
+  var isDebit = amount < 0;
+  var absAmt  = Math.round(Math.abs(amount) * 100) / 100;
+  var txnType = isDebit ? "Admin Debit" : "Admin Credit";
+  var sf      = body.storefront === "LS" ? "LS" : "";
+
+  _appendWalletTransaction(phone, name, txnType, absAmt, true, "ADMIN-" + Date.now(), sf);
   
-  let msg = `₹${amount} credited to ${phone}. New balance: ₹${Math.round(newBalance)}`;
+  var settleRes = { msg: "" };
+  if (!isDebit) {
+    settleRes = _autoSettlePendingOrders(phone);
+  }
+  var newBalance = _calculateWalletBalance(phone, null, sf);
+  
+  let msg = isDebit
+    ? `₹${absAmt} debited from ${phone}. New balance: ₹${Math.round(newBalance)}`
+    : `₹${absAmt} credited to ${phone}. New balance: ₹${Math.round(newBalance)}`;
   if (settleRes.msg) {
     msg = settleRes.msg;
   }

@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.08.08">
+  <meta name="app-version" content="v26.09.25.01">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1803,9 +1803,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           <div class="page-title">Customers <small>All customers, sorted by most recent order</small></div>
         </div>
 
-        <!-- Quick Wallet Credit -->
+        <!-- Quick Wallet Credit / Debit -->
         <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;border-radius:14px;padding:16px 18px;margin-bottom:18px;">
-          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#166534;margin-bottom:12px;">💳 Add Wallet Credit</div>
+          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#166534;margin-bottom:12px;">💳 Add Wallet Credit / Debit</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
             <div style="flex:1;min-width:140px;">
               <div style="font-size:.7rem;color:#166534;font-weight:600;margin-bottom:4px;">Customer Phone</div>
@@ -1814,13 +1814,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
                 oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
             </div>
             <div style="flex:1;min-width:120px;">
-              <div style="font-size:.7rem;color:#166534;font-weight:600;margin-bottom:4px;">Amount (₹)</div>
-              <input type="number" id="wcAmount" placeholder="e.g. 100" min="1"
+              <div style="font-size:.7rem;color:#166534;font-weight:600;margin-bottom:4px;">Amount (₹) <span style="font-weight:400;font-size:.65rem;color:#15803d;">(use - to debit)</span></div>
+              <input type="number" id="wcAmount" placeholder="e.g. 100 or -50" step="any"
                 style="width:100%;padding:9px 12px;border:1.5px solid #86efac;border-radius:8px;font-size:.85rem;background:#fff;box-sizing:border-box;">
             </div>
             <button onclick="adminAddWalletCredit()"
               style="padding:9px 22px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;white-space:nowrap;">
-              ➕ Add Credit
+              ➕ Update Wallet
             </button>
           </div>
           <div id="wcStatus" style="margin-top:8px;font-size:.78rem;min-height:18px;"></div>
@@ -2332,7 +2332,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.09.08.08";
+    const ADMIN_VERSION = "v26.09.25.01";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -6150,12 +6150,14 @@ async function adminAddWalletCredit() {
   const amount = parseFloat(document.getElementById("wcAmount").value);
   const status = document.getElementById("wcStatus");
   if (phone.length < 10) { status.innerHTML = `<span style="color:#dc2626;">⚠ Enter a valid 10-digit phone number.</span>`; return; }
-  if (!amount || amount <= 0) { status.innerHTML = `<span style="color:#dc2626;">⚠ Enter a valid amount.</span>`; return; }
-  status.innerHTML = `<span style="color:#166534;">Adding ₹${amount} to ${phone}…</span>`;
+  if (isNaN(amount) || amount === 0) { status.innerHTML = `<span style="color:#dc2626;">⚠ Enter a valid non-zero amount.</span>`; return; }
+  const isDebit = amount < 0;
+  const absAmt  = Math.abs(amount);
+  status.innerHTML = `<span style="color:${isDebit ? '#b91c1c' : '#166534'};">${isDebit ? `Debiting ₹${absAmt} from` : `Adding ₹${absAmt} to`} ${phone}…</span>`;
   try {
     const data = await safeFetchJson(APPS_SCRIPT_URL, { method:"POST", body: JSON.stringify({ _action:"adminCreditWallet", phone, amount, pin: S.sessionPin }) });
     if (data.success) {
-      status.innerHTML = `<span style="color:#16a34a;font-weight:700;">✅ ${data.msg || `₹${amount} credited to ${phone}. New balance: ₹${data.newBalance}`}</span>`;
+      status.innerHTML = `<span style="color:#16a34a;font-weight:700;">✅ ${data.msg || (isDebit ? `₹${absAmt} debited from ${phone}. New balance: ₹${data.newBalance}` : `₹${absAmt} credited to ${phone}. New balance: ₹${data.newBalance}`)}</span>`;
       document.getElementById("wcPhone").value  = "";
       document.getElementById("wcAmount").value = "";
     } else {

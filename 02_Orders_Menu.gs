@@ -449,8 +449,8 @@ function _calculateWalletBalance(phone, preloadedRows, storefront) {
     if (rType.includes("recharge") || rType.includes("refund") || rType.includes("credit")
         || rType.includes("carry forward") || rType.includes("carry-forward")) {
       balance += rAmt;
-    } else if (rType.includes("order") || rType.includes("deduct") || rType.includes("payment")) {
-      balance -= rAmt;
+    } else if (rType.includes("order") || rType.includes("deduct") || rType.includes("payment") || rType.includes("debit")) {
+      balance -= Math.abs(rAmt);
     }
   });
 
@@ -477,14 +477,15 @@ function getWalletTransactions(phone) {
       const rVer  = String(w.Verified || "").trim().toUpperCase();
       const verified = (rVer === "TRUE" || rVer === "YES" || rVer === "VERIFIED");
       const typeLow  = rType.toLowerCase();
-      const isCredit = typeLow.includes("recharge") || typeLow.includes("refund")
+      const rawCredit = typeLow.includes("recharge") || typeLow.includes("refund")
                     || typeLow.includes("credit") || typeLow.includes("carry forward")
                     || typeLow.includes("carry-forward");
+      const isCredit = rawCredit && rAmt >= 0;
       const rawTs  = w.Timestamp;
       const tsDate = rawTs instanceof Date ? rawTs : new Date(rawTs || 0);
       return {
         type:      rType || "Transaction",
-        amount:    rAmt,
+        amount:    Math.abs(rAmt),
         direction: isCredit ? "credit" : "debit",
         verified,
         reference: String(w.Reference_ID || "").trim(),
