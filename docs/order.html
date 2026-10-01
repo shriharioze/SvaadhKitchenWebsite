@@ -5191,7 +5191,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.09.25.01";
+    const APP_VERSION = "v26.10.01.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -12918,7 +12918,7 @@
     // ON-ACCOUNT BILL  (customer-facing, skippable / overdue)
     // ═══════════════════════════════════════════════════════════
     // Shows pending on-account dues for Monthly or Daily customers.
-    // - Monthly: skippable till the 9th; mandatory / hard-blocked from 10th.
+    // - Monthly: skippable till the 4th; mandatory / hard-blocked from 5th.
     // - Daily: skippable ("Remind me later") if unpaid orders <= 7 days old;
     //   mandatory / hard-blocked if any unpaid order > 7 days old.
     async function maybeShowOnAccountBill() {

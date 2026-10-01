@@ -115,6 +115,12 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Archive policy: due-slice (1-10→18th, 11-20→28th, 21-end→next-month 8th), terminal rows only (Paid/Cancelled/Refunded), Pending/On-Account stay live, per-month existing files appended, daily ~22:30 IST trigger, preview `archiveDueDryRun`.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
+## Recent Changes (October 2026)
+- **Monthly On-Account Payment Deadline Moved to 5th (CODE_VERSION 35.75 / APP_VERSION v26.10.01.01)**
+  - **Payment Deadline Updated (10th -> 5th):** Changed the monthly on-account customer payment deadline from the 10th of next month to the 5th of next month.
+  - **Backend Hard-Block Guard:** Updated `getOnAccountBill` (`04_Reports_Misc.gs`) to set `isOverdue = true` on or after the 5th of the month (`now.getDate() >= 5`). Both `submitOrder` (`02_Orders_Menu.gs`) and `submitBulkOrder` (`06_Bulk_Orders.gs`) continue to verify `billInfo.isOverdue` and hard-block overdue monthly customers.
+  - **Frontend Parity:** Updated comments and bumped `APP_VERSION` to `v26.10.01.01` in `docs/order.html` and `docs/Liviano-Serio.html`.
+
 ## Recent Changes (September 2026)
 - **Food Clarity & Nutrition Transparency System (APP_VERSION v26.09.16.07)**
   - **Full Catalog Transparency Across Both Storefronts (`docs/order.html` & `docs/Liviano-Serio.html`):**
@@ -216,7 +222,7 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
     - If any unpaid order is older than 7 days ($> 7$ days, e.g., on Aug 28 an unpaid order from Aug 20 is 8 days old), `isOverdue` flips to `true`.
     - Modal becomes unskippable: "Remind me later" is disabled and replaced by *"Please clear pending dues to continue"* with friendly reminder copy. Backdrop clicking is blocked.
     - Full outstanding dues till date must be cleared before the customer can proceed.
-  - **Authoritative Backend Guard:** Hardened `submitOrder` (`02_Orders_Menu.gs`) and `submitBulkOrder` (`06_Bulk_Orders.gs`) to verify `getOnAccountBill` for both monthly (>= 10th) and daily (> 7 days) on-account customers, rejecting order placement with a descriptive error if overdue.
+  - **Authoritative Backend Guard:** Hardened `submitOrder` (`02_Orders_Menu.gs`) and `submitBulkOrder` (`06_Bulk_Orders.gs`) to verify `getOnAccountBill` for both monthly (>= 5th) and daily (> 7 days) on-account customers, rejecting order placement with a descriptive error if overdue.
   - **Settlement Parity:** HDFC Gateway one-tap payment automatically passes `scope: "all"` for daily accounts (and `"monthly"` for monthly accounts) in `docs/order.html` and `docs/Liviano-Serio.html`, settling all outstanding dues up to date.
 - **22 Approved Address Groups Standardization & Automated Backup (CODE_VERSION 35.60)**
   - **Comprehensive Multi-Account & Duplicate Address Standardization:** Processed 22 owner-approved address duplicate clusters covering 54 customer profiles in `SK_Customers` and 18 active orders in `SK_Orders` to consolidate physical delivery locations into shared delivery slots (`slotType: "shared"`).
@@ -345,7 +351,7 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - Hid Past Dues Recovery UI for On-Account customers since they do not pay upfront.
 - **Features:**
   - **Friends & Family Discount (F&F):** Added a 20% discount on food subtotal for privileged customers, controlled via an admin toggle (toggleFnF). F&F customers bypass delivery caps and do not accrue 6th-day loyalty rewards.
-  - **Billing:** Hard-blocked overdue On-Account monthly users after the 9th of the month.
+  - **Billing:** Hard-blocked overdue On-Account monthly users from the 5th of the month.
   - **Reporting:** Added daily End-Of-Day email report summarizing new customers and daily metrics.
 
 ## Where the deep documentation lives
@@ -353,4 +359,4 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
 
 ### Billing & On-Account
-- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 10th of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.
+- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 5th of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.

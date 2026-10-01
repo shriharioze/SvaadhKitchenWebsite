@@ -2497,7 +2497,7 @@ function _submitOrderInternal(body) {
 
   // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
   // If customer is On Account and has overdue unpaid orders:
-  // - Monthly: >= 10th of month with unpaid bill from previous month(s)
+  // - Monthly: >= 5th of month with unpaid bill from previous month(s)
   // - Daily: has unpaid orders older than 7 days
   // Completely block them from placing new orders until the bill is paid.
   if (String(profile.onAccount || "").toLowerCase() === "yes") {

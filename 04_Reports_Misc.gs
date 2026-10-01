@@ -5601,7 +5601,7 @@ function getBillingData(cycle, filterValue) {
 // order page can surface a bill / payment reminder modal.
 // - MONTHLY cycle: previous-month (plus older carry-forward) unpaid orders.
 //   Skippably shown from the 1st of the month; hard-blocked (isOverdue=true)
-//   if it is the 10th or later of the current month.
+//   if it is the 5th or later of the current month.
 // - DAILY cycle: all unpaid orders up to today. Skippable ("Remind me later")
 //   if oldest unpaid order is <= 7 days old. Hard-blocked (isOverdue=true)
 //   if ANY order is older than 7 days (> 7 days).
@@ -5684,8 +5684,8 @@ function getOnAccountBill(phone) {
         periodLabel = _startMY + ' – ' + _endMY;
       }
 
-      // If today is the 10th or later of the current month, they MUST pay before ordering
-      const isOverdue = now.getDate() >= 10;
+      // If today is the 5th or later of the current month, they MUST pay before ordering
+      const isOverdue = now.getDate() >= 5;
 
       return {
         due:         true,

@@ -616,7 +616,7 @@ function submitBulkOrder(body) {
 
   // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
   // If customer is On Account and has overdue unpaid orders:
-  // - Monthly: >= 10th of month with unpaid bill from previous month(s)
+  // - Monthly: >= 5th of month with unpaid bill from previous month(s)
   // - Daily: has unpaid orders older than 7 days
   // Block bulk orders too.
   if (cRow && String(cRow.On_Account || "").trim().toLowerCase() === "yes") {
