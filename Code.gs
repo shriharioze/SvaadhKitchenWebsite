@@ -78,13 +78,6 @@ function doGet(e) {
         return jsonRes({ status: "error", error: hErr.message, ts: new Date().toISOString() });
       }
     }
-    if (action === "createSimilReconciliationSheet") {
-      try {
-        return jsonRes(createSimilReconciliationSheet());
-      } catch (err) {
-        return jsonRes({ status: "error", error: err.message, stack: err.stack });
-      }
-    }
     if (action === "getConfig") return jsonRes({
       gateway_enabled: PAYMENT_GATEWAY_ENABLED,
       gateway_env: HDFC_ENV,
