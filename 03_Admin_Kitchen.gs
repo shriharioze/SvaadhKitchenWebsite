@@ -239,6 +239,8 @@ function _getAdminDataUncached() {
       order_counts:     mealOrderCounts[d] || { Breakfast: 0, Lunch: 0, Dinner: 0 },
       kitchen_closed:   kitchenClosed,
       closed_meals:     closedMeals,
+      closure_reason:   _parseClosureReason(r.Closure_Reason).general,
+      closure_reasons:  _parseClosureReason(r.Closure_Reason).perMeal,
     };
   });
 
@@ -404,6 +406,9 @@ function setKitchenClosed(body) {
   const confirmCancelOrders = (body.confirmCancelOrders === true ||
                                String(body.confirmCancelOrders) === "true");
   const reason = String(body.reason || body.message || "").trim();
+  const mealReasonsInput = (typeof body.mealReasons === "object" && body.mealReasons !== null)
+    ? body.mealReasons
+    : (typeof body.reasons === "object" && body.reasons !== null ? body.reasons : null);
 
   // Which meals to act on? Absent/empty ⇒ FULL DAY (all three) — backward compatible
   // with the old whole-day toggle and the "Full Day" selection.
@@ -601,7 +606,43 @@ function setKitchenClosed(body) {
     // Merge the selected meals into the closed set + persist.
     const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
     meals.forEach(function (m) { newClosed[m] = true; });
-    _writeClosedMeals(menuWs, mIdx, dateStr, newClosed, reason);
+
+    const curParsed = _parseClosureReason(_menuRowNow ? _menuRowNow.Closure_Reason : "");
+    const mergedMealReasons = Object.assign({}, curParsed.perMeal);
+    meals.forEach(function (m) {
+      if (mealReasonsInput && mealReasonsInput[m] !== undefined && String(mealReasonsInput[m]).trim() !== "") {
+        mergedMealReasons[m] = String(mealReasonsInput[m]).trim();
+      } else if (reason) {
+        mergedMealReasons[m] = reason;
+      }
+    });
+
+    const closedList = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
+    const isFullDay = closedList.length === 3;
+
+    // Determine persisted reason string (plain string if uniform, JSON if differing per meal)
+    let persistedReason = "";
+    if (closedList.length > 0) {
+      const activeReasons = {};
+      closedList.forEach(function(m) {
+        if (mergedMealReasons[m]) activeReasons[m] = mergedMealReasons[m];
+      });
+      const uniqueVals = [...new Set(Object.values(activeReasons))];
+      if (uniqueVals.length === 1 && !reason) {
+        persistedReason = uniqueVals[0];
+      } else if (uniqueVals.length === 1 && reason && uniqueVals[0] === reason) {
+        persistedReason = reason;
+      } else if (uniqueVals.length === 0 && reason) {
+        persistedReason = reason;
+      } else if (uniqueVals.length > 1 || (Object.keys(activeReasons).length > 0 && uniqueVals.length > 0)) {
+        if (reason) activeReasons._general = reason;
+        persistedReason = JSON.stringify(activeReasons);
+      } else if (reason) {
+        persistedReason = reason;
+      }
+    }
+
+    _writeClosedMeals(menuWs, mIdx, dateStr, newClosed, persistedReason);
 
     const cacheKeys = [
       "menu_v2_" + dateStr,
@@ -615,9 +656,6 @@ function setKitchenClosed(body) {
     });
     _invalidateCache.apply(null, cacheKeys);
     _invalidateWeeklyMenuCache();
-
-    const closedList = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
-    const isFullDay = closedList.length === 3;
 
     // Build a human-readable breakdown including On Account (was missing).
     var parts = [];
@@ -644,6 +682,8 @@ function setKitchenClosed(body) {
       isClosed: true,
       closedMeals: closedList,
       fullDay: isFullDay,
+      closureReason: persistedReason,
+      closureReasons: mergedMealReasons,
       cancelled: cancelled,
       rescheduledBulk: rescheduledBulk,
       rescheduledOrders: shiftedOrders,
@@ -658,10 +698,27 @@ function setKitchenClosed(body) {
   // (already-cancelled orders stay cancelled — matches the previous whole-day behaviour).
   const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
   meals.forEach(function (m) { newClosed[m] = false; });
-  _writeClosedMeals(menuWs, mIdx, dateStr, newClosed, "");
+  const stillClosed = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
+
+  let persistedReason = "";
+  if (stillClosed.length > 0) {
+    const curParsed = _parseClosureReason(_menuRowNow ? _menuRowNow.Closure_Reason : "");
+    const activeReasons = {};
+    stillClosed.forEach(function(m) {
+      if (curParsed.perMeal[m]) activeReasons[m] = curParsed.perMeal[m];
+    });
+    const uniqueVals = [...new Set(Object.values(activeReasons))];
+    if (uniqueVals.length === 1) {
+      persistedReason = uniqueVals[0];
+    } else if (uniqueVals.length > 1) {
+      if (curParsed.general) activeReasons._general = curParsed.general;
+      persistedReason = JSON.stringify(activeReasons);
+    }
+  }
+
+  _writeClosedMeals(menuWs, mIdx, dateStr, newClosed, persistedReason);
   _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "kitchen_closed_set_v1", "kitchen_closed_mealset_v1", "adminData_v1");
   _invalidateWeeklyMenuCache();
-  const stillClosed = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
   return {
     success: true, isClosed: false, closedMeals: stillClosed, fullDay: false,
     message: (stillClosed.length ? ("Re-opened " + meals.join(", ") + " — still closed: " + stillClosed.join(", "))
@@ -689,9 +746,7 @@ function _writeClosedMeals(menuWs, mIdx, dateStr, closedObj, reason) {
     menuWs.getRange(existing._row, cmCol).setValue(jsonVal);
     if (crCol) {
       if (closedList.length > 0) {
-        if (reason !== undefined && reason !== null && String(reason).trim() !== "") {
-          menuWs.getRange(existing._row, crCol).setValue(String(reason).trim());
-        }
+        menuWs.getRange(existing._row, crCol).setValue(reason || "");
       } else {
         menuWs.getRange(existing._row, crCol).setValue("");
       }

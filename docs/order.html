@@ -5200,7 +5200,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.10.06.01";
+    const APP_VERSION = "v26.10.06.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10165,6 +10165,7 @@
         S.kitchenClosedDates = Array.isArray(data.closedDates) ? data.closedDates : [];
         S.streakExemptDates  = Array.isArray(data.exemptDates) ? data.exemptDates : S.kitchenClosedDates;
         S.closedReasons      = (data && typeof data.reasons === "object" && data.reasons) ? data.reasons : {};
+        S.closedMealReasons  = (data && typeof data.mealReasons === "object" && data.mealReasons) ? data.mealReasons : {};
       } catch (e) {
         // Soft-fail: if the fetch errors, the calendar still works (just
         // without the closed-day markers). The server-side guard in
@@ -10172,6 +10173,7 @@
         S.kitchenClosedDates = S.kitchenClosedDates || [];
         S.streakExemptDates  = S.streakExemptDates || [];
         S.closedReasons      = S.closedReasons || {};
+        S.closedMealReasons  = S.closedMealReasons || {};
       }
     }
     function toggleDate(ds) {
@@ -10354,11 +10356,15 @@
                 const areaCheck = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
                 const isClosed = cState === true || (cState === "restricted" && !(areaCheck.includes("bhosale") || areaCheck.includes("triveni") || areaCheck.includes("pickup") || areaCheck.includes("porter")));
                 const isKitchenClosed = !!(S.menuCache[date]?.closed_meals || {})[meal];
-                const closureReason = S.menuCache[date]?.closure_reason || (S.closedReasons && S.closedReasons[date]) || (date >= '2026-11-06' && date <= '2026-11-11' ? 'Diwali Break' : '');
+                const closureReason = (S.menuCache[date]?.closure_reasons && S.menuCache[date]?.closure_reasons[meal])
+                  || S.menuCache[date]?.closure_reason
+                  || (S.closedMealReasons && S.closedMealReasons[date] && S.closedMealReasons[date][meal])
+                  || (S.closedReasons && S.closedReasons[date])
+                  || (date >= '2026-11-06' && date <= '2026-11-11' ? 'Diwali Break' : '');
                 const msg = isKitchenClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🚫</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">${closureReason || "Kitchen Closed"}</div>
-                     <div style="font-size:0.72rem;color:#666;">${closureReason ? `Kitchen is closed for ${closureReason}.` : `${meal} is closed on this day.`} Sorry for the inconvenience.</div>`
+                     <div style="font-size:0.72rem;color:#666;">${closureReason ? `${meal} is closed (${closureReason}). Sorry for the inconvenience.` : `${meal} is closed on this day. Sorry for the inconvenience.`}</div>`
                   : isSoldOut
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🍽️</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Sold Out for Today</div>
@@ -10398,7 +10404,11 @@
         const el = $(`cutdown_${date}_${meal}`);
         if (!el) return;
         if (!!(menu.closed_meals || {})[meal]) {
-          const cr = menu.closure_reason || (S.closedReasons && S.closedReasons[date]) || (date >= '2026-11-06' && date <= '2026-11-11' ? 'Diwali Break' : '');
+          const cr = (menu.closure_reasons && menu.closure_reasons[meal])
+            || menu.closure_reason
+            || (S.closedMealReasons && S.closedMealReasons[date] && S.closedMealReasons[date][meal])
+            || (S.closedReasons && S.closedReasons[date])
+            || (date >= '2026-11-06' && date <= '2026-11-11' ? 'Diwali Break' : '');
           el.textContent = cr || 'Kitchen closed';
           el.style.color = '';
           return;

@@ -1285,6 +1285,7 @@ function _getMenuUncached(dateStr) {
       kitchen_closed: false,
       closed_meals: { Breakfast: false, Lunch: false, Dinner: false },
       closure_reason: "",
+      closure_reasons: { Breakfast: "", Lunch: "", Dinner: "" },
       sunday_closed: _isSunday
     };
   }
@@ -1292,6 +1293,7 @@ function _getMenuUncached(dateStr) {
   // Menu row exists but it's a Sunday with no sabjis — still treat as closed unless admin set kitchen closure details.
   if (_isSunday && !_hasSabjis && !_kitchenClosed) {
     let ordersClosed2 = { Breakfast: true, Lunch: true, Dinner: true };
+    const parsedSun = r ? _parseClosureReason(r.Closure_Reason) : { general: "", perMeal: { Breakfast: "", Lunch: "", Dinner: "" } };
     return {
       breakfast, lunch_dry:"", lunch_curry:"", dinner_dry:"", dinner_curry:"",
       cutoff_overrides:{},
@@ -1306,7 +1308,8 @@ function _getMenuUncached(dateStr) {
       sold_out: {},
       kitchen_closed: false,
       closed_meals: { Breakfast: false, Lunch: false, Dinner: false },
-      closure_reason: r ? String(r.Closure_Reason || "").trim() : "",
+      closure_reason: parsedSun.general,
+      closure_reasons: parsedSun.perMeal,
       sunday_closed: true
     };
   }
@@ -1442,7 +1445,8 @@ function _getMenuUncached(dateStr) {
     sold_out:      soldOut,      // customer display: meal hit its cap today
     kitchen_closed: _kitchenClosed,               // full-day close (all meals)
     closed_meals:   _closedMealsObj(r),           // per-meal close {Breakfast,Lunch,Dinner}
-    closure_reason: r ? String(r.Closure_Reason || "").trim() : ""
+    closure_reason: _parseClosureReason(r ? r.Closure_Reason : "").general,
+    closure_reasons: _parseClosureReason(r ? r.Closure_Reason : "").perMeal
   };
 }
 
@@ -1461,6 +1465,7 @@ function getKitchenClosedDates() {
     const closed = [];
     const exempt = [];
     const reasons = {};
+    const mealReasons = {};
     rows.forEach(function(r) {
       const isClosed = (r.Kitchen_Closed === true ||
         String(r.Kitchen_Closed || "").toLowerCase() === "true");
@@ -1479,17 +1484,20 @@ function getKitchenClosedDates() {
         : String(r.Date).trim();
       if (!d || d < cutoff) return;            // recent past + future
       
-      const rReason = String(r.Closure_Reason || "").trim();
+      const parsed = _parseClosureReason(r.Closure_Reason);
       if (isClosed) {
         closed.push(d); // Fully closed -> calendar blocked
-        if (rReason) reasons[d] = rReason;
+        if (parsed.general) reasons[d] = parsed.general;
       }
-      exempt.push(d);               // Fully or partially closed -> streak exempt
-      if (rReason && !reasons[d]) reasons[d] = rReason;
+      exempt.push(d);   // Fully or partially closed -> streak exempt
+      if (parsed.general && !reasons[d]) reasons[d] = parsed.general;
+      if (parsed.perMeal && (parsed.perMeal.Breakfast || parsed.perMeal.Lunch || parsed.perMeal.Dinner)) {
+        mealReasons[d] = parsed.perMeal;
+      }
     });
     closed.sort();
     exempt.sort();
-    return { closedDates: closed, exemptDates: exempt, reasons: reasons };
+    return { closedDates: closed, exemptDates: exempt, reasons: reasons, mealReasons: mealReasons };
   });
 }
 
@@ -2683,20 +2691,22 @@ function _submitOrderInternal(body) {
   };
   if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
     const closedHits = []; // [{date, meal}]
-    let hitReason = "";
+    const hitReasons = [];
     for (const _o of orders) {
       const _menuForDate = _findMenuRow(_o.date);
+      const parsed = _parseClosureReason(_menuForDate ? _menuForDate.Closure_Reason : "");
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
         if (_isMealKitchenClosed(_menuForDate, _mt)) {
           closedHits.push({ date: _o.date, meal: _mt });
-          if (!hitReason && _menuForDate && _menuForDate.Closure_Reason) {
-            hitReason = String(_menuForDate.Closure_Reason).trim();
-          }
+          const mRsn = (parsed.perMeal && parsed.perMeal[_mt]) || parsed.general || "";
+          if (mRsn) hitReasons.push(mRsn);
         }
       }
     }
     if (closedHits.length) {
+      const uniqueReasons = [...new Set(hitReasons.filter(Boolean))];
+      const hitReason = uniqueReasons.length ? uniqueReasons.join("; ") : "";
       const reasonSuffix = hitReason ? " (" + hitReason + ")" : "";
       return {
         success: false,

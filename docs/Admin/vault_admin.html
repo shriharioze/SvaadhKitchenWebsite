@@ -5,7 +5,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.06.01">
+  <meta name="app-version" content="v26.10.06.02">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2332,7 +2332,7 @@ function colKeyToDisplayName(k) {
     // compare its meta-version to this constant. If they differ, the
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
-    const ADMIN_VERSION = "v26.10.06.01";
+    const ADMIN_VERSION = "v26.10.06.02";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -3077,9 +3077,10 @@ function selectDate(iso) {
   const _closedMeals = (existing && existing.closed_meals) || {};
   const _closedList = ["Breakfast","Lunch","Dinner"].filter(m => _closedMeals[m]);
   const _anyClosed = _closedList.length > 0;
+  const _cReason = (existing && existing.closure_reason) ? ` (${existing.closure_reason})` : '';
   const _kLabel = !_anyClosed ? '✅ Open — Tap to Close Kitchen'
-    : (_closedList.length === 3 ? '🚫 Kitchen Closed (full day) — tap to edit'
-       : '🚫 ' + _closedList.join(', ') + ' closed — tap to edit');
+    : (_closedList.length === 3 ? `🚫 Kitchen Closed${_cReason} — tap to edit`
+       : `🚫 ${_closedList.join(', ')} closed${_cReason} — tap to edit`);
   const isPastDate = (iso < toISODate(new Date()));
   const showKitchenChip = !isSunday && !isPastDate;
   const kitchenChip = showKitchenChip
@@ -3105,63 +3106,121 @@ function selectDate(iso) {
 }
 
 // ── KITCHEN CLOSE — PER-MEAL MULTISELECT ──────────────────────
-// Opens a small panel to close/re-open specific meals (or the full day) for the
-// selected date. Ticked = closed; closing a meal that has orders auto-cancels +
-// refunds them (backend setKitchenClosed, meal-scoped).
+// Opens a panel to close/re-open specific meals (or the full day) for the
+// selected date with custom message/reason support per meal or full day.
 function openKitchenClosePanel() {
   if (!S.selectedDate) return;
   const iso = S.selectedDate;
   const existing = S.menuEntries.find(e => e.date === iso);
   const cur = (existing && existing.closed_meals) || {};
+  const curGeneralReason = (existing && existing.closure_reason) || "";
+  const curMealReasons   = (existing && existing.closure_reasons) || {};
   const MEALS = ["Breakfast", "Lunch", "Dinner"];
 
   const ov = document.createElement("div");
   ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60000;display:flex;align-items:center;justify-content:center;padding:18px;font-family:inherit;";
-  const rows = MEALS.map(m => `
-    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid ${cur[m] ? '#f5b7b1' : '#eee'};border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:0.9rem;">
-      <input type="checkbox" class="kc-meal" value="${m}" ${cur[m] ? "checked" : ""} style="width:18px;height:18px;accent-color:#c0392b;">
-      <span>${m}${cur[m] ? ' <span style="color:#c0392b;font-size:0.72rem;font-weight:700;">(closed)</span>' : ''}</span>
-    </label>`).join("");
-  ov.innerHTML = `<div style="background:#fff;max-width:420px;width:100%;border-radius:16px;padding:20px;box-shadow:0 18px 50px rgba(0,0,0,.3);">
+  const rows = MEALS.map(m => {
+    const isMClosed = !!cur[m];
+    const mReason = (curMealReasons && curMealReasons[m]) || "";
+    return `
+    <div style="border:1.5px solid ${isMClosed ? '#f5b7b1' : '#eee'};background:${isMClosed ? '#fffbfb' : '#fff'};border-radius:12px;padding:10px 12px;margin-bottom:8px;transition:all 0.2s;" id="kcMealCard_${m}">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.9rem;font-weight:700;">
+        <input type="checkbox" class="kc-meal" value="${m}" ${isMClosed ? "checked" : ""} style="width:18px;height:18px;accent-color:#c0392b;cursor:pointer;">
+        <span style="flex:1;">${m}</span>
+        <span class="kc-meal-badge" id="kcBadge_${m}" style="color:#c0392b;font-size:0.72rem;font-weight:800;display:${isMClosed ? 'inline' : 'none'};">(closed)</span>
+      </label>
+      <div class="kc-meal-reason-wrap" id="kcReasonWrap_${m}" style="margin-top:8px;display:${isMClosed ? 'block' : 'none'};">
+        <input type="text" class="kc-meal-reason" id="kcReason_${m}" data-meal="${m}" placeholder="Custom message for ${m} (e.g. Chef on leave, Gas issue)" value="${mReason.replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:0.8rem;background:#fff;outline:none;">
+      </div>
+    </div>`;
+  }).join("");
+
+  ov.innerHTML = `<div style="background:#fff;max-width:440px;width:100%;border-radius:16px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto;">
     <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px;">🚫 Close kitchen — ${iso}</div>
-    <div style="font-size:0.78rem;color:#777;margin-bottom:14px;">Tick meals to <b>close</b> (untick to re-open). Closing a meal that already has orders will <b>cancel + refund</b> them.</div>
+    <div style="font-size:0.78rem;color:#777;margin-bottom:14px;line-height:1.4;">Tick meals to <b>close</b> (untick to re-open). You can provide custom messages for individual meals or full day. Closing a meal with orders will <b>cancel + refund</b> them.</div>
     ${rows}
-    <label style="display:flex;align-items:center;gap:8px;margin:6px 0 12px;font-size:0.82rem;font-weight:700;color:#c0392b;cursor:pointer;">
-      <input type="checkbox" id="kcFullDay" ${MEALS.every(m => cur[m]) ? "checked" : ""} style="width:16px;height:16px;accent-color:#c0392b;"> Full day (all meals)
-    </label>
-    <div style="margin-bottom:14px;">
-      <label style="display:block;font-size:0.75rem;font-weight:700;color:#555;margin-bottom:4px;">Closure Reason / Message (optional):</label>
-      <input type="text" id="kcReason" placeholder="e.g. Diwali Break" value="${(existing && existing.closure_reason) || ''}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-size:0.85rem;">
+    <div style="border-top:1px dashed #e2e8f0;margin:12px 0 10px;padding-top:10px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;font-weight:700;color:#c0392b;cursor:pointer;margin-bottom:12px;">
+        <input type="checkbox" id="kcFullDay" ${MEALS.every(m => cur[m]) ? "checked" : ""} style="width:16px;height:16px;accent-color:#c0392b;cursor:pointer;"> Full day (all meals)
+      </label>
+      <div>
+        <label style="display:block;font-size:0.75rem;font-weight:700;color:#555;margin-bottom:4px;">Common / Full Day Message (optional):</label>
+        <input type="text" id="kcReasonAll" placeholder="e.g. Diwali Break, Maintenance, Private Event" value="${curGeneralReason.replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-size:0.85rem;outline:none;">
+        <div style="font-size:0.7rem;color:#888;margin-top:3px;line-height:1.3;">Reflects on customer calendar tooltip &amp; toast, and serves as default for closed meals if left blank above.</div>
+      </div>
     </div>
-    <div style="display:flex;gap:10px;">
+    <div style="display:flex;gap:10px;margin-top:16px;">
       <button id="kcCancel" style="flex:1;padding:11px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>
       <button id="kcApply" style="flex:1;padding:11px;border:none;border-radius:10px;background:#c0392b;color:#fff;font-weight:800;cursor:pointer;">Apply</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
+
   const closeOv = () => ov.remove();
   ov.addEventListener("click", e => { if (e.target === ov) closeOv(); });
   ov.querySelector("#kcCancel").onclick = closeOv;
-  ov.querySelector("#kcFullDay").onchange = (e) => { ov.querySelectorAll(".kc-meal").forEach(cb => cb.checked = e.target.checked); };
-  ov.querySelectorAll(".kc-meal").forEach(cb => cb.onchange = () => {
-    ov.querySelector("#kcFullDay").checked = [...ov.querySelectorAll(".kc-meal")].every(x => x.checked);
+
+  const updateMealUI = (m, checked) => {
+    const wrap = ov.querySelector("#kcReasonWrap_" + m);
+    const badge = ov.querySelector("#kcBadge_" + m);
+    const card = ov.querySelector("#kcMealCard_" + m);
+    if (wrap) wrap.style.display = checked ? "block" : "none";
+    if (badge) badge.style.display = checked ? "inline" : "none";
+    if (card) {
+      card.style.borderColor = checked ? "#f5b7b1" : "#eee";
+      card.style.background = checked ? "#fffbfb" : "#fff";
+    }
+  };
+
+  ov.querySelector("#kcFullDay").onchange = (e) => {
+    ov.querySelectorAll(".kc-meal").forEach(cb => {
+      cb.checked = e.target.checked;
+      updateMealUI(cb.value, cb.checked);
+    });
+  };
+
+  ov.querySelectorAll(".kc-meal").forEach(cb => {
+    cb.onchange = () => {
+      updateMealUI(cb.value, cb.checked);
+      ov.querySelector("#kcFullDay").checked = [...ov.querySelectorAll(".kc-meal")].every(x => x.checked);
+    };
   });
+
   ov.querySelector("#kcApply").onclick = async () => {
     const desired = {}; ov.querySelectorAll(".kc-meal").forEach(cb => { if (cb.checked) desired[cb.value] = true; });
-    const reason = (ov.querySelector("#kcReason")?.value || "").trim();
+    const generalReason = (ov.querySelector("#kcReasonAll")?.value || "").trim();
+    const mealReasons = {};
+    MEALS.forEach(m => {
+      if (desired[m]) {
+        const val = (ov.querySelector("#kcReason_" + m)?.value || "").trim();
+        mealReasons[m] = val || generalReason;
+      }
+    });
+
     const toClose = MEALS.filter(m => desired[m] && !cur[m]);
     const toOpen  = MEALS.filter(m => !desired[m] && cur[m]);
     const closureStayed = MEALS.filter(m => desired[m]);
+    const reasonChanged = (generalReason !== curGeneralReason) || MEALS.some(m => desired[m] && (mealReasons[m] !== ((curMealReasons && curMealReasons[m]) || "")));
+
     closeOv();
-    if (!toClose.length && !toOpen.length && (!closureStayed.length || !reason)) return;
-    await _applyKitchenClosure(iso, toClose.length ? toClose : (reason && closureStayed.length ? closureStayed : []), toOpen, reason);
+    if (!toClose.length && !toOpen.length && !reasonChanged) return;
+    await _applyKitchenClosure(iso, toClose.length ? toClose : closureStayed, toOpen, generalReason, mealReasons);
   };
 }
 
-async function _applyKitchenClosure(iso, toClose, toOpen, reason) {
-  const _send = (meals, isClosed, confirmCancelOrders, rsn) => fetch(APPS_SCRIPT_URL, {
+async function _applyKitchenClosure(iso, toClose, toOpen, reason, mealReasons) {
+  const _send = (meals, isClosed, confirmCancelOrders, rsn, mRsns) => fetch(APPS_SCRIPT_URL, {
     method: "POST",
-    body: JSON.stringify({ _action: "setKitchenClosed", pin: S.sessionPin, date: iso, meals: meals, isClosed: isClosed, reason: rsn, confirmCancelOrders: !!confirmCancelOrders })
+    body: JSON.stringify({
+      _action: "setKitchenClosed",
+      pin: S.sessionPin,
+      date: iso,
+      meals: meals,
+      isClosed: isClosed,
+      reason: rsn,
+      mealReasons: mRsns,
+      confirmCancelOrders: !!confirmCancelOrders
+    })
   }).then(r => r.json());
 
   try {
@@ -3171,7 +3230,7 @@ async function _applyKitchenClosure(iso, toClose, toOpen, reason) {
       if (!r || !r.success) await sAlert((r && r.error) || "Could not re-open.", "Failed", "❌");
     }
     if (toClose.length) {
-      let r = await _send(toClose, true, false, reason);
+      let r = await _send(toClose, true, false, reason, mealReasons);
       if (r && r.requires_confirm) {
         let actionDesc = "Closing will <b>cancel and refund</b> all of them (wallet → instant, UPI → refund queue, On-Account → un-billed).";
         if (r.bulkCount > 0 && r.standardCount > 0) {
@@ -3185,7 +3244,7 @@ async function _applyKitchenClosure(iso, toClose, toOpen, reason) {
           actionDesc + `<br><br>Proceed?`,
           "Existing Orders Found", "⚠️", "", { confirmLabel: "Yes, proceed", cancelLabel: "Keep open" }
         );
-        if (ok) r = await _send(toClose, true, true, reason);
+        if (ok) r = await _send(toClose, true, true, reason, mealReasons);
         else r = { success: true, message: "Left those meals open." };
       }
       if (r && !r.success) await sAlert(r.error || "Could not close.", "Failed", "❌");
