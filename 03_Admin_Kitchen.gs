@@ -382,13 +382,28 @@ function setKitchenClosed(body) {
   const pin = String(body && body.pin || "").trim();
   if (pin !== ADMIN_PIN) return { success: false, error: "STRICT ADMIN PIN REQUIRED" };
 
-  const dateStr = String(body.date || "").trim();
+  // Support batch dates execution: e.g. dates: ["2026-11-06", "2026-11-07", ...]
+  if (Array.isArray(body && body.dates) && body.dates.length > 0) {
+    const results = [];
+    for (let i = 0; i < body.dates.length; i++) {
+      const singleBody = Object.assign({}, body, { date: body.dates[i], dates: undefined });
+      const res = setKitchenClosed(singleBody);
+      results.push({ date: body.dates[i], result: res });
+      if (!res.success && res.requires_confirm) {
+        return { success: false, requires_confirm: true, date: body.dates[i], message: res.message, partialResults: results };
+      }
+    }
+    return { success: true, batch: true, results: results };
+  }
+
+  const dateStr = String(body && body.date || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return { success: false, error: "Invalid date format (expected YYYY-MM-DD)" };
   }
   const isClosed = (body.isClosed === true || String(body.isClosed) === "true");
   const confirmCancelOrders = (body.confirmCancelOrders === true ||
                                String(body.confirmCancelOrders) === "true");
+  const reason = String(body.reason || body.message || "").trim();
 
   // Which meals to act on? Absent/empty ⇒ FULL DAY (all three) — backward compatible
   // with the old whole-day toggle and the "Full Day" selection.
@@ -402,10 +417,10 @@ function setKitchenClosed(body) {
   const menuWs = getOrCreateTab(ss, TAB_MENU, [
     "Date","Breakfast_JSON","Lunch_Dry","Lunch_Curry","Dinner_Dry","Dinner_Curry",
     "Cutoff_Breakfast","Cutoff_Lunch","Cutoff_Dinner",
-    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON","Closed_Meals_JSON"
+    "OOS_JSON","Orders_Closed","Stock_JSON","Kitchen_Closed","Order_Cap_JSON","Cap_Alt_JSON","Closed_Meals_JSON","Closure_Reason"
   ]);
   let mIdx = headerIndex(menuWs);
-  ["Kitchen_Closed", "Closed_Meals_JSON"].forEach(function (col) {
+  ["Kitchen_Closed", "Closed_Meals_JSON", "Closure_Reason"].forEach(function (col) {
     if (!mIdx[col]) menuWs.getRange(1, menuWs.getLastColumn() + 1).setValue(col);
   });
   SpreadsheetApp.flush(); mIdx = headerIndex(menuWs);
@@ -586,7 +601,7 @@ function setKitchenClosed(body) {
     // Merge the selected meals into the closed set + persist.
     const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
     meals.forEach(function (m) { newClosed[m] = true; });
-    _writeClosedMeals(menuWs, mIdx, dateStr, newClosed);
+    _writeClosedMeals(menuWs, mIdx, dateStr, newClosed, reason);
 
     const cacheKeys = [
       "menu_v2_" + dateStr,
@@ -643,7 +658,7 @@ function setKitchenClosed(body) {
   // (already-cancelled orders stay cancelled — matches the previous whole-day behaviour).
   const newClosed = { Breakfast: curClosed.Breakfast, Lunch: curClosed.Lunch, Dinner: curClosed.Dinner };
   meals.forEach(function (m) { newClosed[m] = false; });
-  _writeClosedMeals(menuWs, mIdx, dateStr, newClosed);
+  _writeClosedMeals(menuWs, mIdx, dateStr, newClosed, "");
   _invalidateCache("menu_v2_" + dateStr, "kitchen_closed_dates_v1", "kitchen_closed_set_v1", "kitchen_closed_mealset_v1", "adminData_v1");
   _invalidateWeeklyMenuCache();
   const stillClosed = KITCHEN_MEALS.filter(function (m) { return newClosed[m]; });
@@ -657,12 +672,12 @@ function setKitchenClosed(body) {
 // Persist per-meal closure. Closed_Meals_JSON holds the {meal:true} set; the legacy
 // Kitchen_Closed boolean is set TRUE only when ALL three meals are closed, so every
 // existing full-day reader keeps working. Creates the menu row if none exists.
-function _writeClosedMeals(menuWs, mIdx, dateStr, closedObj) {
+function _writeClosedMeals(menuWs, mIdx, dateStr, closedObj, reason) {
   const closedList = KITCHEN_MEALS.filter(function (m) { return closedObj[m]; });
   const jsonVal = closedList.length
     ? JSON.stringify(closedList.reduce(function (o, m) { o[m] = true; return o; }, {})) : "";
   const fullDay = closedList.length === 3;
-  const kcCol = mIdx["Kitchen_Closed"], cmCol = mIdx["Closed_Meals_JSON"];
+  const kcCol = mIdx["Kitchen_Closed"], cmCol = mIdx["Closed_Meals_JSON"], crCol = mIdx["Closure_Reason"];
   const existing = getAllRows(menuWs).find(function(x) {
     const d = x.Date instanceof Date
       ? Utilities.formatDate(x.Date, "Asia/Kolkata", "yyyy-MM-dd")
@@ -672,11 +687,26 @@ function _writeClosedMeals(menuWs, mIdx, dateStr, closedObj) {
   if (existing) {
     menuWs.getRange(existing._row, kcCol).setValue(fullDay ? "TRUE" : "");
     menuWs.getRange(existing._row, cmCol).setValue(jsonVal);
+    if (crCol) {
+      if (closedList.length > 0) {
+        if (reason !== undefined && reason !== null && String(reason).trim() !== "") {
+          menuWs.getRange(existing._row, crCol).setValue(String(reason).trim());
+        }
+      } else {
+        menuWs.getRange(existing._row, crCol).setValue("");
+      }
+    }
   } else {
     const newRow = new Array(menuWs.getLastColumn()).fill("");
     newRow[mIdx["Date"] - 1] = dateStr;
     newRow[kcCol - 1] = fullDay ? "TRUE" : "";
     newRow[cmCol - 1] = jsonVal;
+    if (crCol) newRow[crCol - 1] = reason || "";
+    if (mIdx["Orders_Closed"]) newRow[mIdx["Orders_Closed"] - 1] = "{}";
+    if (mIdx["Stock_JSON"]) newRow[mIdx["Stock_JSON"] - 1] = "{}";
+    if (mIdx["OOS_JSON"]) newRow[mIdx["OOS_JSON"] - 1] = "{}";
+    if (mIdx["Order_Cap_JSON"]) newRow[mIdx["Order_Cap_JSON"] - 1] = "{}";
+    if (mIdx["Cap_Alt_JSON"]) newRow[mIdx["Cap_Alt_JSON"] - 1] = "{}";
     menuWs.appendRow(newRow);
   }
   SpreadsheetApp.flush();

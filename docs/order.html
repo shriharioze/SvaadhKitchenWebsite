@@ -4238,6 +4238,15 @@
           </div>
           <div id="graceCountdown" style="font-size:1.1rem;font-weight:800;letter-spacing:1px;white-space:nowrap;"></div>
         </div>
+
+        <!-- Holiday / Kitchen Closure Announcement Banner -->
+        <div id="kitchenClosureBanner" style="display:none;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:0.8rem;font-weight:600;align-items:center;gap:10px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #fb923c;color:#9a3412;">
+          <span style="font-size:1.3rem;">🪔</span>
+          <div style="flex:1;">
+            <div style="font-weight:800;font-size:0.85rem;margin-bottom:2px;" id="kcBannerTitle">Diwali Break Notice</div>
+            <div style="font-size:0.75rem;font-weight:500;line-height:1.35;" id="kcBannerText">Kitchen will remain closed for full days from 6th Nov to 11th Nov. Regular kitchen service resumes on 12th Nov.</div>
+          </div>
+        </div>
         <div class="calendar-header">
           <button class="cal-nav" id="calPrev">‹</button>
           <h3 id="calMonthTitle"></h3>
@@ -5191,7 +5200,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.10.01.01";
+    const APP_VERSION = "v26.10.06.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10096,11 +10105,21 @@
       // login + on each calendar nav; defaults to [] so the calendar still
       // renders if the fetch fails.
       const closedSet = new Set(S.kitchenClosedDates || []);
+
+      // Toggle Diwali Break / Holiday announcement banner when viewing target month
+      const banner = $("kitchenClosureBanner");
+      if (banner) {
+        const ymPrefix = `${y}-${String(m + 1).padStart(2, "0")}`;
+        const monthClosures = (S.kitchenClosedDates || []).filter(d => d.startsWith(ymPrefix));
+        const hasDiwali = monthClosures.some(d => d >= "2026-11-06" && d <= "2026-11-11") || ymPrefix === "2026-11";
+        banner.style.display = hasDiwali ? "flex" : "none";
+      }
+
       let html = "";
       for (let i = 0; i < fd; i++)html += `<div class="cal-day empty"></div>`;
       for (let d = 1; d <= dim; d++) {
         const ds = toISO(y, m, d), isSun = new Date(ds + "T12:00:00").getDay() === 0, past = ds < today, sel = S.selectedDates.includes(ds);
-        const isKitchenClosed = !isSun && !past && closedSet.has(ds);
+        const isKitchenClosed = !past && closedSet.has(ds);
         // Issue 3: disable today if all meal cutoffs have already passed
         const avail = getMealAvailability(ds);
         const allCutoffPassed = ds === today && !avail.Breakfast && !avail.Lunch && !avail.Dinner;
@@ -10115,19 +10134,26 @@
         // Closed-day cells get a 🚫 badge + an onclick that shows the message
         // (so customers tapping a greyed-out cell get an explanation rather
         // than silent failure).
+        const closureReason = (S.closedReasons && S.closedReasons[ds]) || (ds >= '2026-11-06' && ds <= '2026-11-11' ? 'Diwali Break' : '');
+        const reasonTitle = closureReason ? `Kitchen closed (${closureReason})` : 'Kitchen is closed on this day';
         const inner = isKitchenClosed
-          ? `${d}<span class="cal-closed-badge" title="Kitchen closed">🚫</span>`
+          ? `${d}<span class="cal-closed-badge" title="${reasonTitle}">🚫</span>`
           : `${d}`;
         const click = isKitchenClosed
-          ? `onclick="showKitchenClosedToast()"`
+          ? `onclick="showKitchenClosedToast('${ds}')"`
           : (!disabled ? `onclick="toggleDate('${ds}')"` : "");
-        html += `<div class="${cls}" ${click} title="${isKitchenClosed ? 'Kitchen is closed on this day' : (allCutoffPassed ? t('all_cutoffs_passed_title') : '')}">${inner}</div>`;
+        html += `<div class="${cls}" ${click} title="${isKitchenClosed ? reasonTitle : (allCutoffPassed ? t('all_cutoffs_passed_title') : '')}">${inner}</div>`;
       }
       $("calGrid").innerHTML = html;
       updateDateSummary();
     }
-    function showKitchenClosedToast() {
-      toast("Kitchen is closed on this day, sorry for inconvenience caused", 3500);
+    function showKitchenClosedToast(ds) {
+      const reason = (S.closedReasons && ds && S.closedReasons[ds]) || (ds && ds >= '2026-11-06' && ds <= '2026-11-11' ? 'Diwali Break' : '');
+      if (reason) {
+        toast(`${reason} — Kitchen is closed on this day, sorry for inconvenience caused`, 4000);
+      } else {
+        toast("Kitchen is closed on this day, sorry for inconvenience caused", 3500);
+      }
     }
     // Fetches the admin-marked closed dates (non-Sunday) from the backend
     // and caches them in S.kitchenClosedDates. Called once at app start
@@ -10138,12 +10164,14 @@
         const data = await res.json();
         S.kitchenClosedDates = Array.isArray(data.closedDates) ? data.closedDates : [];
         S.streakExemptDates  = Array.isArray(data.exemptDates) ? data.exemptDates : S.kitchenClosedDates;
+        S.closedReasons      = (data && typeof data.reasons === "object" && data.reasons) ? data.reasons : {};
       } catch (e) {
         // Soft-fail: if the fetch errors, the calendar still works (just
         // without the closed-day markers). The server-side guard in
         // submitOrder will still block any closed-day submission.
         S.kitchenClosedDates = S.kitchenClosedDates || [];
         S.streakExemptDates  = S.streakExemptDates || [];
+        S.closedReasons      = S.closedReasons || {};
       }
     }
     function toggleDate(ds) {
@@ -10326,10 +10354,11 @@
                 const areaCheck = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
                 const isClosed = cState === true || (cState === "restricted" && !(areaCheck.includes("bhosale") || areaCheck.includes("triveni") || areaCheck.includes("pickup") || areaCheck.includes("porter")));
                 const isKitchenClosed = !!(S.menuCache[date]?.closed_meals || {})[meal];
+                const closureReason = S.menuCache[date]?.closure_reason || (S.closedReasons && S.closedReasons[date]) || (date >= '2026-11-06' && date <= '2026-11-11' ? 'Diwali Break' : '');
                 const msg = isKitchenClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🚫</div>
-                     <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Kitchen Closed</div>
-                     <div style="font-size:0.72rem;color:#666;">${meal} is closed on this day. Sorry for the inconvenience.</div>`
+                     <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">${closureReason || "Kitchen Closed"}</div>
+                     <div style="font-size:0.72rem;color:#666;">${closureReason ? `Kitchen is closed for ${closureReason}.` : `${meal} is closed on this day.`} Sorry for the inconvenience.</div>`
                   : isSoldOut
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🍽️</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Sold Out for Today</div>
@@ -10368,7 +10397,12 @@
       ["Breakfast","Lunch","Dinner"].forEach(meal => {
         const el = $(`cutdown_${date}_${meal}`);
         if (!el) return;
-        if (!!(menu.closed_meals || {})[meal]) { el.textContent = 'Kitchen closed'; el.style.color = ''; return; }
+        if (!!(menu.closed_meals || {})[meal]) {
+          const cr = menu.closure_reason || (S.closedReasons && S.closedReasons[date]) || (date >= '2026-11-06' && date <= '2026-11-11' ? 'Diwali Break' : '');
+          el.textContent = cr || 'Kitchen closed';
+          el.style.color = '';
+          return;
+        }
         const cState2 = (menu.orders_closed || {})[meal];
         const areaCheck2 = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
         const isClosed = cState2 === true || (cState2 === "restricted" && !(areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter")));
@@ -12343,8 +12377,9 @@
           // Refresh menu cache for the affected dates so closed_meals is current.
           _affectedDates.forEach(d => { if (S.menuCache[d]) delete S.menuCache[d]._fetchedAt; });
           await fetchKitchenClosedDates();
+          const rNotice = data.closure_reason ? ` (${data.closure_reason})` : '';
           await sAlert(
-            `The kitchen is closed for:<br><br><b>${data.closed_meals.map(x => x.meal + ' on ' + x.date).join("<br>")}</b><br><br>` +
+            `The kitchen is closed${rNotice} for:<br><br><b>${data.closed_meals.map(x => x.meal + ' on ' + x.date).join("<br>")}</b><br><br>` +
             `We've removed these from your cart. Please review and try again.`,
             "Kitchen Closed", "🚫"
           );

@@ -1221,7 +1221,8 @@ function _findMenuRowOrCycle(menuRows, dateStr) {
           Stock_JSON: "{}",
           Kitchen_Closed: false,
           Order_Cap_JSON: "{}",
-          Cap_Alt_JSON: "{}"
+          Cap_Alt_JSON: "{}",
+          Closure_Reason: ""
         };
       }
     }
@@ -1276,12 +1277,20 @@ function _getMenuUncached(dateStr) {
       orders_closed: _isSunday ? { Breakfast: true, Lunch: true, Dinner: true } : {},
       stock_limits: {},
       units_remaining: {},
+      combo_stock: { Lunch: { Dry: null, Curry: null }, Dinner: { Dry: null, Curry: null } },
+      order_caps: _effectiveOrderCaps({}),
+      cap_alt: {},
+      order_counts: { Breakfast: 0, Lunch: 0, Dinner: 0 },
+      sold_out: {},
+      kitchen_closed: false,
+      closed_meals: { Breakfast: false, Lunch: false, Dinner: false },
+      closure_reason: "",
       sunday_closed: _isSunday
     };
   }
 
-  // Menu row exists but it's a Sunday with no sabjis — still treat as closed.
-  if (_isSunday && !_hasSabjis) {
+  // Menu row exists but it's a Sunday with no sabjis — still treat as closed unless admin set kitchen closure details.
+  if (_isSunday && !_hasSabjis && !_kitchenClosed) {
     let ordersClosed2 = { Breakfast: true, Lunch: true, Dinner: true };
     return {
       breakfast, lunch_dry:"", lunch_curry:"", dinner_dry:"", dinner_curry:"",
@@ -1290,6 +1299,14 @@ function _getMenuUncached(dateStr) {
       orders_closed: ordersClosed2,
       stock_limits: {},
       units_remaining: {},
+      combo_stock: { Lunch: { Dry: null, Curry: null }, Dinner: { Dry: null, Curry: null } },
+      order_caps: _effectiveOrderCaps({}),
+      cap_alt: {},
+      order_counts: { Breakfast: 0, Lunch: 0, Dinner: 0 },
+      sold_out: {},
+      kitchen_closed: false,
+      closed_meals: { Breakfast: false, Lunch: false, Dinner: false },
+      closure_reason: r ? String(r.Closure_Reason || "").trim() : "",
       sunday_closed: true
     };
   }
@@ -1424,7 +1441,8 @@ function _getMenuUncached(dateStr) {
     order_counts:  orderCounts,  // admin display: active orders placed so far
     sold_out:      soldOut,      // customer display: meal hit its cap today
     kitchen_closed: _kitchenClosed,               // full-day close (all meals)
-    closed_meals:   _closedMealsObj(r)            // per-meal close {Breakfast,Lunch,Dinner}
+    closed_meals:   _closedMealsObj(r),           // per-meal close {Breakfast,Lunch,Dinner}
+    closure_reason: r ? String(r.Closure_Reason || "").trim() : ""
   };
 }
 
@@ -1442,6 +1460,7 @@ function getKitchenClosedDates() {
     const cutoff = Utilities.formatDate(new Date(Date.now() - 40 * 86400000), "Asia/Kolkata", "yyyy-MM-dd");
     const closed = [];
     const exempt = [];
+    const reasons = {};
     rows.forEach(function(r) {
       const isClosed = (r.Kitchen_Closed === true ||
         String(r.Kitchen_Closed || "").toLowerCase() === "true");
@@ -1460,12 +1479,17 @@ function getKitchenClosedDates() {
         : String(r.Date).trim();
       if (!d || d < cutoff) return;            // recent past + future
       
-      if (isClosed) closed.push(d); // Fully closed -> calendar blocked
+      const rReason = String(r.Closure_Reason || "").trim();
+      if (isClosed) {
+        closed.push(d); // Fully closed -> calendar blocked
+        if (rReason) reasons[d] = rReason;
+      }
       exempt.push(d);               // Fully or partially closed -> streak exempt
+      if (rReason && !reasons[d]) reasons[d] = rReason;
     });
     closed.sort();
     exempt.sort();
-    return { closedDates: closed, exemptDates: exempt };
+    return { closedDates: closed, exemptDates: exempt, reasons: reasons };
   });
 }
 
@@ -2659,19 +2683,27 @@ function _submitOrderInternal(body) {
   };
   if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {
     const closedHits = []; // [{date, meal}]
+    let hitReason = "";
     for (const _o of orders) {
       const _menuForDate = _findMenuRow(_o.date);
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
-        if (_isMealKitchenClosed(_menuForDate, _mt)) closedHits.push({ date: _o.date, meal: _mt });
+        if (_isMealKitchenClosed(_menuForDate, _mt)) {
+          closedHits.push({ date: _o.date, meal: _mt });
+          if (!hitReason && _menuForDate && _menuForDate.Closure_Reason) {
+            hitReason = String(_menuForDate.Closure_Reason).trim();
+          }
+        }
       }
     }
     if (closedHits.length) {
+      const reasonSuffix = hitReason ? " (" + hitReason + ")" : "";
       return {
         success: false,
         kitchen_closed: true,
         closed_meals: closedHits,
-        error: "The kitchen is closed for " + closedHits.map(function (h) { return h.meal + " on " + h.date; }).join(", ")
+        closure_reason: hitReason,
+        error: "The kitchen is closed" + reasonSuffix + " for " + closedHits.map(function (h) { return h.meal + " on " + h.date; }).join(", ")
              + ". Please remove those from your cart and try again."
       };
     }
