@@ -116,12 +116,12 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
-- **Diwali Break Schedule Adjustment (CODE_VERSION 35.81 / APP_VERSION v26.10.07.02)**
+- **Diwali Break Schedule Adjustment (CODE_VERSION 35.81 / APP_VERSION v26.10.07.02 / ADMIN_VERSION v26.10.07.02)**
   - **Kitchen Open Till 7th Nov:** Re-opened kitchen for 6th Nov (Friday) and 7th Nov (Saturday) (`isClosed: false`).
   - **Diwali Break Dates (9th–12th Nov):** Kitchen closed for full days from Monday, 9th Nov to Thursday, 12th Nov (`isClosed: true`, `reason: "Diwali Break"` across all 3 meals). Regular kitchen service resumes on Friday, 13th Nov 2026.
   - **Live SK_Daily_Menu Database Updated:** Synchronized live `SK_Daily_Menu` sheet via `setKitchenClosed` API for `2026-11-06`, `2026-11-07`, and `2026-11-12`.
   - **Backend & Chatbot Brain Sync:** Updated `00_Config.gs` `BUSINESS_CONTEXT.holiday_notice` to 9th–12th Nov break (service till 7th Nov, resumes 13th Nov) and deployed backend `CODE_VERSION 35.81`.
-  - **Storefront Notices & Fallbacks (`docs/order.html` & `docs/Liviano-Serio.html`):** Updated announcement banner notice text to 9th–12th Nov (resumes 13th Nov), adjusted calendar safety-net fallback ranges from `2026-11-06..2026-11-11` to `2026-11-09..2026-11-12`, and bumped frontend `APP_VERSION` to `v26.10.07.02`.
+  - **Storefront & Admin Version Lockstep (`docs/order.html`, `docs/Liviano-Serio.html`, `docs/Admin/vault_admin.html`):** Updated announcement banner notice text to 9th–12th Nov (resumes 13th Nov), adjusted calendar safety-net fallback ranges from `2026-11-06..2026-11-11` to `2026-11-09..2026-11-12`, and bumped frontend versions to `v26.10.07.02` across customer storefronts and admin portal in lockstep.
 - **Friends & Family Discount Adjusted from 20% to 10% (CODE_VERSION 35.80 / APP_VERSION v26.10.07.01 / ADMIN_VERSION v26.10.07.01)**
   - **F&F Discount Rate Updated (20% -> 10%):** Reduced the privileged Friends & Family discount from 20% to 10% on food subtotals (`🌟 Exclusive Privilege (10% off)`).
   - **Server-Side Pricing Parity:** Updated `02_Orders_Menu.gs` (`discRate = 0.10` in `_submitOrderInternal`), `06_Bulk_Orders.gs` (`rate = 0.10` in `_bulkComputeBatch`), and `10_Hdfc_Gateway.gs` (`discRate = 0.10` in `_computeAuthoritativeTotal`).
