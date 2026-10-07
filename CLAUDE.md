@@ -116,6 +116,17 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Friends & Family Discount Adjusted from 20% to 10% (CODE_VERSION 35.80 / APP_VERSION v26.10.07.01 / ADMIN_VERSION v26.10.07.01)**
+  - **F&F Discount Rate Updated (20% -> 10%):** Reduced the privileged Friends & Family discount from 20% to 10% on food subtotals (`🌟 Exclusive Privilege (10% off)`).
+  - **Server-Side Pricing Parity:** Updated `02_Orders_Menu.gs` (`discRate = 0.10` in `_submitOrderInternal`), `06_Bulk_Orders.gs` (`rate = 0.10` in `_bulkComputeBatch`), and `10_Hdfc_Gateway.gs` (`discRate = 0.10` in `_computeAuthoritativeTotal`).
+  - **Chatbot & Business Context Sync:** Updated `BUSINESS_CONTEXT.discounts.fnf_privilege` (`00_Config.gs`) and `buildSystemPrompt` (`04_Reports_Misc.gs`) to reflect the 10% rate and `🌟 Exclusive Privilege (10% off)` label.
+  - **Admin Panel (`docs/Admin/vault_admin.html`):** Updated `toggleFnF` confirmation modal text to 10%, customer detail badge to `🎉 F&F - 10% Off & Cap Bypass`, and action button to `🎉 Make Friends & Family (10% Off)`.
+  - **Frontend Customer Storefronts (`docs/order.html` & `docs/Liviano-Serio.html`):** Updated FAQ item answer to 10%, checkout bill discount calculation (`discRate = 0.10`), bulk plan info card (`10% (Friends & Family) off`), bulk checkout review summary (`Friends & Family discount (10%)`), and savings text (`with your 10% Friends & Family discount`).
+  - **Delivery Cap Bypass & Loyalty Retained:** Friends & Family accounts continue to bypass kitchen delivery slot caps and have streak/tier upsells suppressed to preserve their flat privilege discount.
+- **Per-Meal and Full-Day Custom Kitchen Closure Reasons (CODE_VERSION 35.79 / APP_VERSION v26.10.06.02)**
+  - Added support for admin to specify custom closure message when closing kitchen for any individual meal (Breakfast/Lunch/Dinner) or full day, stored in `Closure_Reason` in `SK_Daily_Menu` (plain string or JSON map `{"Breakfast":"...","Lunch":"..."}`). Live reflection across calendar tooltips, toasts, locked meal cards, countdown timers, and checkout rejection dialogs.
+- **Diwali Break Closure & Custom Closure Reason (CODE_VERSION 35.78)**
+  - Closed kitchen for full days from 2026-11-06 to 2026-11-11 with custom holiday message 'Diwali Break'.
 - **Monthly On-Account Payment Deadline Moved to 5th (CODE_VERSION 35.75 / APP_VERSION v26.10.01.01)**
   - **Payment Deadline Updated (10th -> 5th):** Changed the monthly on-account customer payment deadline from the 10th of next month to the 5th of next month.
   - **Backend Hard-Block Guard:** Updated `getOnAccountBill` (`04_Reports_Misc.gs`) to set `isOverdue = true` on or after the 5th of the month (`now.getDate() >= 5`). Both `submitOrder` (`02_Orders_Menu.gs`) and `submitBulkOrder` (`06_Bulk_Orders.gs`) continue to verify `billInfo.isOverdue` and hard-block overdue monthly customers.
@@ -313,8 +324,8 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Mobile Touch Swipe Gestures & Responsive Polish:** Added touch swiping on `.wm-body` (swipe left for next day, swipe right for previous day with vertical-scroll guard) and compact mobile styles under `@media (max-width: 480px)`.
 - **Upcoming Tentative Menu Modal Navigation & Knowledge Base Sync (CODE_VERSION 35.69 / APP_VERSION v26.09.15.01)**
   - **Upcoming Menu Modal Left/Right Navigation:** Users can preview up to 131 upcoming days from the 22-week perpetual cycle in `docs/order.html`, `docs/Liviano-Serio.html`, and `docs/intentamplify.html`. Added bidirectional arrow buttons (`‹` / `›`), active date tab auto-centering via `scrollIntoView`, desktop drag-to-scroll, wheel-tilt translation, and header/footer day steppers (`‹ Prev Day` / `Next Day ›`).
-  - **F&F Discount Label Renamed:** Updated label from "🎉 20% Friends & Family Discount" to "🌟 Exclusive Privilege (20% off)".
-  - **Knowledge Base, Guides & FAQ Sync:** Updated `BUSINESS_CONTEXT` in `00_Config.gs` and `buildSystemPrompt` in `04_Reports_Misc.gs` to inform the AI chatbot about the 22-week cycle navigation, F&F 20% privilege rules, and Liviano Serio storefront. Updated Guides & FAQs in `docs/order.html`, `docs/Liviano-Serio.html`, and `docs/index.html` (including Curd 50g add-on ₹13 pricing and upcoming menu preview tips).
+  - **F&F Discount Label Renamed:** Updated label from "🎉 20% Friends & Family Discount" to "🌟 Exclusive Privilege" (originally 20% off, reduced to 10% off in v35.80).
+  - **Knowledge Base, Guides & FAQ Sync:** Updated `BUSINESS_CONTEXT` in `00_Config.gs` and `buildSystemPrompt` in `04_Reports_Misc.gs` to inform the AI chatbot about the 22-week cycle navigation, F&F privilege rules, and Liviano Serio storefront. Updated Guides & FAQs in `docs/order.html`, `docs/Liviano-Serio.html`, and `docs/index.html` (including Curd 50g add-on ₹13 pricing and upcoming menu preview tips).
 - **Live Address Preview on Order Form (`docs/order.html` APP_VERSION v26.09.08.07)**
   - **Instant Real-Time Address Preview:** Renders an interactive live address preview card as customers type their address fields (Wing, Flat, Floor, Society, Area, Landmark, Handover instructions) in both single-address mode and per-meal mode.
   - **Natural Address Formatting:** Dropped explicit `"Wing"` and `"Flat"` labels so addresses format cleanly (e.g., `A 104, Jasminium, Magarpatta` or `3, KanchanJunga, Tupe Patil Road` or `Office 5, Cybercity Tower 12, Magarpatta`).
@@ -350,7 +361,7 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - Removed restrictive validKeys filter in submitOrder that caused empty Items_JSON and blank item columns for Gateway (HDFC) breakfast/lunch/dinner orders (v35.21).
   - Hid Past Dues Recovery UI for On-Account customers since they do not pay upfront.
 - **Features:**
-  - **Friends & Family Discount (F&F):** Added a 20% discount on food subtotal for privileged customers, controlled via an admin toggle (toggleFnF). F&F customers bypass delivery caps and do not accrue 6th-day loyalty rewards.
+  - **Friends & Family Discount (F&F):** Added a flat discount on food subtotal for privileged customers (originally 20%, updated to 10% in v35.80), controlled via an admin toggle (toggleFnF). F&F customers bypass delivery caps and do not accrue 6th-day loyalty rewards.
   - **Billing:** Hard-blocked overdue On-Account monthly users from the 5th of the month.
   - **Reporting:** Added daily End-Of-Day email report summarizing new customers and daily metrics.
 

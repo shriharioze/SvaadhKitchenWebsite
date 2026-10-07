@@ -3142,7 +3142,7 @@ function _submitOrderInternal(body) {
     // Tiers on the day's combined FOOD total: ≥₹750 → 10%, ≥₹485 → 7.5%, ≥₹325 → 5%.
     // MUST mirror the frontend (DISC_T1/T2/T3) and the gateway recompute exactly.
     let discRate = 0;
-    if (profile.isFnF === true || String(profile.isFnF) === "true") discRate = 0.20;
+    if (profile.isFnF === true || String(profile.isFnF) === "true") discRate = 0.10;
     else if (combinedDayTotal >= 750) discRate = 0.10;
     else if (combinedDayTotal >= 485) discRate = 0.075;
     else if (combinedDayTotal >= 325) discRate = 0.05;

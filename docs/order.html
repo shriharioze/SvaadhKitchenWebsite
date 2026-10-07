@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.06.02">
+  <meta name="app-version" content="v26.10.07.01">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -5201,7 +5201,7 @@
     // CONFIG
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
-    const APP_VERSION = "v26.10.06.02";
+    const APP_VERSION = "v26.10.07.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8439,7 +8439,7 @@
       { q: "What is the 6-day loyalty reward?", a: "Order at least one meal on 6 consecutive kitchen-open days (Sundays don't break the streak — they're skipped). On the 6th day, you get <strong>5% of your 6 days' food total</strong> back as a <strong>Loyalty Reward</strong>. The bill page shows your current streak progress." },
       { q: "Can I edit or delete my order?", a: "Editing an existing order is not possible. To make corrections, <strong>delete</strong> the existing order from Manage Orders and place a <strong>new</strong> one before the cutoff. Wallet payments are refunded instantly to the wallet; UPI refunds are processed within 1–2 working days." },
       { q: "Can I check the menu for upcoming days in advance?", a: "Yes! Tap <strong>📅 View Upcoming Days' Tentative Menu</strong> on Step 2 or Step 3. You can see tentative breakfast, lunch, and dinner menus days and weeks in advance based on our 22-week seasonal cycle. Use the left and right arrows (‹ / ›), drag, or day steppers to browse future dates seamlessly." },
-      { q: "What is the Friends & Family privilege?", a: "Accounts verified under Friends & Family automatically receive an exclusive flat <strong>20% discount</strong> on all food items (<strong>🌟 Exclusive Privilege (20% off)</strong>) and are exempt from delivery slot limits." },
+      { q: "What is the Friends & Family privilege?", a: "Accounts verified under Friends & Family automatically receive an exclusive flat <strong>10% discount</strong> on all food items (<strong>🌟 Exclusive Privilege (10% off)</strong>) and are exempt from delivery slot limits." },
       { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
       { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. If it's missing, place again and choose 'Already Paid' if you've already completed the UPI payment." },
     ];
@@ -8475,7 +8475,7 @@
     }
 
     function renderStreakBanner(...ids) {
-      // Friends & Family receive flat 20% discount (no streak rewards) — hide streak banners completely
+      // Friends & Family receive flat 10% discount (no streak rewards) — hide streak banners completely
       const isFnF = !!(S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true"));
       if (isFnF) {
         ids.forEach(id => {
@@ -11220,7 +11220,7 @@
 
         // Retroactive discount credit: if existing orders didn't get a discount but combined now qualifies
         let discRate = 0, discLabel = "";
-        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.20; discLabel = "🌟 Exclusive Privilege (20% off)"; }
+        if (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")) { discRate = 0.10; discLabel = "🌟 Exclusive Privilege (10% off)"; }
         else if (combinedDayTotal >= DISC_T3.min) { discRate = DISC_T3.rate; discLabel = `10% off (≥ ₹${DISC_T3.min})`; }
         else if (combinedDayTotal >= DISC_T2.min) { discRate = DISC_T2.rate; discLabel = `7.5% off (≥ ₹${DISC_T2.min})`; }
         else if (combinedDayTotal >= DISC_T1.min) { discRate = DISC_T1.rate; discLabel = `5% off (≥ ₹${DISC_T1.min})`; }
@@ -16564,7 +16564,7 @@
     function _bulkInfoHtml(plan) {
       const i = BULK_PLAN_INFO[plan] || BULK_PLAN_INFO.week;
       const isFnF = !!(S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true"));
-      const discountText = isFnF ? "<b>20% (Friends &amp; Family) off</b>" : ("<b>" + i.rate + " off</b>");
+      const discountText = isFnF ? "<b>10% (Friends &amp; Family) off</b>" : ("<b>" + i.rate + " off</b>");
       const flexLine = i.postpone > 0
         ? '<li><b>Change of plans?</b> Postpone up to <b>' + i.postpone + ' lunch</b> + <b>' + i.postpone + ' dinner</b> days to another date — no charge, discount kept.</li>'
           + '<li>Or cancel any day before its cutoff (cancelling forfeits that meal\'s bulk discount).</li>'
@@ -16807,8 +16807,8 @@
       const fmt = function(v) { return Number(Number(v).toFixed(2)); };
       const isFnF = !!(q.isFnF || (S.profile && (S.profile.isFnF === true || String(S.profile.isFnF) === "true")));
       const deliveryPerDay = rows[0].delivery || 0, smallFeePerDay = rows[0].smallFee || 0;
-      const ratePct = isFnF ? 20 : (q.bulkRate ? Math.round(q.bulkRate * 1000) / 10 : 5); // 5 / 7.5 / 10 / 20
-      const discountLabel = isFnF ? 'Friends & Family discount (20%)' : ('Bulk discount (' + ratePct + '%)');
+      const ratePct = isFnF ? 10 : (q.bulkRate ? Math.round(q.bulkRate * 1000) / 10 : 5); // 5 / 7.5 / 10
+      const discountLabel = isFnF ? 'Friends & Family discount (10%)' : ('Bulk discount (' + ratePct + '%)');
       let feeItems = (deliveryPerDay > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#777;"><span>🚚 Delivery</span><span>₹' + fmt(deliveryPerDay) + '</span></div>' : "")
                    + (smallFeePerDay > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:3px 0;color:#777;"><span>📦 Small-order fee</span><span>₹' + fmt(smallFeePerDay) + '</span></div>' : "");
       let lines = '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:5px 0;color:#555;border-top:1px solid #f0f0f0;margin-top:4px;"><span>Food (₹' + fmt(foodPerDay) + '/day × ' + days + ')</span><span>₹' + fmt(food) + '</span></div>'
@@ -16829,7 +16829,7 @@
       const body = '<div style="padding:14px 16px;max-height:56vh;overflow-y:auto;">'
         + _bulkMealBlock("Dinner", q, "🌙") + _bulkMealBlock("Lunch", q, "☀️")
         + '<div style="display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem;color:#b45309;padding:8px 2px 2px;border-top:2px solid #eee;"><span>Grand Total</span><span>₹' + q.total + '</span></div>'
-        + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + (isFnF ? ' with your 20% Friends & Family discount' : ' with bulk') + '</div>'
+        + '<div style="font-size:0.68rem;color:#16a34a;text-align:right;margin-bottom:10px;">You save ₹' + (q.totalBulkDisc + q.totalTierDisc) + (isFnF ? ' with your 10% Friends & Family discount' : ' with bulk') + '</div>'
         + '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:9px 12px;font-size:0.71rem;color:#92400e;line-height:1.55;">📌 If you cancel a day, that meal\'s bulk discount comes off the refund (lunch &amp; dinner are independent). Sabji is the chef\'s choice each day.</div></div>';
       // Payment routing — mirrors the regular order flow: On-Account users are billed
       // later (never forced to pay); a wallet balance is used first (full → wallet only,

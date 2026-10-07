@@ -427,7 +427,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
 
     let tierRate = 0;
     if (ctx && ctx.isFnF) {
-      tierRate = 0; // FnF gets flat 20% on food total for all bulk plans — no daily volume tier stacking
+      tierRate = 0; // FnF gets flat 10% on food total for all bulk plans — no daily volume tier stacking
     } else if (dayFood >= 750) tierRate = 0.10;
     else if (dayFood >= 485) tierRate = 0.075;
     else if (dayFood >= 325) tierRate = 0.05;
@@ -518,7 +518,7 @@ function _bulkComputeBatch(plan, lunchItems, dinnerItems, ctx, frozen) {
   const lunchDates  = lunchFood  > 0 ? winLunch  : [];
   const dinnerDates = dinnerFood > 0 ? winDinner : [];
   const isFnF = !!(ctx && ctx.isFnF);
-  const rate = isFnF ? 0.20 : (BULK_PLAN_RATES[planName] || BULK_DISCOUNT_RATE); // FnF: flat 20% on all 3 bulk plans; else week 5% / 15day 7.5% / month 10%
+  const rate = isFnF ? 0.10 : (BULK_PLAN_RATES[planName] || BULK_DISCOUNT_RATE); // FnF: flat 10% on all 3 bulk plans; else week 5% / 15day 7.5% / month 10%
   const priced = _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates, ctx, rate);
   priced.plan     = planName;
   priced.bulkRate = rate; // surfaced to the frontend review ("Bulk discount (X%)")

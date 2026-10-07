@@ -160,7 +160,7 @@ function buildSystemPrompt(extraMenu, page) {
     + "   • Outside Policy: We do NOT deliver to Kothrud, Baner, Viman Nagar, Koregaon Park, or anywhere outside our listed Hadapsar areas.\n\n"
     + "4. DISCOUNTS, 6-DAY LOYALTY REWARD & REVIEW PROMO:\n"
     + "   • Automatic Day Discounts (assessed on your total food subtotal for that day): 5% off at ₹325+ | 7.5% off at ₹485+ | 10% off at ₹750+.\n"
-    + "   • Friends & Family Privilege: Verified Friends & Family accounts automatically receive an exclusive flat 20% discount on food ('🌟 Exclusive Privilege (20% off)') and delivery cap bypass. Streak discounts and volume tiers are inapplicable for F&F customers.\n"
+    + "   • Friends & Family Privilege: Verified Friends & Family accounts automatically receive an exclusive flat 10% discount on food ('🌟 Exclusive Privilege (10% off)') and delivery cap bypass. Streak discounts and volume tiers are inapplicable for F&F customers.\n"
     + "   • 6-Day Loyalty Streak: Order at least one meal on 6 consecutive kitchen-open days (Sundays/closed days do not break the streak). On the 6th day, you automatically get 5% of your total 6 days' food spend credited back as a loyalty reward on your bill!\n"
     + "   • Google Review Promo: Leave a 5-star Google review (https://g.page/r/CasEH8gGAhzLEBM/review) and unlock 10% off your next order (for 3 orders)!\n\n"
     + "5. ⚡ BULK MEAL PLANS (WEEK / 15-DAY / MONTH):\n"

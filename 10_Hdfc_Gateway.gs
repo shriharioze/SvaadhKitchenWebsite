@@ -503,7 +503,7 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
     // Day-tier discount (5%/7.5%/10%) — pro-rated to this submission. MUST mirror the
     // frontend (DISC_T1/T2/T3) and submitOrder exactly so the charge == the cart total.
     let discRate = 0;
-    if (isFnF) discRate = 0.20;
+    if (isFnF) discRate = 0.10;
     else if (combinedDayTotal >= 750)      discRate = 0.10;
     else if (combinedDayTotal >= 485) discRate = 0.075;
     else if (combinedDayTotal >= 325) discRate = 0.05;
