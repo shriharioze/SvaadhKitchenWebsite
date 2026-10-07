@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 06_Bulk_Orders.gs
 // Bulk meal ordering — order Lunch and/or Dinner across the next N working days

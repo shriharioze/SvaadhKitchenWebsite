@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 05_Customer_Archive.gs
 // Keeps SK_Customers small + fast: stamps Last_Order_At on each order, archives

@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 02_Orders_Menu.gs — customers, login, wallet, menu, submit/delete order
 // Split from Code.gs (verbatim). Global config in 00_Config.gs (loads first).

@@ -1,3 +1,4 @@
+# Read claude.md and bump version number for pages with changes
 # customer_info_manager.py  (New System)
 # Reads SK_Orders tab, builds customer_info_master.xlsx from first-time customers
 # Column reference: Phone, Customer_Name, Full_Address, Maps_Link, Landmark,

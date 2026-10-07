@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ═══════════════════════════════════════════════════════
 // SVAADH KITCHEN — i18n (English only)
 // Provides t(key, vars) for dynamic UI strings used by

@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 13_LivianoSerio.gs
 // Liviano-Serio storefront (LS) — second consumer storefront.

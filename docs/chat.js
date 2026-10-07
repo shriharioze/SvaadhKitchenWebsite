@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 document.addEventListener("DOMContentLoaded", () => {
   // All chat and order API calls go through the same Apps Script endpoint
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";

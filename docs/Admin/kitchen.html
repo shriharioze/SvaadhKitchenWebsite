@@ -1,3 +1,4 @@
+<!-- Read claude.md and bump version number for pages with changes -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -8,7 +9,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.09.01.01">
+  <meta name="app-version" content="v26.10.07.03">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -959,7 +960,8 @@
 
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
-    const APP_VERSION = "v26.09.01.01";
+    // Read claude.md and bump version number for pages with changes
+    const APP_VERSION = "v26.10.07.03";
     (function() {
       const savedVer = localStorage.getItem("sk_admin_ver");
       if (savedVer !== APP_VERSION) {
@@ -1848,7 +1850,8 @@
     // compare its meta-version to this constant. If they differ, the
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
-    const KITCHEN_VERSION = "v26.09.01.01";
+    // Read claude.md and bump version number for pages with changes
+    const KITCHEN_VERSION = "v26.10.07.03";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");

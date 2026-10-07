@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 function runAOVAnalysis() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();

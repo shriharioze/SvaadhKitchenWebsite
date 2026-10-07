@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 07_Labels_Auto.gs — SERVER-SIDE label auto-generation
 // ============================================================

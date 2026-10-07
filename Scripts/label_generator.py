@@ -1,3 +1,4 @@
+# Read claude.md and bump version number for pages with changes
 # label_generator.py  (New System)
 # Reads SK_Orders from Google Sheet directly — no Excel file needed.
 # Generates PDF labels per meal per date.

@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 14_IntentAmplify.gs
 // Corporate meal channel ("IntentAmplify") — integrated module.

@@ -1,3 +1,4 @@
+# Read claude.md and bump version number for pages with changes
 # dispatch_manager.py  (New System)
 # Reads SK_Orders directly — address is already in every row.
 # No separate customer_info_master.xlsx lookup needed for addresses.

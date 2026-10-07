@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 03_Admin_Kitchen.gs — admin data/menu CRUD, areas, refunds, kitchen, driver, labels, packaging
 // Split from Code.gs (verbatim). Global config in 00_Config.gs (loads first).

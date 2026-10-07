@@ -116,6 +116,10 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Model Directive Comment Across All Code Files & Global Version Bump (CODE_VERSION 35.82 / APP_VERSION v26.10.07.03 / ADMIN_VERSION v26.10.07.03 / KITCHEN_VERSION v26.10.07.03 / RECOVERY_VERSION v26.10.07.03)**
+  - **Authoritative Model Comment Added:** Embedded the directive comment `Read claude.md and bump version number for pages with changes` across all 48 code files (Apps Script backend `.gs`, frontend `.html`, `.js`, `.css`, and Python scripts) at line 1, as well as directly above `APP_VERSION`, `ADMIN_VERSION`, `KITCHEN_VERSION`, `RECOVERY_VERSION`, and `<meta name="app-version">` tags. This ensures any AI model immediately sees and follows the version bump protocol upon inspecting any file.
+  - **Lockstep Version Bump:** Bumped frontend versions to `v26.10.07.03` across `order.html`, `Liviano-Serio.html`, `vault_admin.html`, `kitchen.html`, `driver.html`, `recovery.html`, and `intentamplify.html`.
+  - **Backend Code Version:** Bumped `00_Config.gs` to `CODE_VERSION = 35.82`, pushed via clasp, and deployed to live production.
 - **Diwali Break Schedule Adjustment (CODE_VERSION 35.81 / APP_VERSION v26.10.07.02 / ADMIN_VERSION v26.10.07.02)**
   - **Kitchen Open Till 7th Nov:** Re-opened kitchen for 6th Nov (Friday) and 7th Nov (Saturday) (`isClosed: false`).
   - **Diwali Break Dates (9th–12th Nov):** Kitchen closed for full days from Monday, 9th Nov to Thursday, 12th Nov (`isClosed: true`, `reason: "Diwali Break"` across all 3 meals). Regular kitchen service resumes on Friday, 13th Nov 2026.

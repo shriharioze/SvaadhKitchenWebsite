@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 /**
  * SVAADH CUSTOM MODALS
  * Replacement for alert() and confirm()

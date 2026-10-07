@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 const CACHE_NAME = 'svaadh-cache-v3';
 const urlsToCache = [
   '/',

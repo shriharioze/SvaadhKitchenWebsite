@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 04_Reports_Misc.gs — chatbot, reconciliation, history, analytics, inventory, expenses, error log, misc
 // Split from Code.gs (verbatim). Global config in 00_Config.gs (loads first).

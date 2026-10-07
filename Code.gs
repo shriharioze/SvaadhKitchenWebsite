@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // Code.gs — SVAADH KITCHEN core (router, orders, menu, kitchen, etc.)
 // Global config/constants live in 00_Config.gs (loads first).

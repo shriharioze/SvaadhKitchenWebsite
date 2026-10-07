@@ -1,3 +1,4 @@
+# Read claude.md and bump version number for pages with changes
 # kitchen_live_manager.py  (New System)
 # Reads a processed results dict (from auto_svaadh_summary) and pushes
 # live kitchen totals to the Kitchen Dashboard Google Sheet.

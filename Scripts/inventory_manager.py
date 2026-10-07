@@ -1,3 +1,4 @@
+# Read claude.md and bump version number for pages with changes
 # inventory_manager.py  (New System)
 # Reads the processed meal DataFrames (from auto_svaadh_summary) to calculate
 # packaging unit requirements and costs.

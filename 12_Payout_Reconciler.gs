@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 // ============================================================
 // 12_Payout_Reconciler.gs
 // SETTLEMENT (merchant payout) reconciliation — peace-of-mind check that every

@@ -1,3 +1,4 @@
+# Read claude.md and bump version number for pages with changes
 # auto_svaadh_summary.py
 # ============================================================
 # SVAADH KITCHEN — Master Orchestrator (New System)

@@ -1,3 +1,4 @@
+// Read claude.md and bump version number for pages with changes
 function debugIAOrder() {
   var rows = typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : [];
   var target = rows.filter(function(r) { return r.Submission_ID === "IA2606191652000730A"; });
