@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.07.03">
+  <meta name="app-version" content="v26.10.10.01">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -4246,7 +4246,7 @@
           <span style="font-size:1.3rem;">🪔</span>
           <div style="flex:1;">
             <div style="font-weight:800;font-size:0.85rem;margin-bottom:2px;" id="kcBannerTitle">Diwali Break Notice</div>
-            <div style="font-size:0.75rem;font-weight:500;line-height:1.35;" id="kcBannerText">Kitchen will remain closed for full days from 9th Nov to 12th Nov. Regular kitchen service resumes on 13th Nov.</div>
+            <div style="font-size:0.75rem;font-weight:500;line-height:1.35;" id="kcBannerText">Kitchen will remain closed from 7th Nov Dinner to 12th Nov Lunch. Kitchen is operational till 7th Nov Lunch and resumes from 12th Nov Dinner.</div>
           </div>
         </div>
         <div class="calendar-header">
@@ -5203,7 +5203,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.07.03";
+    const APP_VERSION = "v26.10.10.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10114,7 +10114,7 @@
       if (banner) {
         const ymPrefix = `${y}-${String(m + 1).padStart(2, "0")}`;
         const monthClosures = (S.kitchenClosedDates || []).filter(d => d.startsWith(ymPrefix));
-        const hasDiwali = monthClosures.some(d => d >= "2026-11-09" && d <= "2026-11-12") || ymPrefix === "2026-11";
+        const hasDiwali = monthClosures.some(d => d >= "2026-11-07" && d <= "2026-11-12") || ymPrefix === "2026-11";
         banner.style.display = hasDiwali ? "flex" : "none";
       }
 
@@ -10137,7 +10137,7 @@
         // Closed-day cells get a 🚫 badge + an onclick that shows the message
         // (so customers tapping a greyed-out cell get an explanation rather
         // than silent failure).
-        const closureReason = (S.closedReasons && S.closedReasons[ds]) || (ds >= '2026-11-09' && ds <= '2026-11-12' ? 'Diwali Break' : '');
+        const closureReason = (S.closedReasons && S.closedReasons[ds]) || (ds >= '2026-11-09' && ds <= '2026-11-11' ? 'Diwali Break' : '');
         const reasonTitle = closureReason ? `Kitchen closed (${closureReason})` : 'Kitchen is closed on this day';
         const inner = isKitchenClosed
           ? `${d}<span class="cal-closed-badge" title="${reasonTitle}">🚫</span>`
@@ -10151,7 +10151,7 @@
       updateDateSummary();
     }
     function showKitchenClosedToast(ds) {
-      const reason = (S.closedReasons && ds && S.closedReasons[ds]) || (ds && ds >= '2026-11-09' && ds <= '2026-11-12' ? 'Diwali Break' : '');
+      const reason = (S.closedReasons && ds && S.closedReasons[ds]) || (ds && ds >= '2026-11-07' && ds <= '2026-11-12' ? 'Diwali Break' : '');
       if (reason) {
         toast(`${reason} — Kitchen is closed on this day, sorry for inconvenience caused`, 4000);
       } else {
@@ -10363,7 +10363,7 @@
                   || S.menuCache[date]?.closure_reason
                   || (S.closedMealReasons && S.closedMealReasons[date] && S.closedMealReasons[date][meal])
                   || (S.closedReasons && S.closedReasons[date])
-                  || (date >= '2026-11-09' && date <= '2026-11-12' ? 'Diwali Break' : '');
+                  || ((date === '2026-11-07' && meal === 'Dinner') || (date >= '2026-11-08' && date <= '2026-11-11') || (date === '2026-11-12' && meal !== 'Dinner') ? 'Diwali Break' : '');
                 const msg = isKitchenClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🚫</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">${closureReason || "Kitchen Closed"}</div>
@@ -10411,7 +10411,7 @@
             || menu.closure_reason
             || (S.closedMealReasons && S.closedMealReasons[date] && S.closedMealReasons[date][meal])
             || (S.closedReasons && S.closedReasons[date])
-            || (date >= '2026-11-09' && date <= '2026-11-12' ? 'Diwali Break' : '');
+            || ((date === '2026-11-07' && meal === 'Dinner') || (date >= '2026-11-08' && date <= '2026-11-11') || (date === '2026-11-12' && meal !== 'Dinner') ? 'Diwali Break' : '');
           el.textContent = cr || 'Kitchen closed';
           el.style.color = '';
           return;
