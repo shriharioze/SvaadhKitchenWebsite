@@ -32,8 +32,8 @@
   },
   "delivery": {
     "free_area": "Bhosale Nagar, Triveni Nagar, Self Pickup — always free",
-    "delivery_charge": "₹11 per meal. Delivery becomes FREE when the day's food total reaches ₹106 (ordering 1 meal that day), ₹159 (2 meals) or ₹190 (3 meals). Always free for Bhosale Nagar, Triveni Nagar, and Self Pickup.",
-    "small_order_fee": "A small ₹11 cart fee applies to a Lunch or Dinner meal whose food subtotal is below ₹53.",
+    "delivery_charge": "₹12 per meal. Delivery becomes FREE when the day's food total reaches ₹117 (ordering 1 meal that day), ₹175 (2 meals) or ₹209 (3 meals). Always free for Bhosale Nagar, Triveni Nagar, and Self Pickup.",
+    "small_order_fee": "A small ₹12 cart fee applies to a Lunch or Dinner meal whose food subtotal is below ₹59.",
     "outside_service": "We only deliver in listed Hadapsar areas.",
     "per_meal_address": "Each meal can go to a different address — breakfast at home, lunch at office, dinner back home.",
     "delivery_full": "On high-demand days, delivery slots for a meal can fill up. Orders of ₹200+ for that meal (₹100+ for breakfast) still get home delivery even when slots are full. Otherwise you can still order with free Self Pickup, or Porter (you book a courier from our kitchen and pay the courier directly — we add no fee)."
@@ -43,34 +43,34 @@
     "breads": [
       {
         "name": "Chapati",
-        "price": 10,
+        "price": 11,
         "unit": "per piece",
         "size": "Standard ~7 inches diameter"
       },
       {
         "name": "Without Oil Chapati",
-        "price": 9,
+        "price": 10,
         "unit": "per piece",
         "size": "Standard ~7 inches diameter",
         "oil": "Zero Oil"
       },
       {
         "name": "Phulka",
-        "price": 8,
+        "price": 9,
         "unit": "per piece",
         "size": "5–5.5 inches diameter",
         "oil": "Zero Oil (dry puffed)"
       },
       {
         "name": "Ghee Phulka",
-        "price": 11,
+        "price": 13,
         "unit": "per piece",
         "size": "5–5.5 inches diameter",
         "oil": "Brushed with Pure Cow Ghee"
       },
       {
         "name": "Jowar Bhakri",
-        "price": 22,
+        "price": 25,
         "unit": "per piece",
         "size": "Traditional thick handcrafted millet flatbread"
       },
@@ -84,54 +84,54 @@
     "sabji": [
       {
         "name": "Dry Sabji Mini [100ml]",
-        "price": 24,
+        "price": 26,
         "portion_type": "Liquid volume capacity [100ml food-grade container]"
       },
       {
         "name": "Dry Sabji Full [250ml]",
-        "price": 48,
+        "price": 52,
         "portion_type": "Liquid volume capacity [250ml food-grade container]"
       },
       {
         "name": "Curry Sabji Mini [100ml]",
-        "price": 24,
+        "price": 26,
         "portion_type": "Liquid volume capacity [100ml food-grade container]"
       },
       {
         "name": "Curry Sabji Full [250ml]",
-        "price": 48,
+        "price": 52,
         "portion_type": "Liquid volume capacity [250ml food-grade container]"
       }
     ],
     "basics": [
       {
         "name": "Dal [200ml]",
-        "price": 24,
+        "price": 26,
         "container": "200ml food-grade leak-proof container"
       },
       {
         "name": "Dal Fry [200ml]",
-        "price": 40,
+        "price": 42,
         "container": "200ml food-grade leak-proof container"
       },
       {
         "name": "Rice [100g]",
-        "price": 13,
+        "price": 15,
         "portion": "100g"
       },
       {
         "name": "Salad [40g]",
-        "price": 8,
+        "price": 9,
         "portion": "40g"
       },
       {
         "name": "Curd [50g]",
-        "price": 13,
+        "price": 14,
         "portion": "50g"
       }
     ],
-    "breakfast": "Rotating daily menu — items like Kanda Poha, Upma, Sabudana Khichdi, Paratha, Sheera (₹35–₹70 range). Check the order form for today's breakfast options.",
-    "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹105 before discounts. Build lighter or bigger — you only pay for what you pick.",
+    "breakfast": "Rotating daily menu — items like Kanda Poha (₹40), Upma (₹45), Sabudana Khichdi (₹50), Parathas (₹48–₹85), Sheera (₹55), Tikhi Puri (₹12), Idli (₹8) (₹40–₹85 range). Curd 50g (₹14) is available as an add-on. Check the order form for today's breakfast options.",
+    "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹115 before discounts. Build lighter or bigger — you only pay for what you pick.",
     "portion_clarity": {
       "sabji_portions": "100ml (Mini) and 250ml (Full) denote the volumetric liquid capacity of the food-grade container (water volume equivalent). The net physical weight in grams varies naturally depending on vegetable density and gravy consistency.",
       "dal_portions": "Dal and Dal Fry are served in 200ml food-grade leak-proof containers.",

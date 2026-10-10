@@ -357,21 +357,20 @@ function backfillBulkPlan(commit) {
 // threshold is evaluated on the day's full lunch+dinner food in one shot.
 // Day discount = bulk plan rate (always) + day-tier (stacks): ≥₹750 → +10%, ≥₹485 → +7.5%, ≥₹325 → +5%.
 
-const BULK_DELIVERY = 11; // MUST equal submitOrder/_computeAuthoritativeTotal DELIVERY
+const BULK_DELIVERY = 12; // MUST equal submitOrder/_computeAuthoritativeTotal DELIVERY
 // L/D base prices — MUST mirror _computeAuthoritativeTotal's LD_PRICE (10_Hdfc_Gateway.gs).
 // Breakfast is excluded from bulk, so no menu-sheet lookup is ever needed.
 const BULK_LD_PRICE = {
-  "Chapati": 9, "Without Oil Chapati": 8, "Phulka": 7, "Ghee Phulka": 10,
-  "Jowar Bhakri": 20, "Bajra Bhakri": 20,
-  "Dry Sabji Mini [100ml]": 22, "Dry Sabji Full [250ml]": 45,
-  "Curry Sabji Mini [100ml]": 22, "Curry Sabji Full [250ml]": 45,
-  "Dal [200ml]": 22, "Dal Fry [200ml]": 37, "Rice [100g]": 12, "Salad [40g]": 7, "Curd [50g]": 12
+  "Chapati": 11, "Without Oil Chapati": 10, "Phulka": 9, "Ghee Phulka": 13,
+  "Jowar Bhakri": 25, "Bajra Bhakri": 22,
+  "Dry Sabji Mini [100ml]": 26, "Dry Sabji Full [250ml]": 52,
+  "Curry Sabji Mini [100ml]": 26, "Curry Sabji Full [250ml]": 52,
+  "Dal [200ml]": 26, "Dal Fry [200ml]": 42, "Rice [100g]": 15, "Salad [40g]": 9, "Curd [50g]": 14
 };
 
-// Authoritative per-item price (Lunch/Dinner). V2 = ceil(base × 1.06), else base.
+// Authoritative per-item price (Lunch/Dinner).
 function _bulkItemPrice(colKey) {
-  const base = Number(BULK_LD_PRICE[colKey] || 0);
-  return PRICING_V2 ? Math.ceil(base * 1.06) : base;
+  return Number(BULK_LD_PRICE[colKey] || 0);
 }
 // Sum a meal's chosen items → authoritative food subtotal.
 function _bulkMealFood(items) {
@@ -404,7 +403,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
   // one fixed drop location). MUST match submitOrder/_computeAuthoritativeTotal so
   // charge == cart == rows.
   const lsFree    = !!ctx.lsFree && LS_FREE_DELIVERY;
-  const smallTh   = PRICING_V2 ? 53 : 50;
+  const smallTh   = PRICING_V2 ? 59 : 50;
 
   // PASS 1 — build the day list + per-day fee/tier context, and accumulate the batch's
   // total bulk discount (per-day 5%/7.5%/10% of that day's food, rounded) PLUS each
@@ -423,7 +422,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     const dayFood = meals.reduce(function (s, m) { return s + m.food; }, 0);
     if (dayFood <= 0) return;
 
-    const freeThreshold = meals.length <= 1 ? (PRICING_V2 ? 106 : 100) : meals.length === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
+    const freeThreshold = meals.length <= 1 ? (PRICING_V2 ? 117 : 100) : meals.length === 2 ? (PRICING_V2 ? 175 : 150) : (PRICING_V2 ? 209 : 180);
     const isDayFree = feeExempt || (dayFood >= freeThreshold);
 
     let tierRate = 0;
@@ -437,7 +436,7 @@ function _bulkPriceFromWindows(lunchItems, dinnerItems, lunchDates, dinnerDates,
     let dayTotalDailyFood = 0;
     meals.forEach(function (m) {
       const delivery = (lsFree || isDayFree || freeArea || isPickup) ? 0 : BULK_DELIVERY;
-      const smallFee = (lsFree || isDayFree || isPickup) ? 0 : (m.food < smallTh ? 11 : 0);
+      const smallFee = (lsFree || isDayFree || isPickup) ? 0 : (m.food < smallTh ? 12 : 0);
       m.baseFood = m.food;
       m.delivery = delivery;
       m.smallFee = smallFee;

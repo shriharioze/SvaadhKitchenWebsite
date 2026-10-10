@@ -3123,6 +3123,65 @@ function syncBreakfastMenuToMaster(dryRun, fromDateStr) {
   };
 }
 
+/**
+ * Updates breakfast items in SK_Master_Breakfast to the newly approved prices
+ * and triggers syncBreakfastMenuToMaster from 2026-10-12 onwards.
+ */
+function updateMasterBreakfastPrices(commit) {
+  const targetPrices = {
+    "Kanda Poha": 40,
+    "Ghee Upma": 45,
+    "Sabudana Khichdi": 50,
+    "Ghee Sheera": 55,
+    "Thalipeeth": 55,
+    "Aloo Paratha": 55,
+    "Paneer Paratha": 85,
+    "Palak Paratha (2 peices)": 48,
+    "Palak Paratha (2 pieces)": 48,
+    "Methi Paratha (2 pieces)": 48,
+    "Coconut Chutney [100ml]": 25,
+    "Coconut Chutney": 25,
+    "Coriander Chutney": 18,
+    "1 x Idli": 8,
+    "1 x Tikhi Puri": 12
+  };
+
+  const ss = getSpreadsheet();
+  const bfWs = getOrCreateTab(ss, TAB_BF_MASTER, []);
+  const rows = getAllRows(bfWs);
+  const hIdx = headerIndex(bfWs);
+
+  const updates = [];
+  rows.forEach(function(r) {
+    const name = String(r.Name || "").trim();
+    if (name && targetPrices[name] !== undefined) {
+      const oldPrice = Number(r.Price) || 0;
+      const newPrice = targetPrices[name];
+      if (oldPrice !== newPrice) {
+        updates.push({ id: r.ID, name: name, oldPrice: oldPrice, newPrice: newPrice });
+        if (commit && hIdx["Price"]) {
+          bfWs.getRange(r._row, hIdx["Price"]).setValue(newPrice);
+        }
+      }
+    }
+  });
+
+  if (commit) {
+    SpreadsheetApp.flush();
+    _invalidateCache("adminData_v1");
+  }
+
+  // Also sync daily menu rows from Monday, 12 Oct 2026
+  const syncRes = syncBreakfastMenuToMaster(!commit, "2026-10-12");
+
+  return {
+    success: true,
+    committed: !!commit,
+    master_updates: updates,
+    menu_sync: syncRes
+  };
+}
+
 
 
 

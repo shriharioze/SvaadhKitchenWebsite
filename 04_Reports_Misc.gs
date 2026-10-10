@@ -138,11 +138,11 @@ function buildSystemPrompt(extraMenu, page) {
     + "\n=== COMPLETE KNOWLEDGE BASE & GUIDE TO SVAADH KITCHEN ===\n"
     + "1. MAKE YOUR OWN MEAL MODEL (No Fixed Thali):\n"
     + "   • We do not serve fixed thalis or forced bundles. You pick exactly what you want item by item à la carte.\n"
-    + "   • Breads: Chapati (₹10 · ~7\"), Without Oil Chapati (₹9 · ~7\"), Phulka (₹8 · 5–5.5 inches), Ghee Phulka (₹11 · 5–5.5 inches), Jowar Bhakri (₹22), Bajra Bhakri (₹22).\n"
-    + "   • Sabjis (Dry & Curry): Mini 100ml (₹24) or Full 250ml (₹48). Portion Note: 100ml and 250ml denote the container's liquid volume capacity (water volume equivalent); physical weight in grams varies naturally based on vegetable density and gravy consistency. Today's exact sabjis are listed above or shown live on the calendar.\n"
-    + "   • Basics: Dal 200ml (₹24 · 200ml container), Dal Fry 200ml (₹40 · 200ml container), Rice 100g (₹13), Salad 40g (₹8), Curd 50g (₹13).\n"
-    + "   • Breakfast: Daily rotating items (₹35–₹70) made in Pure Ghee (Poha, Upma, Sabudana Khichdi, Paratha, Sheera, etc.). Curd 50g (₹13) is available as an add-on.\n"
-    + "   • Typical Meal Cost: 2 Chapati + Full Sabji + Dal + Rice ≈ ₹105 before discounts.\n"
+    + "   • Breads: Chapati (₹11 · ~7\"), Without Oil Chapati (₹10 · ~7\"), Phulka (₹9 · 5–5.5 inches), Ghee Phulka (₹13 · 5–5.5 inches), Jowar Bhakri (₹25), Bajra Bhakri (₹22).\n"
+    + "   • Sabjis (Dry & Curry): Mini 100ml (₹26) or Full 250ml (₹52). Portion Note: 100ml and 250ml denote the container's liquid volume capacity (water volume equivalent); physical weight in grams varies naturally based on vegetable density and gravy consistency. Today's exact sabjis are listed above or shown live on the calendar.\n"
+    + "   • Basics: Dal 200ml (₹26 · 200ml container), Dal Fry 200ml (₹42 · 200ml container), Rice 100g (₹15), Salad 40g (₹9), Curd 50g (₹14).\n"
+    + "   • Breakfast: Daily rotating items (₹40–₹85) made in Pure Ghee (Poha, Upma, Sabudana Khichdi, Paratha, Sheera, etc.). Curd 50g (₹14) is available as an add-on.\n"
+    + "   • Typical Meal Cost: 2 Chapati + Full Sabji + Dal + Rice ≈ ₹115 before discounts.\n"
     + "   • Cooking Standards & Oils: Cooked fresh daily in small batches. We use Refined Groundnut Oil for all sabjis, Sunflower Oil for chapatis/parathas and frying (e.g. koftas), Pure Cow Ghee for Ghee Phulkas & breakfast, and Zero Oil for Without Oil Chapatis. 100% Pure Vegetarian kitchen (no eggs, no meat). No dedicated Jain preparation.\n"
     + "   • Food Clarity & Nutrition Transparency: Tap the ℹ️ info chip next to any item on the order page to view full nutritional breakdown (Calories, Protein, Carbs, Fats, Fiber), exact ingredients list, chef's kitchen notes, and dietary tags across all 45+ items.\n\n"
     + "2. ORDER CUTOFF TIMINGS & MULTI-DAY ORDERING:\n"
@@ -154,8 +154,8 @@ function buildSystemPrompt(extraMenu, page) {
     + "   • Exactly 15 Served Areas in Hadapsar: Bhosale Nagar, Triveni Nagar, Self Pickup, Magarpatta, Amanora, DP Road, Malwadi, SadeSatraNali, Kirtane Baug, Tupe Patil Road, BG Shirke Road, Pune-Solapur Road (Magarpatta Bridge to Gadital only), Vihar Chowk, Hadapsar Mandai, and Gadital.\n"
     + "   • Always FREE Delivery Areas: Bhosale Nagar, Triveni Nagar, and Self Pickup (from A 104, Shree Laxmi Vihar Society, Bhosale Nagar).\n"
     + "   • Liviano Serio Storefront: Dedicated storefront at https://svaadhkitchen.in/Liviano-Serio.html for Liviano Serio residents with 100% free delivery.\n"
-    + "   • Delivery Fee for Other 12 Areas: ₹11 per meal. BUT Delivery becomes completely FREE when the day's food subtotal reaches ₹106 (ordering 1 meal that day), ₹159 (2 meals), or ₹190 (3 meals).\n"
-    + "   • Small Order Cart Fee: A small ₹11 cart fee applies to any Lunch or Dinner meal whose food subtotal is below ₹53.\n"
+    + "   • Delivery Fee for Other 12 Areas: ₹12 per meal. BUT Delivery becomes completely FREE when the day's food subtotal reaches ₹117 (ordering 1 meal that day), ₹175 (2 meals), or ₹209 (3 meals).\n"
+    + "   • Small Order Cart Fee: A small ₹12 cart fee applies to any Lunch or Dinner meal whose food subtotal is below ₹59.\n"
     + "   • Different Addresses Per Meal: Each meal (Breakfast, Lunch, Dinner) on the same day can be sent to a DIFFERENT address (e.g., breakfast home, lunch office, dinner home).\n"
     + "   • Busy Days & Slot Caps: If delivery slots fill up on high-demand days, orders of ₹200+ for that meal (₹100+ for breakfast) still get home delivery! Otherwise you can choose free Self Pickup or arrange a Porter courier directly.\n"
     + "   • Outside Policy: We do NOT deliver to Kothrud, Baner, Viman Nagar, Koregaon Park, or anywhere outside our listed Hadapsar areas.\n\n"
@@ -1946,9 +1946,9 @@ function markOrdersStatus(body) {
       const scFreeAreas  = getAreas().filter(a => a.free).map(a => a.name);
       const scIsNonFree  = (area) => !scFreeAreas.includes(area) && area !== "Self Pickup";
       // Dynamic free-delivery threshold by remaining meal count (matches submitOrder
-      // and _deleteOrderInternal): 1 meal → ₹106, 2 → ₹159, 3 → ₹190 (V2).
+      // and _deleteOrderInternal): 1 meal → ₹117, 2 → ₹175, 3 → ₹209 (V2).
       const _scMeals = (arr) => new Set(arr.filter(x => (Number(x.Food_Subtotal) || 0) > 0).map(x => String(x.Meal_Type).trim())).size;
-      const _scThr   = (n) => n <= 1 ? (PRICING_V2 ? 106 : 100) : n === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
+      const _scThr   = (n) => n <= 1 ? (PRICING_V2 ? 117 : 100) : n === 2 ? (PRICING_V2 ? 175 : 150) : (PRICING_V2 ? 209 : 180);
       const scOldThr = _scThr(_scMeals(scSameDayRows.concat([r])));
       const scRemThr = _scThr(_scMeals(scSameDayRows));
       if (scOldTotal >= scOldThr && scRemaining < scRemThr) {
@@ -1959,15 +1959,15 @@ function markOrdersStatus(body) {
           const xH2 = _hOf(x), xWs2 = _wsOf(x);
           // LS storefront rows: delivery always free, no small-order fee — never claw back.
           const xIsLS = !!x._lsTab;
-          // Delivery is ₹11 everywhere — refund deduction and stored charge must match.
+          // Delivery is ₹12 everywhere — refund deduction and stored charge must match.
           if (!xIsLS && xSub > 0 && scIsNonFree(x.Area || "") && (Number(x.Delivery_Charge) || 0) === 0) {
-            scDeliveryOwed += 11; scNetDelta += 11;
-            if (xH2["Delivery_Charge"]) xWs2.getRange(x._row, xH2["Delivery_Charge"]).setValue(11);
+            scDeliveryOwed += 12; scNetDelta += 12;
+            if (xH2["Delivery_Charge"]) xWs2.getRange(x._row, xH2["Delivery_Charge"]).setValue(12);
           }
-          if (!xIsLS && (xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
+          if (!xIsLS && (xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 59 : 50)
               && (Number(x.Small_Order_Fee) || 0) === 0) {
-            scSmallFeeOwed += 11; scNetDelta += 11;
-            if (xH2["Small_Order_Fee"]) xWs2.getRange(x._row, xH2["Small_Order_Fee"]).setValue(11);
+            scSmallFeeOwed += 12; scNetDelta += 12;
+            if (xH2["Small_Order_Fee"]) xWs2.getRange(x._row, xH2["Small_Order_Fee"]).setValue(12);
           }
           if (scNetDelta > 0 && xH2["Net_Total"]) {
             // FIX (stale-read): re-read stored Net_Total — the scOverDiscount block

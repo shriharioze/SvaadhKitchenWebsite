@@ -77,7 +77,7 @@
 
     // ── Step 3 ───────────────────────────────────────────
     step3_title: "🗓️ Select Delivery Dates",
-    step3_tip: "🚚 <strong>Free delivery</strong> if meal total ≥ ₹106 (or Bhosale Nagar) &nbsp;·&nbsp; 🎉 <strong>5% off</strong> ≥ ₹325/day &nbsp;·&nbsp; <strong>7.5% off</strong> ≥ ₹485/day &nbsp;·&nbsp; <strong>10% off</strong> ≥ ₹750/day",
+    step3_tip: "🚚 <strong>Free delivery</strong> if meal total ≥ ₹117 (or Bhosale Nagar) &nbsp;·&nbsp; 🎉 <strong>5% off</strong> ≥ ₹325/day &nbsp;·&nbsp; <strong>7.5% off</strong> ≥ ₹485/day &nbsp;·&nbsp; <strong>10% off</strong> ≥ ₹750/day",
 
     // ── Step 4 ───────────────────────────────────────────
     step4_title: "🍱 Choose Your Meals",

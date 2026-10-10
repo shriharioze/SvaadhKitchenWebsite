@@ -819,6 +819,11 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
       return jsonRes(syncBreakfastMenuToMaster(!commit, p.from));
     }
+    if (action === "updateMasterBreakfastPrices") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
+      return jsonRes(updateMasterBreakfastPrices(commit));
+    }
     if (action === "patch20260808Menu") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(patch20260808Menu());
@@ -1219,6 +1224,11 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       const commit = (body.commit === "1" || body.commit === true || body.commit === "true");
       return jsonRes(syncBreakfastMenuToMaster(!commit, body.from));
+    }
+    if (action === "updateMasterBreakfastPrices") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const commit = (body.commit === "1" || body.commit === true || body.commit === "true");
+      return jsonRes(updateMasterBreakfastPrices(commit));
     }
     if (action === "patch20260808Menu") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});

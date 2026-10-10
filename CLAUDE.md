@@ -116,6 +116,33 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Menu Price Increase, Delivery Adjustment & Customer Quality Notice (CODE_VERSION 35.85 / APP_VERSION v26.10.10.03 / ADMIN_VERSION v26.10.10.03)**
+  - **Menu Rate Updates (Effective Monday, 12/10/2026):**
+    - Breads: Chapati ₹11 (was ₹10), Without Oil Chapati ₹10 (was ₹9), Phulka ₹9 (was ₹8), Ghee Phulka ₹13 (was ₹11), Jowar Bhakri ₹25 (was ₹22), Bajra Bhakri ₹22 (kept ₹22).
+    - Sabjis: Dry Sabji Mini [100ml] ₹26 (was ₹24), Dry Sabji Full [250ml] ₹52 (was ₹48), Curry Sabji Mini [100ml] ₹26 (was ₹24), Curry Sabji Full [250ml] ₹52 (was ₹48).
+    - Basics: Dal [200ml] ₹26 (was ₹24), Dal Fry [200ml] ₹42 (was ₹40), Rice [100g] ₹15 (was ₹13), Salad [40g] ₹9 (was ₹8), Curd [50g] ₹14 (was ₹13).
+    - Breakfast Items: Kanda Poha [175g] ₹40 (was ₹38), Ghee Upma [200g] ₹45 (was ₹43), Sabudana Khichdi [200g] ₹50 (was ₹43), Ghee Sheera [200g] ₹55 (was ₹53), Thalipeeth ₹55 (was ₹53), Aloo Paratha ₹55 (was ₹53), Paneer Paratha ₹85 (was ₹80), Palak Paratha (2 pcs) ₹48 (was ₹43), Methi Paratha (2 pcs) ₹48 (was ₹43), Coconut Chutney [100ml] ₹25 (was ₹22), Coriander Chutney [100ml] ₹18 (was ₹15), 1 x Idli ₹8 (was ₹7), 1 x Tikhi Puri ₹12 (was ₹10). Breakfast Curd (B_CURD) is ₹14.
+  - **Delivery & Cart Adjustments:**
+    - Delivery Charge: ₹12 per meal (was ₹11). Always free for Bhosale Nagar, Triveni Nagar, and Self Pickup.
+    - Small Cart Fee: ₹12 (was ₹11).
+    - Small Cart Threshold: ₹59 (was ₹53) for Lunch/Dinner.
+    - Free Delivery Multi-Meal Tiers: 1 Meal: ₹117 (was ₹106), 2 Meals: ₹175 (was ₹159), 3 Meals: ₹209 (was ₹190).
+  - **One-Time Customer Notice Modal:** Added popup modal on `docs/order.html` explaining ingredient inflation (Whole wheat, rice, jowar, pure cow ghee, curd, dals, poha, sabudana, groundnut & sunflower oils, paneer, coconut, certified food-grade packaging) and commitment to purity without cutting corners; shown strictly once per customer, restricted to returning/existing customers only upon login, and suppressed permanently for new customers via `localStorage.getItem("sk_pricing_notice_20261012")`.
+  - **Backend & Gateway Synchronization:**
+    - `00_Config.gs`: Bumped `CODE_VERSION = 35.85`. Updated `BUSINESS_CONTEXT` with all new rates, delivery ₹12, small cart fee ₹12/₹59, and tiers ₹117/₹175/₹209.
+    - `02_Orders_Menu.gs`: Updated delivery charge to 12, tiers to 117/175/209, small cart fee threshold to 59 and fee to 12. Updated cancellation clawbacks and refund breakdown strings.
+    - `06_Bulk_Orders.gs`: Updated `BULK_DELIVERY = 12`, `BULK_LD_PRICE` with authoritative prices, `smallTh = 59`, `freeThreshold = 117/175/209`, `smallFee = 12`.
+    - `10_Hdfc_Gateway.gs`: Updated `LD_PRICE` with authoritative prices, `DELIVERY = 12`, `dynamicFreeThreshold = 117/175/209`, `combinedMealSub < 59` and `smallOrderFee = 12`.
+    - `04_Reports_Misc.gs`: Updated AI prompt rates, meal cost ≈ ₹115, delivery rules, and clawback helpers (`_scThr`, `scDeliveryOwed`, `scSmallFeeOwed`).
+    - `03_Admin_Kitchen.gs` & `Code.gs`: Added `updateMasterBreakfastPrices` endpoint to update `SK_Master_Breakfast` and trigger `syncBreakfastMenuToMaster`.
+    - `Backend/business.json`: Updated all menu rates, delivery charge, and cart thresholds.
+  - **Frontend Pages Synchronized:**
+    - `docs/index.html`: Updated JSON-LD and visible FAQ with delivery charge ₹12, small cart fee ₹12/₹59, tiers ₹117/₹175/₹209, meal item rates, and meal cost ₹115.
+    - `docs/order.html`: Bumped `APP_VERSION = "v26.10.10.03"`, meta tags, JSON-LD, info text, guide, FAQ, `FIXED_MEAL_ITEMS`, `getPrice`, `DELIVERY_CHARGE = 12`, small fee 12, threshold 59, tiers 117/175/209, and injected one-time quality notice modal.
+    - `docs/Liviano-Serio.html`: Bumped `APP_VERSION = "v26.10.10.03"`, synchronized `FIXED_MEAL_ITEMS`, `getPrice`, and rotating tips.
+    - `docs/Admin/vault_admin.html`: Bumped meta app-version, `APP_VERSION`, and `ADMIN_VERSION` to `v26.10.10.03`.
+    - `docs/order-chat.js`: Updated canned answers for delivery and item prices.
+    - `docs/i18n.js` & `docs/shipping.html`: Updated step tip and shipping thresholds.
 - **Diwali Break Notice & Full-Day Closure Extension (CODE_VERSION 35.84 / APP_VERSION v26.10.10.02 / ADMIN_VERSION v26.10.10.02)**
   - **Final Diwali Break Schedule (7th Nov Dinner through 12th Nov):** Kitchen is operational till 7th Nov Lunch. Closed from 7th Nov Dinner through 12th Nov (full day closed 9th–12th Nov with "Diwali Break", 7th Nov Dinner closed). Regular kitchen service resumes on 13th Nov morning (Breakfast).
   - **Live Database Synchronized:** Executed `setKitchenClosed` API for `2026-11-12` setting full day closed (`isClosed: true`, `reason: "Diwali Break"` across Breakfast, Lunch, and Dinner). Verified in live `closedDates` list (`['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12']`).

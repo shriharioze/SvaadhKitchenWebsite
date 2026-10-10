@@ -2557,7 +2557,7 @@ function _submitOrderInternal(body) {
 
   // Fetch free areas dynamically (replaces hardcoded FREE_AREA = "Bhosale Nagar")
   const freeAreaNames = getAreas().filter(function(a){ return a.free; }).map(function(a){ return a.name; });
-  const DELIVERY  = 11;
+  const DELIVERY  = 12;
 
   const submissionIds = [];
 
@@ -3129,9 +3129,9 @@ function _submitOrderInternal(body) {
     const existingMeals = Object.keys(existingDateInfo).filter(mType => (Number(existingDateInfo[mType].subtotal) || 0) > 0);
     const allMealsOnDate = Array.from(new Set([...mealsThisSubmission, ...existingMeals]));
     const totalMealsCount = allMealsOnDate.length;
-    // Free-delivery threshold by delivery-meal count: 1 → ₹106, 2 → ₹159, 3 → ₹190.
+    // Free-delivery threshold by delivery-meal count: 1 → ₹117, 2 → ₹175, 3 → ₹209.
     // MUST mirror the frontend (_freeTh) and the gateway recompute exactly.
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : totalMealsCount === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 117 : 100) : totalMealsCount === 2 ? (PRICING_V2 ? 175 : 150) : (PRICING_V2 ? 209 : 180);
 
     // Calculate total food subtotal for this specific submission's date
     const submissionDayFoodTotal = order.meals.reduce((s, m) => s + (Number(m.subtotal) || 0), 0);
@@ -3242,8 +3242,8 @@ function _submitOrderInternal(body) {
       }
       let smallOrderFee = 0;
       // LS storefront: NO fees at all (owner 2026-08-25 — free delivery AND no small-order fee)
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !_lsDeliveryFree(_sf) && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
-        smallOrderFee = 11;
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !_lsDeliveryFree(_sf) && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 59 : 50)) {
+        smallOrderFee = 12;
       }
 
       // Calculation of credits for previously paid fees on the same day (Retroactive waiver)
@@ -4722,8 +4722,8 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         rowsArr.filter(x => (Number(x.Food_Subtotal) || 0) > 0)
                .map(x => String(x.Meal_Type).trim())
       ).size;
-      const oldThreshold = _mealsIn(sameDayRows.concat([r])) <= 1 ? 100 : 150;
-      remThreshold = _mealsIn(sameDayRows) <= 1 ? 100 : 150;
+      const oldThreshold = _mealsIn(sameDayRows.concat([r])) <= 1 ? (PRICING_V2 ? 117 : 100) : _mealsIn(sameDayRows.concat([r])) === 2 ? (PRICING_V2 ? 175 : 150) : (PRICING_V2 ? 209 : 180);
+      remThreshold = _mealsIn(sameDayRows) <= 1 ? (PRICING_V2 ? 117 : 100) : _mealsIn(sameDayRows) === 2 ? (PRICING_V2 ? 175 : 150) : (PRICING_V2 ? 209 : 180);
       const freeAreaNames2 = getAreas().filter(a => a.free).map(a => a.name);
       const isNonFree = (area) => !freeAreaNames2.includes(area) && area !== "Self Pickup";
 
@@ -4742,20 +4742,20 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
 
           // 1. Delivery Clawback: order was in non-free area but charged ₹0 due to threshold
           if (!xIsLS && xSub > 0 && isNonFree(xArea) && (Number(x.Delivery_Charge) || 0) === 0) {
-            deliveryOwed += 11;
-            netDelta += 11;
+            deliveryOwed += 12;
+            netDelta += 12;
             const delivIdx = xH["Delivery_Charge"];
-            if (delivIdx && !opts.dryRun) xWs.getRange(x._row, delivIdx).setValue(11);
+            if (delivIdx && !opts.dryRun) xWs.getRange(x._row, delivIdx).setValue(12);
           }
 
-          // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹53 was waived due to threshold
+          // 2. Small Order Fee Clawback: Lunch/Dinner sub < ₹59 was waived due to threshold
           const xMeal = String(x.Meal_Type).trim();
-          if (!xIsLS && (xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 53 : 50)
+          if (!xIsLS && (xMeal === "Lunch" || xMeal === "Dinner") && xSub > 0 && xSub < (PRICING_V2 ? 59 : 50)
               && (Number(x.Small_Order_Fee) || 0) === 0) {
-            smallFeeOwed += 11;
-            netDelta += 11;
+            smallFeeOwed += 12;
+            netDelta += 12;
             const smallIdx = xH["Small_Order_Fee"];
-            if (smallIdx && !opts.dryRun) xWs.getRange(x._row, smallIdx).setValue(11);
+            if (smallIdx && !opts.dryRun) xWs.getRange(x._row, smallIdx).setValue(12);
           }
 
           // Update Net_Total on remaining row to reflect newly owed fees (prevents double-clawback).
@@ -4853,11 +4853,11 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
         lines.push(`  • -₹${overDiscount} — discount reversal: a loyalty discount applied to your other order(s) on this day is reversed since it was earned as part of this streak order.`);
       }
       if (deliveryOwed > 0) {
-        const numOrders = deliveryOwed / 11;
-        lines.push(`  • -₹${deliveryOwed} — delivery fee: your remaining ${numOrders > 1 ? numOrders + " orders" : "order"} had free delivery because the day total met the free-delivery threshold. It now drops below ₹${remThreshold}, so ₹11 delivery applies.`);
+        const numOrders = deliveryOwed / 12;
+        lines.push(`  • -₹${deliveryOwed} — delivery fee: your remaining ${numOrders > 1 ? numOrders + " orders" : "order"} had free delivery because the day total met the free-delivery threshold. It now drops below ₹${remThreshold}, so ₹12 delivery applies.`);
       }
       if (smallFeeOwed > 0) {
-        lines.push(`  • -₹${smallFeeOwed} — small cart fee: a remaining order under ₹53 had its ₹11 small cart fee waived (day total met the threshold). Now that drops below ₹${remThreshold}, the fee applies.`);
+        lines.push(`  • -₹${smallFeeOwed} — small cart fee: a remaining order under ₹59 had its ₹12 small cart fee waived (day total met the threshold). Now that drops below ₹${remThreshold}, the fee applies.`);
       }
       if (loyaltyClawback > 0) {
         lines.push(`  • -₹${loyaltyClawback} — loyalty reward reversal: ${loyaltyClawbackNote}`);

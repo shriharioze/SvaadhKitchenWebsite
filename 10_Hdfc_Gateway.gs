@@ -339,25 +339,24 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
   // ~4960). When PRICING_V2 is on, priceOf() returns ceil(base × 1.06) — exactly the
   // new table the frontend's getPrice() derives — and the surcharge below is dropped.
   const LD_PRICE = {
-    "Chapati": 9, "Without Oil Chapati": 8, "Phulka": 7, "Ghee Phulka": 10,
-    "Jowar Bhakri": 20, "Bajra Bhakri": 20,
-    "Dry Sabji Mini [100ml]": 22, "Dry Sabji Full [250ml]": 45,
-    "Curry Sabji Mini [100ml]": 22, "Curry Sabji Full [250ml]": 45,
-    "Dal [200ml]": 22, "Dal Fry [200ml]": 37, "Rice [100g]": 12, "Salad [40g]": 7, "Curd [50g]": 12
+    "Chapati": 11, "Without Oil Chapati": 10, "Phulka": 9, "Ghee Phulka": 13,
+    "Jowar Bhakri": 25, "Bajra Bhakri": 22,
+    "Dry Sabji Mini [100ml]": 26, "Dry Sabji Full [250ml]": 52,
+    "Curry Sabji Mini [100ml]": 26, "Curry Sabji Full [250ml]": 52,
+    "Dal [200ml]": 26, "Dal Fry [200ml]": 42, "Rice [100g]": 15, "Salad [40g]": 9, "Curd [50g]": 14
   };
   function priceOf(colKey, meal, menu) {
     if (meal === "Breakfast") {
       // Breakfast prices come from the menu sheet (updated to V2 there); only the
-      // hardcoded B_CURD needs the bump (12 → 13) under V2.
-      if (colKey === "B_CURD") return PRICING_V2 ? 13 : 12;
+      // hardcoded B_CURD needs the bump (12 → 14) under V2.
+      if (colKey === "B_CURD") return PRICING_V2 ? 14 : 12;
       const f = (menu && menu.breakfast || []).find(function(b){ return b.name === colKey; });
       return f ? Number(f.price) || 0 : 0;
     }
-    const _base = Number(LD_PRICE[colKey] || 0);
-    return PRICING_V2 ? Math.ceil(_base * 1.06) : _base;
+    return Number(LD_PRICE[colKey] || 0);
   }
 
-  const DELIVERY = 11; // MUST match the order page's DELIVERY_CHARGE so the gateway charge == cart total
+  const DELIVERY = 12; // MUST match the order page's DELIVERY_CHARGE so the gateway charge == cart total
   const ss = getSpreadsheet();
   const allAreas      = getAreas() || [];
   const freeAreaNames = allAreas.filter(function(a){return a.free;}).map(function(a){return a.name;});
@@ -494,9 +493,9 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
     const mealsThisSubmission = Object.keys(mealSubs);
     const existingMeals       = Object.keys(existingDateInfo).filter(function(t){ return (Number(existingDateInfo[t].subtotal)||0) > 0; });
     const totalMealsCount     = Array.from(new Set(mealsThisSubmission.concat(existingMeals))).length;
-    // Free-delivery threshold by delivery-meal count: 1 → ₹106, 2 → ₹159, 3 → ₹190.
+    // Free-delivery threshold by delivery-meal count: 1 → ₹117, 2 → ₹175, 3 → ₹209.
     // MUST mirror the frontend (_freeTh) and submitOrder so the charge == the cart total.
-    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 106 : 100) : totalMealsCount === 2 ? (PRICING_V2 ? 159 : 150) : (PRICING_V2 ? 190 : 180);
+    const dynamicFreeThreshold = totalMealsCount <= 1 ? (PRICING_V2 ? 117 : 100) : totalMealsCount === 2 ? (PRICING_V2 ? 175 : 150) : (PRICING_V2 ? 209 : 180);
     // VIP counts as a "free day" too — matches frontend + submitOrder, so a VIP
     // whose earlier same-day orders were charged fees gets them credited back.
     const isDayFree           = (combinedDayTotal >= dynamicFreeThreshold) || isFeeExempt;
@@ -579,8 +578,8 @@ function _computeAuthoritativeTotal(savedOrders, phone, storefront) {
       }
 
       let smallOrderFee = 0;
-      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !_lsFreeDel && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 53 : 50)) {
-        smallOrderFee = 11;
+      if (!isFeeExempt && !isDayFree && !isPickup && !isPorter && !_lsFreeDel && (mealType === "Lunch" || mealType === "Dinner") && sub > 0 && combinedMealSub < (PRICING_V2 ? 59 : 50)) {
+        smallOrderFee = 12;
       }
 
       // Retroactive credits if today crossed the day-free threshold.
