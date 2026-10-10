@@ -116,6 +116,13 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Diwali Break Notice & Full-Day Closure Extension (CODE_VERSION 35.84 / APP_VERSION v26.10.10.02 / ADMIN_VERSION v26.10.10.02)**
+  - **Final Diwali Break Schedule (7th Nov Dinner through 12th Nov):** Kitchen is operational till 7th Nov Lunch. Closed from 7th Nov Dinner through 12th Nov (full day closed 9th–12th Nov with "Diwali Break", 7th Nov Dinner closed). Regular kitchen service resumes on 13th Nov morning (Breakfast).
+  - **Live Database Synchronized:** Executed `setKitchenClosed` API for `2026-11-12` setting full day closed (`isClosed: true`, `reason: "Diwali Break"` across Breakfast, Lunch, and Dinner). Verified in live `closedDates` list (`['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12']`).
+  - **Notice Banner Text Updated:** Customer banner text across `docs/order.html` and `docs/Liviano-Serio.html` updated to: *"Wishing you a Happy Diwali! Kitchen service pauses after 7th Nov Lunch and resumes on 13th Nov morning (closed 7th Nov Dinner through 12th Nov)."*
+  - **Calendar & Fallback Guards Updated:** Closed date cell fallbacks extended to include 12th Nov (`ds >= '2026-11-09' && ds <= '2026-11-12'`). Meal card and countdown timer fallbacks updated to: `((date === '2026-11-07' && meal === 'Dinner') || (date >= '2026-11-08' && date <= '2026-11-12') ? 'Diwali Break' : '')`.
+  - **Backend & AI Brain Sync:** Updated `BUSINESS_CONTEXT.holiday_notice` in `00_Config.gs`, bumped `CODE_VERSION` to `35.84`, pushed via `clasp push -f` and deployed live to snapshot `@688`.
+  - **Frontend Versions Bumped:** Bumped `docs/order.html`, `docs/Liviano-Serio.html`, and `docs/Admin/vault_admin.html` to `v26.10.10.02`.
 - **Diwali Break Notice & Per-Meal Schedule Adjustment (CODE_VERSION 35.83 / APP_VERSION v26.10.10.01 / ADMIN_VERSION v26.10.10.01)**
   - **Diwali Break Schedule (7th Nov Dinner to 12th Nov Lunch):** Kitchen is closed starting from Saturday 7th Nov Dinner through Thursday 12th Nov Lunch. Kitchen is operational till 7th Nov Lunch and regular service resumes from 12th Nov Dinner.
   - **Live Database Verified:** Live `SK_Daily_Menu` synchronized via `setKitchenClosed`: `2026-11-07` open for Breakfast & Lunch and closed for Dinner; `2026-11-09`, `2026-11-10`, `2026-11-11` closed full day; `2026-11-12` closed for Breakfast & Lunch and open for Dinner.
