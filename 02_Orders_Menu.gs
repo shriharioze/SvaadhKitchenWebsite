@@ -1502,11 +1502,11 @@ function getKitchenClosedDates() {
   });
 }
 
-// ── GET WEEKLY MENU (next 1 month / 30 days) ──────────────────
+// ── GET WEEKLY MENU (past 30 days & coming 30 days) ───────────
 function getWeeklyMenu() {
   const today = getISTDate();
   const todayStr = Utilities.formatDate(today, "Asia/Kolkata", "yyyy-MM-dd");
-  return _cachedData("weekly_menu_1m_" + todayStr, 900, function() {
+  return _cachedData("weekly_menu_v2_" + todayStr, 900, function() {
     return _getWeeklyMenuUncached(today, todayStr);
   });
 }
@@ -1533,20 +1533,26 @@ function _getWeeklyMenuUncached(today, todayStr) {
     menuMap[d] = x;
   });
 
-  // Limit window to next 30 days (1 month) from today to cut payload size and load time
+  // Windows: next 30 days (future/today) & past 30 days
   const maxDate = new Date(today.getTime());
   maxDate.setDate(maxDate.getDate() + 30);
   const maxDateStr = Utilities.formatDate(maxDate, "Asia/Kolkata", "yyyy-MM-dd");
 
-  // Collect all future/today dates in the 1-month window that have a menu row, sorted ascending
+  const minPastDate = new Date(today.getTime());
+  minPastDate.setDate(minPastDate.getDate() - 30);
+  const minPastDateStr = Utilities.formatDate(minPastDate, "Asia/Kolkata", "yyyy-MM-dd");
+
   const futureDates = Object.keys(menuMap)
     .filter(d => d >= todayStr && d <= maxDateStr)
     .sort();
 
-  const days = [];
-  futureDates.forEach(dateStr => {
+  const pastDates = Object.keys(menuMap)
+    .filter(d => d >= minPastDateStr && d < todayStr)
+    .sort();
+
+  function formatMenuDay(dateStr, isPast) {
     const d = new Date(dateStr + "T00:00:00+05:30");
-    const dayName    = Utilities.formatDate(d, "Asia/Kolkata", "EEEE");
+    const dayName     = Utilities.formatDate(d, "Asia/Kolkata", "EEEE");
     const displayDate = Utilities.formatDate(d, "Asia/Kolkata", "dd MMM");
 
     const r = menuMap[dateStr];
@@ -1556,7 +1562,7 @@ function _getWeeklyMenuUncached(today, todayStr) {
     // set at least one sabji (Lunch or Dinner), signalling the kitchen is open that day.
     const isSunday = dayName === "Sunday";
     const hasSabjis = r && (r.Lunch_Dry || r.Lunch_Curry || r.Dinner_Dry || r.Dinner_Curry);
-    if (isSunday && !hasSabjis) return;
+    if (isSunday && !hasSabjis) return null;
 
     let bfDaily = [];
     try {
@@ -1569,7 +1575,7 @@ function _getWeeklyMenuUncached(today, todayStr) {
       if (!finalBf.some(x => x.name === m.name)) finalBf.push(m);
     });
 
-    days.push({
+    return {
       date: dateStr,
       dayName: dayName,
       displayDate: displayDate,
@@ -1578,11 +1584,30 @@ function _getWeeklyMenuUncached(today, todayStr) {
       lunch_curry:  r ? (r.Lunch_Curry  || "") : "",
       dinner_dry:   r ? (r.Dinner_Dry   || "") : "",
       dinner_curry: r ? (r.Dinner_Curry || "") : "",
-      menuSet: true  // only dates with a menu row are included
-    });
+      menuSet: true,
+      isPast: !!isPast
+    };
+  }
+
+  const days = [];
+  futureDates.forEach(dateStr => {
+    const item = formatMenuDay(dateStr, false);
+    if (item) days.push(item);
   });
 
-  return { success: true, days: days, count: days.length };
+  const pastDays = [];
+  pastDates.forEach(dateStr => {
+    const item = formatMenuDay(dateStr, true);
+    if (item) pastDays.push(item);
+  });
+
+  return {
+    success: true,
+    days: days,
+    pastDays: pastDays,
+    count: days.length,
+    pastCount: pastDays.length
+  };
 }
 
 // ── WALLET LOGIC ───────────────────────────────────────────────

@@ -378,6 +378,7 @@ function _invalidateWeeklyMenuCache() {
     const today = getISTDate();
     const todayStr = Utilities.formatDate(today, "Asia/Kolkata", "yyyy-MM-dd");
     _invalidateCache("weekly_menu_1m_" + todayStr);
+    _invalidateCache("weekly_menu_v2_" + todayStr);
   } catch(e) {}
 }
 

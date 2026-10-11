@@ -9,7 +9,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.07.03">
+  <meta name="app-version" content="v26.10.11.02">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -798,8 +798,8 @@
 
     .wm-sheet {
       background: #fff;
-      width: 90%;
-      max-width: 500px;
+      width: 92%;
+      max-width: 540px;
       max-height: 85vh;
       border-radius: 20px;
       overflow: hidden;
@@ -816,8 +816,36 @@
       align-items: center;
     }
 
+    .wm-tab-btn {
+      flex: 1;
+      padding: 8px 6px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: #fff;
+      color: #475569;
+      transition: all 0.2s;
+      text-align: center;
+      line-height: 1.25;
+      font-family: inherit;
+    }
+
+    .wm-tab-btn:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+    }
+
+    .wm-tab-btn.active {
+      background: #1E1240;
+      color: #fff;
+      border-color: #1E1240;
+      box-shadow: 0 2px 6px rgba(30, 18, 64, 0.25);
+    }
+
     .wm-body {
-      padding: 20px;
+      padding: 16px 20px;
       overflow-y: auto;
     }
 
@@ -946,11 +974,25 @@
   </div>
 
   <!-- WEEKLY MENU MODAL -->
-  <div class="wm-overlay" id="wmOverlay">
+  <div class="wm-overlay" id="wmOverlay" onclick="if(event.target===this) closeWeeklyMenu()">
     <div class="wm-sheet">
       <div class="wm-header">
-        <h3 style="color:#d35400;">📋 आठवड्याचा मेन्यू (Weekly Menu)</h3>
+        <h3 style="color:#d35400; display:flex; align-items:center; gap:8px;">
+          <span>📋</span> <span>आठवड्याचा मेन्यू (Weekly Menu)</span>
+        </h3>
         <button class="close-modal" onclick="closeWeeklyMenu()">×</button>
+      </div>
+      <!-- Segmented Tab Bar for Coming 30 Days & Past 30 Days -->
+      <div class="wm-tabs-bar" id="wmTabsBar" style="display:flex; background:#f8fafc; padding:8px 12px; border-bottom:1px solid #e2e8f0; gap:8px; flex-shrink:0;">
+        <button id="wmTabUpcoming" class="wm-tab-btn active" onclick="setWmSection('upcoming')">
+          🔮 पुढील ३० दिवस <span id="wmCountUpcoming" style="opacity:0.85; font-size:0.75rem;"></span>
+        </button>
+        <button id="wmTabPast" class="wm-tab-btn" onclick="setWmSection('past')">
+          ⏪ मागील ३० दिवस <span id="wmCountPast" style="opacity:0.85; font-size:0.75rem;"></span>
+        </button>
+        <button id="wmTabAll" class="wm-tab-btn" onclick="setWmSection('all')">
+          📋 सर्व (All)
+        </button>
       </div>
       <div class="wm-body" id="wmBody">
         <div style="text-align:center; padding:20px; color:#999;">Loading menu...</div>
@@ -961,7 +1003,7 @@
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.07.03";
+    const APP_VERSION = "v26.10.11.02";
     (function() {
       const savedVer = localStorage.getItem("sk_admin_ver");
       if (savedVer !== APP_VERSION) {
@@ -1851,7 +1893,7 @@
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
     // Read claude.md and bump version number for pages with changes
-    const KITCHEN_VERSION = "v26.10.07.03";
+    const KITCHEN_VERSION = "v26.10.11.02";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
@@ -2032,17 +2074,30 @@
       renderView();
     }
 
+    let _wmData = { days: [], pastDays: [] };
+    let _wmCurrentSection = "upcoming"; // "upcoming" | "past" | "all"
+    let _wmPastSortDesc = true; // true: yesterday first
+
     async function openWeeklyMenu() {
       const overlay = document.getElementById("wmOverlay");
       const body = document.getElementById("wmBody");
       overlay.classList.add("active");
 
-      body.innerHTML = '<div style="text-align:center; padding:20px;"><div class="spinner"></div><p style="font-size:0.78rem;color:#888;margin-top:8px;">Fetching menu...</p></div>';
+      body.innerHTML = '<div style="text-align:center; padding:30px;"><div class="spinner"></div><p style="font-size:0.82rem;color:#888;margin-top:10px;">मेन्यू लोड होत आहे (Fetching menu)...</p></div>';
       try {
         const res = await fetch(`${APPS_SCRIPT_URL}?action=getWeeklyMenu&pin=${K.sessionPin}`);
         const data = await res.json();
         if (data.success) {
-          renderMenuModal(data.days);
+          _wmData = {
+            days: data.days || [],
+            pastDays: data.pastDays || []
+          };
+          const countUp = document.getElementById("wmCountUpcoming");
+          if (countUp) countUp.textContent = `(${_wmData.days.length})`;
+          const countPast = document.getElementById("wmCountPast");
+          if (countPast) countPast.textContent = `(${_wmData.pastDays.length})`;
+
+          setWmSection(_wmCurrentSection || "upcoming");
         } else {
           throw new Error(data.error || "Failed to load menu");
         }
@@ -2051,33 +2106,124 @@
       }
     }
 
-    function renderMenuModal(days) {
+    function setWmSection(sec) {
+      _wmCurrentSection = sec;
+      ["wmTabUpcoming", "wmTabPast", "wmTabAll"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove("active");
+      });
+      if (sec === "upcoming") {
+        const el = document.getElementById("wmTabUpcoming");
+        if (el) el.classList.add("active");
+      } else if (sec === "past") {
+        const el = document.getElementById("wmTabPast");
+        if (el) el.classList.add("active");
+      } else if (sec === "all") {
+        const el = document.getElementById("wmTabAll");
+        if (el) el.classList.add("active");
+      }
+      renderActiveWmSection();
+    }
+
+    function toggleWmPastSort() {
+      _wmPastSortDesc = !_wmPastSortDesc;
+      renderActiveWmSection();
+    }
+
+    function renderActiveWmSection() {
       const body = document.getElementById("wmBody");
+      const curToday = (typeof todayIST === "function" ? todayIST() : ((document.getElementById("datePicker") && document.getElementById("datePicker").value) || new Date().toISOString().slice(0, 10)));
+      const todayD = new Date(curToday + "T00:00:00+05:30");
+      const yestD = new Date(todayD.getTime() - 86400000);
+      const yestStr = yestD.toISOString().slice(0, 10);
+      const tomD = new Date(todayD.getTime() + 86400000);
+      const tomStr = tomD.toISOString().slice(0, 10);
+
       const dayMR = {
         "Monday": "सोमवार", "Tuesday": "मंगळवार", "Wednesday": "बुधवार",
         "Thursday": "गुरुवार", "Friday": "शुक्रवार", "Saturday": "शनिवार", "Sunday": "रविवार"
       };
 
-      let html = "";
-      days.forEach(d => {
+      function renderCard(d) {
         const bfList = (d.breakfast || []).map(b => mr(b.name)).join(", ");
         const l_dry = mr(d.lunch_dry || "-");
         const l_curry = mr(d.lunch_curry || "-");
         const d_dry = mr(d.dinner_dry || "-");
         const d_curry = mr(d.dinner_curry || "-");
 
-        html += `
-          <div class="wm-day" style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-            <h4 style="color:#1E1240; font-size: 1rem; margin-bottom: 8px;">
-              📅 ${dayMR[d.dayName] || d.dayName} (${d.displayDate})
-            </h4>
-            <p style="font-size:0.88rem; margin-bottom:4px;"><strong>न्याहारी (BF):</strong> ${bfList}</p>
-            <p style="font-size:0.88rem; margin-bottom:4px;"><strong>दुपार (Lunch):</strong> ${l_dry} & ${l_curry}</p>
-            <p style="font-size:0.88rem; margin-bottom:0;"><strong>रात्र (Dinner):</strong> ${d_dry} & ${d_curry}</p>
+        let badgeHtml = "";
+        let borderStyle = "1px solid #e2e8f0";
+        let bgStyle = "#fdf8f2";
+
+        if (d.date === curToday) {
+          badgeHtml = '<span style="background:linear-gradient(135deg,#1E1240,#3B2064); color:#fff; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700; margin-left:6px;">✨ आज (Today)</span>';
+          borderStyle = "2px solid #1E1240";
+          bgStyle = "#f8f5ff";
+        } else if (d.date === tomStr) {
+          badgeHtml = '<span style="background:#e67e22; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700; margin-left:6px;">🌟 उद्या (Tomorrow)</span>';
+          borderStyle = "1.5px solid #f39c12";
+          bgStyle = "#fffaf0";
+        } else if (d.date === yestStr) {
+          badgeHtml = '<span style="background:#64748b; color:#fff; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:700; margin-left:6px;">⏪ काल (Yesterday)</span>';
+          bgStyle = "#f1f5f9";
+          borderStyle = "1.5px solid #94a3b8";
+        } else if (d.isPast || d.date < curToday) {
+          bgStyle = "#f8fafc";
+          borderStyle = "1px solid #e2e8f0";
+        }
+
+        return `
+          <div class="wm-day" style="margin-bottom: 12px; border:${borderStyle}; background:${bgStyle}; border-radius: 12px; padding: 12px 14px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+              <h4 style="color:${d.date === curToday ? '#1E1240' : '#d35400'}; font-size: 0.95rem; font-weight:700; margin:0; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+                <span>📅 ${dayMR[d.dayName] || d.dayName} (${d.displayDate})</span>
+                ${badgeHtml}
+              </h4>
+              <span style="font-size:0.74rem; color:#94a3b8; font-weight:600;">${d.date}</span>
+            </div>
+            <p style="font-size:0.86rem; margin-bottom:5px; line-height:1.45;"><strong style="color:#2c3e50;">न्याहारी (BF):</strong> ${bfList || "-"}</p>
+            <p style="font-size:0.86rem; margin-bottom:5px; line-height:1.45;"><strong style="color:#2c3e50;">दुपार (Lunch):</strong> ${l_dry} &amp; ${l_curry}</p>
+            <p style="font-size:0.86rem; margin-bottom:0; line-height:1.45;"><strong style="color:#2c3e50;">रात्र (Dinner):</strong> ${d_dry} &amp; ${d_curry}</p>
           </div>
         `;
-      });
-      body.innerHTML = html || '<div style="text-align:center; padding:20px;">No menu data available.</div>';
+      }
+
+      let html = "";
+      if (_wmCurrentSection === "upcoming") {
+        if (!_wmData.days || !_wmData.days.length) {
+          html = '<div style="text-align:center; padding:30px; color:#64748b;">पुढील मेन्यू उपलब्ध नाही (No upcoming menu data).</div>';
+        } else {
+          html += `<div style="font-size:0.82rem; font-weight:700; color:#1E1240; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between;">
+            <span>🔮 पुढील ३० दिवसांचा मेन्यू (Coming 30 Days):</span>
+            <span style="color:#64748b; font-weight:600; font-size:0.75rem;">${_wmData.days.length} दिवस</span>
+          </div>`;
+          html += _wmData.days.map(d => renderCard(d)).join("");
+        }
+      } else if (_wmCurrentSection === "past") {
+        if (!_wmData.pastDays || !_wmData.pastDays.length) {
+          html = '<div style="text-align:center; padding:30px; color:#64748b;">मागील मेन्यू उपलब्ध नाही (No past menu data).</div>';
+        } else {
+          const list = [..._wmData.pastDays];
+          if (_wmPastSortDesc) list.reverse(); // Yesterday first
+
+          html += `<div style="font-size:0.82rem; font-weight:700; color:#475569; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between;">
+            <span>⏪ मागील ३० दिवसांचा मेन्यू (Past 30 Days):</span>
+            <button onclick="toggleWmPastSort()" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:8px; padding:3px 8px; font-size:0.72rem; cursor:pointer; font-weight:600; color:#334155;">
+              ${_wmPastSortDesc ? '⇅ काल आधी (Newest first)' : '⇅ जुने आधी (Oldest first)'}
+            </button>
+          </div>`;
+          html += list.map(d => renderCard(d)).join("");
+        }
+      } else { // "all"
+        html += `<div style="font-size:0.82rem; font-weight:700; color:#475569; margin-bottom:10px;">⏪ मागील ३० दिवस (Past 30 Days - ${_wmData.pastDays.length} दिवस):</div>`;
+        const pastList = [..._wmData.pastDays];
+        html += pastList.map(d => renderCard(d)).join("");
+
+        html += `<div style="font-size:0.82rem; font-weight:700; color:#1E1240; margin:20px 0 10px; padding-top:14px; border-top:2px dashed #cbd5e1;">🔮 पुढील ३० दिवस (Coming 30 Days - ${_wmData.days.length} दिवस):</div>`;
+        html += _wmData.days.map(d => renderCard(d)).join("");
+      }
+
+      body.innerHTML = html;
     }
 
     function closeWeeklyMenu() {

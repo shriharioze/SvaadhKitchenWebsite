@@ -116,6 +116,14 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Kitchen Weekly Menu Past 30 Days & Coming 30 Days (CODE_VERSION 35.87 / KITCHEN_VERSION v26.10.11.02)**
+  - **30-Day Past & Coming Menu in Backend (`02_Orders_Menu.gs`):** `getWeeklyMenu()` now extracts both coming 30 days (`days`) and past 30 days (`pastDays`) from `SK_Daily_Menu`. Filtered strictly within `[today - 30d, today - 1d]` for past and `[today, today + 30d]` for future. Returns `{ success: true, days, pastDays, count, pastCount }`. Customer storefronts (`order.html`, `Liviano-Serio.html`, `intentamplify.html`) consume `days` with 100% backward compatibility.
+  - **Cache Key & Invalidation (`02_Orders_Menu.gs`, `03_Admin_Kitchen.gs`):** Updated cache key to `weekly_menu_v2_<todayStr>` with 900s TTL. `_invalidateWeeklyMenuCache()` flushes both `weekly_menu_1m_` and `weekly_menu_v2_` keys on menu edits and kitchen closures.
+  - **Kitchen Modal Redesign (`docs/Admin/kitchen.html`):** The "📋 आठवड्याचा मेन्यू (Weekly Menu)" button opens an upgraded responsive modal featuring:
+    - Segmented tabs: "🔮 पुढील ३० दिवस (Coming 30 Days)" (count badge), "⏪ मागील ३० दिवस (Past 30 Days)" (count badge), and "📋 सर्व (All)".
+    - Day badges: "✨ आज (Today)", "🌟 उद्या (Tomorrow)", and "⏪ काल (Yesterday)".
+    - Newest-first default ordering for past menus with an interactive sort toggle button (Newest ⇄ Oldest).
+    - Backdrop click dismiss and smooth scroll behavior.
 - **Breakfast Rates Refinement (CODE_VERSION 35.86 / APP_VERSION v26.10.11.01 / ADMIN_VERSION v26.10.11.01)**
   - **Refined Breakfast Items Rates:**
     - Sabudana Khichdi [200g]: ₹48 (was ₹50, originally ₹43).
