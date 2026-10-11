@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.10.02">
+  <meta name="app-version" content="v26.10.11.03">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -5203,7 +5203,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.11.01";
+    const APP_VERSION = "v26.10.11.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -9324,7 +9324,9 @@
           isFnF: (profileData.isFnF === true || String(profileData.isFnF) === "true" || String(profileData.friends_family || profileData.Friends_Family || "").toLowerCase() === "yes"),
           onAccount: String(profileData.onAccount || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
           billingCycle: profileData.billingCycle || "Daily",
-          pending_amount: Number(profileData.pending_amount) || 0
+          pending_amount: Number(profileData.pending_amount) || 0,
+          last_order_at: profileData.last_order_at || "",
+          ordered_last_30_days: (profileData.ordered_last_30_days === true || String(profileData.ordered_last_30_days) === "true")
         };
         S.walletBalance = wb;
         S.walletMode = true; // Everyone is on wallet/prepaid mode now
@@ -14151,6 +14153,13 @@
         // Compact full-depth history (45 rows ≈ 15 days) for the streak engine —
         // past_orders' 10-row UI cap is too short for 3-meal/day customers.
         S.streakRows = data.streak_rows || [];
+        if (data.ordered_last_30_days !== undefined) {
+          S.profile = (S.profile || {});
+          if (data.ordered_last_30_days === true) {
+            S.profile.ordered_last_30_days = true;
+          }
+        }
+        setTimeout(function () { try { _maybeShowPricingUpdateNotice(); } catch (_) {} }, 400);
         S.loyaltyInfo = calculateLoyaltyStreak(S.pastOrders);
         refreshStreakUI(); // Live refresh once data arrives
 
@@ -17067,12 +17076,51 @@
     }
 
 
+    function _hasCustomerOrderedInLast30Days() {
+      try {
+        if (!S.profile) return false;
+        // Direct boolean from backend verifyLogin / getCustomerOrders
+        if (S.profile.ordered_last_30_days === true) return true;
+
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        const minDateStr = thirtyDaysAgo.toLocaleDateString("en-CA"); // "YYYY-MM-DD"
+
+        // Check last_order_at if present on profile
+        if (S.profile.last_order_at) {
+          const lo = String(S.profile.last_order_at).trim().slice(0, 10);
+          if (lo && lo >= minDateStr) return true;
+        }
+
+        // Active upcoming orders on file (today or future)
+        if (Array.isArray(S.existingOrders) && S.existingOrders.length > 0) return true;
+
+        // Past orders or streak history rows within last 30 days
+        const pastList = (Array.isArray(S.pastOrders) && S.pastOrders.length) ? S.pastOrders : (S.streakRows || []);
+        if (Array.isArray(pastList) && pastList.length > 0) {
+          for (let i = 0; i < pastList.length; i++) {
+            const od = String(pastList[i].date || "").trim().slice(0, 10);
+            if (od && od >= minDateStr) return true;
+          }
+        }
+      } catch (_) {}
+      return false;
+    }
+
     function _maybeShowPricingUpdateNotice() {
       try {
+        // Cutoff: show only till 17th October 2026; after that, do not show to anyone
+        const todayISO = new Date().toLocaleDateString("en-CA");
+        if (todayISO > "2026-10-17") return;
+
         if (localStorage.getItem("sk_pricing_notice_20261012")) return;
         // Strictly only existing registered customers (never new visitors or unauthenticated sessions)
         if (S.isFirstTime || !S.profile || !S.profile.name) return;
         if (document.getElementById("pricingNoticeModal")) return;
+
+        // Strictly only existing customers who have ordered from us in the last 30 days
+        if (!_hasCustomerOrderedInLast30Days()) return;
 
         // Mark as shown immediately in localStorage so it can never be shown again
         localStorage.setItem("sk_pricing_notice_20261012", "1");

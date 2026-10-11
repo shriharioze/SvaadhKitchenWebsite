@@ -116,6 +116,12 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Pricing Notice Condition Tightening: 30-Day Activity & 17th Oct Expiry (CODE_VERSION 35.88 / APP_VERSION v26.10.11.03)**
+  - **30-Day Order Activity Verification (`02_Orders_Menu.gs`):** `verifyLogin` evaluates whether the customer has placed an order within the last 30 days (`ordered_last_30_days`, `last_order_at`), checking both `SK_Customers` (`Last_Order_At`) and live order tab (`SK_Orders`). `getCustomerOrders` also returns `ordered_last_30_days`.
+  - **Client-Side Targeting & Cutoff (`docs/order.html`):**
+    - The price & quality update notice modal is shown strictly to returning existing customers who have ordered within the past 30 days (evaluating `S.profile.ordered_last_30_days`, `S.profile.last_order_at`, upcoming orders `S.existingOrders`, and recent past orders `S.pastOrders`/`S.streakRows`).
+    - The notice modal strictly expires after 17th October 2026 (`todayISO > "2026-10-17"` returns immediately), ensuring it is never displayed to anyone after that date.
+    - Permanently suppressed for all new customers upon registration and still shown at most once per eligible customer (`sk_pricing_notice_20261012`).
 - **Kitchen Weekly Menu Past 30 Days & Coming 30 Days (CODE_VERSION 35.87 / KITCHEN_VERSION v26.10.11.02)**
   - **30-Day Past & Coming Menu in Backend (`02_Orders_Menu.gs`):** `getWeeklyMenu()` now extracts both coming 30 days (`days`) and past 30 days (`pastDays`) from `SK_Daily_Menu`. Filtered strictly within `[today - 30d, today - 1d]` for past and `[today, today + 30d]` for future. Returns `{ success: true, days, pastDays, count, pastCount }`. Customer storefronts (`order.html`, `Liviano-Serio.html`, `intentamplify.html`) consume `days` with 100% backward compatibility.
   - **Cache Key & Invalidation (`02_Orders_Menu.gs`, `03_Admin_Kitchen.gs`):** Updated cache key to `weekly_menu_v2_<todayStr>` with 900s TTL. `_invalidateWeeklyMenuCache()` flushes both `weekly_menu_1m_` and `weekly_menu_v2_` keys on menu edits and kitchen closures.

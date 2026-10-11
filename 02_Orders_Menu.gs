@@ -186,6 +186,45 @@ function verifyLogin(phone, pin, storefront) {
     }
   }
 
+  const todayIST = getISTDate();
+  const min30Date = new Date(todayIST.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const min30Str = Utilities.formatDate(min30Date, "Asia/Kolkata", "yyyy-MM-dd");
+
+  let orderedLast30Days = false;
+  let lastOrderStr = "";
+  const rawLast = _get(r, "Last_Order_At");
+  if (rawLast) {
+    if (rawLast instanceof Date) {
+      lastOrderStr = Utilities.formatDate(rawLast, "Asia/Kolkata", "yyyy-MM-dd");
+    } else {
+      lastOrderStr = String(rawLast).trim().slice(0, 10);
+    }
+    if (lastOrderStr >= min30Str) {
+      orderedLast30Days = true;
+    }
+  }
+
+  // Fallback: if Last_Order_At missing or older, scan live order tab for orders within last 30 days
+  if (!orderedLast30Days) {
+    try {
+      const orderWs = (typeof _lsOrdersWs === "function") ? _lsOrdersWs(ss, storefront) : getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+      const orderRows = getAllRows(orderWs);
+      for (let i = orderRows.length - 1; i >= 0; i--) {
+        const ord = orderRows[i];
+        if (_normalizePhone(_get(ord, "Phone")) === pStr) {
+          const od = ord.Order_Date instanceof Date
+            ? Utilities.formatDate(ord.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+            : String(ord.Order_Date || "").trim().slice(0, 10);
+          if (od >= min30Str) {
+            orderedLast30Days = true;
+            lastOrderStr = od;
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   return {
     success: true,
     // Login notices are Hadapsar delivery-stop messages — not applicable to LS.
@@ -212,7 +251,9 @@ function verifyLogin(phone, pin, storefront) {
       isFnF:              (r.Friends_Family === "Yes" || r.Friends_Family === true),
       onAccount:          String(r.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
       billingCycle:       r.Billing_Cycle || "Daily",
-      pending_amount:     pendingAmount
+      pending_amount:     pendingAmount,
+      last_order_at:      lastOrderStr,
+      ordered_last_30_days: orderedLast30Days
     }
   };
 }
@@ -4338,10 +4379,15 @@ function getCustomerOrders(phone, storefront) {
   });
   const monthName = Utilities.formatDate(new Date(), "Asia/Kolkata", "MMMM");
 
+  const min30Date = new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000);
+  const min30Str = Utilities.formatDate(min30Date, "Asia/Kolkata", "yyyy-MM-dd");
+  const orderedLast30Days = allFiltered.some(r => fmtD(r) >= min30Str);
+
   return {
     orders: upcoming,
     past_orders: past,
     streak_rows: streakRows,
+    ordered_last_30_days: orderedLast30Days,
     wallet_balance: _calculateWalletBalance(phone, undefined, storefront),
     on_account_balance: onAccountBalance,
     // Today's effective (override-aware) cutoff hours so Manage Orders can
