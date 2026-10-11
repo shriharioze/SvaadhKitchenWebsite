@@ -719,6 +719,24 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getCustomerList());
     }
+    if (action === "adminAddCustomer") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const profile = {
+        phone: p.phone,
+        name: p.name,
+        area: p.area || "",
+        wing: p.wing || "",
+        flat: p.flat || "",
+        floor: p.floor || "",
+        society: p.society || "",
+        landmark: p.landmark || "",
+        delivery_point: p.delivery_point || "",
+        onAccount: p.onAccount || "No",
+        billingCycle: p.billingCycle || "Daily"
+      };
+      _upsertCustomer(getSpreadsheet(), profile);
+      return jsonRes({success: true, profile: profile});
+    }
     if (action === "getCustomerHistory") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getCustomerHistory(p.phone));
@@ -970,6 +988,24 @@ function doPost(e) {
     if (action === "placeBulkOrders") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(placeBulkOrders(body));
+    }
+    if (action === "adminAddCustomer") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const profile = {
+        phone: body.phone,
+        name: body.name,
+        area: body.area || "",
+        wing: body.wing || "",
+        flat: body.flat || "",
+        floor: body.floor || "",
+        society: body.society || "",
+        landmark: body.landmark || "",
+        delivery_point: body.delivery_point || "",
+        onAccount: body.onAccount || "No",
+        billingCycle: body.billingCycle || "Daily"
+      };
+      _upsertCustomer(getSpreadsheet(), profile);
+      return jsonRes({success: true, profile: profile});
     }
     if (action === "markEnRoute") {
        if (!isStaff) return jsonRes({error:"STRICT STAFF PIN REQUIRED"});

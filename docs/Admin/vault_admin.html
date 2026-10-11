@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.11.01">
+  <meta name="app-version" content="v26.10.12.01">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1830,6 +1830,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
           <input class="cust-search" type="text" id="custSearch" placeholder="🔍 Search by name or phone…" oninput="_dbCustSearch()">
           <button class="btn-primary" onclick="loadCustomers()">↺ Refresh</button>
+          <button class="btn-primary" style="background:#16a34a; border-color:#16a34a;" onclick="openNewCustomerModal()">➕ New Customer</button>
           <button class="btn-primary" style="background:#8e44ad; border-color:#8e44ad;" onclick="whitelistNewVIP()">🌟 Whitelist VIP Number</button>
           <button class="btn-primary" style="background:#1e5fa8; border-color:#1e5fa8;" onclick="whitelistOnAccount()">💳 Manage On Account</button>
         </div>
@@ -2151,7 +2152,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
 // Read claude.md and bump version number for pages with changes
-const APP_VERSION = "v26.10.11.01";
+const APP_VERSION = "v26.10.12.01";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2335,7 +2336,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.11.01";
+    const ADMIN_VERSION = "v26.10.12.01";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -6236,6 +6237,150 @@ async function adminAddWalletCredit() {
   }
 }
 
+function openNewCustomerModal(prefillPhone = '') {
+  const overlay = document.createElement('div');
+  overlay.className = 's-modal-overlay';
+  overlay.style.cssText = 'z-index:5000;';
+  document.body.appendChild(overlay);
+
+  const areas = (_areasList && _areasList.length) ? _areasList.map(a => a.name) : [
+    'Amanora', 'Magarpatta', 'Keshav Nagar', 'Hadapsar', 'Bhosale Nagar', 'Hadapsar Mandai',
+    'Mundhwa', 'Koregaon Park', 'Fatima Nagar', 'Wanowrie', 'Kalyani Nagar', 'Viman Nagar', 'Other'
+  ];
+
+  overlay.innerHTML = `
+    <div class="s-modal" style="max-width:440px;width:92%;max-height:90vh;overflow-y:auto;">
+      <div class="s-modal-title" style="display:flex;align-items:center;gap:8px;font-size:1.05rem;">
+        <span>➕ Add New Customer</span>
+      </div>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:14px;">
+        Register a new customer with 0 orders and immediately place meals on their behalf.
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div>
+          <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Mobile Phone (10 digits) *</label>
+          <input type="tel" id="ncPhone" value="${prefillPhone}" placeholder="e.g. 9823012345" maxlength="10" inputmode="numeric"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;box-sizing:border-box;"
+            oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)">
+        </div>
+
+        <div>
+          <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Customer Full Name *</label>
+          <input type="text" id="ncName" placeholder="e.g. Rahul Sharma"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+        </div>
+
+        <div>
+          <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Delivery Area *</label>
+          <select id="ncArea" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;background:#fff;box-sizing:border-box;">
+            ${areas.map(a => `<option value="${a}">${a}</option>`).join('')}
+          </select>
+        </div>
+
+        <div>
+          <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Society / Building (Optional)</label>
+          <input type="text" id="ncSociety" placeholder="e.g. Amanora Aspire Towers"
+            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Wing</label>
+            <input type="text" id="ncWing" placeholder="e.g. Tower 4 / B"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Flat / Office</label>
+            <input type="text" id="ncFlat" placeholder="e.g. 1204"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:3px;">Landmark (Optional)</label>
+          <input type="text" id="ncLandmark" placeholder="e.g. Near West Gate"
+            style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+        </div>
+
+        <div style="margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:600;cursor:pointer;">
+            <input type="checkbox" id="ncOnAccount" style="width:16px;height:16px;">
+            <span>Authorize for On-Account (Pay Later)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="s-modal-footer" style="margin-top:18px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <button class="s-btn s-btn-secondary" onclick="document.body.removeChild(this.closest('.s-modal-overlay'))">Cancel</button>
+        <div style="display:flex;gap:8px;">
+          <button class="s-btn s-btn-secondary" onclick="_saveNewCust(false, this.closest('.s-modal-overlay'))" style="font-weight:700;">💾 Save Customer</button>
+          <button class="s-btn s-btn-primary" onclick="_saveNewCust(true, this.closest('.s-modal-overlay'))" style="background:#16a34a;border-color:#16a34a;font-weight:700;">⚡ Save & Open Customer</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function _saveNewCust(openOrder, overlay) {
+  const phone = (document.getElementById("ncPhone")?.value || "").trim();
+  const name = (document.getElementById("ncName")?.value || "").trim();
+  const area = (document.getElementById("ncArea")?.value || "").trim();
+  const society = (document.getElementById("ncSociety")?.value || "").trim();
+  const wing = (document.getElementById("ncWing")?.value || "").trim();
+  const flat = (document.getElementById("ncFlat")?.value || "").trim();
+  const landmark = (document.getElementById("ncLandmark")?.value || "").trim();
+  const onAccount = document.getElementById("ncOnAccount")?.checked ? "Yes" : "No";
+
+  if (!/^\d{10}$/.test(phone)) {
+    sAlert("Please enter a valid 10-digit mobile number.", "Invalid Phone", "⚠️");
+    return;
+  }
+  if (!name) {
+    sAlert("Please enter the customer's full name.", "Missing Name", "⚠️");
+    return;
+  }
+
+  sLoading(true, "Registering customer…");
+  try {
+    const data = await safeFetchJson(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        _action: "adminAddCustomer",
+        pin: S.sessionPin,
+        phone, name, area, society, wing, flat, landmark, onAccount, billingCycle: "Daily"
+      })
+    });
+    if (!data.success) throw new Error(data.error || "Failed to register customer");
+
+    // Add or update in _custData
+    const existingIdx = _custData.findIndex(c => c.phone === phone);
+    const newCustObj = {
+      phone, name, area, society, wing, flat, landmark,
+      orderCount: 0, totalSpent: 0, pendingAmt: 0, lastDate: toISO(getIST()),
+      onAccount, Fee_Exempt: "No", Friends_Family: "No", standardOrder: ""
+    };
+    if (existingIdx !== -1) {
+      _custData[existingIdx] = Object.assign(_custData[existingIdx], newCustObj);
+    } else {
+      _custData.unshift(newCustObj);
+    }
+
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    toast("✅ Customer registered successfully!");
+
+    if (openOrder) {
+      loadCustomerDetail(phone);
+    } else {
+      applyCustomerFilters();
+    }
+  } catch(e) {
+    sAlert("Error: " + e.message);
+  } finally {
+    sLoading(false);
+  }
+}
+
 let _custDataLoaded = false;
 async function loadCustomers(force = false, silent = false) {
   if (_custDataLoaded && !force && !silent && _custData && _custData.length > 0) {
@@ -6303,7 +6448,18 @@ function renderCustomerGrid(list) {
   const el = document.getElementById("custGridWrap");
   const fmtD = d => d ? (p=>p[2]+"/"+p[1]+"/"+p[0])(d.split("-")) : "—";
   const fmtM = v => `₹${Number(v).toLocaleString("en-IN")}`;
-  if (!list.length) { el.innerHTML=`<div class="no-orders-msg">No customers found.</div>`; return; }
+  if (!list.length) {
+    const q = (document.getElementById("custSearch")?.value || "").trim();
+    const isPhone = /^\d{10}$/.test(q);
+    el.innerHTML = `<div class="no-orders-msg" style="padding:32px 16px;text-align:center;">
+      <div style="font-size:1.05rem;font-weight:700;margin-bottom:6px;">No customers found${q ? ` matching "${q}"` : ''}</div>
+      <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;">Register a new customer with 0 orders and place meals on their behalf:</div>
+      <button class="btn-primary" style="background:#16a34a;border-color:#16a34a;padding:8px 18px;" onclick="openNewCustomerModal('${isPhone ? q : ''}')">
+        ➕ Add New Customer ${isPhone ? '(' + q + ')' : ''}
+      </button>
+    </div>`;
+    return;
+  }
   el.innerHTML = `<div class="cust-grid">${list.map(c=>`
     <div class="cust-card" onclick="loadCustomerDetail('${c.phone}')">
       <div class="cust-card-name">
@@ -6311,7 +6467,7 @@ function renderCustomerGrid(list) {
         ${c.Fee_Exempt === 'Yes' ? '<span class="vip-chip">🌟 VIP</span>' : ''}
         ${c.onAccount === 'Yes' ? '<span class="on-account-chip">💳 On Account</span>' : ''}
       </div>
-      <div class="cust-card-phone">📱 ${c.phone} &nbsp;·&nbsp; <span class="area-chip" style="font-size:.68rem;">${c.area}</span></div>
+      <div class="cust-card-phone">📱 ${c.phone} &nbsp;·&nbsp; <span class="area-chip" style="font-size:.68rem;">${c.area || 'No Area'}</span></div>
       <div class="cust-card-meta">
         <div class="cust-card-stat"><strong>${c.orderCount}</strong> orders</div>
         <div class="cust-card-stat"><strong>${fmtM(c.totalSpent)}</strong> total</div>
@@ -6327,9 +6483,12 @@ async function loadCustomerDetail(phone) {
   try {
     const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
+    window._currentCustDetail = data;
     wrap.innerHTML = renderCustomerDetail(data);
-    // Render bulk calendar now that the DOM element exists
+    // Render bulk calendar & meal panels now that the DOM elements exist
     if (typeof window.renderBulkCalendar === 'function') window.renderBulkCalendar();
+    if (typeof window.renderBulkMealPanels === 'function') window.renderBulkMealPanels();
+    if (typeof window.updateBulkSummary === 'function') window.updateBulkSummary();
     // Wire up ⚡ Place buttons via event delegation (avoids HTML escaping issues)
     wrap.querySelectorAll('.qe-place-btn').forEach(btn => {
       btn.onclick = () => {
@@ -6557,7 +6716,6 @@ function renderCustomerDetail(data) {
       <td style="text-align:right;font-weight:700;white-space:nowrap;">${fmtM(o.total)}</td>
       <td>${pBadge(o.status)}</td>
       <td style="text-align:right;">
-    <td style="text-align:right;">
         <button class="btn-set-fav" onclick="setAsStandard('${data.phone}', this.dataset.raw, '${o.meal}')" data-raw='${rawItems.replace(/'/g, "&apos;")}' title="Set as Standard Order">⭐ Favorite</button>
       </td>
     </tr>`;
@@ -6653,10 +6811,58 @@ function renderCustomerDetail(data) {
     } catch(e) {}
   }
 
+  const directOrderSection = `
+    <div style="background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+        <div>
+          <div style="font-size:.85rem; font-weight:800; color:var(--text); text-transform:uppercase; letter-spacing:.03em;">⚡ Place Single Meal Order</div>
+          <div style="font-size:.74rem; color:var(--muted);">Place Breakfast, Lunch, or Dinner directly on customer's behalf without requiring saved favorites</div>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+        <button class="s-btn" onclick="openDirectOrderModal('${data.phone}', '${(data.name||'').replace(/'/g, "\\'")}', 'Breakfast')"
+          style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700; padding:10px 14px; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;">
+          🍳 Place Breakfast
+        </button>
+        <button class="s-btn" onclick="openDirectOrderModal('${data.phone}', '${(data.name||'').replace(/'/g, "\\'")}', 'Lunch')"
+          style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700; padding:10px 14px; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;">
+          🍲 Place Lunch
+        </button>
+        <button class="s-btn" onclick="openDirectOrderModal('${data.phone}', '${(data.name||'').replace(/'/g, "\\'")}', 'Dinner')"
+          style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; font-weight:700; padding:10px 14px; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;">
+          🍛 Place Dinner
+        </button>
+      </div>
+    </div>
+  `;
+
   // Render Bulk Placement Tool
   const today = getIST();
   window._bulkCalYear  = today.getUTCFullYear();
   window._bulkCalMonth = today.getUTCMonth();
+  window._bulkSelected = [];
+
+  let customerFavs = [];
+  try { customerFavs = JSON.parse(data.standardOrder || "[]"); } catch(e) { customerFavs = []; }
+
+  const getInitialMealItems = (mType) => {
+    const f = customerFavs.find(fav => (fav.meal || "").toLowerCase() === mType.toLowerCase() || (fav.name || "").toLowerCase().includes(mType.toLowerCase()));
+    if (f && f.items) {
+      let itms = f.items;
+      if (typeof itms === "string") { try { itms = JSON.parse(itms); } catch(e) { itms = {}; } }
+      return { ...itms };
+    }
+    if (mType === 'Breakfast') return { 'Kanda Poha': 1 };
+    if (mType === 'Lunch') return { 'Chapati': 2, 'Dry Sabji Mini': 1, 'Dal': 1 };
+    if (mType === 'Dinner') return { 'Chapati': 2, 'Curry Sabji Mini': 1, 'Dal': 1 };
+    return {};
+  };
+
+  window._bulkMealsConfig = {
+    Breakfast: { enabled: false, items: getInitialMealItems('Breakfast') },
+    Lunch:     { enabled: true,  items: getInitialMealItems('Lunch') },
+    Dinner:    { enabled: false, items: getInitialMealItems('Dinner') }
+  };
 
   window.renderBulkCalendar = function() {
     const y = window._bulkCalYear, m = window._bulkCalMonth;
@@ -6673,83 +6879,401 @@ function renderCustomerDetail(data) {
       generateCalendar(y, m, window._bulkSelected || [], "toggleBulkDate");
   };
 
-  const bulkTool = `
-    <div class="bulk-panel">
-      <div class="bulk-title">🗓️ Bulk Order Multi-Placement</div>
-      <div style="font-size:0.75rem; color:#856404; margin-bottom:12px;">Select multiple dates. Use the <b>tick boxes</b> on your favorites above to decide what to place for each date. Only one favorite per meal type can be ticked.</div>
+  window.toggleBulkDate = (el, iso) => {
+    const idx = window._bulkSelected.indexOf(iso);
+    if (idx === -1) {
+      window._bulkSelected.push(iso);
+      if (el) el.classList.add('active');
+    } else {
+      window._bulkSelected.splice(idx, 1);
+      if (el) el.classList.remove('active');
+    }
+    if (typeof window.updateBulkSummary === 'function') window.updateBulkSummary();
+  };
 
-      <div style="display:grid; grid-template-columns: 1fr 200px; gap:20px;">
-        <div id="bulkCalendar" class="bulk-cal-wrap"></div>
-        <div>
-          <button class="btn-primary" style="width:100%; padding:10px; background:var(--red); border-color:var(--red);" onclick="handleBulkOrderTrigger('${data.phone}', '${data.name.replace(/'/g, "\\'")}')">🚚 Place Bulk Orders</button>
-          <div style="font-size:0.68rem; color:var(--muted); margin-top:10px; line-height:1.2;">
-            Selected dates will be cross-referenced with your ticked favorites.
+  window.selectBulkPreset = function(workingDays) {
+    const list = [];
+    const ist = getIST();
+    const currH = ist.getHours() + (ist.getMinutes() / 60);
+    let cursor = new Date(ist.getTime());
+    if (currH >= 20) {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const closedList = Array.isArray(S.kitchenClosedDates) ? S.kitchenClosedDates : [];
+    while (list.length < workingDays && list.length < 90) {
+      const dayOfWeek = cursor.getDay();
+      const iso = toISO(cursor);
+      if (dayOfWeek !== 0 && !closedList.includes(iso)) {
+        list.push(iso);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    window._bulkSelected = list;
+    if (list.length > 0) {
+      const firstD = new Date(list[0]);
+      window._bulkCalYear = firstD.getFullYear();
+      window._bulkCalMonth = firstD.getMonth();
+    }
+    window.renderBulkCalendar();
+    window.updateBulkSummary();
+    toast(`📅 Selected ${list.length} working days`);
+  };
+
+  window.clearBulkDates = function() {
+    window._bulkSelected = [];
+    window.renderBulkCalendar();
+    window.updateBulkSummary();
+  };
+
+  window.renderBulkMealPanels = function() {
+    const container = document.getElementById("bulkMealPanelsWrap");
+    if (!container) return;
+    const meals = ['Breakfast', 'Lunch', 'Dinner'];
+    const favsByMeal = (m) => customerFavs.filter(f => (f.meal || '').toLowerCase() === m.toLowerCase() || (f.name || '').toLowerCase().includes(m.toLowerCase()));
+
+    container.innerHTML = meals.map(m => {
+      const cfg = window._bulkMealsConfig[m] || { enabled: false, items: {} };
+      const avail = _getAvailableItemsForMeal(m);
+      const existingKeys = new Set(Object.keys(cfg.items).filter(k => cfg.items[k] > 0));
+      const addableItems = avail.filter(a => !existingKeys.has(a.key));
+
+      const rows = Object.entries(cfg.items)
+        .filter(([,q]) => Number(q) > 0)
+        .map(([k, q]) => {
+          const label = colKeyToDisplayName ? colKeyToDisplayName(k) : k;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:.78rem;border-bottom:1px solid #f3f4f6;">
+            <span>${label}</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button onclick="_bulkQty('${m}', '${k}', -1)" style="width:22px;height:22px;border:1px solid #ddd;border-radius:4px;background:#f9f9f9;cursor:pointer;line-height:1;">−</button>
+              <strong style="min-width:16px;text-align:center;">${q}</strong>
+              <button onclick="_bulkQty('${m}', '${k}', 1)" style="width:22px;height:22px;border:1px solid #ddd;border-radius:4px;background:#f9f9f9;cursor:pointer;line-height:1;">+</button>
+              <button onclick="_bulkQty('${m}', '${k}', 0)" style="width:22px;height:22px;border:1px solid #fecaca;border-radius:4px;background:#fef2f2;cursor:pointer;color:#dc2626;font-size:.7rem;">✕</button>
+            </div>
+          </div>`;
+        }).join('');
+
+      const mFavs = favsByMeal(m);
+      const favOptions = mFavs.map(f => `<option value="${f.name.replace(/"/g, '&quot;')}">${f.name}</option>`).join('');
+      const sub = _calcSubtotal(cfg.items);
+
+      return `
+        <div style="border:1.5px solid ${cfg.enabled ? 'var(--red-border, #fca5a5)' : 'var(--border)'};border-radius:10px;padding:12px;background:${cfg.enabled ? '#fff' : '#fcfcfc'};">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:.85rem;cursor:pointer;">
+              <input type="checkbox" id="bulkMeal_${m}_chk" ${cfg.enabled ? 'checked' : ''} onchange="_bulkToggleMeal('${m}', this.checked)" style="width:16px;height:16px;">
+              <span>${m === 'Breakfast' ? '🍳' : m === 'Lunch' ? '🍲' : '🍛'} ${m}</span>
+            </label>
+            <span style="font-size:.8rem;font-weight:700;color:${cfg.enabled ? 'var(--red)' : 'var(--muted)'};">₹${sub}/meal</span>
           </div>
+          ${cfg.enabled ? `
+            ${mFavs.length > 0 ? `
+              <div style="margin-bottom:8px;">
+                <select onchange="_bulkLoadFav('${m}', this.value)" style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;background:#f9fafb;">
+                  <option value="">⚡ Load from saved favorite…</option>
+                  ${favOptions}
+                </select>
+              </div>
+            ` : ''}
+            <div style="max-height:140px;overflow-y:auto;margin-bottom:8px;">
+              ${rows || '<div style="font-size:.75rem;color:var(--muted);padding:4px 0;">No items added yet.</div>'}
+            </div>
+            <div style="display:flex;gap:4px;">
+              <select id="bulkAdd_${m}" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:.75rem;">
+                <option value="">+ Add item…</option>
+                ${addableItems.map(a => `<option value="${a.key}">${a.label} (₹${a.price})</option>`).join('')}
+              </select>
+              <button onclick="_bulkAddItem('${m}')" style="padding:5px 10px;background:var(--red);color:#fff;border:none;border-radius:6px;font-size:.75rem;font-weight:700;cursor:pointer;">Add</button>
+            </div>
+          ` : `
+            <div style="font-size:.74rem;color:var(--muted);margin-top:4px;">Disabled for this bulk plan. Tick checkbox to include.</div>
+          `}
+        </div>
+      `;
+    }).join('');
+  };
+
+  window._bulkToggleMeal = (m, enabled) => {
+    window._bulkMealsConfig[m].enabled = enabled;
+    window.renderBulkMealPanels();
+    window.updateBulkSummary();
+  };
+
+  window._bulkQty = (m, key, delta) => {
+    if (delta === 0) {
+      delete window._bulkMealsConfig[m].items[key];
+    } else {
+      window._bulkMealsConfig[m].items[key] = Math.max(0, (window._bulkMealsConfig[m].items[key] || 0) + delta);
+      if (window._bulkMealsConfig[m].items[key] === 0) delete window._bulkMealsConfig[m].items[key];
+    }
+    window.renderBulkMealPanels();
+    window.updateBulkSummary();
+  };
+
+  window._bulkAddItem = (m) => {
+    const sel = document.getElementById(`bulkAdd_${m}`);
+    if (!sel || !sel.value) return;
+    const k = sel.value;
+    window._bulkMealsConfig[m].items[k] = (window._bulkMealsConfig[m].items[k] || 0) + 1;
+    window.renderBulkMealPanels();
+    window.updateBulkSummary();
+  };
+
+  window._bulkLoadFav = (m, favName) => {
+    if (!favName) return;
+    const f = customerFavs.find(x => x.name === favName);
+    if (!f || !f.items) return;
+    let itms = f.items;
+    if (typeof itms === "string") { try { itms = JSON.parse(itms); } catch(e) { itms = {}; } }
+    window._bulkMealsConfig[m].items = { ...itms };
+    window.renderBulkMealPanels();
+    window.updateBulkSummary();
+    toast(`Loaded favorite "${favName}" for ${m}`);
+  };
+
+  window.updateBulkSummary = function() {
+    const countEl = document.getElementById("bulkSelectedCount");
+    const summaryEl = document.getElementById("bulkSummaryStrip");
+    const btnEl = document.getElementById("bulkSubmitBtn");
+    const dates = window._bulkSelected || [];
+    if (countEl) countEl.textContent = `${dates.length} date${dates.length === 1 ? '' : 's'} selected`;
+
+    const enabledMeals = [];
+    ['Breakfast', 'Lunch', 'Dinner'].forEach(m => {
+      const cfg = window._bulkMealsConfig[m];
+      if (cfg && cfg.enabled && Object.keys(cfg.items).length > 0) {
+        enabledMeals.push({ name: m, subtotal: _calcSubtotal(cfg.items) });
+      }
+    });
+
+    const dailySubtotal = enabledMeals.reduce((s, m) => s + m.subtotal, 0);
+    const totalOrders = dates.length * enabledMeals.length;
+    const estGrandTotal = dates.length * dailySubtotal;
+
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:.82rem;">
+          <div>
+            <strong>${dates.length} Days</strong> × <strong>${enabledMeals.length} Meal${enabledMeals.length===1?'':'s'}/day</strong>
+            <span style="color:var(--muted);margin-left:6px;">(${enabledMeals.map(m=>`${m.name} ₹${m.subtotal}`).join(', ') || 'No meals selected'})</span>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:1rem;font-weight:800;color:var(--red);">Est. ₹${Number(estGrandTotal).toLocaleString('en-IN')}</div>
+            <div style="font-size:.7rem;color:var(--muted);">${totalOrders} total order${totalOrders===1?'':'s'} to place</div>
+          </div>
+        </div>
+      `;
+    }
+
+    if (btnEl) {
+      btnEl.disabled = dates.length === 0 || enabledMeals.length === 0;
+      btnEl.innerHTML = `🚚 Place Bulk Orders (${dates.length} Days · ${totalOrders} Orders)`;
+    }
+  };
+
+  window.executeBulkOrderPlacement = async function(phone, name) {
+    const dates = window._bulkSelected || [];
+    if (!dates.length) {
+      sAlert("Please select at least one date using the 7/15/30 Days presets or by clicking the calendar.", "No Dates", "⚠️");
+      return;
+    }
+
+    const enabledMeals = [];
+    ['Breakfast', 'Lunch', 'Dinner'].forEach(m => {
+      const cfg = window._bulkMealsConfig[m];
+      if (cfg && cfg.enabled) {
+        const activeEntries = Object.entries(cfg.items).filter(([,q]) => Number(q) > 0);
+        if (activeEntries.length > 0) {
+          enabledMeals.push({
+            type: m,
+            itemsObj: Object.fromEntries(activeEntries),
+            itemList: activeEntries.map(([colKey, qty]) => ({ colKey, qty: Number(qty) })),
+            subtotal: _calcSubtotal(cfg.items)
+          });
+        }
+      }
+    });
+
+    if (!enabledMeals.length) {
+      sAlert("Please enable at least one meal (Breakfast, Lunch, or Dinner) and ensure it has items.", "No Meals Configured", "⚠️");
+      return;
+    }
+
+    const totalOrders = dates.length * enabledMeals.length;
+    const estGrandTotal = dates.length * enabledMeals.reduce((s, m) => s + m.subtotal, 0);
+
+    const confirmed = await sConfirm(
+      `Place <b>${totalOrders} orders</b> across <b>${dates.length} days</b> for <b>${name}</b>?<br><br>` +
+      `Meals per day: <b>${enabledMeals.map(m=>m.type).join(', ')}</b><br>` +
+      `Est. Food Subtotal: <b>₹${Number(estGrandTotal).toLocaleString('en-IN')}</b>`,
+      "Confirm Bulk Placement", "🚚"
+    );
+    if (!confirmed) return;
+
+    const payMethod = document.getElementById("bulkPayMethod")?.value || "On Account";
+    const payStatus = payMethod === "Paid" ? "Paid" : (payMethod === "Wallet" ? "Wallet Paid" : (payMethod === "On Account" ? "On Account" : "Pending"));
+    const saveFav = document.getElementById("bulkSaveAsFav")?.checked;
+
+    const orders = dates.map(date => ({
+      date,
+      meals: enabledMeals.map(m => ({
+        type: m.type,
+        items: m.itemList,
+        subtotal: m.subtotal
+      }))
+    }));
+
+    sLoading(true, `Placing ${totalOrders} bulk orders…`);
+    try {
+      let customer = _custData.find(c => c.phone === phone);
+      if (!customer && window._currentCustDetail && window._currentCustDetail.phone === phone) {
+        customer = window._currentCustDetail;
+      }
+
+      const data = await safeFetchJson(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          _action: "processOrder",
+          pin: S.sessionPin,
+          profile: {
+            phone: customer ? customer.phone : phone,
+            name: customer ? customer.name : name,
+            area:           customer?.area || "",
+            wing:           customer?.wing || "",
+            flat:           customer?.flat || "",
+            floor:          customer?.floor || "",
+            society:        customer?.society || "",
+            maps:           customer?.maps || "",
+            landmark:       customer?.landmark || "",
+            delivery_point: customer?.delivery_point || ""
+          },
+          orders: orders,
+          payment_method: payMethod,
+          payment_status: payStatus
+        })
+      });
+
+      if (!data.success) throw new Error(data.error || "Failed to place bulk orders");
+
+      if (saveFav) {
+        for (const m of enabledMeals) {
+          try {
+            await safeFetchJson(APPS_SCRIPT_URL, {
+              method: 'POST',
+              body: JSON.stringify({
+                _action: 'setStandardOrder',
+                pin: S.sessionPin,
+                phone,
+                items: m.itemsObj,
+                templateName: `${m.type} Plan`,
+                meal: m.type
+              })
+            });
+          } catch(e) {
+            console.error("Failed to save fav", e);
+          }
+        }
+      }
+
+      toast(`✅ Successfully placed ${totalOrders} orders across ${dates.length} days!`);
+      loadCustomerDetail(phone);
+      loadCustomers(true, true);
+    } catch(e) {
+      sAlert("Bulk Order Error: " + e.message);
+    } finally {
+      sLoading(false);
+    }
+  };
+
+  const bulkTool = `
+    <div class="bulk-panel" style="margin-bottom:24px;">
+      <div class="bulk-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span>🗓️ Bulk Order Multi-Placement</span>
+        <span id="bulkSelectedCount" style="font-size:.78rem;font-weight:600;color:var(--muted);background:var(--bg2);padding:3px 10px;border-radius:12px;border:1px solid var(--border);">0 dates selected</span>
+      </div>
+      <div style="font-size:0.75rem; color:#856404; margin-bottom:12px;">
+        Select duration presets (7, 15, or 30 working days) or pick dates on the calendar. Configure meal items directly below — <b>no pre-saved favorites required</b>!
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+        <button class="s-btn s-btn-secondary" onclick="selectBulkPreset(7)" style="font-weight:700; font-size:.78rem; padding:6px 12px; background:#f0fdf4; border-color:#86efac; color:#166534;">
+          📅 Next 7 Working Days
+        </button>
+        <button class="s-btn s-btn-secondary" onclick="selectBulkPreset(15)" style="font-weight:700; font-size:.78rem; padding:6px 12px; background:#eff6ff; border-color:#93c5fd; color:#1e40af;">
+          📅 Next 15 Working Days
+        </button>
+        <button class="s-btn s-btn-secondary" onclick="selectBulkPreset(30)" style="font-weight:700; font-size:.78rem; padding:6px 12px; background:#faf5ff; border-color:#d8b4fe; color:#6b21a8;">
+          📅 Next 30 Working Days
+        </button>
+        <button class="s-btn s-btn-secondary" onclick="clearBulkDates()" style="font-size:.78rem; padding:6px 10px; color:var(--muted);">
+          🧹 Clear Dates
+        </button>
+      </div>
+
+      <div style="display:grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.4fr); gap:18px;">
+        <div>
+          <div id="bulkCalendar" class="bulk-cal-wrap"></div>
+          <div style="font-size:0.68rem; color:var(--muted); margin-top:8px; line-height:1.3;">
+            Sundays and kitchen closed dates are automatically skipped by presets. Click any date to toggle on/off.
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="font-size:.75rem; font-weight:700; text-transform:uppercase; color:var(--muted);">Configure Meals for Selected Dates</div>
+          <div id="bulkMealPanelsWrap" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+          <div style="background:var(--bg2); padding:10px 12px; border-radius:8px; border:1px solid var(--border); margin-top:4px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:center;">
+              <div>
+                <label style="display:block; font-size:.7rem; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:3px;">Payment Method</label>
+                <select id="bulkPayMethod" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:.78rem;">
+                  <option value="On Account" ${data.On_Account === 'Yes' ? 'selected' : ''}>💳 On Account</option>
+                  <option value="Wallet">👛 Svaadh Wallet</option>
+                  <option value="Paid">✓ Direct Paid (UPI/Cash)</option>
+                  <option value="Pending">⏳ Pending</option>
+                </select>
+              </div>
+              <div style="padding-top:14px;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:.75rem; cursor:pointer;">
+                  <input type="checkbox" id="bulkSaveAsFav" style="width:14px; height:14px;">
+                  <span>⭐ Save as customer favorites</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div id="bulkSummaryStrip" style="padding:10px 14px; background:#fff8f0; border-radius:8px; border:1px solid #ffe0b0;"></div>
+
+          <button id="bulkSubmitBtn" class="btn-primary" style="width:100%; padding:11px; background:var(--red); border-color:var(--red); font-weight:700; font-size:.9rem;"
+            onclick="executeBulkOrderPlacement('${data.phone}', '${(data.name||'').replace(/'/g, "\\'")}')">
+            🚚 Place Bulk Orders
+          </button>
         </div>
       </div>
     </div>
   `;
 
-  window._bulkSelected = [];
-  window.toggleBulkDate = (el, iso) => {
-    const idx = window._bulkSelected.indexOf(iso);
-    if (idx === -1) {
-      window._bulkSelected.push(iso);
-      el.classList.add('active');
-    } else {
-      window._bulkSelected.splice(idx, 1);
-      el.classList.remove('active');
-    }
-  };
-
-  function syncFavToggles(chk) {
-    const meal = chk.dataset.meal;
-    if (!chk.checked || meal === "Other") return;
-    document.querySelectorAll(`.fav-bulk-check[data-meal="${meal}"]`).forEach(c => {
-      if (c !== chk) c.checked = false;
-    });
-  }
-
-  async function handleBulkOrderTrigger(phone, name) {
-    const selectedDates = [...document.querySelectorAll(".cal-day.active")].map(d => d.dataset.date);
-    if (!selectedDates.length) { toast("Please select at least one date on the calendar."); return; }
-    const selectedFavs = [...document.querySelectorAll(".fav-bulk-check:checked")];
-    if (!selectedFavs.length) { toast("Please select at least one favorite template (tick the boxes)."); return; }
-    const counts = { Breakfast: 0, Lunch: 0, Dinner: 0, Other: 0 };
-    selectedFavs.forEach(f => counts[f.dataset.meal]++);
-    if (counts.Breakfast > 1 || counts.Lunch > 1 || counts.Dinner > 1) {
-      toast("Error: Maximum one favorite per meal type (Breakfast/Lunch/Dinner) allowed.");
-      return;
-    }
-    if (!(await showUIConfirm(`Place orders for ${selectedDates.length} days using ${selectedFavs.length} template(s)?`, "Confirm Bulk Order", "🚚"))) return;
-    sLoading(true, `Placing orders for ${selectedDates.length} days...`);
-    try {
-      const templates = selectedFavs.map(chk => ({ name: chk.value, items: JSON.parse(chk.dataset.raw), meal: chk.dataset.meal }));
-      const data = await safeFetchJson(APPS_SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({ _action: "placeBulkOrders", pin: S.sessionPin, phone, name, templates, dates: selectedDates })
-      });
-      if (!data.success) throw new Error(data.error);
-      toast(`✅ Successfully placed ${data.count} orders!`);
-      loadCustomerDetail(phone);
-    } catch(e) {
-      toast("Error: " + e.message);
-    } finally {
-      sLoading(false);
-    }
-  }
+  const historyContent = rows ? `
+    <table class="hist-table">
+      <thead><tr><th>Date</th><th>Meal</th><th>Items</th><th style="text-align:right;">Amount</th><th>Status</th><th style="text-align:right;">Fav</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>` : `
+    <div style="text-align:center;padding:28px 16px;background:var(--bg2);border-radius:10px;border:1.5px dashed var(--border);color:var(--muted);font-size:.85rem;">
+      <div style="font-size:1.4rem;margin-bottom:6px;">🍽️</div>
+      <strong>No previous orders yet for this customer.</strong>
+      <div style="margin-top:4px;font-size:.78rem;">Use the <b>⚡ Place Single Meal Order</b> buttons or the <b>🗓️ Bulk Order</b> tool above to place their first order!</div>
+    </div>`;
 
   return `<div class="cust-detail-wrap">
     <div class="cust-detail-head">
       <div>
         <div class="cust-detail-title">${data.name}</div>
-        <div style="font-size:.75rem; color:var(--muted); margin-top:2px;">📱 ${data.phone} &nbsp;·&nbsp; ${data.area} &nbsp;·&nbsp; ${data.orderCount} orders</div>
+        <div style="font-size:.75rem; color:var(--muted); margin-top:2px;">📱 ${data.phone} &nbsp;·&nbsp; ${data.area || 'No Area'} &nbsp;·&nbsp; ${data.orderCount || 0} orders</div>
       </div>
       <div style="display:flex; gap:14px; align-items:center;">
         <div style="text-align:right;">
-          <div style="font-size:1.05rem; font-weight:700;">${fmtM(data.totalSpent)} total</div>
+          <div style="font-size:1.05rem; font-weight:700;">${fmtM(data.totalSpent || 0)} total</div>
           <div style="font-size:.8rem; margin-top:2px;">
-            ${data.pending>0?`<span style="color:var(--gold);">⏳ ${fmtM(data.pending)} pending</span>`:`<span style="color:var(--green);">✓ Fully paid</span>`}
+            ${(data.pending || 0) > 0 ? `<span style="color:var(--gold);">⏳ ${fmtM(data.pending)} pending</span>` : `<span style="color:var(--green);">✓ Fully paid</span>`}
           </div>
         </div>
         <button class="cust-detail-close" onclick="document.getElementById('custDetailWrap').innerHTML=''" title="Close">✕</button>
@@ -6806,15 +7330,12 @@ function renderCustomerDetail(data) {
        </button>
     </div>
 
+    ${directOrderSection}
     ${stdOrderHtml}
     ${bulkTool}
 
-    <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--muted); margin: 30px 0 10px;">📜 Order History</div>
-
-      <table class="hist-table">
-        <thead><tr><th>Date</th><th>Meal</th><th>Items</th><th style="text-align:right;">Amount</th><th>Status</th><th style="text-align:right;">Fav</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+    <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--muted); margin: 30px 0 10px;">📜 Order History (${(data.orders||[]).length})</div>
+    ${historyContent}
   </div>`;
 }
 
@@ -7938,54 +8459,94 @@ function generateCalendar(year, month, selectedDates = [], onToggleFnName = null
 
 function _getAvailableItemsForMeal(mealType) {
   const staples = [
-    {key: 'Chapati', label: 'Chapati', price: 9},
-    {key: 'Without Oil Chapati', label: 'Without Oil Chapati', price: 8},
-    {key: 'Phulka', label: 'Phulka', price: 7},
-    {key: 'Ghee Phulka', label: 'Ghee Phulka', price: 10},
-    {key: 'Jowar Bhakri', label: 'Jowar Bhakri', price: 20},
-    {key: 'Bajra Bhakri', label: 'Bajra Bhakri', price: 20},
-    {key: 'Dry Sabji Mini', label: 'Dry Sabji Mini', price: 22},
-    {key: 'Dry Sabji Full', label: 'Dry Sabji Full', price: 45},
-    {key: 'Curry Sabji Mini', label: 'Curry Sabji Mini', price: 22},
-    {key: 'Curry Sabji Full', label: 'Curry Sabji Full', price: 45},
-    {key: 'Dal', label: 'Dal', price: 24},
-    {key: 'Dal_Fry', label: 'Dal Fry', price: 40},
-    {key: 'Rice', label: 'Rice', price: 12},
-    {key: 'Salad', label: 'Salad', price: 6},
-    {key: 'Curd', label: 'Curd', price: 12},
+    {key: 'Chapati', label: 'Chapati', price: 11},
+    {key: 'Without Oil Chapati', label: 'Without Oil Chapati', price: 10},
+    {key: 'Phulka', label: 'Phulka', price: 9},
+    {key: 'Ghee Phulka', label: 'Ghee Phulka', price: 13},
+    {key: 'Jowar Bhakri', label: 'Jowar Bhakri', price: 25},
+    {key: 'Bajra Bhakri', label: 'Bajra Bhakri', price: 22},
+    {key: 'Dry Sabji Mini', label: 'Dry Sabji Mini [100ml]', price: 26},
+    {key: 'Dry Sabji Full', label: 'Dry Sabji Full [250ml]', price: 52},
+    {key: 'Curry Sabji Mini', label: 'Curry Sabji Mini [100ml]', price: 26},
+    {key: 'Curry Sabji Full', label: 'Curry Sabji Full [250ml]', price: 52},
+    {key: 'Dal', label: 'Dal [200ml]', price: 26},
+    {key: 'Dal_Fry', label: 'Dal Fry [200ml]', price: 42},
+    {key: 'Rice', label: 'Rice [100g]', price: 15},
+    {key: 'Salad', label: 'Salad [40g]', price: 9},
+    {key: 'Curd', label: 'Curd [50g]', price: 14},
   ];
   if (mealType === 'Breakfast') {
-    return S.bfMaster.map(x => ({key: x.id||x.name, label: x.name, price: Number(x.price)||0}));
+    if (Array.isArray(S.bfMaster) && S.bfMaster.length > 0) {
+      return S.bfMaster.map(x => ({key: x.id||x.name, label: x.name, price: Number(x.price)||0}));
+    }
+    return [
+      {key: 'Kanda Poha', label: 'Kanda Poha', price: 40},
+      {key: 'Ghee Upma', label: 'Ghee Upma', price: 45},
+      {key: 'Sabudana Khichdi', label: 'Sabudana Khichdi [200g]', price: 48},
+      {key: 'Ghee Sheera', label: 'Ghee Sheera', price: 55},
+      {key: 'Thalipeeth', label: 'Thalipeeth', price: 55},
+      {key: 'Aloo Paratha', label: 'Aloo Paratha', price: 55},
+      {key: 'Paneer Paratha', label: 'Paneer Paratha', price: 85},
+      {key: 'Palak Paratha', label: 'Palak Paratha (2 pcs)', price: 45},
+      {key: 'Methi Paratha', label: 'Methi Paratha (2 pcs)', price: 45},
+      {key: 'Coconut Chutney', label: 'Coconut Chutney [100ml]', price: 24},
+      {key: 'Coriander Chutney', label: 'Coriander Chutney [100ml]', price: 17},
+      {key: 'Curd', label: 'Curd [50g]', price: 14}
+    ];
   }
   return staples;
 }
 
 function _calcSubtotal(itemsObj) {
   let sub = 0;
-  Object.entries(itemsObj).forEach(([key,qty]) => {
-    const n = Number(qty)||0;
+  if (!itemsObj) return 0;
+  const priceMap = {
+    'Chapati': 11, 'Without Oil Chapati': 10, 'Without_Oil_Chapati': 10, 'W/O Oil Chapati': 10,
+    'Phulka': 9, 'Ghee Phulka': 13, 'Ghee_Phulka': 13,
+    'Jowar Bhakri': 25, 'Jowar_Bhakri': 25, 'Bajra Bhakri': 22, 'Bajra_Bhakri': 22,
+    'Dry Sabji Mini': 26, 'Dry_Sabji_Mini': 26, 'Dry Sabji Mini [100ml]': 26,
+    'Dry Sabji Full': 52, 'Dry_Sabji_Full': 52, 'Dry Sabji Full [250ml]': 52,
+    'Curry Sabji Mini': 26, 'Curry_Sabji_Mini': 26, 'Curry Sabji Mini [100ml]': 26,
+    'Curry Sabji Full': 52, 'Curry_Sabji_Full': 52, 'Curry Sabji Full [250ml]': 52,
+    'Dal': 26, 'Dal [200ml]': 26, 'Dal Fry': 42, 'Dal_Fry': 42, 'Dal Fry [200ml]': 42,
+    'Rice': 15, 'Rice [100g]': 15, 'Salad': 9, 'Salad [40g]': 9, 'Curd': 14, 'Curd [50g]': 14,
+    'Kanda Poha': 40, 'Ghee Upma': 45, 'Sabudana Khichdi': 48, 'Ghee Sheera': 55,
+    'Thalipeeth': 55, 'Aloo Paratha': 55, 'Paneer Paratha': 85,
+    'Palak Paratha': 45, 'Palak Paratha (2 pcs)': 45,
+    'Methi Paratha': 45, 'Methi Paratha (2 pcs)': 45,
+    'Coconut Chutney': 24, 'Coriander Chutney': 17, 'Idli': 8, 'Tikhi Puri': 11
+  };
+  Object.entries(itemsObj).forEach(([key, qty]) => {
+    const n = Number(qty) || 0;
     if (n <= 0) return;
-
-    // Staple? Use the live V2 price (ceil(base × 1.06)).
-    const sp = staplePriceV2(key);
-    if (sp !== null) { sub += sp * n; return; }
-
-    // Breakfast/sabji master prices are already V2 (sheet values); else V2 fallback.
-    const found = [...(S.bfMaster||[]),...(S.sabjiMaster||[])].find(x=>x.id===key||x.name===key);
+    if (priceMap[key] !== undefined) {
+      sub += priceMap[key] * n;
+      return;
+    }
+    const cleanKey = key.replace(/_/g, ' ');
+    if (priceMap[cleanKey] !== undefined) {
+      sub += priceMap[cleanKey] * n;
+      return;
+    }
+    const found = [...(S.bfMaster||[]), ...(S.sabjiMaster||[])].find(x => x.id === key || x.name === key);
     if (found) {
-      sub += (Number(found.price) || _fallbackSabjiV2(key)) * n;
+      sub += (Number(found.price) || 26) * n;
     } else {
-      sub += _fallbackSabjiV2(key) * n;
+      sub += (cleanKey.toLowerCase().includes('full') ? 52 : 26) * n;
     }
   });
   return sub;
 }
 
-function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
+function sQuickEditModal(customerName, favName, initialItems, defaultMeal, phone) {
   return new Promise((resolve) => {
     const ist = getIST();
     let selDate = toISO(ist);
     let selMeal = defaultMeal || (ist.getHours() < 9 ? 'Breakfast' : ist.getHours() < 16 ? 'Lunch' : 'Dinner');
+
+    // Customer check for On Account
+    const cust = (_custData || []).find(c => c.phone === phone) || window._currentCustDetail;
+    const defaultPayMethod = (cust && (cust.On_Account === 'Yes' || cust.onAccount === 'Yes')) ? 'On Account' : 'Paid';
 
     // Working copy of items {key: qty}
     let editItems = {};
@@ -7993,16 +8554,29 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
     if (typeof rawObj === 'string') { try { rawObj = JSON.parse(rawObj); } catch(e){ rawObj={}; } }
     if (Array.isArray(rawObj)) {
       rawObj.forEach(({colKey,qty}) => { editItems[colKey] = Number(qty)||0; });
-    } else {
+    } else if (rawObj && typeof rawObj === 'object') {
       Object.entries(rawObj).forEach(([k,v]) => { if (Number(v) > 0) editItems[k] = Number(v); });
     }
+
+    // If completely empty, seed with sensible defaults
+    if (Object.keys(editItems).length === 0) {
+      if (selMeal === 'Breakfast') editItems = { 'Kanda Poha': 1 };
+      else if (selMeal === 'Lunch') editItems = { 'Chapati': 2, 'Dry Sabji Mini': 1, 'Dal': 1 };
+      else if (selMeal === 'Dinner') editItems = { 'Chapati': 2, 'Curry Sabji Mini': 1, 'Dal': 1 };
+    }
+
+    let saveFavChecked = false;
+    let selectedPayMethod = defaultPayMethod;
 
     const overlay = document.createElement('div');
     overlay.className = 's-modal-overlay';
     overlay.style.cssText = 'z-index:5000;';
     document.body.appendChild(overlay);
 
-    const closeModal = (val) => { document.body.removeChild(overlay); resolve(val); };
+    const closeModal = (val) => {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      resolve(val);
+    };
 
     const render = () => {
       const avail = _getAvailableItemsForMeal(selMeal);
@@ -8013,13 +8587,7 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
         .filter(([,q]) => q > 0)
         .map(([key,qty]) => {
           const label = colKeyToDisplayName ? colKeyToDisplayName(key) : key.replace(/_/g,' ');
-          
-          // Live V2 price for display (ceil(base × 1.06) for staples; master price as-is).
-          let price = staplePriceV2(key);
-          if (price === null) {
-            const found = [...(S.bfMaster||[]), ...(S.sabjiMaster||[])].find(x => x.id === key || x.name === key);
-            price = found ? (Number(found.price) || _fallbackSabjiV2(key)) : _fallbackSabjiV2(key);
-          }
+          const price = _calcSubtotal({ [key]: 1 });
 
           return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;">
             <div>
@@ -8030,27 +8598,23 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
               <button onclick="_qtyChange('${key}',-1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:1rem;line-height:1;">−</button>
               <span id="qty_${key}" style="min-width:20px;text-align:center;font-weight:700;font-size:.9rem;">${qty}</span>
               <button onclick="_qtyChange('${key}',1)" style="width:26px;height:26px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:1rem;line-height:1;">+</button>
-              <button onclick="_qtyRemove('${key}')" style="width:26px;height:26px;border:1px solid #ffcccc;border-radius:6px;background:#fff5f5;cursor:pointer;font-size:.8rem;">✕</button>
+              <button onclick="_qtyRemove('${key}')" style="width:26px;height:26px;border:1px solid #ffcccc;border-radius:6px;background:#fff5f5;cursor:pointer;font-size:.8rem;color:#dc2626;">✕</button>
             </div>
           </div>`;
         }).join('');
 
-      const addOptions = addableItems.map(a => {
-        const p = staplePriceV2(a.key);            // V2 for staples; master items keep their (V2) price
-        return `<option value="${a.key}">${a.label} (₹${p === null ? a.price : p})</option>`;
-      }).join('');
-
+      const addOptions = addableItems.map(a => `<option value="${a.key}">${a.label} (₹${a.price})</option>`).join('');
       const sub = _calcSubtotal(editItems);
 
       overlay.innerHTML = `
-        <div class="s-modal" style="max-width:440px;max-height:90vh;overflow-y:auto;">
-          <div class="s-modal-title" style="font-size:1rem;">⚡ Place Order — ${favName}</div>
+        <div class="s-modal" style="max-width:460px;max-height:92vh;overflow-y:auto;">
+          <div class="s-modal-title" style="font-size:1rem;">⚡ Place Order — ${favName || selMeal}</div>
           <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">Customer: <strong>${customerName}</strong></div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
             <div>
               <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;margin-bottom:4px;color:var(--muted);">Date</div>
-              <input type="date" id="qeDate" value="${selDate}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:.83rem;">
+              <input type="date" id="qeDate" value="${selDate}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:.83rem;box-sizing:border-box;">
             </div>
             <div>
               <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;margin-bottom:4px;color:var(--muted);">Meal</div>
@@ -8063,7 +8627,7 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
           </div>
 
           <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;margin-bottom:8px;color:var(--muted);">Items</div>
-          <div id="qeItemRows">${itemRows || '<p style="color:#aaa;font-size:.8rem;">No items yet — add from below.</p>'}</div>
+          <div id="qeItemRows">${itemRows || '<p style="color:#aaa;font-size:.8rem;padding:6px 0;">No items selected — add items from below.</p>'}</div>
 
           ${addOptions ? `
           <div style="display:flex;gap:6px;align-items:center;margin-top:10px;">
@@ -8074,14 +8638,41 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
             <button onclick="_qeAdd()" style="padding:7px 14px;background:var(--red);color:#fff;border:none;border-radius:7px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;">Add</button>
           </div>` : ''}
 
-          <div style="margin-top:14px;padding:10px 14px;background:#fff8f0;border-radius:8px;border:1px solid #ffe0b0;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:.8rem;color:#856404;">Subtotal (food only)</span>
-            <span id="qeSubtotal" style="font-size:1rem;font-weight:800;color:var(--red);">₹${sub}</span>
+          <!-- Payment Method -->
+          <div style="margin-top:14px;padding:10px 12px;background:var(--bg2);border-radius:8px;border:1px solid var(--border);">
+            <label style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Payment Method</label>
+            <select id="qePayMethod" onchange="_qePayChange(this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:.82rem;">
+              <option value="On Account" ${selectedPayMethod==='On Account'?'selected':''}>💳 On Account (Pay Later)</option>
+              <option value="Wallet" ${selectedPayMethod==='Wallet'?'selected':''}>👛 Svaadh Wallet</option>
+              <option value="Paid" ${selectedPayMethod==='Paid'?'selected':''}>✓ Direct Paid (UPI/Cash)</option>
+              <option value="Pending" ${selectedPayMethod==='Pending'?'selected':''}>⏳ Pending</option>
+            </select>
           </div>
 
-          <div class="s-modal-footer" style="margin-top:14px;">
+          <!-- Save Favorite Checkbox -->
+          <div style="margin-top:10px;padding:4px 2px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;cursor:pointer;">
+              <input type="checkbox" id="qeSaveFav" ${saveFavChecked?'checked':''} onchange="_qeSaveFavChange(this.checked)" style="width:15px;height:15px;">
+              <span>⭐ Save this combination as customer's favorite</span>
+            </label>
+            ${saveFavChecked ? `
+              <div style="margin-top:6px;">
+                <input type="text" id="qeFavTitle" value="${favName || (selMeal + ' Favorite')}" placeholder="Favorite Template Name"
+                  style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.78rem;box-sizing:border-box;">
+              </div>
+            ` : ''}
+          </div>
+
+          <div style="margin-top:12px;padding:10px 14px;background:#fff8f0;border-radius:8px;border:1px solid #ffe0b0;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:.8rem;color:#856404;">Subtotal (food only)</span>
+            <span id="qeSubtotal" style="font-size:1.05rem;font-weight:800;color:var(--red);">₹${sub}</span>
+          </div>
+
+          <div class="s-modal-footer" style="margin-top:14px;display:flex;justify-content:space-between;">
             <button class="s-btn s-btn-secondary" onclick="_qeClose(null)">Cancel</button>
-            <button class="s-btn s-btn-primary" onclick="_qeConfirm()" style="background:var(--red);border-color:var(--red);">⚡ Place as On Account</button>
+            <button class="s-btn s-btn-primary" onclick="_qeConfirm()" style="background:var(--red);border-color:var(--red);font-weight:700;">
+              ⚡ Confirm & Place Order
+            </button>
           </div>
         </div>`;
 
@@ -8092,17 +8683,36 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal) {
         render();
       };
       window._qtyRemove = (key) => { delete editItems[key]; render(); };
-      window._qeMeal   = (m)   => { selMeal = m; render(); };
-      window._qeClose  = (v)   => closeModal(v);
-      window._qeAdd    = ()    => {
+      window._qeMeal = (m) => {
+        if (selMeal !== m) {
+          selMeal = m;
+          // Seed defaults for new meal if current items don't fit
+          if (m === 'Breakfast') editItems = { 'Kanda Poha': 1 };
+          else if (m === 'Lunch') editItems = { 'Chapati': 2, 'Dry Sabji Mini': 1, 'Dal': 1 };
+          else if (m === 'Dinner') editItems = { 'Chapati': 2, 'Curry Sabji Mini': 1, 'Dal': 1 };
+        }
+        render();
+      };
+      window._qeClose = (v) => closeModal(v);
+      window._qeAdd = () => {
         const sel = document.getElementById('qeAddSel');
         if (!sel || !sel.value) return;
         editItems[sel.value] = (editItems[sel.value]||0) + 1;
         render();
       };
+      window._qePayChange = (val) => { selectedPayMethod = val; };
+      window._qeSaveFavChange = (val) => { saveFavChecked = val; render(); };
       window._qeConfirm = () => {
         selDate = document.getElementById('qeDate')?.value || selDate;
-        closeModal({ date: selDate, meal: selMeal, items: {...editItems} });
+        const favTitle = document.getElementById('qeFavTitle')?.value || (favName || (selMeal + ' Favorite'));
+        closeModal({
+          date: selDate,
+          meal: selMeal,
+          items: {...editItems},
+          paymentMethod: selectedPayMethod,
+          saveFavorite: saveFavChecked,
+          favTitle: favTitle
+        });
       };
     };
 
@@ -8115,10 +8725,10 @@ async function quickOrderStandard(phone, name, rawItems, favName, mealType) {
   if (typeof name === 'string') name = name.replace(/&apos;/g, "'");
   if (typeof favName === 'string') favName = favName.replace(/&apos;/g, "'");
 
-  const result = await sQuickEditModal(name, favName, rawItems, mealType);
+  const result = await sQuickEditModal(name, favName, rawItems, mealType, phone);
   if (!result) return;
 
-  const { date, meal, items } = result;
+  const { date, meal, items, paymentMethod, saveFavorite, favTitle } = result;
   const itemsObj = items;
 
   // Build [{colKey, qty}] list
@@ -8129,10 +8739,16 @@ async function quickOrderStandard(phone, name, rawItems, favName, mealType) {
   if (!itemList.length) { toast('No items in order — nothing placed.'); return; }
 
   const subtotal = _calcSubtotal(itemsObj);
+  const payMethod = paymentMethod || 'On Account';
+  const payStatus = payMethod === 'Paid' ? 'Paid' : (payMethod === 'Wallet' ? 'Wallet Paid' : (payMethod === 'On Account' ? 'On Account' : 'Pending'));
 
-  sLoading(true, 'Placing order as On Account…');
+  sLoading(true, `Placing order as ${payMethod}…`);
   try {
-    const customer = _custData.find(c => c.phone === phone);
+    let customer = _custData.find(c => c.phone === phone);
+    if (!customer && window._currentCustDetail && window._currentCustDetail.phone === phone) {
+      customer = window._currentCustDetail;
+    }
+
     const data = await safeFetchJson(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({
@@ -8149,117 +8765,38 @@ async function quickOrderStandard(phone, name, rawItems, favName, mealType) {
           delivery_point: customer?.delivery_point || ""
         },
         orders: [{ date, meals: [{ type: meal, items: itemList, subtotal }] }],
-        payment_method: 'On Account',
-        payment_status: 'On Account'
+        payment_method: payMethod,
+        payment_status: payStatus
       })
     });
     if (data.success) {
-      toast(`✅ Order placed as On Account for ${name}!`);
-      loadCustomers(true);
+      toast(`✅ Order placed as ${payMethod} for ${name}!`);
+      if (saveFavorite && favTitle) {
+        try {
+          await safeFetchJson(APPS_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+              _action: 'setStandardOrder',
+              pin: S.sessionPin,
+              phone,
+              items: itemsObj,
+              templateName: favTitle.trim(),
+              meal: meal
+            })
+          });
+        } catch(fe) {
+          console.error("Auto-save favorite error:", fe);
+        }
+      }
+      loadCustomerDetail(phone);
+      loadCustomers(true, true);
     } else throw new Error(data.error);
   } catch(e) { sAlert('Error: ' + e.message); }
   finally { sLoading(false); }
 }
 
-
-/**
- * Bulk Order Placement Logic
- */
-async function handleBulkOrderTrigger(phone, name) {
-  const selectedDates = [...document.querySelectorAll(".cal-day.active")].map(d => d.dataset.date);
-  const selectedFavs = [...document.querySelectorAll(".fav-bulk-check:checked")];
-  
-  if (!selectedDates.length) return sAlert("Please select at least one date on the calendar.");
-  if (!selectedFavs.length) return sAlert("Please tick at least one favorite above to use as a template.");
-  
-  const customer = _custData.find(c => c.phone === phone);
-  if (!customer) return sAlert("Customer session lost. Please reload.");
-  
-  // Build templates object
-  const templates = selectedFavs.map(chk => {
-    const favName = chk.value;
-    const favs = JSON.parse(customer.standardOrder || "[]");
-    return favs.find(f => f.name === favName);
-  }).filter(Boolean);
-
-  placeBulkOrders(customer, selectedDates, templates);
-}
-
-function syncFavToggles(chk) {
-  const meal = chk.dataset.meal;
-  if (!chk.checked || meal === "Other") return;
-  // If a Breakfast/Lunch/Dinner is checked, uncheck others of SAME category
-  document.querySelectorAll(`.fav-bulk-check[data-meal="${meal}"]`).forEach(c => {
-    if (c !== chk) c.checked = false;
-  });
-}
-
-/**
- * Bulk Order Placement Logic
- */
-async function placeBulkOrders(customer, selectedDates, templates) {
-  const totalOrders = selectedDates.length * templates.length;
-  const confirmed = await sConfirm(`Place ${totalOrders} orders for ${customer.name}?`, "Bulk Order", "🚚");
-  if (!confirmed) return;
-
-  const orders = [];
-  selectedDates.forEach(date => {
-    const dailyMeals = templates.map(fav => {
-      // Safely parse items in case they are stringified
-      let itemsObj = fav.items;
-      if (typeof itemsObj === "string") {
-        try { itemsObj = JSON.parse(itemsObj); } catch(e) { itemsObj = {}; }
-      }
-
-      // Calculate subtotal using shared robust logic
-      const subtotal = _calcSubtotal(itemsObj);
-
-      const mType = fav.name.toLowerCase().includes("breakfast") ? "Breakfast" : (fav.name.toLowerCase().includes("lunch") ? "Lunch" : "Dinner");
-
-      return {
-        type: mType,
-        items: Object.entries(itemsObj).map(([colKey, qty]) => ({ colKey, qty })),
-        subtotal: subtotal
-      };
-    });
-    orders.push({ date, meals: dailyMeals });
-  });
-
-  if (!orders.length) {
-    sAlert("No matching favorite templates found for the selected meals. Please set templates named 'Breakfast', 'Lunch', or 'Dinner' first.");
-    return;
-  }
-
-  sLoading(true, "Placing Bulk Orders...");
-  try {
-    const data = await safeFetchJson(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        _action: "processOrder",
-        pin: S.sessionPin,
-        profile: { 
-          phone: customer.phone, 
-          name: customer.name,
-          area:           customer.area || "",
-          wing:           customer.wing || "",
-          flat:           customer.flat || "",
-          floor:          customer.floor || "",
-          society:        customer.society || "",
-          maps:           customer.maps || "",
-          landmark:       customer.landmark || "",
-          delivery_point: customer.delivery_point || ""
-        },
-        orders: orders,
-        payment_method: "Wallet",
-        payment_status: "Paid"
-      })
-    });
-    if (data.success) {
-      sAlert(`Successfully placed ${orders.reduce((s,o)=>s+o.meals.length,0)} orders!`, "Success", "✅");
-      loadCustomers(true);
-    } else throw new Error(data.error);
-  } catch(e) { sAlert("Bulk Order Error: " + e.message); }
-  finally { sLoading(false); }
+function openDirectOrderModal(phone, name, mealType) {
+  quickOrderStandard(phone, name, {}, `${mealType} Order`, mealType);
 }
 
 

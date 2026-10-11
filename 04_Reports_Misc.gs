@@ -1584,14 +1584,12 @@ function getCustomerList() {
     }
   });
 
-  // Also include SK_Customers entries that have never placed an order (e.g. pre-registered VIPs)
+  // Also include SK_Customers entries that have never placed an order (e.g. pre-registered customers / 0 orders)
   custRows.forEach(function(c) {
     var p = String(c.Phone || "").trim();
     if (!p) return;
     var normP = _normalizePhone(p);
-    if (map[p]) return; // already in map from orders
-    // Only surface pre-registered VIPs (Fee_Exempt = Yes) to keep the list clean
-    if (String(c.Fee_Exempt).trim() !== "Yes" && String(c.Friends_Family).trim() !== "Yes") return;
+    if (map[p] || map[normP]) return; // already in map from orders
     map[p] = {
       phone: p,
       name: String(c.Customer_Name || "").trim(),
@@ -1603,13 +1601,20 @@ function getCustomerList() {
       lastDate: String(c.Created_At instanceof Date
         ? Utilities.formatDate(c.Created_At, "Asia/Kolkata", "yyyy-MM-dd")
         : (c.Created_At || "")).slice(0, 10),
-      promoCount: 0,
-      reviewClaimed: false,
-      standardOrder: "",
+      promoCount: Number(c.Review_Promo_Count) || 0,
+      reviewClaimed: (String(c.Review_Reward_Claimed) === "TRUE" || String(c.Review_Reward_Claimed) === "true"),
+      standardOrder: c.Standard_Order || "",
       Fee_Exempt: (String(c.Fee_Exempt).trim() === "Yes" ? "Yes" : "No"),
       Friends_Family: (String(c.Friends_Family).trim() === "Yes" ? "Yes" : "No"),
       onAccount: String(c.On_Account).trim() === "Yes" ? "Yes" : "No",
-      billingCycle: c.Billing_Cycle || "Daily"
+      billingCycle: c.Billing_Cycle || "Daily",
+      wing:    c.Wing || "",
+      flat:    c.Flat || "",
+      floor:   c.Floor || "",
+      society: c.Society || "",
+      maps:    c.Maps_Link || "",
+      landmark: c.Landmark || "",
+      delivery_point: c.Delivery_Point || ""
     };
   });
 
@@ -1692,20 +1697,20 @@ function getCustomerHistory(phone) {
     };
   }).sort(function(a,b){return b.date.localeCompare(a.date);});
 
-  var name       = rows.length ? String(rows[0].Customer_Name||"").trim() : "";
-  var area       = rows.length ? String(rows[0].Area||"").trim() : "";
-  var payFreq    = rows.length ? String(rows[0].Payment_Freq||"").trim() : "";
-  var activeOrders = orders.filter(function(o){return !_isOrderCancelled(o.status);});
-  var totalSpent = Math.round(activeOrders.reduce(function(s,o){return s+o.total;},0));
-  var pending    = Math.round(activeOrders.filter(function(o){return String(o.status)!=="Paid" && String(o.status)!=="Wallet Paid";}).reduce(function(s,o){return s+o.total;},0));
-
-  // Fetch Standard_Order from customer sheet
+  // Fetch Standard_Order and customer details from customer sheet
   var custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   var cRows = getAllRows(custWs);
   var normP = _normalizePhone(phone);
   var standardOrder = "";
   var custMatch = cRows.find(function(c){ return _normalizePhone(c.Phone) === normP; });
   if (custMatch) standardOrder = custMatch.Standard_Order || "";
+
+  var name       = rows.length ? String(rows[0].Customer_Name||"").trim() : (custMatch ? String(custMatch.Customer_Name||"").trim() : "");
+  var area       = rows.length ? String(rows[0].Area||"").trim() : (custMatch ? String(custMatch.Area||"").trim() : "");
+  var payFreq    = rows.length ? String(rows[0].Payment_Freq||"").trim() : (custMatch ? String(custMatch.Payment_Freq||"").trim() : "Daily");
+  var activeOrders = orders.filter(function(o){return !_isOrderCancelled(o.status);});
+  var totalSpent = Math.round(activeOrders.reduce(function(s,o){return s+o.total;},0));
+  var pending    = Math.round(activeOrders.filter(function(o){return String(o.status)!=="Paid" && String(o.status)!=="Wallet Paid";}).reduce(function(s,o){return s+o.total;},0));
 
   var feeExempt = custMatch ? (String(custMatch.Fee_Exempt).trim() === "Yes" ? "Yes" : "No") : "No";
   var isFnF = custMatch ? (String(custMatch.Friends_Family).trim() === "Yes" ? "Yes" : "No") : "No";
@@ -5411,30 +5416,73 @@ function placeBulkOrders(body) {
   const pin = String(body.pin || "").trim();
   if (pin !== ADMIN_PIN) return {success:false, error:"STRICT ADMIN PIN REQUIRED"};
   
-  const phone = body.phone;
-  const name = body.name;
-  const templates = body.templates; 
-  const dates = body.dates;     
-  
-  let count = 0;
-  dates.forEach(function(date) {
-    templates.forEach(function(tpl) {
-      const orderBody = {
-        phone: phone,
-        name: name,
-        date: date,
-        meal: tpl.meal,
-        items: tpl.items,
-        payment_method: "Wallet",
-        payment_freq: "Prepaid Wallet",
-        source: "Admin Bulk",
-        pin: pin   // verified admin pin — lets the ordering-window guard allow late/closed-day placement
+  const phone = String(body.phone || "").trim();
+  const name = String(body.name || "").trim();
+  const templates = body.templates || []; 
+  const dates = body.dates || [];     
+  const payMethod = body.payment_method || (body.onAccount === "Yes" ? "On Account" : "On Account");
+  const payStatus = body.payment_status || (payMethod === "On Account" ? "On Account" : "Paid");
+
+  if (!phone) return {success:false, error:"Customer phone required"};
+  if (!dates.length) return {success:false, error:"No dates specified"};
+  if (!templates.length) return {success:false, error:"No meal templates/items specified"};
+
+  // Build profile
+  const ss = getSpreadsheet();
+  const custWs = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  const custRows = getAllRows(custWs);
+  const normP = _normalizePhone(phone);
+  const cust = custRows.find(function(c){ return _normalizePhone(c.Phone) === normP; });
+
+  const profile = {
+    phone: phone,
+    name: name || (cust ? cust.Customer_Name : "Customer"),
+    area: cust ? (cust.Area || "") : (body.area || ""),
+    wing: cust ? (cust.Wing || "") : (body.wing || ""),
+    flat: cust ? (cust.Flat || "") : (body.flat || ""),
+    floor: cust ? (cust.Floor || "") : (body.floor || ""),
+    society: cust ? (cust.Society || "") : (body.society || ""),
+    landmark: cust ? (cust.Landmark || "") : (body.landmark || ""),
+    delivery_point: cust ? (cust.Delivery_Point || "") : (body.delivery_point || "")
+  };
+
+  // Convert dates and templates into canonical orders payload
+  const orders = dates.map(function(d) {
+    const dailyMeals = templates.map(function(tpl) {
+      let itemsList = [];
+      if (Array.isArray(tpl.items)) {
+        itemsList = tpl.items;
+      } else if (tpl.items && typeof tpl.items === "object") {
+        itemsList = Object.entries(tpl.items).map(function(e) {
+          return { colKey: e[0], qty: Number(e[1]) || 0 };
+        }).filter(function(it) { return it.qty > 0; });
+      }
+      return {
+        type: tpl.meal || "Lunch",
+        items: itemsList,
+        subtotal: 0 // auto-calculated in _submitOrderInternal
       };
-      const res = submitOrder(orderBody);
-      if (res.success) count++;
-    });
-  });
-  return {success:true, count: count};
+    }).filter(function(m) { return m.items.length > 0; });
+    return { date: d, meals: dailyMeals };
+  }).filter(function(o) { return o.meals.length > 0; });
+
+  if (!orders.length) return {success:false, error:"No valid meal items found"};
+
+  const orderPayload = {
+    pin: pin,
+    profile: profile,
+    orders: orders,
+    payment_method: payMethod,
+    payment_status: payStatus,
+    source: "Admin Bulk"
+  };
+
+  const res = submitOrder(orderPayload);
+  if (res && res.success) {
+    return { success: true, count: orders.reduce(function(s, o){ return s + o.meals.length; }, 0) };
+  } else {
+    return { success: false, error: (res && res.error) || "Failed to place bulk orders" };
+  }
 }
 
 // ═══════════════════════════════════════════════════════
