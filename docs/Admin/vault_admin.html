@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.12.01">
+  <meta name="app-version" content="v26.10.12.02">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2255,35 +2255,85 @@ const _dbReviewSearch = debounce(() => {
 }, 300);
 
 const GLOBAL_STAPLE_PRICES = {
-  "Chapati": 9,
-  "Without Oil Chapati": 8, "W/O Oil Chapati": 8,
-  "Phulka": 7,
-  "Ghee Phulka": 10,
-  "Jowar Bhakri": 20,
-  "Bajra Bhakri": 20,
-  "Dry Sabji Mini [100ml]": 22, "Dry Sabji (Mini)": 22, "Dry_Sabji_Mini": 22, "L_DRY_MINI": 22, "D_DRY_MINI": 22,
-  "Dry Sabji Full [250ml]": 45, "Dry Sabji (Full)": 45, "Dry_Sabji_Full": 45, "L_DRY_FULL": 45, "D_DRY_FULL": 45,
-  "Curry Sabji Mini [100ml]": 22, "Curry Sabji (Mini)": 22, "Curry_Sabji_Mini": 22, "L_CURRY_MINI": 22, "D_CURRY_MINI": 22,
-  "Curry Sabji Full [250ml]": 45, "Curry Sabji (Full)": 45, "Curry_Sabji_Full": 45, "L_CURRY_FULL": 45, "D_CURRY_FULL": 45,
-  "Dal [200ml]": 22, "Dal": 22,
-  "Dal Fry [200ml]": 37, "Dal Fry": 37, "Dal_Fry": 37, "L_DAL_FRY": 37, "D_DAL_FRY": 37,
-  "Rice [100g]": 12, "Rice": 12,
-  "Salad [40g]": 7, "Salad": 7,
-  "Curd [50g]": 12, "Curd": 12
+  // Lunch & Dinner staples
+  "Chapati": 11,
+  "Without Oil Chapati": 10, "W/O Oil Chapati": 10, "Without_Oil_Chapati": 10,
+  "Phulka": 9,
+  "Ghee Phulka": 13, "Ghee_Phulka": 13,
+  "Jowar Bhakri": 25, "Jowar_Bhakri": 25,
+  "Bajra Bhakri": 22, "Bajra_Bhakri": 22,
+  "Dry Sabji Mini [100ml]": 26, "Dry Sabji (Mini)": 26, "Dry_Sabji_Mini": 26, "Dry Sabji Mini": 26,
+  "Dry Sabji Full [250ml]": 52, "Dry Sabji (Full)": 52, "Dry_Sabji_Full": 52, "Dry Sabji Full": 52,
+  "Curry Sabji Mini [100ml]": 26, "Curry Sabji (Mini)": 26, "Curry_Sabji_Mini": 26, "Curry Sabji Mini": 26,
+  "Curry Sabji Full [250ml]": 52, "Curry Sabji (Full)": 52, "Curry_Sabji_Full": 52, "Curry Sabji Full": 52,
+  "Dal [200ml]": 26, "Dal": 26,
+  "Dal Fry [200ml]": 42, "Dal Fry": 42, "Dal_Fry": 42,
+  "Rice [100g]": 15, "Rice": 15,
+  "Salad [40g]": 9, "Salad": 9,
+  "Curd [50g]": 14, "Curd 50g": 14, "Curd": 14, "Curd (Breakfast)": 14,
+
+  // Legacy L_ / D_ / B_ codes
+  "L_CHAPATI": 11, "D_CHAPATI": 11,
+  "L_WO_CHAPATI": 10, "D_WO_CHAPATI": 10,
+  "L_PHULKA": 9, "D_PHULKA": 9,
+  "L_GHEE_PHULKA": 13, "D_GHEE_PHULKA": 13,
+  "L_JOWAR": 25, "D_JOWAR": 25,
+  "L_BAJRA": 22, "L_BA_JRA": 22, "D_BAJRA": 22, "D_BA_JRA": 22,
+  "L_DRY_MINI": 26, "D_DRY_MINI": 26,
+  "L_DRY_FULL": 52, "D_DRY_FULL": 52,
+  "L_CURRY_MINI": 26, "D_CURRY_MINI": 26,
+  "L_CURRY_FULL": 52, "D_CURRY_FULL": 52,
+  "L_DAL": 26, "D_DAL": 26,
+  "L_DAL_FRY": 42, "D_DAL_FRY": 42,
+  "L_RICE": 15, "D_RICE": 15,
+  "L_SALAD": 9, "D_SALAD": 9,
+  "L_CURD": 14, "D_CURD": 14, "B_CURD": 14,
+
+  // Breakfast items (authoritative schedule)
+  "Kanda Poha": 40, "Kanda Poha [175g]": 40, "Kanda_Poha": 40, "B_POHA": 40,
+  "Ghee Upma": 45, "Ghee Upma [200g]": 45, "Ghee_Upma": 45, "B_UPMA": 45,
+  "Sabudana Khichdi": 48, "Sabudana Khichdi [200g]": 48, "Sabudana_Khichdi": 48, "B_SABU": 48,
+  "Ghee Sheera": 55, "Ghee Sheera [200g]": 55, "Ghee_Sheera": 55, "B_SHEERA": 55,
+  "Thalipeeth": 55, "B_THALIPEETH": 55,
+  "Aloo Paratha": 55, "B_ALOO": 55,
+  "Paneer Paratha": 85, "B_PANEER": 85,
+  "Palak Paratha": 45, "Palak Paratha (2 pcs)": 45, "Palak Paratha (2 peices)": 45, "Palak Paratha (2 pieces)": 45, "B_PALAK": 45,
+  "Methi Paratha": 45, "Methi Paratha (2 pcs)": 45, "Methi Paratha (2 pieces)": 45, "B_METHI": 45,
+  "Coconut Chutney": 24, "Coconut Chutney [100ml]": 24, "B_COCO_CHUTNEY": 24,
+  "Coriander Chutney": 17, "Coriander Chutney [100ml]": 17, "B_CORI_CHUTNEY": 17,
+  "1 x Idli": 8, "Idli": 8, "Idli Chutney": 32, "4 x Idli & 100ml Chutney": 56, "B_IDLI": 8,
+  "1 x Tikhi Puri": 11, "Tikhi Puri": 11, "Tikhi Pudi": 11, "5 x Tikhi Pudi with 100 ml coriander chutney": 72, "B_TIKHI": 11
 };
 
-// PRICING_V2 (live since the surcharge-removal go-live): the staple BASE prices above
-// are the old values; the bill the customer/admin sees uses ceil(base × 1.06), exactly
-// mirroring the backend priceOf(). Returns the live price for a staple colKey, or null
-// if the key isn't a staple (caller falls back to the breakfast/sabji master price).
+// Returns the live flat price for a staple / known colKey, or null if unlisted.
 function staplePriceV2(key) {
-  let base = GLOBAL_STAPLE_PRICES[key];
-  if (base === undefined && typeof colKeyToDisplayName === "function") base = GLOBAL_STAPLE_PRICES[colKeyToDisplayName(key)];
-  if (base === undefined) base = GLOBAL_STAPLE_PRICES[String(key).replace(/\s+/g, "_")];
-  return base === undefined ? null : Math.ceil(base * 1.06);
+  if (key === undefined || key === null) return null;
+  const k = String(key).trim();
+  let base = GLOBAL_STAPLE_PRICES[k];
+  if (base === undefined && typeof colKeyToDisplayName === "function") base = GLOBAL_STAPLE_PRICES[colKeyToDisplayName(k)];
+  if (base === undefined) base = GLOBAL_STAPLE_PRICES[k.replace(/\s+/g, "_")];
+  if (base === undefined) base = GLOBAL_STAPLE_PRICES[k.replace(/_/g, " ")];
+  return base !== undefined ? Number(base) : null;
 }
+
 // Live price for the "full/mini" fallback sabji (when not found in a master list).
-function _fallbackSabjiV2(key) { return Math.ceil((String(key).toLowerCase().includes("full") ? 45 : 22) * 1.06); }
+function _fallbackSabjiV2(key) {
+  return String(key).toLowerCase().includes("full") ? 52 : 26;
+}
+
+// Unified item price helper across staples, masters, and fallbacks
+function _getItemPrice(key) {
+  if (!key) return 0;
+  const sp = staplePriceV2(key);
+  if (sp !== null && sp !== undefined) return sp;
+  const cleanKey = String(key).replace(/_/g, ' ').trim();
+  const spClean = staplePriceV2(cleanKey);
+  if (spClean !== null && spClean !== undefined) return spClean;
+  const found = [...(S.bfMaster||[]), ...(S.sabjiMaster||[])].find(x => x.id === key || x.name === key || x.id === cleanKey || x.name === cleanKey);
+  if (found && found.price) return Number(found.price) || 0;
+  if (cleanKey.toLowerCase().includes('sabji')) return _fallbackSabjiV2(key);
+  return 0;
+}
 
 // Maps every possible column key / colKey to a human-readable display name
 function colKeyToDisplayName(k) {
@@ -2336,7 +2386,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.12.01";
+    const ADMIN_VERSION = "v26.10.12.02";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -6941,8 +6991,12 @@ function renderCustomerDetail(data) {
         .filter(([,q]) => Number(q) > 0)
         .map(([k, q]) => {
           const label = colKeyToDisplayName ? colKeyToDisplayName(k) : k;
+          const unitPrice = _getItemPrice(k);
           return `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:.78rem;border-bottom:1px solid #f3f4f6;">
-            <span>${label}</span>
+            <div>
+              <span>${label}</span>
+              <span style="font-size:.7rem;color:var(--muted);margin-left:4px;">(₹${unitPrice} each)</span>
+            </div>
             <div style="display:flex;align-items:center;gap:4px;">
               <button onclick="_bulkQty('${m}', '${k}', -1)" style="width:22px;height:22px;border:1px solid #ddd;border-radius:4px;background:#f9f9f9;cursor:pointer;line-height:1;">−</button>
               <strong style="min-width:16px;text-align:center;">${q}</strong>
@@ -8459,39 +8513,39 @@ function generateCalendar(year, month, selectedDates = [], onToggleFnName = null
 
 function _getAvailableItemsForMeal(mealType) {
   const staples = [
-    {key: 'Chapati', label: 'Chapati', price: 11},
-    {key: 'Without Oil Chapati', label: 'Without Oil Chapati', price: 10},
-    {key: 'Phulka', label: 'Phulka', price: 9},
-    {key: 'Ghee Phulka', label: 'Ghee Phulka', price: 13},
-    {key: 'Jowar Bhakri', label: 'Jowar Bhakri', price: 25},
-    {key: 'Bajra Bhakri', label: 'Bajra Bhakri', price: 22},
-    {key: 'Dry Sabji Mini', label: 'Dry Sabji Mini [100ml]', price: 26},
-    {key: 'Dry Sabji Full', label: 'Dry Sabji Full [250ml]', price: 52},
-    {key: 'Curry Sabji Mini', label: 'Curry Sabji Mini [100ml]', price: 26},
-    {key: 'Curry Sabji Full', label: 'Curry Sabji Full [250ml]', price: 52},
-    {key: 'Dal', label: 'Dal [200ml]', price: 26},
-    {key: 'Dal_Fry', label: 'Dal Fry [200ml]', price: 42},
-    {key: 'Rice', label: 'Rice [100g]', price: 15},
-    {key: 'Salad', label: 'Salad [40g]', price: 9},
-    {key: 'Curd', label: 'Curd [50g]', price: 14},
+    {key: 'Chapati', label: 'Chapati', price: _getItemPrice('Chapati') || 11},
+    {key: 'Without Oil Chapati', label: 'Without Oil Chapati', price: _getItemPrice('Without Oil Chapati') || 10},
+    {key: 'Phulka', label: 'Phulka', price: _getItemPrice('Phulka') || 9},
+    {key: 'Ghee Phulka', label: 'Ghee Phulka', price: _getItemPrice('Ghee Phulka') || 13},
+    {key: 'Jowar Bhakri', label: 'Jowar Bhakri', price: _getItemPrice('Jowar Bhakri') || 25},
+    {key: 'Bajra Bhakri', label: 'Bajra Bhakri', price: _getItemPrice('Bajra Bhakri') || 22},
+    {key: 'Dry Sabji Mini', label: 'Dry Sabji Mini [100ml]', price: _getItemPrice('Dry Sabji Mini') || 26},
+    {key: 'Dry Sabji Full', label: 'Dry Sabji Full [250ml]', price: _getItemPrice('Dry Sabji Full') || 52},
+    {key: 'Curry Sabji Mini', label: 'Curry Sabji Mini [100ml]', price: _getItemPrice('Curry Sabji Mini') || 26},
+    {key: 'Curry Sabji Full', label: 'Curry Sabji Full [250ml]', price: _getItemPrice('Curry Sabji Full') || 52},
+    {key: 'Dal', label: 'Dal [200ml]', price: _getItemPrice('Dal') || 26},
+    {key: 'Dal_Fry', label: 'Dal Fry [200ml]', price: _getItemPrice('Dal Fry') || 42},
+    {key: 'Rice', label: 'Rice [100g]', price: _getItemPrice('Rice') || 15},
+    {key: 'Salad', label: 'Salad [40g]', price: _getItemPrice('Salad') || 9},
+    {key: 'Curd', label: 'Curd [50g]', price: _getItemPrice('Curd') || 14},
   ];
   if (mealType === 'Breakfast') {
     if (Array.isArray(S.bfMaster) && S.bfMaster.length > 0) {
-      return S.bfMaster.map(x => ({key: x.id||x.name, label: x.name, price: Number(x.price)||0}));
+      return S.bfMaster.map(x => ({key: x.id||x.name, label: x.name, price: Number(x.price) || _getItemPrice(x.name) || 0}));
     }
     return [
-      {key: 'Kanda Poha', label: 'Kanda Poha', price: 40},
-      {key: 'Ghee Upma', label: 'Ghee Upma', price: 45},
-      {key: 'Sabudana Khichdi', label: 'Sabudana Khichdi [200g]', price: 48},
-      {key: 'Ghee Sheera', label: 'Ghee Sheera', price: 55},
-      {key: 'Thalipeeth', label: 'Thalipeeth', price: 55},
-      {key: 'Aloo Paratha', label: 'Aloo Paratha', price: 55},
-      {key: 'Paneer Paratha', label: 'Paneer Paratha', price: 85},
-      {key: 'Palak Paratha', label: 'Palak Paratha (2 pcs)', price: 45},
-      {key: 'Methi Paratha', label: 'Methi Paratha (2 pcs)', price: 45},
-      {key: 'Coconut Chutney', label: 'Coconut Chutney [100ml]', price: 24},
-      {key: 'Coriander Chutney', label: 'Coriander Chutney [100ml]', price: 17},
-      {key: 'Curd', label: 'Curd [50g]', price: 14}
+      {key: 'Kanda Poha', label: 'Kanda Poha', price: _getItemPrice('Kanda Poha') || 40},
+      {key: 'Ghee Upma', label: 'Ghee Upma', price: _getItemPrice('Ghee Upma') || 45},
+      {key: 'Sabudana Khichdi', label: 'Sabudana Khichdi [200g]', price: _getItemPrice('Sabudana Khichdi') || 48},
+      {key: 'Ghee Sheera', label: 'Ghee Sheera', price: _getItemPrice('Ghee Sheera') || 55},
+      {key: 'Thalipeeth', label: 'Thalipeeth', price: _getItemPrice('Thalipeeth') || 55},
+      {key: 'Aloo Paratha', label: 'Aloo Paratha', price: _getItemPrice('Aloo Paratha') || 55},
+      {key: 'Paneer Paratha', label: 'Paneer Paratha', price: _getItemPrice('Paneer Paratha') || 85},
+      {key: 'Palak Paratha', label: 'Palak Paratha (2 pcs)', price: _getItemPrice('Palak Paratha') || 45},
+      {key: 'Methi Paratha', label: 'Methi Paratha (2 pcs)', price: _getItemPrice('Methi Paratha') || 45},
+      {key: 'Coconut Chutney', label: 'Coconut Chutney [100ml]', price: _getItemPrice('Coconut Chutney') || 24},
+      {key: 'Coriander Chutney', label: 'Coriander Chutney [100ml]', price: _getItemPrice('Coriander Chutney') || 17},
+      {key: 'Curd', label: 'Curd [50g]', price: _getItemPrice('Curd') || 14}
     ];
   }
   return staples;
@@ -8500,40 +8554,11 @@ function _getAvailableItemsForMeal(mealType) {
 function _calcSubtotal(itemsObj) {
   let sub = 0;
   if (!itemsObj) return 0;
-  const priceMap = {
-    'Chapati': 11, 'Without Oil Chapati': 10, 'Without_Oil_Chapati': 10, 'W/O Oil Chapati': 10,
-    'Phulka': 9, 'Ghee Phulka': 13, 'Ghee_Phulka': 13,
-    'Jowar Bhakri': 25, 'Jowar_Bhakri': 25, 'Bajra Bhakri': 22, 'Bajra_Bhakri': 22,
-    'Dry Sabji Mini': 26, 'Dry_Sabji_Mini': 26, 'Dry Sabji Mini [100ml]': 26,
-    'Dry Sabji Full': 52, 'Dry_Sabji_Full': 52, 'Dry Sabji Full [250ml]': 52,
-    'Curry Sabji Mini': 26, 'Curry_Sabji_Mini': 26, 'Curry Sabji Mini [100ml]': 26,
-    'Curry Sabji Full': 52, 'Curry_Sabji_Full': 52, 'Curry Sabji Full [250ml]': 52,
-    'Dal': 26, 'Dal [200ml]': 26, 'Dal Fry': 42, 'Dal_Fry': 42, 'Dal Fry [200ml]': 42,
-    'Rice': 15, 'Rice [100g]': 15, 'Salad': 9, 'Salad [40g]': 9, 'Curd': 14, 'Curd [50g]': 14,
-    'Kanda Poha': 40, 'Ghee Upma': 45, 'Sabudana Khichdi': 48, 'Ghee Sheera': 55,
-    'Thalipeeth': 55, 'Aloo Paratha': 55, 'Paneer Paratha': 85,
-    'Palak Paratha': 45, 'Palak Paratha (2 pcs)': 45,
-    'Methi Paratha': 45, 'Methi Paratha (2 pcs)': 45,
-    'Coconut Chutney': 24, 'Coriander Chutney': 17, 'Idli': 8, 'Tikhi Puri': 11
-  };
   Object.entries(itemsObj).forEach(([key, qty]) => {
     const n = Number(qty) || 0;
     if (n <= 0) return;
-    if (priceMap[key] !== undefined) {
-      sub += priceMap[key] * n;
-      return;
-    }
-    const cleanKey = key.replace(/_/g, ' ');
-    if (priceMap[cleanKey] !== undefined) {
-      sub += priceMap[cleanKey] * n;
-      return;
-    }
-    const found = [...(S.bfMaster||[]), ...(S.sabjiMaster||[])].find(x => x.id === key || x.name === key);
-    if (found) {
-      sub += (Number(found.price) || 26) * n;
-    } else {
-      sub += (cleanKey.toLowerCase().includes('full') ? 52 : 26) * n;
-    }
+    const p = _getItemPrice(key);
+    sub += (p > 0 ? p : (String(key).toLowerCase().includes('full') ? 52 : 26)) * n;
   });
   return sub;
 }
@@ -8587,7 +8612,7 @@ function sQuickEditModal(customerName, favName, initialItems, defaultMeal, phone
         .filter(([,q]) => q > 0)
         .map(([key,qty]) => {
           const label = colKeyToDisplayName ? colKeyToDisplayName(key) : key.replace(/_/g,' ');
-          const price = _calcSubtotal({ [key]: 1 });
+          const price = _getItemPrice(key);
 
           return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;">
             <div>
