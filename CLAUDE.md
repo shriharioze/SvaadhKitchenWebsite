@@ -398,6 +398,23 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Direct Single Order Placement (No Favorite Required):** In customer detail view, added direct 1-tap order placement buttons (`🍳 Place Breakfast`, `🍲 Place Lunch`, `🍛 Place Dinner`) that open an enhanced `sQuickEditModal` allowing date selection, item customization with live rates, payment method selection (`On Account`, `Wallet`, `Paid`, `Pending`), and an optional checkbox to save the configuration as a customer favorite.
   - **Upgraded Bulk Order Tool with 7/15/30-Day Presets:** Overhauled the bulk placement interface with quick working-day duration presets (`📅 Next 7 Working Days`, `📅 Next 15 Working Days`, `📅 Next 30 Working Days`, `🧹 Clear Dates`) that intelligently skip Sundays and kitchen-closed dates. Built-in interactive meal panels allow direct configuration of Breakfast, Lunch, and Dinner items independent of saved favorites (with an optional helper to load from existing favorites). Supports custom payment method selection and 1-tap bulk order submission with canonical `orders` payload structure.
   - **Zero-Order Customer State:** Clean fallback state in order history when viewing 0-order accounts, replacing empty tables with helpful quick-order instructions.
+- **Admin Bulk Order Presets & Discount Parity with Customer Order Page (CODE_VERSION 35.90 / ADMIN_VERSION v26.10.12.03)**
+  - **Working Days Calculation (Excluding Sundays & Kitchen Closures):**
+    - 7 Days preset selects **6 working days** (1 week, Sundays excluded).
+    - 15 Days preset selects **13 working days** (~2 weeks, Sundays excluded).
+    - 30 Days preset selects **26 working days** (~1 month, Sundays excluded).
+    - Presets honor any dates marked as kitchen-closed in admin and skip them automatically.
+  - **Bulk Discount Parity:**
+    - Standard customer order page bulk discount structure is now strictly mirrored in the admin Bulk Order Multi-Placement tool:
+      - 6 to 12 working days: **5% off**
+      - 13 to 25 working days: **7.5% off**
+      - 26+ working days: **10% off**
+    - Live summary strip displays gross food subtotal, strikethrough price, discount amount saved in a green badge, and discounted net payable.
+    - Added an optional manual bulk discount override select (`Auto (by working days)`, `7.5% (15-day equivalent)`, `5% (7-day equivalent)`, `10% (30-day equivalent)`, `No bulk discount (0%)`).
+  - **Backend Accounting & Storage (`submitOrder` in `02_Orders_Menu.gs`):**
+    - `submitOrder` now respects `meal.discount` and `body.bulk_rate` overrides via `explicitDisc = Math.round(Number(meal.discount))`.
+    - Correctly calculates `discAmt = Math.max(explicitDisc, getDisc(sub))` and `Net_Total = Food_Subtotal - discAmt`.
+    - Stamps `Bulk_Plan`, `Bulk_Clawback` (the discount amount for clawback protection), and `Source = "Bulk"` into `SK_Orders`.
 - **Food Clarity, Nutrition Transparency, Volume vs Weight & Oils (CODE_VERSION 35.71 / APP_VERSION v26.09.16.08)**
   - **1-Tap Food Clarity Across 45+ Catalog Items:** Interactive nutritional and ingredient modal deployed across all 45+ items (Breakfast, Breads, Dry Sabjis, Curry Sabjis, Dal, Rice, Extras) on `docs/order.html` and `docs/Liviano-Serio.html`. Displays approximate calories, protein, carbs, fats, fiber, complete ingredient list, chef kitchen notes, and dietary tags.
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.

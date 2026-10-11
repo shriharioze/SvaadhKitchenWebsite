@@ -3324,7 +3324,14 @@ function _submitOrderInternal(body) {
       const totalDateCredit = dateDeliveryCredit + dateSmallFeeCredit;
       const mealCredit = submissionDayFoodTotal > 0 ? Math.round(totalDateCredit * (sub / submissionDayFoodTotal)) : 0;
 
-      const discAmt = getDisc(sub);
+      // Bulk discount or explicit discount override (e.g. bulk plan placement)
+      let explicitDisc = 0;
+      if (meal.discount !== undefined && !isNaN(Number(meal.discount))) {
+        explicitDisc = Math.round(Number(meal.discount));
+      } else if (body.bulk_rate !== undefined && Number(body.bulk_rate) > 0) {
+        explicitDisc = Math.round(sub * Number(body.bulk_rate));
+      }
+      const discAmt = Math.max(explicitDisc, getDisc(sub));
       // V1: surcharge ceil(sub×6%) IS charged; the 6th-day loyalty waiver covers it
       // (net: get back days 1–5). V2: NO surcharge in the bill — inflationSurcharge is a
       // round(sub×5%) ACCRUAL stored only for the streak, and given back on the 6th day.
@@ -3442,6 +3449,11 @@ function _submitOrderInternal(body) {
         set("Review_Discount",   meal._reviewDiscount || 0);
       }
       set("Net_Total",           netTotal);
+      if (explicitDisc > 0) {
+        if (hIdx["Bulk_Plan"]) set("Bulk_Plan", String(body.bulk_plan || meal.bulk_plan || ""));
+        if (hIdx["Bulk_Clawback"]) set("Bulk_Clawback", explicitDisc);
+        if (hIdx["Source"]) set("Source", "Bulk");
+      }
       grandNetTotal += netTotal;   // authoritative running total — drives the post-place QR
 
       // ════ DUPLICATE CHECK — must run BEFORE wallet deduction ════

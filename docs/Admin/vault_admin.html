@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.12.02">
+  <meta name="app-version" content="v26.10.12.03">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -2386,7 +2386,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.12.02";
+    const ADMIN_VERSION = "v26.10.12.03";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -6941,7 +6941,39 @@ function renderCustomerDetail(data) {
     if (typeof window.updateBulkSummary === 'function') window.updateBulkSummary();
   };
 
-  window.selectBulkPreset = function(workingDays) {
+  function _getBulkDiscountInfo(dateCount, manualOverrideRate = null) {
+    if (manualOverrideRate !== null && manualOverrideRate !== undefined && manualOverrideRate !== 'auto') {
+      const rate = Number(manualOverrideRate) || 0;
+      const pct = (rate * 100).toFixed(rate === 0.075 ? 1 : 0) + '%';
+      return { plan: rate >= 0.10 ? 'month' : rate >= 0.075 ? '15day' : rate >= 0.05 ? 'week' : 'custom', label: `${pct} Discount`, rate, pct };
+    }
+    // Matches order page rules:
+    // Month = 26 working days (30 calendar days excl Sundays) -> 10%
+    // 15-Day = 13 working days (15 calendar days excl Sundays) -> 7.5%
+    // Week = 6 working days (7 calendar days excl Sundays) -> 5%
+    if (dateCount >= 26) return { plan: 'month', label: 'Month Plan (26+ Days)', rate: 0.10, pct: '10%' };
+    if (dateCount >= 13) return { plan: '15day', label: '15-Day Plan (13+ Days)', rate: 0.075, pct: '7.5%' };
+    if (dateCount >= 6)  return { plan: 'week',  label: 'Week Plan (6+ Days)',   rate: 0.05,  pct: '5%' };
+    return { plan: 'standard', label: 'Standard Plan', rate: 0, pct: '0%' };
+  }
+
+  window.selectBulkPreset = function(planKey) {
+    let workingDays = 13;
+    let plan = '15day';
+    if (planKey === 'week' || planKey === 7 || planKey === 6) {
+      workingDays = 6;
+      plan = 'week';
+    } else if (planKey === '15day' || planKey === 15 || planKey === 13) {
+      workingDays = 13;
+      plan = '15day';
+    } else if (planKey === 'month' || planKey === 30 || planKey === 26) {
+      workingDays = 26;
+      plan = 'month';
+    } else if (typeof planKey === 'number') {
+      workingDays = planKey;
+      plan = workingDays >= 26 ? 'month' : workingDays >= 13 ? '15day' : workingDays >= 6 ? 'week' : 'custom';
+    }
+
     const list = [];
     const ist = getIST();
     const currH = ist.getHours() + (ist.getMinutes() / 60);
@@ -6964,9 +6996,13 @@ function renderCustomerDetail(data) {
       window._bulkCalYear = firstD.getFullYear();
       window._bulkCalMonth = firstD.getMonth();
     }
+    const discSel = document.getElementById("bulkDiscountOverride");
+    if (discSel) discSel.value = 'auto';
+
     window.renderBulkCalendar();
     window.updateBulkSummary();
-    toast(`📅 Selected ${list.length} working days`);
+    const discInfo = _getBulkDiscountInfo(list.length);
+    toast(`📅 Selected ${list.length} working days (${discInfo.pct} bulk discount)`);
   };
 
   window.clearBulkDates = function() {
@@ -7101,17 +7137,40 @@ function renderCustomerDetail(data) {
 
     const dailySubtotal = enabledMeals.reduce((s, m) => s + m.subtotal, 0);
     const totalOrders = dates.length * enabledMeals.length;
-    const estGrandTotal = dates.length * dailySubtotal;
+    const grossTotal = dates.length * dailySubtotal;
+
+    const discSelectEl = document.getElementById("bulkDiscountOverride");
+    const manualRate = discSelectEl ? discSelectEl.value : 'auto';
+    const discInfo = _getBulkDiscountInfo(dates.length, manualRate);
+    const discRate = discInfo.rate;
+    const totalDiscount = Math.round(grossTotal * discRate);
+    const netGrandTotal = Math.max(0, grossTotal - totalDiscount);
+    const dailyNet = Math.max(0, dailySubtotal - Math.round(dailySubtotal * discRate));
 
     if (summaryEl) {
       summaryEl.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:.82rem;">
           <div>
-            <strong>${dates.length} Days</strong> × <strong>${enabledMeals.length} Meal${enabledMeals.length===1?'':'s'}/day</strong>
-            <span style="color:var(--muted);margin-left:6px;">(${enabledMeals.map(m=>`${m.name} ₹${m.subtotal}`).join(', ') || 'No meals selected'})</span>
+            <div>
+              <strong>${dates.length} Days</strong> × <strong>${enabledMeals.length} Meal${enabledMeals.length===1?'':'s'}/day</strong>
+              <span style="color:var(--muted);margin-left:6px;">(${enabledMeals.map(m=>`${m.name} ₹${m.subtotal}`).join(', ') || 'No meals selected'})</span>
+            </div>
+            ${discRate > 0 ? `
+              <div style="margin-top:4px;font-size:.76rem;color:#16a34a;font-weight:700;display:flex;align-items:center;gap:6px;">
+                <span style="background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:4px;border:1px solid #86efac;">⚡ ${discInfo.pct} Bulk Discount</span>
+                <span>Saving ₹${totalDiscount.toLocaleString('en-IN')} (Net: ₹${dailyNet}/day)</span>
+              </div>
+            ` : (dates.length > 0 ? `
+              <div style="margin-top:3px;font-size:.72rem;color:var(--muted);">
+                Select 6+ days for 5% off, 13+ days for 7.5% off, 26+ days for 10% off.
+              </div>
+            ` : '')}
           </div>
           <div style="text-align:right;">
-            <div style="font-size:1rem;font-weight:800;color:var(--red);">Est. ₹${Number(estGrandTotal).toLocaleString('en-IN')}</div>
+            ${discRate > 0 ? `
+              <div style="font-size:.75rem;color:var(--muted);text-decoration:line-through;">₹${Number(grossTotal).toLocaleString('en-IN')}</div>
+            ` : ''}
+            <div style="font-size:1.05rem;font-weight:800;color:var(--red);">Est. ₹${Number(netGrandTotal).toLocaleString('en-IN')}</div>
             <div style="font-size:.7rem;color:var(--muted);">${totalOrders} total order${totalOrders===1?'':'s'} to place</div>
           </div>
         </div>
@@ -7120,7 +7179,8 @@ function renderCustomerDetail(data) {
 
     if (btnEl) {
       btnEl.disabled = dates.length === 0 || enabledMeals.length === 0;
-      btnEl.innerHTML = `🚚 Place Bulk Orders (${dates.length} Days · ${totalOrders} Orders)`;
+      const discTag = discRate > 0 ? ` · ${discInfo.pct} off` : '';
+      btnEl.innerHTML = `🚚 Place Bulk Orders (${dates.length} Days · ₹${Number(netGrandTotal).toLocaleString('en-IN')}${discTag})`;
     }
   };
 
@@ -7153,12 +7213,25 @@ function renderCustomerDetail(data) {
     }
 
     const totalOrders = dates.length * enabledMeals.length;
-    const estGrandTotal = dates.length * enabledMeals.reduce((s, m) => s + m.subtotal, 0);
+    const grossTotal = dates.length * enabledMeals.reduce((s, m) => s + m.subtotal, 0);
+
+    const discSelectEl = document.getElementById("bulkDiscountOverride");
+    const manualRate = discSelectEl ? discSelectEl.value : 'auto';
+    const discInfo = _getBulkDiscountInfo(dates.length, manualRate);
+    const discRate = discInfo.rate;
+    const totalDiscount = Math.round(grossTotal * discRate);
+    const netGrandTotal = Math.max(0, grossTotal - totalDiscount);
+
+    const discMsg = discRate > 0
+      ? `<br>Original Subtotal: <del>₹${Number(grossTotal).toLocaleString('en-IN')}</del><br>` +
+        `Bulk Discount (${discInfo.pct}): <b style="color:#16a34a;">−₹${totalDiscount.toLocaleString('en-IN')}</b>`
+      : '';
 
     const confirmed = await sConfirm(
       `Place <b>${totalOrders} orders</b> across <b>${dates.length} days</b> for <b>${name}</b>?<br><br>` +
-      `Meals per day: <b>${enabledMeals.map(m=>m.type).join(', ')}</b><br>` +
-      `Est. Food Subtotal: <b>₹${Number(estGrandTotal).toLocaleString('en-IN')}</b>`,
+      `Meals per day: <b>${enabledMeals.map(m=>m.type).join(', ')}</b>` +
+      discMsg + `<br>` +
+      `Net Total to Bill: <b>₹${Number(netGrandTotal).toLocaleString('en-IN')}</b>`,
       "Confirm Bulk Placement", "🚚"
     );
     if (!confirmed) return;
@@ -7169,11 +7242,17 @@ function renderCustomerDetail(data) {
 
     const orders = dates.map(date => ({
       date,
-      meals: enabledMeals.map(m => ({
-        type: m.type,
-        items: m.itemList,
-        subtotal: m.subtotal
-      }))
+      meals: enabledMeals.map(m => {
+        const mealDiscAmt = Math.round(m.subtotal * discRate);
+        return {
+          type: m.type,
+          items: m.itemList,
+          subtotal: m.subtotal,
+          discount: mealDiscAmt,
+          discount_amount: mealDiscAmt,
+          net: Math.max(0, m.subtotal - mealDiscAmt)
+        };
+      })
     }));
 
     sLoading(true, `Placing ${totalOrders} bulk orders…`);
@@ -7201,6 +7280,8 @@ function renderCustomerDetail(data) {
             delivery_point: customer?.delivery_point || ""
           },
           orders: orders,
+          bulk_plan: discInfo.plan,
+          bulk_rate: discRate,
           payment_method: payMethod,
           payment_status: payStatus
         })
@@ -7245,20 +7326,20 @@ function renderCustomerDetail(data) {
         <span id="bulkSelectedCount" style="font-size:.78rem;font-weight:600;color:var(--muted);background:var(--bg2);padding:3px 10px;border-radius:12px;border:1px solid var(--border);">0 dates selected</span>
       </div>
       <div style="font-size:0.75rem; color:#856404; margin-bottom:12px;">
-        Select duration presets (7, 15, or 30 working days) or pick dates on the calendar. Configure meal items directly below — <b>no pre-saved favorites required</b>!
+        Select duration presets (7, 15, or 30 days) or pick dates on the calendar. Bulk discounts auto-apply matching order page rules (6d=5%, 13d=7.5%, 26d=10%).
       </div>
 
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
-        <button class="s-btn s-btn-secondary" onclick="selectBulkPreset(7)" style="font-weight:700; font-size:.78rem; padding:6px 12px; background:#f0fdf4; border-color:#86efac; color:#166534;">
-          📅 Next 7 Working Days
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center;">
+        <button type="button" class="s-btn s-btn-secondary" onclick="selectBulkPreset('week')" style="font-weight:700; font-size:.78rem; padding:7px 12px; background:#f0fdf4; border-color:#86efac; color:#166534; cursor:pointer;">
+          📅 7 Days (6 Working Days · 5% off)
         </button>
-        <button class="s-btn s-btn-secondary" onclick="selectBulkPreset(15)" style="font-weight:700; font-size:.78rem; padding:6px 12px; background:#eff6ff; border-color:#93c5fd; color:#1e40af;">
-          📅 Next 15 Working Days
+        <button type="button" class="s-btn s-btn-secondary" onclick="selectBulkPreset('15day')" style="font-weight:700; font-size:.78rem; padding:7px 12px; background:#eff6ff; border-color:#93c5fd; color:#1e40af; cursor:pointer;">
+          📅 15 Days (13 Working Days · 7.5% off)
         </button>
-        <button class="s-btn s-btn-secondary" onclick="selectBulkPreset(30)" style="font-weight:700; font-size:.78rem; padding:6px 12px; background:#faf5ff; border-color:#d8b4fe; color:#6b21a8;">
-          📅 Next 30 Working Days
+        <button type="button" class="s-btn s-btn-secondary" onclick="selectBulkPreset('month')" style="font-weight:700; font-size:.78rem; padding:7px 12px; background:#faf5ff; border-color:#d8b4fe; color:#6b21a8; cursor:pointer;">
+          📅 30 Days (26 Working Days · 10% off)
         </button>
-        <button class="s-btn s-btn-secondary" onclick="clearBulkDates()" style="font-size:.78rem; padding:6px 10px; color:var(--muted);">
+        <button type="button" class="s-btn s-btn-secondary" onclick="clearBulkDates()" style="font-size:.78rem; padding:7px 10px; color:var(--muted); cursor:pointer;">
           🧹 Clear Dates
         </button>
       </div>
@@ -7286,12 +7367,22 @@ function renderCustomerDetail(data) {
                   <option value="Pending">⏳ Pending</option>
                 </select>
               </div>
-              <div style="padding-top:14px;">
-                <label style="display:flex; align-items:center; gap:6px; font-size:.75rem; cursor:pointer;">
-                  <input type="checkbox" id="bulkSaveAsFav" style="width:14px; height:14px;">
-                  <span>⭐ Save as customer favorites</span>
-                </label>
+              <div>
+                <label style="display:block; font-size:.7rem; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:3px;">Bulk Discount</label>
+                <select id="bulkDiscountOverride" onchange="updateBulkSummary()" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:.78rem;">
+                  <option value="auto">✨ Auto (by plan days)</option>
+                  <option value="0.075">7.5% off (15-Day Tier)</option>
+                  <option value="0.05">5.0% off (Week Tier)</option>
+                  <option value="0.10">10.0% off (Month Tier)</option>
+                  <option value="0">0% (No discount)</option>
+                </select>
               </div>
+            </div>
+            <div style="margin-top:8px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:.75rem; cursor:pointer;">
+                <input type="checkbox" id="bulkSaveAsFav" style="width:14px; height:14px;">
+                <span>⭐ Save configured meals as customer favorites</span>
+              </label>
             </div>
           </div>
 
