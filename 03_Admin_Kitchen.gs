@@ -3012,15 +3012,15 @@ function standardizeBreakfastJson(rawJson, masterPriceMap) {
 
     // 1. Expand Tikhi Puri combo
     if (lName === "tikhi puri" || lName === "tikhi pudi" || lName.includes("5 x tikhi")) {
-      result.push({ name: "Coriander Chutney", price: (masterPriceMap && masterPriceMap["Coriander Chutney"]) || 15 });
-      result.push({ name: "1 x Tikhi Puri", price: (masterPriceMap && masterPriceMap["1 x Tikhi Puri"]) || 10 });
+      result.push({ name: "Coriander Chutney", price: (masterPriceMap && masterPriceMap["Coriander Chutney"]) || 17 });
+      result.push({ name: "1 x Tikhi Puri", price: (masterPriceMap && masterPriceMap["1 x Tikhi Puri"]) || 11 });
       continue;
     }
 
     // 2. Expand Idli combo
     if (lName.includes("idli") && (lName.includes("chutney") || lName.includes("4 x"))) {
-      result.push({ name: "Coconut Chutney", price: (masterPriceMap && masterPriceMap["Coconut Chutney"]) || 22 });
-      result.push({ name: "1 x Idli", price: (masterPriceMap && masterPriceMap["1 x Idli"]) || 7 });
+      result.push({ name: "Coconut Chutney", price: (masterPriceMap && masterPriceMap["Coconut Chutney"]) || (masterPriceMap && masterPriceMap["Coconut Chutney [100ml]"]) || 24 });
+      result.push({ name: "1 x Idli", price: (masterPriceMap && masterPriceMap["1 x Idli"]) || 8 });
       continue;
     }
 
@@ -3131,19 +3131,19 @@ function updateMasterBreakfastPrices(commit) {
   const targetPrices = {
     "Kanda Poha": 40,
     "Ghee Upma": 45,
-    "Sabudana Khichdi": 50,
+    "Sabudana Khichdi": 48,
     "Ghee Sheera": 55,
     "Thalipeeth": 55,
     "Aloo Paratha": 55,
     "Paneer Paratha": 85,
-    "Palak Paratha (2 peices)": 48,
-    "Palak Paratha (2 pieces)": 48,
-    "Methi Paratha (2 pieces)": 48,
-    "Coconut Chutney [100ml]": 25,
-    "Coconut Chutney": 25,
-    "Coriander Chutney": 18,
+    "Palak Paratha (2 peices)": 45,
+    "Palak Paratha (2 pieces)": 45,
+    "Methi Paratha (2 pieces)": 45,
+    "Coconut Chutney [100ml]": 24,
+    "Coconut Chutney": 24,
+    "Coriander Chutney": 17,
     "1 x Idli": 8,
-    "1 x Tikhi Puri": 12
+    "1 x Tikhi Puri": 11
   };
 
   const ss = getSpreadsheet();

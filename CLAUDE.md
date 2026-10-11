@@ -116,12 +116,22 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Breakfast Rates Refinement (CODE_VERSION 35.86 / APP_VERSION v26.10.11.01 / ADMIN_VERSION v26.10.11.01)**
+  - **Refined Breakfast Items Rates:**
+    - Sabudana Khichdi [200g]: ₹48 (was ₹50, originally ₹43).
+    - Palak Paratha (2 pcs): ₹45 (was ₹48, originally ₹43).
+    - Methi Paratha (2 pcs): ₹45 (was ₹48, originally ₹43).
+    - Coconut Chutney [100ml]: ₹24 (was ₹25, originally ₹22).
+    - Coriander Chutney [100ml]: ₹17 (was ₹18, originally ₹15).
+    - 1 x Tikhi Puri: ₹11 (was ₹12, originally ₹10).
+  - Synchronized `SK_Master_Breakfast` and all upcoming menu rows from 2026-10-12 onwards via `updateMasterBreakfastPrices(commit=1)`.
+  - Synchronized `00_Config.gs`, `03_Admin_Kitchen.gs`, `Backend/business.json`, `docs/index.html`, and bumped frontend versions to `v26.10.11.01`.
 - **Menu Price Increase, Delivery Adjustment & Customer Quality Notice (CODE_VERSION 35.85 / APP_VERSION v26.10.10.03 / ADMIN_VERSION v26.10.10.03)**
   - **Menu Rate Updates (Effective Monday, 12/10/2026):**
     - Breads: Chapati ₹11 (was ₹10), Without Oil Chapati ₹10 (was ₹9), Phulka ₹9 (was ₹8), Ghee Phulka ₹13 (was ₹11), Jowar Bhakri ₹25 (was ₹22), Bajra Bhakri ₹22 (kept ₹22).
     - Sabjis: Dry Sabji Mini [100ml] ₹26 (was ₹24), Dry Sabji Full [250ml] ₹52 (was ₹48), Curry Sabji Mini [100ml] ₹26 (was ₹24), Curry Sabji Full [250ml] ₹52 (was ₹48).
     - Basics: Dal [200ml] ₹26 (was ₹24), Dal Fry [200ml] ₹42 (was ₹40), Rice [100g] ₹15 (was ₹13), Salad [40g] ₹9 (was ₹8), Curd [50g] ₹14 (was ₹13).
-    - Breakfast Items: Kanda Poha [175g] ₹40 (was ₹38), Ghee Upma [200g] ₹45 (was ₹43), Sabudana Khichdi [200g] ₹50 (was ₹43), Ghee Sheera [200g] ₹55 (was ₹53), Thalipeeth ₹55 (was ₹53), Aloo Paratha ₹55 (was ₹53), Paneer Paratha ₹85 (was ₹80), Palak Paratha (2 pcs) ₹48 (was ₹43), Methi Paratha (2 pcs) ₹48 (was ₹43), Coconut Chutney [100ml] ₹25 (was ₹22), Coriander Chutney [100ml] ₹18 (was ₹15), 1 x Idli ₹8 (was ₹7), 1 x Tikhi Puri ₹12 (was ₹10). Breakfast Curd (B_CURD) is ₹14.
+    - Breakfast Items: Kanda Poha [175g] ₹40 (was ₹38), Ghee Upma [200g] ₹45 (was ₹43), Sabudana Khichdi [200g] ₹48 (was ₹43), Ghee Sheera [200g] ₹55 (was ₹53), Thalipeeth ₹55 (was ₹53), Aloo Paratha ₹55 (was ₹53), Paneer Paratha ₹85 (was ₹80), Palak Paratha (2 pcs) ₹45 (was ₹43), Methi Paratha (2 pcs) ₹45 (was ₹43), Coconut Chutney [100ml] ₹24 (was ₹22), Coriander Chutney [100ml] ₹17 (was ₹15), 1 x Idli ₹8 (was ₹7), 1 x Tikhi Puri ₹11 (was ₹10). Breakfast Curd (B_CURD) is ₹14.
   - **Delivery & Cart Adjustments:**
     - Delivery Charge: ₹12 per meal (was ₹11). Always free for Bhosale Nagar, Triveni Nagar, and Self Pickup.
     - Small Cart Fee: ₹12 (was ₹11).
