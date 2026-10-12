@@ -1659,7 +1659,7 @@ function buildDeliveryRoute(days) {
       var meal = String(r.Meal_Type || "").trim();
       if (!meal) return;
       var soc = _routeSocietyKey(r);
-      if (!soc) return;
+      if (!soc || soc === "porter" || soc === "selfpickup" || soc === "self pickup") return;
       var od = (r.Order_Date instanceof Date)
         ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
         : String(r.Order_Date).trim();
@@ -1707,8 +1707,8 @@ function buildDeliveryRoute(days) {
       var CONFIDENCE_THRESHOLD = 5;
       var DEFAULT_POSITION = 0.5; // mid-route for low-confidence entries
       var stats = Object.keys(posAcc).map(function (soc) {
-        // Skip non-delivery entries (Self Pickup has no geographic position).
-        if (soc === "selfpickup" || soc === "self pickup") return null;
+        // Skip non-delivery entries (Self Pickup and Porter have no geographic position).
+        if (soc === "selfpickup" || soc === "self pickup" || soc === "porter") return null;
         var arr = posAcc[soc].slice().sort(function (a, b) { return a - b; });
         var mid = Math.floor(arr.length / 2);
         var med = (arr.length % 2) ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;

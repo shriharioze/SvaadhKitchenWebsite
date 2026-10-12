@@ -116,6 +116,16 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Porter Courier Highlight on Driver Delivery Page (CODE_VERSION 35.93 / DRIVER_VERSION v26.10.12.01)**
+  - **Driver Page Highlight (`docs/Admin/driver.html`):** Highlighted Porter courier orders similar to Self Pickup so the rider/kitchen is immediately aware the food is picked up at the kitchen by a 3rd-party courier (Porter/Borzo) and not loaded for road delivery:
+    - Distinct amber highlight badge (`🛵 PORTER PICKUP`), warm background (`#fffcf5`), and 5px amber left-border (`border-left: 5px solid #f59e0b`).
+    - Prominent address box header and clear operational instructions (`Customer booked third-party courier (Porter/Borzo). Package picked up directly from kitchen — DO NOT load for delivery route!`).
+    - Dedicated customer drop address verification section showing customer destination and landmark for courier handover verification.
+    - Protected `displayArea` and `displayAddr` so saved customer profile addresses in `mealAddresses` never overwrite temporary Porter (or Self Pickup) overrides.
+    - Disabled Maps button labeled `🛵 Porter Pickup` and suppressed coordinate warnings in favor of `Handover to courier at kitchen — excluded from delivery navigation`.
+    - Handover-tailored WhatsApp confirmation message and `⬜ Handed Over to Porter Courier` / `✅ Handed to Courier at HH:MM` delivery buttons.
+    - Ranked Porter at Rank 0 (top of the list with Self Pickup) so kitchen/driver deals with kitchen collections first.
+  - **Route Learning Exclusion (`03_Admin_Kitchen.gs`):** Excluded Porter and Self Pickup from route learning in `buildDeliveryRoute()` so kitchen courier collections do not distort the learned road delivery sequence.
 - **Default Dinner Cutoff Moved to 4:00 PM (CODE_VERSION 35.92 / APP_VERSION v26.10.12.02 / ADMIN_VERSION v26.10.12.04 / KITCHEN_VERSION v26.10.12.01)**
   - **Site-Wide Default Cutoff Shift:** Updated default Dinner cutoff from 4:30 PM (16.5 / 16.25) to 4:00 PM (16.0) across all pages, live database (`SK_Default_Cutoffs`), and backend code.
   - **Live Sheet:** Updated `SK_Default_Cutoffs` Dinner default to 16 via `setDefaultCutoffs` API action.
