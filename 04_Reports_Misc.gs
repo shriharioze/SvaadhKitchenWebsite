@@ -160,14 +160,14 @@ function buildSystemPrompt(extraMenu, page) {
     + "   • Busy Days & Slot Caps: If delivery slots fill up on high-demand days, orders of ₹200+ for that meal (₹100+ for breakfast) still get home delivery! Otherwise you can choose free Self Pickup or arrange a Porter courier directly.\n"
     + "   • Outside Policy: We do NOT deliver to Kothrud, Baner, Viman Nagar, Koregaon Park, or anywhere outside our listed Hadapsar areas.\n\n"
     + "4. DISCOUNTS, 6-DAY LOYALTY REWARD & REVIEW PROMO:\n"
-    + "   • Automatic Day Discounts (assessed on your total food subtotal for that day): 5% off at ₹325+ | 7.5% off at ₹485+ | 10% off at ₹750+.\n"
+    + "   • Automatic Day Discounts (assessed on your total food subtotal for that day): 5% off at ₹358+ | 7.5% off at ₹534+ | 10% off at ₹825+.\n"
     + "   • Friends & Family Privilege: Verified Friends & Family accounts automatically receive an exclusive flat 10% discount on food ('🌟 Exclusive Privilege (10% off)') and delivery cap bypass. Streak discounts and volume tiers are inapplicable for F&F customers.\n"
     + "   • 6-Day Loyalty Streak: Order at least one meal on 6 consecutive kitchen-open days (Sundays/closed days do not break the streak). On the 6th day, you automatically get 5% of your total 6 days' food spend credited back as a loyalty reward on your bill!\n"
     + "   • Google Review Promo: Leave a 5-star Google review (https://g.page/r/CasEH8gGAhzLEBM/review) and unlock 10% off your next order (for 3 orders)!\n\n"
     + "5. ⚡ BULK MEAL PLANS (WEEK / 15-DAY / MONTH):\n"
     + "   • Plan Options: Week Plan (6 working days -> 5% off every day's food) | 15-Day Plan (13 working days -> 7.5% off) | Month Plan (26 working days -> 10% off).\n"
     + "   • How it works: Tap the ⚡ Bulk card on the order page, pick your Lunch and/or Dinner items once, and the same meal arrives every working day with the chef's special rotating sabji. Sundays & holidays skipped automatically.\n"
-    + "   • Stacking: Daily discount tiers (5/7.5/10% at ₹325/485/750) STACK on top of the bulk plan discount! (Example: Month plan 10% + daily tier 5% = up to 15% off).\n"
+    + "   • Stacking: Daily discount tiers (5/7.5/10% at ₹358/534/825) STACK on top of the bulk plan discount! (Example: Month plan 10% + daily tier 5% = up to 15% off).\n"
     + "   • Postpone Days (Free Reschedule): Change of plans? Instead of cancelling, you can POSTPONE up to 2 lunch + 2 dinner days on the 15-Day plan (and 4 + 4 days on the Month plan) to another working day within 30 days for free! Same items, price, and discount kept.\n"
     + "   • Cancelling Bulk Days: Any day can be cancelled before its cutoff. Cancelling forfeits the bulk commitment discount for that meal, and the rest is refunded immediately to your Svaadh Wallet.\n\n"
     + "6. PAYMENTS, SVAADH WALLET & ON ACCOUNT:\n"
@@ -1918,7 +1918,7 @@ function markOrdersStatus(body) {
       });
       const scRemaining = scSameDayRows.reduce((s, x) => s + (Number(x.Food_Subtotal) || 0), 0);
       const scOldTotal  = scRemaining + (Number(r.Food_Subtotal) || 0);
-      const scDiscRate  = (sub) => sub >= 750 ? 0.10 : sub >= 485 ? 0.075 : sub >= 325 ? 0.05 : 0;
+      const scDiscRate  = (sub) => sub >= 825 ? 0.10 : sub >= 534 ? 0.075 : sub >= 358 ? 0.05 : 0;
       const scOldRate   = scDiscRate(scOldTotal);
       const scNewRate   = scDiscRate(scRemaining);
 

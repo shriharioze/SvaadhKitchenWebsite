@@ -162,9 +162,9 @@
     "cancellation": "You can also cancel any individual day before its cutoff. Cancelling a day forfeits that meal's bulk discount (it's a commitment discount), and the rest is refunded."
   },
   "discounts": {
-    "tier1": "5% off when the day's food total is ₹325 or more",
-    "tier2": "7.5% off when the day's food total is ₹485 or more",
-    "tier3": "10% off when the day's food total is ₹750 or more",
+    "tier1": "5% off when the day's food total is ₹358 or more",
+    "tier2": "7.5% off when the day's food total is ₹534 or more",
+    "tier3": "10% off when the day's food total is ₹825 or more",
     "bulk": "Bulk plans add their own discount on every day's food: Week 5%, 15-Day 7.5%, Month 10% — and the daily tiers above stack on top.",
     "loyalty_streak": "Order 6 days in a row (Sundays and kitchen-closed days don't break the streak) and get a loyalty reward on day 6 — 5% of each streak day's food is given back.",
     "review_promo": "Leave a 5-star Google review and get an extra 10% off your next order.",
