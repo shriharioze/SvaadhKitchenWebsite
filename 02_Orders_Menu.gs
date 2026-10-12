@@ -4415,12 +4415,12 @@ function getCustomerOrders(phone, storefront) {
 
 // Site-wide default cutoff hours, editable without a redeploy via the admin panel
 // (or directly in the SK_Default_Cutoffs sheet — one row, columns Breakfast/Lunch/
-// Dinner, decimal hours e.g. 16.5 = 4:30 PM). Falls back to the original hardcoded
+// Dinner, decimal hours e.g. 16 = 4:00 PM). Falls back to the original hardcoded
 // defaults if the sheet is empty/missing. Cached 5 min since _effectiveCutoffsForDate
 // runs on nearly every menu/order request. ALWAYS returns a fresh object — callers
 // (like _effectiveCutoffsForDate below) mutate it with per-day overrides.
 function _getDefaultCutoffs() {
-  var FALLBACK = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+  var FALLBACK = { Breakfast: 7, Lunch: 9, Dinner: 16 };
   try {
     var hit = CacheService.getScriptCache().get("default_cutoffs_v1");
     if (hit !== null) return JSON.parse(hit);
@@ -4580,7 +4580,7 @@ function _deleteOrderInternal(phone, rowId, refundType, opts) {
   let msg = "Order deleted successfully";
   const today = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd");
   const hourIST = now.getHours() + now.getMinutes() / 60;
-  const CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+  const CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16 };
 
   // ── Ownership guard ──────────────────────────────────────────
   // Customers: must pass BOTH the exact Submission_ID and the matching phone.

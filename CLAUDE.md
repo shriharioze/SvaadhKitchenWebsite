@@ -109,13 +109,19 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 
 ## Facts that get answered wrong from stale data
 - PRICING_V2 LIVE: Chapati 10 (8"), WO-Chapati 9 (8"), Phulka 8 (5–5.5"), Ghee Phulka 11 (5–5.5"), Bhakri 22 (10"), Sabji Mini 24 [100ml] / Full 48 [250ml], Dal 24 [200ml], Dal Fry 40 [200ml], Rice 13 [100g], Salad 8 [40g], Curd 13 [50g]. No market surcharge (Inflation_Surcharge = loyalty accrual only).
-- Cutoffs (verify live): B 7:00 / L 9:00 / D 16:30. Sundays closed. Caps: B 11 / L 24 / D 23.
+- Cutoffs (verify live): B 7:00 / L 9:00 / D 16:00 (4:00 PM). Sundays closed. Caps: B 11 / L 24 / D 23.
 - Bulk plans PUBLIC: Week 6d 5% / 15-Day 13d 7.5% / Month 26d 10%; postpone 2+2 / 4+4 within 30 days; cancel forfeits that meal's bulk discount.
 - LS storefront: Ganga Serio Kharadi, wings A–G2 (A–D=Liviano, E1–G2=Serio), Lunch & Dinner only, free delivery, pickup at G2 804, unlisted page.
 - Archive policy: due-slice (1-10→18th, 11-20→28th, 21-end→next-month 8th), terminal rows only (Paid/Cancelled/Refunded), Pending/On-Account stay live, per-month existing files appended, daily ~22:30 IST trigger, preview `archiveDueDryRun`.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Default Dinner Cutoff Moved to 4:00 PM (CODE_VERSION 35.92 / APP_VERSION v26.10.12.02 / ADMIN_VERSION v26.10.12.04 / KITCHEN_VERSION v26.10.12.01)**
+  - **Site-Wide Default Cutoff Shift:** Updated default Dinner cutoff from 4:30 PM (16.5 / 16.25) to 4:00 PM (16.0) across all pages, live database (`SK_Default_Cutoffs`), and backend code.
+  - **Live Sheet:** Updated `SK_Default_Cutoffs` Dinner default to 16 via `setDefaultCutoffs` API action.
+  - **Backend (`00_Config.gs`, `02_Orders_Menu.gs`, `03_Admin_Kitchen.gs`, `04_Reports_Misc.gs`):** Updated fallback dinner cutoffs and `BUSINESS_CONTEXT` prompt strings to 4:00 PM; bumped `CODE_VERSION` to `35.92`.
+  - **Storefronts & FAQs (`order.html`, `Liviano-Serio.html`, `index.html`, `refund.html`, `shipping.html`, `terms.html`, `order-chat.js`, `business.json`):** Synchronized English and Marathi strings (४:०० पूर्वी), JSON-LD schemas, guide modals, canned chatbot responses, and rotating tips.
+  - **Admin & Operations (`vault_admin.html`, `kitchen.html`):** Synchronized admin default labels and kitchen cutoff countdown fallback.
 - **Pricing Notice Condition Tightening: 30-Day Activity & 17th Oct Expiry (CODE_VERSION 35.88 / APP_VERSION v26.10.11.03)**
   - **30-Day Order Activity Verification (`02_Orders_Menu.gs`):** `verifyLogin` evaluates whether the customer has placed an order within the last 30 days (`ordered_last_30_days`, `last_order_at`), checking both `SK_Customers` (`Last_Order_At`) and live order tab (`SK_Orders`). `getCustomerOrders` also returns `ordered_last_30_days`.
   - **Client-Side Targeting & Cutoff (`docs/order.html`):**

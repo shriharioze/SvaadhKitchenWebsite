@@ -32,7 +32,7 @@
   // Ganga Serio, Kharadi) · doorstep delivery launching soon · wings A–G2
   // (A–D = Liviano, E1–G2 = Serio). The main order page path is unchanged.
   var IS_LS = (window.STOREFRONT === "LS") || /liviano-serio/i.test(location.pathname || "");
-  var LS_CONTEXT = "[You are answering on the Svaadh Kitchen page exclusively for Ganga Serio residents, Kharadi. Facts: Lunch & Dinner ONLY (no breakfast). Delivery is ALWAYS FREE here; doorstep delivery is launching soon — Self Pickup from G2 804, Ganga Serio is available now. Wings A,B,C,D = Liviano; E1,E2,F1,F2,G1,G2 = Serio. Cutoffs: Lunch 9:00 AM, Dinner 4:30 PM; closed Sundays. Wallet & loyalty are shared with the main svaadhkitchen.in site. Discounts: 5% ≥₹358/day, 7.5% ≥₹534, 10% ≥₹825.]\n\n";
+  var LS_CONTEXT = "[You are answering on the Svaadh Kitchen page exclusively for Ganga Serio residents, Kharadi. Facts: Lunch & Dinner ONLY (no breakfast). Delivery is ALWAYS FREE here; doorstep delivery is launching soon — Self Pickup from G2 804, Ganga Serio is available now. Wings A,B,C,D = Liviano; E1,E2,F1,F2,G1,G2 = Serio. Cutoffs: Lunch 9:00 AM, Dinner 4:00 PM; closed Sundays. Wallet & loyalty are shared with the main svaadhkitchen.in site. Discounts: 5% ≥₹358/day, 7.5% ≥₹534, 10% ≥₹825.]\n\n";
 
   function init() {
     var widget = document.getElementById("sk-chat-widget");
@@ -83,7 +83,7 @@
       { label: "⚡ Bulk meal plans", msg: "Tell me about your weekly, 15-day and monthly bulk meal plans.",
         answer: "Order in advance and save more:\n• **Weekly** — 6 days, 5% off\n• **15-Day** — 13 days, 7.5% off\n• **Monthly** — 26 days, 10% off\n\nYou can **postpone** days if plans change (15-Day: 2 lunch + 2 dinner; Monthly: 4 + 4) instead of cancelling. Cancelling a day forfeits that meal's bulk discount. Sundays are off." },
       { label: "⏰ Order timings", msg: "What are your order cut-off timings?",
-        answer: "Same-day order cut-offs:\n• ☀️ **Lunch** — by 9:00 AM\n• 🌙 **Dinner** — by 4:30 PM\n\nYou can order for **future dates anytime**. We're closed on **Sundays**. (Cut-offs can shift slightly on special days — the order page always shows the live time.)" },
+        answer: "Same-day order cut-offs:\n• ☀️ **Lunch** — by 9:00 AM\n• 🌙 **Dinner** — by 4:00 PM\n\nYou can order for **future dates anytime**. We're closed on **Sundays**. (Cut-offs can shift slightly on special days — the order page always shows the live time.)" },
       { label: "👛 Svaadh Wallet", msg: "What is the Svaadh Wallet and how do refunds work?",
         answer: "Your **Svaadh Wallet** is your prepaid balance with us.\n• Recharge any time and pay in a tap at checkout.\n• Any **refund** (e.g. a cancelled meal) goes back to your wallet **instantly** — no waiting.\n• Cancel before that meal's cut-off from '📋 Manage Orders'.\n\nSee every wallet transaction under '👛 Wallet' on the order page." },
       { label: "🏢 Who is this page for?", msg: "Which building and wings does this page serve?",
@@ -98,7 +98,7 @@
       { label: "⚡ Bulk meal plans", msg: "Tell me about your weekly, 15-day and monthly bulk meal plans.",
         answer: "Order in advance and save more:\n• **Weekly** — 6 days, 5% off\n• **15-Day** — 13 days, 7.5% off\n• **Monthly** — 26 days, 10% off\n\nYou can **postpone** days if plans change (15-Day: 2 lunch + 2 dinner; Monthly: 4 + 4) instead of cancelling. Cancelling a day forfeits that meal's bulk discount. Sundays are off." },
       { label: "⏰ Order timings", msg: "What are your order cut-off timings?",
-        answer: "Same-day order cut-offs:\n• 🌅 **Breakfast** — by 7:00 AM\n• ☀️ **Lunch** — by 9:00 AM\n• 🌙 **Dinner** — by 4:30 PM\n\nYou can order for **future dates anytime**. We're closed on **Sundays**. (Cut-offs can shift slightly on special days — the order page always shows the live time.)" },
+        answer: "Same-day order cut-offs:\n• 🌅 **Breakfast** — by 7:00 AM\n• ☀️ **Lunch** — by 9:00 AM\n• 🌙 **Dinner** — by 4:00 PM\n\nYou can order for **future dates anytime**. We're closed on **Sundays**. (Cut-offs can shift slightly on special days — the order page always shows the live time.)" },
       { label: "👛 Svaadh Wallet", msg: "What is the Svaadh Wallet and how do refunds work?",
         answer: "Your **Svaadh Wallet** is your prepaid balance with us.\n• Recharge any time and pay in a tap at checkout.\n• Any **refund** (e.g. a cancelled meal) goes back to your wallet **instantly** — no waiting.\n• Cancel before that meal's cut-off from '📋 Manage Orders'.\n\nSee every wallet transaction under '👛 Wallet' on the order page." }
     ];

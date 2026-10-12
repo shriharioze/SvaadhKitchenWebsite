@@ -26,7 +26,7 @@
   "order_cutoffs": {
     "breakfast": "before 7:00 AM",
     "lunch": "before 9:00 AM",
-    "dinner": "before 4:30 PM",
+    "dinner": "before 4:00 PM",
     "closed_on": "Sunday",
     "note": "Cutoffs are for same-day delivery. Future dates can be ordered any time. Occasionally the kitchen closes a specific day or a specific meal — closed days/meals are greyed out on the order calendar, and any already-placed orders for them are auto-cancelled with a full refund."
   },

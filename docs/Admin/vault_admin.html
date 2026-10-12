@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.12.03">
+  <meta name="app-version" content="v26.10.12.04">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1001,7 +1001,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
           <div class="meal-card-head">
             <span class="meal-icon">🌙</span>
             <span class="meal-card-title">Dinner</span>
-            <span class="meal-cutoff">Order cutoff: 4:30 PM</span>
+            <span class="meal-cutoff">Order cutoff: 4:00 PM</span>
           </div>
           <div class="meal-card-body">
             <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Select one dry sabji and one curry sabji for dinner.</p>
@@ -1089,7 +1089,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
             <span class="meal-card-title">Extend Cutoff Times Today</span>
           </div>
           <div class="meal-card-body">
-            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Leave blank to use the defaults above (<span id="cutoffDefaultsSummary">Breakfast 7:00 AM · Lunch 9:00 AM · Dinner 4:30 PM</span>). Pick any time — we'll show ⚡ Early or 🔓 Extended to customers.</p>
+            <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px;">Leave blank to use the defaults above (<span id="cutoffDefaultsSummary">Breakfast 7:00 AM · Lunch 9:00 AM · Dinner 4:00 PM</span>). Pick any time — we'll show ⚡ Early or 🔓 Extended to customers.</p>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
               <div>
                 <label style="font-size:.72rem;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">🌅 Breakfast until</label>
@@ -1113,7 +1113,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
                   style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.85rem;background:var(--bg2);color:var(--text);"
                   onchange="updateCutoffBadge('cutoffD','cutoffDBadge',S_DEFAULT_CUTOFFS.Dinner)">
                 <div id="cutoffDBadge" style="margin-top:5px;font-size:.68rem;font-weight:700;text-align:center;"></div>
-                <div id="cutoffDDefaultLabel" style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 4:30 PM</div>
+                <div id="cutoffDDefaultLabel" style="font-size:.65rem;color:var(--muted);text-align:center;margin-top:2px;">Default: 4:00 PM</div>
               </div>
             </div>
             <p style="font-size:.72rem;color:var(--muted);margin-top:10px;">Saved with the menu when you click <strong>Save Menu</strong>. ⚡ Early = before default · 🔓 Extended = after default.</p>
@@ -2152,7 +2152,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
 // Read claude.md and bump version number for pages with changes
-const APP_VERSION = "v26.10.12.01";
+const APP_VERSION = "v26.10.12.04";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2386,7 +2386,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.12.03";
+    const ADMIN_VERSION = "v26.10.12.04";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -2410,7 +2410,7 @@ function colKeyToDisplayName(k) {
 // Site-wide default cutoff hours (decimal, IST). Fetched once on login via
 // loadDefaultCutoffs(); fallback matches the backend's hardcoded fallback so the
 // UI never shows blank/NaN before the fetch completes.
-let S_DEFAULT_CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+let S_DEFAULT_CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16 };
 
 let S = {
   pin:            "",

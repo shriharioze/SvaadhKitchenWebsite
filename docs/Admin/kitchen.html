@@ -9,7 +9,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.11.02">
+  <meta name="app-version" content="v26.10.12.01">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1003,7 +1003,7 @@
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.11.02";
+    const APP_VERSION = "v26.10.12.01";
     (function() {
       const savedVer = localStorage.getItem("sk_admin_ver");
       if (savedVer !== APP_VERSION) {
@@ -1172,7 +1172,7 @@
     // AUTO LABEL TRIGGER — fires 5 min after Lunch / Dinner cutoff
     // ════════════════════════════════════════════════════════════════════
     // Reads today's cutoffs from _lastCutoffs (admin-set per day in Daily
-    // Menu, falling back to defaults Breakfast=7 / Lunch=9 / Dinner=16.5)
+    // Menu, falling back to defaults Breakfast=7 / Lunch=9 / Dinner=16)
     // and schedules timers to auto-fire the label-generate + save-to-drive
     // flow exactly the same way staff do manually. Same Drive folder, same
     // PDF format. localStorage keeps track of "already fired today" so a
@@ -1893,7 +1893,7 @@
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
     // Read claude.md and bump version number for pages with changes
-    const KITCHEN_VERSION = "v26.10.11.02";
+    const KITCHEN_VERSION = "v26.10.12.01";
     (async function _kitchenVersionCheck() {
       try {
         const badge = document.getElementById("kitchenVerBadge");
@@ -2031,7 +2031,7 @@
       const cutoffs = {
         Breakfast: Number(_lastCutoffs.Breakfast) || 7,
         Lunch:     Number(_lastCutoffs.Lunch)     || 9,
-        Dinner:    Number(_lastCutoffs.Dinner)    || 16.5
+        Dinner:    Number(_lastCutoffs.Dinner)    || 16
       };
 
       // Find the next upcoming cutoff

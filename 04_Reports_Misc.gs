@@ -107,7 +107,7 @@ function _formatMenuForPrompt(dateStr, dateObj) {
       out += "  Sabjis: To be updated shortly on the order calendar & WhatsApp group.\n";
     }
 
-    out += "• DINNER SABJIS (Order Cutoff: 4:30 PM" + (cm.Dinner ? " — CLOSED FOR THIS DATE" : "") + "):\n";
+    out += "• DINNER SABJIS (Order Cutoff: 4:00 PM" + (cm.Dinner ? " — CLOSED FOR THIS DATE" : "") + "):\n";
     if (m.dinner_dry || m.dinner_curry) {
       out += "  Dry Sabji: " + (m.dinner_dry || "None / Sold Out") + "\n";
       out += "  Curry Sabji: " + (m.dinner_curry || "None / Sold Out") + "\n";
@@ -146,7 +146,7 @@ function buildSystemPrompt(extraMenu, page) {
     + "   • Cooking Standards & Oils: Cooked fresh daily in small batches. We use Refined Groundnut Oil for all sabjis, Sunflower Oil for chapatis/parathas and frying (e.g. koftas), Pure Cow Ghee for Ghee Phulkas & breakfast, and Zero Oil for Without Oil Chapatis. 100% Pure Vegetarian kitchen (no eggs, no meat). No dedicated Jain preparation.\n"
     + "   • Food Clarity & Nutrition Transparency: Tap the ℹ️ info chip next to any item on the order page to view full nutritional breakdown (Calories, Protein, Carbs, Fats, Fiber), exact ingredients list, chef's kitchen notes, and dietary tags across all 45+ items.\n\n"
     + "2. ORDER CUTOFF TIMINGS & MULTI-DAY ORDERING:\n"
-    + "   • Same-Day Cutoffs: Breakfast before 7:00 AM | Lunch before 9:00 AM | Dinner before 4:30 PM.\n"
+    + "   • Same-Day Cutoffs: Breakfast before 7:00 AM | Lunch before 9:00 AM | Dinner before 4:00 PM.\n"
     + "   • Advance / Multi-Day Ordering: You can order up to 6 days ahead (Mon–Sat) at any time! On the date calendar, tap multiple dates and set meals for each date individually. Use the 'Copy' button on the order screen to clone a meal across multiple days.\n"
     + "   • Upcoming Tentative Menus: Tap '📅 View Upcoming Days' Tentative Menu' on the order page to preview menus for days, weeks, and months in advance! The kitchen follows a curated 22-week seasonal cycle with daily rotating dry & curry sabjis and breakfast items, navigable with left/right arrows, day steppers, and auto-scrolling tabs.\n"
     + "   • Sundays: Kitchen is closed.\n\n"

@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.12.01">
+  <meta name="app-version" content="v26.10.12.02">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -179,7 +179,7 @@
       "name": "What are the order cutoff times?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Breakfast orders must be placed before 7:00 AM, Lunch before 9:00 AM, and Dinner before 4:30 PM."
+        "text": "Breakfast orders must be placed before 7:00 AM, Lunch before 9:00 AM, and Dinner before 4:00 PM."
       }
     },
     {
@@ -243,7 +243,7 @@
       "name": "Can I cancel or modify my order?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "You can cancel before the cutoff time (Breakfast: 7 AM, Lunch: 9:00 AM, Dinner: 4:30 PM) through the Manage Orders section. Editing is not available — delete and re-place with changes instead."
+        "text": "You can cancel before the cutoff time (Breakfast: 7 AM, Lunch: 9:00 AM, Dinner: 4:00 PM) through the Manage Orders section. Editing is not available — delete and re-place with changes instead."
       }
     }
   ]
@@ -3520,8 +3520,8 @@
       <div class="how-info-grid">
         <div class="how-info-box">
           <div class="hi-label" data-i18n="how_cutoffs_label">⏰ Order cutoffs</div>
-          <div class="hi-val">🌅 Breakfast: 7:00 AM<br>☀️ Lunch: 9:00 AM<br>🌙 Dinner: 4:30 PM</div>
-          <p class="mr-note">नाश्ता: सकाळी ७:०० पूर्वी · दुपारचे जेवण: ९:०० पूर्वी · रात्रीचे जेवण: सायं ४:३० पूर्वी</p>
+          <div class="hi-val">🌅 Breakfast: 7:00 AM<br>☀️ Lunch: 9:00 AM<br>🌙 Dinner: 4:00 PM</div>
+          <p class="mr-note">नाश्ता: सकाळी ७:०० पूर्वी · दुपारचे जेवण: ९:०० पूर्वी · रात्रीचे जेवण: सायं ४:०० पूर्वी</p>
         </div>
         <div class="how-info-box">
           <div class="hi-label" data-i18n="how_discounts_label">💰 Discounts</div>
@@ -4201,10 +4201,10 @@
 
         <div class="info-box" id="cutoffInfoBox">
           <strong>Order cutoff times:</strong><br>
-          🌅 Breakfast: before 7:00 AM &nbsp;|&nbsp; ☀️ Lunch: before 9:00 AM &nbsp;|&nbsp; 🌙 Dinner: before 4:30 PM<br>
+          🌅 Breakfast: before 7:00 AM &nbsp;|&nbsp; ☀️ Lunch: before 9:00 AM &nbsp;|&nbsp; 🌙 Dinner: before 4:00 PM<br>
           <span style="font-size:0.74rem;color:#888;">Sundays closed. Select multiple dates to order in advance!</span>
           <p class="mr-note">⏰ <strong>ऑर्डरची शेवटची वेळ:</strong> नाश्ता – सकाळी ७:०० · दुपारचे जेवण – ९:०० · रात्रीचे
-            जेवण – सायं ४:३० · रविवार बंद</p>
+            जेवण – सायं ४:०० · रविवार बंद</p>
         </div>
 
         <!-- ⚡ Order in bulk (week / 15-day / month) entry card — LIVE for all customers
@@ -5203,7 +5203,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.12.01";
+    const APP_VERSION = "v26.10.12.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5215,7 +5215,7 @@
     // Site-wide DEFAULT cutoffs (fallback until getConfig responds; then kept in sync
     // with the server — admin-editable via the "Default Cutoff Times" panel, no
     // redeploy needed). Per-day overrides (menu.cutoff_overrides) always win over this.
-    let CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16.5 };
+    let CUTOFFS = { Breakfast: 7, Lunch: 9, Dinner: 16 };
     // Delivery-cap bypass: a capped MEAL whose food subtotal is ≥ its threshold
     // still gets delivery (big orders are worth the slot). Per-meal since
     // 2026-07-07 (Breakfast is typically a smaller ticket). MUST match the
@@ -8403,7 +8403,7 @@
       $("howModalContent").innerHTML = `
     <div style="font-size:0.82rem;color:#555;line-height:1.8;">
       <strong>🔐 Security:</strong> 4-digit PIN to secure your wallet<br>
-      <strong>⏰ ${t('how_cutoffs_label').replace('⏰ ', '')}</strong>: Breakfast 7AM · Lunch 9:00AM · Dinner 4:30PM<br>
+      <strong>⏰ ${t('how_cutoffs_label').replace('⏰ ', '')}</strong>: Breakfast 7AM · Lunch 9:00AM · Dinner 4:00PM<br>
       <strong>💰 ${t('how_discounts_label').replace('💰 ', '')}</strong>: 5% off ≥₹358 · 7.5% off ≥₹534 · 10% off ≥₹825 per day<br>
       <strong>🚚 ${t('how_delivery_label').replace('🚚 ', '')}</strong>: Free in Bhosale Nagar · ₹12/meal elsewhere (Waived if Self Pickup)<br>
       <strong>📦 Small Order Fee:</strong> ₹12 for Lunch/Dinner if bill &lt; ₹59 (Waived if Self Pickup)<br>
@@ -8433,7 +8433,7 @@
       { q: "What do the 100ml and 250ml sabji portion sizes mean?", a: "<strong>100ml (Mini)</strong> and <strong>250ml (Full)</strong> represent the <strong>liquid volumetric capacity</strong> of our food-grade leak-proof containers (equivalent to the volume of water the container holds). <em>Please note:</em> the actual physical weight in grams naturally varies for each dish depending on vegetable density, moisture, and gravy style (e.g. leafy vegetables vs dense root veggies or curries). Dal and Dal Fry are served in <strong>200ml</strong> containers." },
       { q: "How do I check calories, ingredients, and nutrition for each dish?", a: "We provide complete transparency through our <strong>1-Tap Food Clarity &amp; Nutrition</strong> feature! Next to every item on the menu, simply tap the <strong>ℹ️ chip</strong> to open a full breakdown showing approx <strong>Calories, Protein, Carbs, Fats, Dietary Fiber</strong>, complete ingredients, chef's preparation notes, container sizing, and dietary tags (Homestyle, High Protein, Low Calorie, Vegan, Pure Ghee, Zero Oil)." },
       { q: "What cooking oils and standards do you use?", a: "We cook wholesome homemade food in small batches with strict ingredient standards:<br>• <strong>Sabjis (Dry &amp; Curry):</strong> Cooked in <strong>Refined Groundnut Oil</strong>.<br>• <strong>Chapatis, Parathas &amp; Frying:</strong> Made with <strong>Sunflower Oil</strong>.<br>• <strong>Ghee Phulkas &amp; Breakfast:</strong> Prepared with <strong>Pure Cow Ghee</strong>.<br>• <strong>Diet Options:</strong> <strong>Without Oil Chapati</strong> has zero oil.<br>• <strong>100% Pure Vegetarian:</strong> No eggs, no meat. Prepared daily with fresh ingredients." },
-      { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:30 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
+      { q: "What are the order cutoff times?", a: "Breakfast: before 7:00 AM · Lunch: before 9:00 AM · Dinner: before 4:00 PM. Cutoff times are strictly for same-day delivery. Kitchen is closed on Sundays." },
       { q: "Can I order for multiple days at once?", a: "Yes! On the date selection screen, tap as many dates as you want. You'll set meals for each date individually. Use the <strong>Copy</strong> button to clone a meal you built to other selected dates." },
       { q: "What are the ⚡ Bulk meal plans?", a: "Order many days in one go and save on every day's food: <strong>Week</strong> = 6 working days with <strong>5% off</strong> · <strong>15-Day</strong> = 13 days with <strong>7.5% off</strong> · <strong>Month</strong> = 26 days with <strong>10% off</strong>. Pick your Lunch and/or Dinner items once — the sabji each day is the chef's special. Sundays &amp; kitchen holidays are skipped automatically, and the daily discount tiers stack on top." },
       { q: "Can I change a day in my Bulk plan?", a: "Yes — flexible two ways. <strong>Postpone:</strong> on the 15-Day plan move up to <strong>2 lunch + 2 dinner</strong> days to another date (within 30 days) free of charge; on the Month plan up to <strong>4 + 4</strong>. Same items, same price, discount kept. <strong>Cancel:</strong> any day before its cutoff — that day's bulk discount is forfeited (it's a commitment discount) and the rest is refunded." },
@@ -13606,7 +13606,7 @@
               📌 <b>Cutoff times to remember:</b><br>
               Breakfast — before <b>7:00 AM</b><br>
               Lunch — before <b>9:00 AM</b><br>
-              Dinner — before <b>4:30 PM</b><br>
+              Dinner — before <b>4:00 PM</b><br>
               Kitchen is <b>closed on Sundays</b>.
             </div>
           </div>`
@@ -13623,7 +13623,7 @@
               You can cancel for <b>free</b> before these times:<br>
               <b>Breakfast</b> → before 7:00 AM<br>
               <b>Lunch</b> → before 9:00 AM<br>
-              <b>Dinner</b> → before 4:30 PM<br><br>
+              <b>Dinner</b> → before 4:00 PM<br><br>
               After the cutoff, the order is being prepared and <b>cannot be cancelled</b>.
             </div>
           </div>
@@ -17415,7 +17415,7 @@
       // ⏰ Cutoff Times
       "Breakfast orders close at 7:00 AM — order the night before to be safe.",
       "Lunch orders close at 9:00 AM — order the night before to be safe.",
-      "Dinner orders close at 4:30 PM — you can order in the morning for dinner.",
+      "Dinner orders close at 4:00 PM — you can order in the morning for dinner.",
       "The cutoff timer on the meal card counts down live — watch it tick!",
       "Missed today's cutoff? You can still order for tomorrow and beyond.",
       // 💰 Discounts & Savings
