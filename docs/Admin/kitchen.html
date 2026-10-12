@@ -9,7 +9,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.12.01">
+  <meta name="app-version" content="v26.10.12.02">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -929,6 +929,9 @@
         <button class="pk span2" onclick="kp(0)">0</button><button class="pk del" onclick="kd()">⌫</button>
       </div>
       <div class="login-err" id="kErr"></div>
+      <div style="margin-top:16px;text-align:center;">
+        <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.12.02</span>
+      </div>
     </div>
   </div>
 
@@ -1003,12 +1006,16 @@
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.12.01";
+    const APP_VERSION = "v26.10.12.02";
     (function() {
-      const savedVer = localStorage.getItem("sk_admin_ver");
-      if (savedVer !== APP_VERSION) {
-        localStorage.setItem("sk_admin_ver", APP_VERSION);
+      const loginBadge = document.getElementById("loginVerBadge");
+      if (loginBadge) loginBadge.textContent = APP_VERSION;
+      const savedVer = localStorage.getItem("sk_kitchen_ver");
+      if (savedVer && savedVer !== APP_VERSION) {
+        localStorage.setItem("sk_kitchen_ver", APP_VERSION);
         location.reload(true);
+      } else {
+        localStorage.setItem("sk_kitchen_ver", APP_VERSION);
       }
     })();
     setInterval(async function() {
@@ -1893,11 +1900,15 @@
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
     // Read claude.md and bump version number for pages with changes
-    const KITCHEN_VERSION = "v26.10.12.01";
+    const KITCHEN_VERSION = "v26.10.12.02";
     (async function _kitchenVersionCheck() {
       try {
+        const loginBadge = document.getElementById("loginVerBadge");
+        if (loginBadge) loginBadge.textContent = KITCHEN_VERSION;
         const badge = document.getElementById("kitchenVerBadge");
         if (badge) badge.textContent = KITCHEN_VERSION;
+        const badges = document.querySelectorAll(".app-ver-badge, #topbarVerBadge, #appVerBadge");
+        badges.forEach(b => { if (b) b.textContent = KITCHEN_VERSION; });
         const res = await fetch(window.location.pathname + "?_v=" + Date.now(), { cache: "no-store" });
         if (!res.ok) return;
         const html = await res.text();
@@ -1905,7 +1916,7 @@
         if (m && m[1] && m[1] !== KITCHEN_VERSION) {
           console.log("[Kitchen] Version mismatch: running=" + KITCHEN_VERSION
                       + ", latest=" + m[1] + " — auto hard reloading");
-          localStorage.setItem("sk_admin_ver", m[1]);
+          localStorage.setItem("sk_kitchen_ver", m[1]);
           const sep = window.location.href.indexOf("?") === -1 ? "?" : "&";
           window.location.replace(window.location.href.split("?")[0] + sep + "_v=" + Date.now());
         }

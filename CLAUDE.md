@@ -15,7 +15,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
      - `docs/order.html`: `const APP_VERSION = "..."` + visible version text in footer.
      - `docs/Liviano-Serio.html`: `const APP_VERSION = "..."` + visible version text.
      - `docs/Admin/vault_admin.html`: `<meta name="app-version" content="...">` + `const ADMIN_VERSION = "..."`.
-     - `docs/Admin/kitchen.html`: `<meta name="app-version" content="...">` + `const APP_VERSION = "..."` + `const KITCHEN_VERSION = "..."` (bump all three).
+     - `docs/Admin/kitchen.html`: `<meta name="app-version" content="...">` + `const APP_VERSION = "..."` + `const KITCHEN_VERSION = "..."` + visible `#loginVerBadge` / `#kitchenVerBadge` (bump in lockstep).
      - `docs/Admin/driver.html`: `<meta name="app-version" content="...">` + `const DRIVER_VERSION = "..."` + visible `#loginVerBadge` / `#appVerBadge` (bump in lockstep).
      - `docs/Admin/recovery.html`: `<meta name="app-version" content="...">` + `const RECOVERY_VERSION = "..."` + `<div class="ver-badge">` header badge (bump all three).
   2. **Backend Apps Script edits (`*.gs`):**
