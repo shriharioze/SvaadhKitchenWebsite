@@ -7,7 +7,7 @@
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
   <!-- Read claude.md and bump version number for pages with changes -->
-  <meta name="app-version" content="v26.10.12.01">
+  <meta name="app-version" content="v26.10.12.02">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -268,7 +268,7 @@
 </div>
 
 <script>
-const DRIVER_VERSION  = "v26.10.12.01";
+const DRIVER_VERSION  = "v26.10.12.02";
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
 
 // ── FETCH WITH TIMEOUT (Timeout removed per user request: let request take whatever time it needs) ──
@@ -882,8 +882,6 @@ function renderCard(o, i, meal) {
   const hasMap      = o.maps && o.maps.startsWith("http");
   const hasPhone    = o.phone && o.phone.length >= 10;
   const isDelivered = !!o.deliveredAt;
-  const waText      = encodeURIComponent(`✅ Hi ${o.name}! Your ${meal} has been delivered. 🙏 If you don't see it at your door, please check the bag kept outside — that's where we place it. 🛍️ (Keeping a bag out helps us deliver everyone's meals faster!) Thank you!`);
-  const waNum       = hasPhone ? "91" + o.phone.replace(/\D/g,"").slice(-10) : "";
 
   // ── DETECTION OF FULFILMENT TYPE ──
   const orderIsPorter = /porter/i.test(String(o.area || "")) || /porter/i.test(String(o.address || ""));
@@ -1236,7 +1234,6 @@ async function markDelivered(submissionId, meal, btn) {
   if (card) card.classList.add("delivered");
   const tag = document.getElementById("dtag_"+submissionId);
   if (tag) { tag.style.display=""; tag.textContent = `✅ ${fmtTime(deliveredAt)}`; }
-  const order = (_ordersData[meal]||[]).find(o=>o.submissionId===submissionId);
   if (order) order.deliveredAt = deliveredAt;
   const ubtn = document.getElementById("ubtn_"+submissionId);
   if (ubtn) ubtn.style.display = "flex";
