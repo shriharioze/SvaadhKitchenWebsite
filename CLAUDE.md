@@ -16,7 +16,7 @@ Google Apps Script backend (clasp) + GitHub Pages frontend (docs/, www.svaadhkit
      - `docs/Liviano-Serio.html`: `const APP_VERSION = "..."` + visible version text.
      - `docs/Admin/vault_admin.html`: `<meta name="app-version" content="...">` + `const ADMIN_VERSION = "..."`.
      - `docs/Admin/kitchen.html`: `<meta name="app-version" content="...">` + `const APP_VERSION = "..."` + `const KITCHEN_VERSION = "..."` (bump all three).
-     - `docs/Admin/driver.html`: `<meta name="app-version" content="...">` tag (bump tag).
+     - `docs/Admin/driver.html`: `<meta name="app-version" content="...">` + `const DRIVER_VERSION = "..."` + visible `#loginVerBadge` / `#appVerBadge` (bump in lockstep).
      - `docs/Admin/recovery.html`: `<meta name="app-version" content="...">` + `const RECOVERY_VERSION = "..."` + `<div class="ver-badge">` header badge (bump all three).
   2. **Backend Apps Script edits (`*.gs`):**
      - Increment `CODE_VERSION` in `00_Config.gs` (e.g. `35.45` → `35.46`) and add a bullet to the comment block above it.
