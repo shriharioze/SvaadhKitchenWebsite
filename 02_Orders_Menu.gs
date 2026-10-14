@@ -2843,19 +2843,25 @@ function _submitOrderInternal(body) {
         const _mt = String(_m.type || "");
 
         // ── BREAKFAST MINIMUM ORDER VALUE GUARD (₹40 min per day) ──
+        // Exempt for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup
         if (_mt === "Breakfast") {
-          const _bfSub = Number(_m.subtotal) || 0;
-          let _hasBfItems = false;
-          let _bfItems = _m.items || [];
-          if (typeof _bfItems === "string") {
-            try { _bfItems = JSON.parse(_bfItems); } catch(e) { _bfItems = []; }
-          }
-          if (Array.isArray(_bfItems)) {
-            _hasBfItems = _bfItems.some(it => it && Number(it.qty) > 0);
-          }
-          if ((_bfSub > 0 || _hasBfItems) && _bfSub < MIN_BREAKFAST_ORDER_VALUE) {
-            _wViolations.push("Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + _d + " is ₹" + _bfSub + ").");
-            continue;
+          const _area = String(_m.area || profile.area || "").trim();
+          const _isPickup = _area.toLowerCase().includes("pickup");
+          const _isFreeArea = freeAreaNames.indexOf(_area) !== -1;
+          if (!_isPickup && !_isFreeArea) {
+            const _bfSub = Number(_m.subtotal) || 0;
+            let _hasBfItems = false;
+            let _bfItems = _m.items || [];
+            if (typeof _bfItems === "string") {
+              try { _bfItems = JSON.parse(_bfItems); } catch(e) { _bfItems = []; }
+            }
+            if (Array.isArray(_bfItems)) {
+              _hasBfItems = _bfItems.some(it => it && Number(it.qty) > 0);
+            }
+            if ((_bfSub > 0 || _hasBfItems) && _bfSub < MIN_BREAKFAST_ORDER_VALUE) {
+              _wViolations.push("Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + _d + " is ₹" + _bfSub + ").");
+              continue;
+            }
           }
         }
 

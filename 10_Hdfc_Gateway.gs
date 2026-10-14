@@ -1291,15 +1291,26 @@ function hdfc_savePendingOrder(body) {
   if (!orderId) return { error: "order_id required." };
 
   // ── BREAKFAST MINIMUM ORDER VALUE GUARD (₹40 min per day) ──
+  // Exempt for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup
   const _pendingOrders = body.orders || {};
+  const _pendingMealAddrs = body.mealAddrs || {};
+  const _pendingProfile = body.profile || {};
+  const _allAreas = getAreas() || [];
+  const _freeAreaNames = _allAreas.filter(function(a){ return a.free; }).map(function(a){ return a.name; });
+
   for (const dateKey of Object.keys(_pendingOrders)) {
     const dayObj = _pendingOrders[dateKey] || {};
     const bfObj = dayObj["Breakfast"];
     if (bfObj) {
-      const bfSub = Number(bfObj.subtotal) || 0;
-      const hasItems = bfObj.items && Object.values(bfObj.items).some(q => Number(q) > 0);
-      if ((bfSub > 0 || hasItems) && bfSub < MIN_BREAKFAST_ORDER_VALUE) {
-        return { error: "Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + dateKey + " is ₹" + bfSub + ")." };
+      const bfArea = String(bfObj.area || _pendingMealAddrs.Breakfast?.area || _pendingProfile.area || "").trim();
+      const isPickup = bfArea.toLowerCase().includes("pickup");
+      const isFreeArea = _freeAreaNames.indexOf(bfArea) !== -1;
+      if (!isPickup && !isFreeArea) {
+        const bfSub = Number(bfObj.subtotal) || 0;
+        const hasItems = bfObj.items && Object.values(bfObj.items).some(q => Number(q) > 0);
+        if ((bfSub > 0 || hasItems) && bfSub < MIN_BREAKFAST_ORDER_VALUE) {
+          return { error: "Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + dateKey + " is ₹" + bfSub + ")." };
+        }
       }
     }
   }
