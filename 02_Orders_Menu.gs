@@ -2841,6 +2841,24 @@ function _submitOrderInternal(body) {
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {
         const _mt = String(_m.type || "");
+
+        // ── BREAKFAST MINIMUM ORDER VALUE GUARD (₹40 min per day) ──
+        if (_mt === "Breakfast") {
+          const _bfSub = Number(_m.subtotal) || 0;
+          let _hasBfItems = false;
+          let _bfItems = _m.items || [];
+          if (typeof _bfItems === "string") {
+            try { _bfItems = JSON.parse(_bfItems); } catch(e) { _bfItems = []; }
+          }
+          if (Array.isArray(_bfItems)) {
+            _hasBfItems = _bfItems.some(it => it && Number(it.qty) > 0);
+          }
+          if ((_bfSub > 0 || _hasBfItems) && _bfSub < MIN_BREAKFAST_ORDER_VALUE) {
+            _wViolations.push("Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + _d + " is ₹" + _bfSub + ").");
+            continue;
+          }
+        }
+
         const closedState = _ordersClosedW[_mt];
         if (closedState === true) { _wViolations.push(_mt + " orders are closed for " + _d + "."); continue; }
         if (closedState === "restricted") {

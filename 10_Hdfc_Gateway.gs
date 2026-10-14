@@ -1290,6 +1290,20 @@ function hdfc_savePendingOrder(body) {
   const orderId = String(body.order_id || "").trim();
   if (!orderId) return { error: "order_id required." };
 
+  // ── BREAKFAST MINIMUM ORDER VALUE GUARD (₹40 min per day) ──
+  const _pendingOrders = body.orders || {};
+  for (const dateKey of Object.keys(_pendingOrders)) {
+    const dayObj = _pendingOrders[dateKey] || {};
+    const bfObj = dayObj["Breakfast"];
+    if (bfObj) {
+      const bfSub = Number(bfObj.subtotal) || 0;
+      const hasItems = bfObj.items && Object.values(bfObj.items).some(q => Number(q) > 0);
+      if ((bfSub > 0 || hasItems) && bfSub < MIN_BREAKFAST_ORDER_VALUE) {
+        return { error: "Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + dateKey + " is ₹" + bfSub + ")." };
+      }
+    }
+  }
+
   try {
     const props    = PropertiesService.getScriptProperties();
     const raw      = props.getProperty("HDFC_PENDING_ORDERS") || "{}";

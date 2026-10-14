@@ -95,6 +95,7 @@ SK_Orders · SK_Customers · SK_Wallet · SK_Daily_Menu · SK_Areas · SK_Refund
 15. When editing any function, check its callers for NEW required params (storefront pattern) — node --check does NOT catch undefined-variable runtime throws.
 16. **Items_JSON is the source of truth for kitchen/label rendering** — never gate item rendering by Meal_Type (owner flips types in-sheet). Sources are MIRRORS of one cart: first source wins per item, never sum across sources (double-count).
 17. **Never stringify Dates when rewriting sheet rows** (archiver incident 2026-08-25: Date→string sanitize blanked the live Order_Date column). getValues→setValues round-trips Date objects safely — preserve them.
+18. **Breakfast minimum food order value (₹40)**: Breakfast can ONLY be ordered if a minimum food value of ₹40 is met per day (`MIN_BREAKFAST_ORDER_VALUE = 40`), irrespective of 2 or 3 meals meeting free delivery criteria or free delivery areas/pickup/porter. Enforced server-side in `_submitOrderInternal` and `hdfc_savePendingOrder`, and client-side across step transitions (`goNext`), bill screen, order placement (`placeOrder`), and gateway checkout (`hdfc_initiatePayment`). Lunch and Dinner have NO such minimum food value requirement.
 
 ## Testing rituals (these produced the quality — keep them)
 - Money/logic change in .gs: EXTRACT the real function text (brace-matched, mind CRLF) and eval in a Node script with stubbed globals (FakeSheet emulator pattern in scratch/test_ls_e2e.js) — assert realistic scenarios BEFORE deploying. eval'd `const` doesn't leak — extract RHS and assign.
@@ -116,6 +117,12 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Enforce ₹40 Minimum Breakfast Food Order Value (CODE_VERSION 35.94 / APP_VERSION v26.10.14.01)**
+  - **Context:** Customer placed 3-meal order where breakfast was 2x Idli = ₹16. Because multi-meal combined food total crossed the ₹209 free delivery threshold, the ₹16 breakfast was delivered with ₹0 delivery charge.
+  - **Rule:** Breakfast can ONLY be ordered if a minimum food value of ₹40 is met per day (`MIN_BREAKFAST_ORDER_VALUE = 40`), regardless of multi-meal free delivery thresholds, free delivery areas, pickup, or courier orders. Lunch and Dinner have NO such minimum food value requirement.
+  - **Frontend (`docs/order.html`):** Real-time badge progress towards ₹40 (`#bf_min_status_${date}`), warning note inside breakfast section, blocking alert with auto-focus in `goNext()` (Step 3 -> 4), warning notice on bill screen, and blocking validation in `placeOrder()` and `hdfc_initiatePayment()`. Added Delivery Guide section and FAQ entry.
+  - **Backend (`00_Config.gs`, `02_Orders_Menu.gs`, `10_Hdfc_Gateway.gs`):** Server-side pre-flight check in `_submitOrderInternal` and order stashing validation in `hdfc_savePendingOrder` reject breakfast orders with food value < ₹40.
+  - **Chatbot & Sync (`Backend/business.json`, `docs/order-chat.js`):** Updated business context and FAQ answers to reflect ₹40 breakfast minimum order value.
 - **Porter Courier Highlight on Driver Delivery Page (CODE_VERSION 35.93 / DRIVER_VERSION v26.10.12.02)**
   - **Driver Page Highlight (`docs/Admin/driver.html`):** Highlighted Porter courier orders similar to Self Pickup so the rider/kitchen is immediately aware the food is picked up at the kitchen by a 3rd-party courier (Porter/Borzo) and not loaded for road delivery:
     - Distinct amber highlight badge (`🛵 PORTER PICKUP`), warm background (`#fffcf5`), and 5px amber left-border (`border-left: 5px solid #f59e0b`).
