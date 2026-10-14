@@ -130,7 +130,7 @@
         "portion": "50g"
       }
     ],
-    "breakfast": "Rotating daily menu — items like Kanda Poha (₹40), Upma (₹45), Sabudana Khichdi (₹48), Parathas (₹45–₹85), Sheera (₹55), Tikhi Puri (₹11), Idli (₹8) (₹40–₹85 range). Breakfast orders require a minimum food value of ₹40 per day in regular delivery areas (waived for Free Delivery areas and Self Pickup). Curd 50g (₹14) is available as an add-on. Check the order form for today's breakfast options.",
+    "breakfast": "Rotating daily menu — items like Kanda Poha (₹40), Upma (₹45), Sabudana Khichdi (₹48), Parathas (₹45–₹85), Sheera (₹55), Tikhi Puri (₹11), Idli (₹8) (₹40–₹85 range). Breakfast orders require a minimum food value of ₹40 per day in regular delivery areas (waived for Free Delivery areas, Self Pickup, or if an active breakfast delivery is already scheduled to your exact flat address on that date). Curd 50g (₹14) is available as an add-on. Check the order form for today's breakfast options.",
     "typical_meal": "A typical veg meal of 2 Chapati + Full Sabji + Dal + Rice comes to about ₹115 before discounts. Build lighter or bigger — you only pay for what you pick.",
     "portion_clarity": {
       "sabji_portions": "100ml (Mini) and 250ml (Full) denote the volumetric liquid capacity of the food-grade container (water volume equivalent). The net physical weight in grams varies naturally depending on vegetable density and gravy consistency.",

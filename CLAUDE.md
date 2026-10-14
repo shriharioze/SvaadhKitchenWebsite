@@ -117,6 +117,19 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Waive Breakfast ₹40 Minimum for Exact Flat Address Delivery Match (CODE_VERSION 35.96 / APP_VERSION v26.10.14.03)**
+  - **Operational Exemption:** If an active delivery is ALREADY scheduled to the exact same address for Breakfast on that date (e.g. Wing P, Flat 601, Laburnum Park), our delivery rider is already traveling to that doorstep anyway. In this case, incoming breakfast orders to the same flat are allowed without meeting the ₹40 breakfast minimum order value.
+  - **Address Normalization (`_makeAddrKey`):** Canonical flat-level address key generator standardizing Society (`_normSocietyKey`), Wing (alphanumeric cleaning + prefix stripping + fallback extraction from flat string), and Flat (strict numeric extraction). Collapses variations like "601", "P-601", "Wing P 601" identically while preserving building/wing distinction across complexes.
+  - **Backend (`02_Orders_Menu.gs` & `10_Hdfc_Gateway.gs`):**
+    - `_activeDeliveryIndex` builds `addr[ak] = true` index for all active non-cancelled delivery rows on that date.
+    - `checkDeliveryReachable` endpoint accepts `{ date, meal, society, wing, flat }` and returns `{ exactMatch: boolean }`. Exposed via both `doGet` and `doPost`.
+    - `_submitOrderInternal` and `hdfc_savePendingOrder` waive the ₹40 check when `_isExactStop` / `hasExactStop` is true.
+  - **Frontend (`docs/order.html`):**
+    - `checkActiveBreakfastStops()` queries `checkDeliveryReachable` for selected dates and caches results in `S.activeBfStops[date]`.
+    - `isBreakfastMinExempt(date)` and `getBreakfastMinExemptReason(date)` check if flat has an active delivery and render `✅ No minimum (Flat has active delivery)`.
+    - `validateBreakfastMinimums(date)`, `goNext()`, `placeOrder()`, and `hdfc_initiatePayment()` check active stops and permit low-value breakfast items without blocking.
+    - Updated Delivery Guide modal, FAQs, and bill screen notice.
+  - **Sync:** Synchronized `00_Config.gs`, `02_Orders_Menu.gs`, `10_Hdfc_Gateway.gs`, `Code.gs`, `docs/order.html`, `Backend/business.json`, `docs/order-chat.js`, and `CLAUDE.md`.
 - **Exempt Free Delivery Areas & Pickup from Breakfast ₹40 Minimum (CODE_VERSION 35.95 / APP_VERSION v26.10.14.02)**
   - **Refinement:** Waived the ₹40 breakfast minimum food order value for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup.
   - **Enforcement:** The ₹40 condition continues to apply strictly to all standard delivery areas (Amanora, Hadapsar, Magarpatta, etc.) regardless of whether other meals are ordered or multi-meal free delivery threshold is reached.

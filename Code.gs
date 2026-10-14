@@ -90,6 +90,11 @@ function doGet(e) {
       blocklist: getBlocklist()
     });
     if (action === "getAreas") return jsonRes(getAreas());
+    if (action === "checkDeliveryReachable") {
+      let items = [];
+      try { items = typeof p.items === "string" ? JSON.parse(p.items) : (p.items || []); } catch(_) {}
+      return jsonRes(checkDeliveryReachable({ items: items, phone: p.phone || "" }));
+    }
     if (action === "getDefaultCutoffs") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(getDefaultCutoffs());

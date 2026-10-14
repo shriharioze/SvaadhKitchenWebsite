@@ -959,12 +959,57 @@ function listDistinctSocieties() {
   }).sort(function (a, b) { return b.totalUses - a.totalUses; });
   return { groups: groups, count: groups.length };
 }
-// For one date, per meal, the sets of normalized societies AND normalized phones
-// we ALREADY have an active DELIVERY order for. Lets a customer through the
+/**
+ * Normalizes an address into a canonical key for exact flat-level matching.
+ * Format: "addr|<wing>|<flat>|<canonicalSociety>"
+ * e.g. Society="Laburnum park", Wing="P", Flat="601" -> "addr|p|601|laburnumpark"
+ */
+function _makeAddrKey(society, wing, flat) {
+  var s = typeof _normSocietyKey === "function" 
+    ? _normSocietyKey(society) 
+    : (typeof _normSocietyBase === "function" ? _normSocietyBase(society || "") : String(society || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+  if (!s) return "";
+
+  var fRaw = String(flat || "").trim().toLowerCase();
+  var fMatch = fRaw.match(/\d+/);
+  var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
+  if (!f) return "";
+
+  var wRaw = String(wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  var w = wRaw.replace(/^(wing|block|tower)/, "").trim();
+
+  // If wing was not specified in wing field, inspect fRaw for leading or trailing letters (e.g. "P 601", "P-601", "601 P")
+  if (!w) {
+    var leadW = fRaw.match(/^([a-z]+)[\s\-]*\d+/i);
+    var trailW = fRaw.match(/\d+[\s\-,]*([a-z]+)$/i);
+    if (leadW) {
+      var cand = leadW[1].toLowerCase().replace(/^(wing|block|tower|flat|office)/, "");
+      if (cand) w = cand;
+    } else if (trailW) {
+      var cand = trailW[1].toLowerCase().replace(/^(wing|block|tower|flat|office)/, "");
+      if (cand) w = cand;
+    }
+  }
+
+  // If wing matches society completely or is redundant with society, collapse to ""
+  if (w && (s === w || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === s) || (w.length > 3 && s.indexOf(w) !== -1))) {
+    w = "";
+  }
+
+  return "addr|" + w + "|" + f + "|" + s;
+}
+
+// For one date, per meal, the sets of normalized societies, normalized phones,
+// AND exact address keys we ALREADY have an active DELIVERY order for. Lets a customer through the
 // delivery cap when (a) we're already delivering to their society, or (b) THEY
-// already have a delivery order for that meal (adding more = the same stop).
+// already have a delivery order for that meal (adding more = the same stop),
+// and waives the ₹40 breakfast minimum when an active delivery is already going to their exact flat.
 function _activeDeliveryIndex(rows, dateStr) {
-  const out = { Breakfast: { soc: {}, ph: {} }, Lunch: { soc: {}, ph: {} }, Dinner: { soc: {}, ph: {} } };
+  const out = { 
+    Breakfast: { soc: {}, ph: {}, addr: {} }, 
+    Lunch: { soc: {}, ph: {}, addr: {} }, 
+    Dinner: { soc: {}, ph: {}, addr: {} } 
+  };
   for (var i = 0; i < rows.length; i++) {
     const r = rows[i];
     const d = r.Order_Date instanceof Date
@@ -980,14 +1025,15 @@ function _activeDeliveryIndex(rows, dateStr) {
     if (soc) out[mt].soc[soc] = true;
     const ph = _normalizePhone(r.Phone);
     if (ph) out[mt].ph[ph] = true;
+    const ak = _makeAddrKey(r.Society, r.Wing, r.Flat);
+    if (ak) out[mt].addr[ak] = true;
   }
   return out;
 }
-// Customer-facing lookup: for each {date, meal, society} (+ body.phone), is there
-// already an active delivery to that society OR an existing delivery by this same
-// customer? The order page calls this when a delivery cap is reached — if
-// reachable, the order proceeds as a normal delivery; otherwise it offers Self
-// Pickup / Porter. submitOrder re-checks authoritatively.
+// Customer-facing lookup: for each {date, meal, society, wing, flat} (+ body.phone), is there
+// already an active delivery to that society, an existing delivery by this same customer,
+// OR an exact address match for that meal? The order page calls this for delivery cap piggybacking
+// and waiving the ₹40 breakfast minimum when a delivery is already scheduled to the exact same flat.
 function checkDeliveryReachable(body) {
   const items = (body && body.items) || [];
   if (!Array.isArray(items) || !items.length) return { results: [] };
@@ -1001,9 +1047,11 @@ function checkDeliveryReachable(body) {
     const meal = String(it.meal || "").trim();
     const soc  = _normSocietyKey(it.society || "");
     if (!byDate[date]) byDate[date] = _activeDeliveryIndex(rows, date);
-    const idx = byDate[date][meal] || { soc: {}, ph: {} };
+    const idx = byDate[date][meal] || { soc: {}, ph: {}, addr: {} };
     const reachable = !!((soc && idx.soc[soc]) || (phone && idx.ph[phone]));
-    return { date: date, meal: meal, reachable: reachable };
+    const ak = _makeAddrKey(it.society || "", it.wing || "", it.flat || "");
+    const exactMatch = !!(ak && idx.addr && idx.addr[ak]);
+    return { date: date, meal: meal, reachable: reachable, exactMatch: exactMatch };
   });
   return { results: results };
 }
@@ -2843,24 +2891,29 @@ function _submitOrderInternal(body) {
         const _mt = String(_m.type || "");
 
         // ── BREAKFAST MINIMUM ORDER VALUE GUARD (₹40 min per day) ──
-        // Exempt for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup
+        // Exempt for Free Delivery areas (Bhosale Nagar, Triveni Nagar), Self Pickup,
+        // or if an active delivery is already scheduled to the exact same flat address on this date.
         if (_mt === "Breakfast") {
           const _area = String(_m.area || profile.area || "").trim();
           const _isPickup = _area.toLowerCase().includes("pickup");
           const _isFreeArea = freeAreaNames.indexOf(_area) !== -1;
           if (!_isPickup && !_isFreeArea) {
-            const _bfSub = Number(_m.subtotal) || 0;
-            let _hasBfItems = false;
-            let _bfItems = _m.items || [];
-            if (typeof _bfItems === "string") {
-              try { _bfItems = JSON.parse(_bfItems); } catch(e) { _bfItems = []; }
-            }
-            if (Array.isArray(_bfItems)) {
-              _hasBfItems = _bfItems.some(it => it && Number(it.qty) > 0);
-            }
-            if ((_bfSub > 0 || _hasBfItems) && _bfSub < MIN_BREAKFAST_ORDER_VALUE) {
-              _wViolations.push("Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + _d + " is ₹" + _bfSub + ").");
-              continue;
+            const _inAk = _makeAddrKey(_m.society || profile.society, _m.wing || profile.wing, _m.flat || profile.flat);
+            const _isExactStop = !!(_inAk && _delIdxW && _delIdxW.Breakfast && _delIdxW.Breakfast.addr && _delIdxW.Breakfast.addr[_inAk]);
+            if (!_isExactStop) {
+              const _bfSub = Number(_m.subtotal) || 0;
+              let _hasBfItems = false;
+              let _bfItems = _m.items || [];
+              if (typeof _bfItems === "string") {
+                try { _bfItems = JSON.parse(_bfItems); } catch(e) { _bfItems = []; }
+              }
+              if (Array.isArray(_bfItems)) {
+                _hasBfItems = _bfItems.some(it => it && Number(it.qty) > 0);
+              }
+              if ((_bfSub > 0 || _hasBfItems) && _bfSub < MIN_BREAKFAST_ORDER_VALUE) {
+                _wViolations.push("Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + _d + " is ₹" + _bfSub + ").");
+                continue;
+              }
             }
           }
         }

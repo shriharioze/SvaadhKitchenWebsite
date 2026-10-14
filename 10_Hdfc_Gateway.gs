@@ -1291,7 +1291,8 @@ function hdfc_savePendingOrder(body) {
   if (!orderId) return { error: "order_id required." };
 
   // ── BREAKFAST MINIMUM ORDER VALUE GUARD (₹40 min per day) ──
-  // Exempt for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup
+  // Exempt for Free Delivery areas (Bhosale Nagar, Triveni Nagar), Self Pickup,
+  // or if an active delivery is already scheduled to the exact same flat address on this date.
   const _pendingOrders = body.orders || {};
   const _pendingMealAddrs = body.mealAddrs || {};
   const _pendingProfile = body.profile || {};
@@ -1309,7 +1310,27 @@ function hdfc_savePendingOrder(body) {
         const bfSub = Number(bfObj.subtotal) || 0;
         const hasItems = bfObj.items && Object.values(bfObj.items).some(q => Number(q) > 0);
         if ((bfSub > 0 || hasItems) && bfSub < MIN_BREAKFAST_ORDER_VALUE) {
-          return { error: "Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + dateKey + " is ₹" + bfSub + ")." };
+          const bfSoc = String(bfObj.society || _pendingMealAddrs.Breakfast?.society || _pendingProfile.society || "");
+          const bfWing = String(bfObj.wing || _pendingMealAddrs.Breakfast?.wing || _pendingProfile.wing || "");
+          const bfFlat = String(bfObj.flat || _pendingMealAddrs.Breakfast?.flat || _pendingProfile.flat || "");
+          const incomingAk = typeof _makeAddrKey === "function" ? _makeAddrKey(bfSoc, bfWing, bfFlat) : "";
+          let hasExactStop = false;
+          if (incomingAk) {
+            try {
+              const ss = getSpreadsheet();
+              const ws = getOrCreateTab(ss, TAB_ORDERS, []);
+              const recentRows = getRecentRows(ws, 2000);
+              const delIdx = _activeDeliveryIndex(recentRows, dateKey);
+              if (delIdx && delIdx.Breakfast && delIdx.Breakfast.addr && delIdx.Breakfast.addr[incomingAk]) {
+                hasExactStop = true;
+              }
+            } catch (err) {
+              console.warn("hdfc_savePendingOrder exact address check failed:", err.message);
+            }
+          }
+          if (!hasExactStop) {
+            return { error: "Breakfast orders require a minimum food value of ₹" + MIN_BREAKFAST_ORDER_VALUE + " per day (total for " + dateKey + " is ₹" + bfSub + ")." };
+          }
         }
       }
     }

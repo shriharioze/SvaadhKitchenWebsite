@@ -4911,7 +4911,7 @@
             <div style="font-size:0.82rem;font-weight:700;color:#1a252f;margin-bottom:8px;">🍳 Breakfast Minimum Order</div>
             <div style="font-size:0.78rem;color:#444;line-height:1.7;">
               Breakfast orders require a minimum food value of <b>₹40</b> per day for standard delivery areas.<br>
-              <b>Waived:</b> This condition does not apply to <b>Free Delivery areas</b> (Bhosale Nagar, Triveni Nagar) or <b>Self Pickup</b>.<br>
+              <b>Waived:</b> This condition does not apply to <b>Free Delivery areas</b> (Bhosale Nagar, Triveni Nagar), <b>Self Pickup</b>, or if an active breakfast delivery is already scheduled to your exact flat address on that date.<br>
               Lunch and Dinner have no minimum order value.
             </div>
           </div>
@@ -5213,7 +5213,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.14.02";
+    const APP_VERSION = "v26.10.14.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -5224,7 +5224,8 @@
     const DISC_T3 = { min: 825, rate: 0.10 };
     // Minimum food order value required for Breakfast (per date).
     // Breakfast can only be ordered if the breakfast food total on that date is at least ₹40.
-    // Waived for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup.
+    // Waived for Free Delivery areas (Bhosale Nagar, Triveni Nagar), Self Pickup,
+    // or if an active Breakfast delivery is already scheduled to the exact same flat address on that date.
     const MIN_BREAKFAST_SUBTOTAL = 40;
     // Site-wide DEFAULT cutoffs (fallback until getConfig responds; then kept in sync
     // with the server — admin-editable via the "Default Cutoff Times" panel, no
@@ -8192,7 +8193,7 @@
         name: "", first_name: "", last_name: "", area: "", wing: "", flat: "", floor: "", society: "", delivery_point: "door", maps: "", landmark: "",
         payment_preference: "Daily Payment", feeExempt: false
       },
-      selectedDates: [], menuCache: {}, orders: {},
+      selectedDates: [], menuCache: {}, orders: {}, activeBfStops: {},
       kitchenClosedDates: [],  // populated by fetchKitchenClosedDates()
       calYear: 0, calMonth: 0,
       grandTotal: 0, runningTotal: 0, walletBalance: 0, walletCredit: 0,
@@ -8457,7 +8458,7 @@
       { q: "Can I check the menu for upcoming days in advance?", a: "Yes! Tap <strong>📅 View Upcoming Days' Tentative Menu</strong> on Step 2 or Step 3. You can see tentative breakfast, lunch, and dinner menus days and weeks in advance based on our 22-week seasonal cycle. Use the left and right arrows (‹ / ›), drag, or day steppers to browse future dates seamlessly." },
       { q: "What is the Friends & Family privilege?", a: "Accounts verified under Friends & Family automatically receive an exclusive flat <strong>10% discount</strong> on all food items (<strong>🌟 Exclusive Privilege (10% off)</strong>) and are exempt from delivery slot limits." },
       { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
-      { q: "Is there a minimum order value for Breakfast?", a: "Breakfast orders require a minimum food value of <strong>₹40</strong> per day for standard delivery areas (even if other meals are ordered). This minimum is <strong>waived for Free Delivery areas (Bhosale Nagar, Triveni Nagar) and Self Pickup</strong>. Lunch and Dinner have no minimum order value." },
+      { q: "Is there a minimum order value for Breakfast?", a: "Breakfast orders require a minimum food value of <strong>₹40</strong> per day for standard delivery areas (even if other meals are ordered). This minimum is <strong>waived for Free Delivery areas (Bhosale Nagar, Triveni Nagar), Self Pickup, or if an active breakfast delivery is already scheduled to your exact flat address on that date</strong>. Lunch and Dinner have no minimum order value." },
       { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. If it's missing, place again and choose 'Already Paid' if you've already completed the UPI payment." },
     ];
 
@@ -8959,12 +8960,17 @@
         if (!hasAnyOrder()) { toast(t('toast_select_item')); return; }
 
         // Breakfast minimum order check (₹40 min per day)
-        const _bfCheck = validateBreakfastMinimums();
+        let _bfCheck = validateBreakfastMinimums();
+        if (!_bfCheck.valid) {
+          await checkActiveBreakfastStops();
+          _bfCheck = validateBreakfastMinimums();
+        }
         if (!_bfCheck.valid) {
           await sAlert(
             `Breakfast orders require a minimum food value of <b>₹${MIN_BREAKFAST_SUBTOTAL}</b> per day.<br><br>` +
             `For <b>${formatDate(_bfCheck.date)}</b>, your Breakfast total is <b>₹${_bfCheck.subtotal}</b>.<br><br>` +
-            `Please add breakfast items worth at least <b>₹${_bfCheck.needed}</b> more (minimum ₹${MIN_BREAKFAST_SUBTOTAL}), or remove breakfast items to continue with Lunch/Dinner.`,
+            `Please add breakfast items worth at least <b>₹${_bfCheck.needed}</b> more (minimum ₹${MIN_BREAKFAST_SUBTOTAL}), or remove breakfast items to continue with Lunch/Dinner.<br><br>` +
+            `<span style="font-size:0.75rem;color:#64748b;">(Note: ₹40 minimum is waived for Self Pickup, Free Delivery areas, or if a breakfast delivery is already scheduled to your flat.)</span>`,
             "Minimum Breakfast Order: ₹40",
             "🍳"
           );
@@ -9196,6 +9202,7 @@
           S.mealAddrs = { Breakfast: cBf, Lunch: cL, Dinner: cD };
         }
         S.is10Day = false;
+        S.activeBfStops = {};
       }
       return true;
     }
@@ -10281,6 +10288,7 @@
           };
         }
       });
+      await checkActiveBreakfastStops();
       buildDateTabs();
       renderMealContent(S.selectedDates[0]);
     }
@@ -10514,10 +10522,11 @@
         const items = menu.breakfast || [];
         if (!items.length) return `<div class="info-box">${t('bf_menu_not_set')}</div>`;
         S.orders[date].Breakfast.bfItems = items;
-        const _bfExempt = isBreakfastMinExempt();
+        const _bfExemptReason = getBreakfastMinExemptReason(date);
+        const _bfExempt = !!_bfExemptReason;
         const _bfCurSub = S.orders[date]?.Breakfast?.subtotal || 0;
         const _bfStatusTxt = _bfExempt
-          ? `<span style="color:#16a34a;font-weight:600;font-size:0.7rem;">✅ No minimum (Free Area / Pickup)</span>`
+          ? `<span style="color:#16a34a;font-weight:600;font-size:0.7rem;">✅ No minimum (${_bfExemptReason})</span>`
           : _bfCurSub === 0
           ? `<span style="color:#94a3b8;font-size:0.7rem;">(Add items to order)</span>`
           : _bfCurSub < MIN_BREAKFAST_SUBTOTAL
@@ -10525,7 +10534,7 @@
           : `<span style="color:#16a34a;font-weight:700;">✅ ₹${_bfCurSub} (Min met)</span>`;
         html += `
           <div id="bf_min_note_${date}" style="margin:2px 0 10px; font-size:0.72rem; color:#475569; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:6px 10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:4px;">
-            <span style="display:inline-flex; align-items:center; gap:5px;"><span>🍳</span> <b>Breakfast Min Order: ${_bfExempt ? 'None (Free Area / Pickup)' : '₹40'}</b></span>
+            <span style="display:inline-flex; align-items:center; gap:5px;"><span>🍳</span> <b>Breakfast Min Order: ${_bfExempt ? 'None (' + _bfExemptReason + ')' : '₹40'}</b></span>
             <span id="bf_min_status_${date}">${_bfStatusTxt}</span>
           </div>`;
         html += `<div class="section-label">${date === '2026-07-25' ? 'UPWAS SPECIAL' : t('today_breakfast_label')}</div>`;
@@ -11033,11 +11042,12 @@
       const badge = $(`mtb_${date}_${meal}`); if (!badge) return;
       badge.style.display = sub > 0 ? "block" : "none"; badge.textContent = `₹${sub}`;
       if (meal === "Breakfast") {
-        const _bfExempt = isBreakfastMinExempt();
+        const _bfExemptReason = getBreakfastMinExemptReason(date);
+        const _bfExempt = !!_bfExemptReason;
         const stEl = $(`bf_min_status_${date}`);
         if (stEl) {
           if (_bfExempt) {
-            stEl.innerHTML = `<span style="color:#16a34a;font-weight:600;font-size:0.7rem;">✅ No minimum (Free Area / Pickup)</span>`;
+            stEl.innerHTML = `<span style="color:#16a34a;font-weight:600;font-size:0.7rem;">✅ No minimum (${_bfExemptReason})</span>`;
             badge.style.background = "";
             badge.style.color = "";
             badge.style.border = "";
@@ -11076,18 +11086,70 @@
       }
     }
 
-    function isBreakfastMinExempt() {
+    async function checkActiveBreakfastStops() {
+      try {
+        const mAddr = getMealAddr("Breakfast");
+        const area = String(mAddr?.area || "").trim();
+        const isPickup = (area === "Self Pickup" || area.toLowerCase().includes("pickup"));
+        const isFree = FREE_AREAS.includes(area);
+        if (isPickup || isFree) return;
+        const soc = String(mAddr?.society || "").trim();
+        const flat = String(mAddr?.flat || "").trim();
+        const wing = String(mAddr?.wing || "").trim();
+        if (!soc || !flat || !S.selectedDates || !S.selectedDates.length) return;
+
+        if (!S.activeBfStops) S.activeBfStops = {};
+        const reqItems = S.selectedDates.map(d => ({
+          date: d,
+          meal: "Breakfast",
+          society: soc,
+          wing: wing,
+          flat: flat
+        }));
+        const res = await apiFetch(`${APPS_SCRIPT_URL}?action=checkDeliveryReachable&items=${encodeURIComponent(JSON.stringify(reqItems))}&phone=${encodeURIComponent(S.phone || "")}`);
+        const data = await res.json();
+        if (data && data.results) {
+          data.results.forEach(r => {
+            if (r.meal === "Breakfast") {
+              S.activeBfStops[r.date] = !!r.exactMatch;
+            }
+          });
+          // Update status displays for open screens
+          S.selectedDates.forEach(d => {
+            refreshBadge(d, "Breakfast");
+            const stEl = $(`bf_min_status_${d}`);
+            if (stEl) {
+              const _exReason = getBreakfastMinExemptReason(d);
+              if (_exReason) {
+                stEl.innerHTML = `<span style="color:#16a34a;font-weight:600;font-size:0.7rem;">✅ No minimum (${_exReason})</span>`;
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("checkActiveBreakfastStops error:", err);
+      }
+    }
+
+    function getBreakfastMinExemptReason(date) {
       const mAddr = getMealAddr("Breakfast");
       const area = String(mAddr?.area || "").trim();
       const isPickup = (area === "Self Pickup" || area.toLowerCase().includes("pickup"));
-      const isFreeArea = FREE_AREAS.includes(area);
-      return isPickup || isFreeArea;
+      if (isPickup) return "Self Pickup";
+      if (FREE_AREAS.includes(area)) return "Free Area";
+      if (date && S.activeBfStops && S.activeBfStops[date]) return "Flat has active delivery";
+      return "";
     }
 
-    function validateBreakfastMinimums() {
-      if (isBreakfastMinExempt()) return { valid: true };
+    function isBreakfastMinExempt(date) {
+      return !!getBreakfastMinExemptReason(date);
+    }
+
+    function validateBreakfastMinimums(targetDate) {
       if (!S.selectedDates || !S.selectedDates.length) return { valid: true };
-      for (const date of S.selectedDates) {
+      const dates = targetDate ? [targetDate] : S.selectedDates;
+      for (const date of dates) {
+        if (isBreakfastMinExempt(date)) continue;
         const bfObj = S.orders[date]?.Breakfast;
         const bfSub = bfObj?.subtotal || 0;
         const hasItems = bfObj?.items && Object.values(bfObj.items).some(q => Number(q) > 0);
@@ -11208,7 +11270,7 @@
             <div style="font-weight:700; font-size:0.85rem; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
               <span>⚠️</span> <span>Breakfast Minimum Not Met (₹40 min)</span>
             </div>
-            For <b>${formatDate(_bfBillCheck.date)}</b>, your Breakfast total is <b>₹${_bfBillCheck.subtotal}</b>. Breakfast orders require at least <b>₹${MIN_BREAKFAST_SUBTOTAL}</b> in food items. Please tap Back to add at least <b>₹${_bfBillCheck.needed}</b> more in breakfast items, or remove breakfast.
+            For <b>${formatDate(_bfBillCheck.date)}</b>, your Breakfast total is <b>₹${_bfBillCheck.subtotal}</b>. Breakfast orders require at least <b>₹${MIN_BREAKFAST_SUBTOTAL}</b> in food items (waived for Free Delivery areas, Self Pickup, or if a breakfast delivery is already scheduled to your flat). Please tap Back to add at least <b>₹${_bfBillCheck.needed}</b> more in breakfast items, or remove breakfast.
           </div>`;
       }
       let pCount = S.profile?.promoCount;
@@ -12274,12 +12336,17 @@
       }
 
       // Breakfast minimum order check (₹40 min per day)
-      const _bfCheck = validateBreakfastMinimums();
+      let _bfCheck = validateBreakfastMinimums();
+      if (!_bfCheck.valid) {
+        await checkActiveBreakfastStops();
+        _bfCheck = validateBreakfastMinimums();
+      }
       if (!_bfCheck.valid) {
         await sAlert(
           `Breakfast orders require a minimum food value of <b>₹${MIN_BREAKFAST_SUBTOTAL}</b> per day.<br><br>` +
           `For <b>${formatDate(_bfCheck.date)}</b>, your Breakfast total is <b>₹${_bfCheck.subtotal}</b>.<br><br>` +
-          `Please add breakfast items worth at least <b>₹${_bfCheck.needed}</b> more (minimum ₹${MIN_BREAKFAST_SUBTOTAL}), or remove breakfast items to place your order.`,
+          `Please add breakfast items worth at least <b>₹${_bfCheck.needed}</b> more (minimum ₹${MIN_BREAKFAST_SUBTOTAL}), or remove breakfast items to place your order.<br><br>` +
+          `<span style="font-size:0.75rem;color:#64748b;">(Note: ₹40 minimum is waived for Self Pickup, Free Delivery areas, or if a breakfast delivery is already scheduled to your flat.)</span>`,
           "Minimum Breakfast Order: ₹40",
           "🍳"
         );
@@ -16255,12 +16322,17 @@
       }
 
       // Breakfast minimum order check (₹40 min per day)
-      const _bfCheck = validateBreakfastMinimums();
+      let _bfCheck = validateBreakfastMinimums();
+      if (!_bfCheck.valid) {
+        await checkActiveBreakfastStops();
+        _bfCheck = validateBreakfastMinimums();
+      }
       if (!_bfCheck.valid) {
         await sAlert(
           `Breakfast orders require a minimum food value of <b>₹${MIN_BREAKFAST_SUBTOTAL}</b> per day.<br><br>` +
           `For <b>${formatDate(_bfCheck.date)}</b>, your Breakfast total is <b>₹${_bfCheck.subtotal}</b>.<br><br>` +
-          `Please add breakfast items worth at least <b>₹${_bfCheck.needed}</b> more (minimum ₹${MIN_BREAKFAST_SUBTOTAL}), or remove breakfast items to place your order.`,
+          `Please add breakfast items worth at least <b>₹${_bfCheck.needed}</b> more (minimum ₹${MIN_BREAKFAST_SUBTOTAL}), or remove breakfast items to place your order.<br><br>` +
+          `<span style="font-size:0.75rem;color:#64748b;">(Note: ₹40 minimum is waived for Self Pickup, Free Delivery areas, or if a breakfast delivery is already scheduled to your flat.)</span>`,
           "Minimum Breakfast Order: ₹40",
           "🍳"
         );
