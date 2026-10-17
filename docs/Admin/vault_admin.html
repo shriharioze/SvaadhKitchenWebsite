@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.12.04">
+  <meta name="app-version" content="v26.10.17.02">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -891,7 +891,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
     </div>
     <div class="login-err" id="loginErr"></div>
     <div style="margin-top:16px;text-align:center;">
-      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.07.01</span>
+      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.17.02</span>
     </div>
   </div>
 </div>
@@ -902,7 +902,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
   <div class="topbar">
     <div class="topbar-brand">
       Svaadh Kitchen <span>ADMIN</span>
-      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.10.07.01</span>
+      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.10.17.02</span>
     </div>
     <div class="topbar-nav">
       <button class="topbar-btn active" id="navMenu" onclick="switchPage('menu')">📅 Daily Menu</button>
@@ -2386,7 +2386,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.12.04";
+    const ADMIN_VERSION = "v26.10.17.02";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
