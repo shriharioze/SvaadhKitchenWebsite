@@ -1105,8 +1105,8 @@ function _countActiveMealOrders(rows, dateStr, ordersClosedObj) {
     // Bhosale Nagar & Triveni Nagar do not consume delivery slots, freeing them up for other orders.
     const isFreeBT = ordersClosedObj && (ordersClosedObj[mt] === "free_bt" || ordersClosedObj[mt] === "free_bt_slots");
     if (isFreeBT) {
-      if (ar.indexOf("bhosale") !== -1 || ar.indexOf("triveni") !== -1 ||
-          addrFull.indexOf("bhosale") !== -1 || addrFull.indexOf("triveni") !== -1) {
+      const fullBTStr = (ar + " " + addrFull).toLowerCase();
+      if (fullBTStr.indexOf("bhosale") !== -1 || fullBTStr.indexOf("triveni") !== -1 || fullBTStr.indexOf("triverni") !== -1) {
         btExempt[mt]++;
         continue;
       }
@@ -2989,6 +2989,10 @@ function _submitOrderInternal(body) {
             // (owner-approved, synced with _countActiveMealOrders).
             const _exAddrW = _normSocietyBase(String(_m.society || profile.society || "") + " " + String(_m.address || profile.address || profile.full_address || "") + " " + String(_m.flat || profile.flat || "") + " " + String(_m.landmark || profile.landmark || ""));
             const _isExemptLocW = _exAddrW.indexOf("shreelaxmivihar") !== -1 || _exAddrW.indexOf("momstory") !== -1 || _exAddrW.indexOf("metapercept") !== -1;
+            // Free BT slots: when active for this meal, Bhosale Nagar & Triveni Nagar orders are exempt from delivery cap
+            const _isFreeBTW = _ordersClosedW && (_ordersClosedW[_mt] === "free_bt" || _ordersClosedW[_mt] === "free_bt_slots");
+            const _mFullBT = (_exAddrW + " " + String(_m.area || profile.area || "")).toLowerCase();
+            const _isBTOrderW = _isFreeBTW && (_mFullBT.indexOf("bhosale") !== -1 || _mFullBT.indexOf("triveni") !== -1 || _mFullBT.indexOf("triverni") !== -1);
             // Per-meal bypass CAPPED MEAL keeps delivery even at the cap (big orders
             // are worth the slot) — but only while alternatives are ON; a cap_alt=false
             // HARD close (kitchen out of capacity) is never bypassed. Uses the
@@ -2996,7 +3000,7 @@ function _submitOrderInternal(body) {
             // money — the bill itself is priced authoritatively later/by the gateway.
             const _bypassMinW = CAP_DELIVERY_BYPASS_MIN[_mt] || 200;
             const _bigMealW = _altOnW && (Number(_m.subtotal) || 0) >= _bypassMinW;
-            if (!_isFreeAreaW && !_bigMealW && !_locExemptW && !_isExemptLocW) {
+            if (!_isFreeAreaW && !_bigMealW && !_locExemptW && !_isExemptLocW && !_isBTOrderW) {
               const _idxMtW = _delIdxW && _delIdxW[_mt];
               const _socW = _normSocietyKey(_m.society || profile.society || "");
               const _socAlreadyW  = !!(_socW && _idxMtW && _idxMtW.soc[_socW]);

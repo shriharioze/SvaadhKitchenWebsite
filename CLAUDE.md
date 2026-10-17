@@ -116,7 +116,18 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Archive policy: due-slice (1-10→18th, 11-20→28th, 21-end→next-month 8th), terminal rows only (Paid/Cancelled/Refunded), Pending/On-Account stay live, per-month existing files appended, daily ~22:30 IST trigger, preview `archiveDueDryRun`.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
-## Recent Changes (October 2026)
+- **Orders Tab Slot Attribution & Live Sync for Freed Bhosale/Triveni Slots (CODE_VERSION 35.98 / APP_VERSION v26.10.17.02)**
+  - **Orders Tab (`03_Admin_Kitchen.gs` `getOrderSummary` & `docs/Admin/vault_admin.html`):**
+    - `getOrderSummary(date)` reads `Orders_Closed` for the date. When `isFreeBT` is active for a meal, orders from Bhosale Nagar and Triveni Nagar (supporting both `triveni` and `triverni` spellings across all address/society/area fields) are marked `slotType = 'exempt'` with `slotReason = 'BT Freed'`, without incrementing the meal's delivery slot count (`st.slotCount`).
+    - Subsequent non-BT delivery orders receive sequential slot numbers without skipping (`Slot #1`, `Slot #2`...).
+    - `renderOrderSummary()` displays a distinct highlighted badge `🆓 BT Freed` on exempt order cards.
+    - Meal header displays consumed delivery slots vs cap (e.g. `☀️ Lunch (13 / 24 delivery • 20 orders · 🆓 4 BT freed)`).
+    - Added 1-click `🆓 Free BT Slots: ON/OFF` toggle button directly inside the Orders tab meal header, updating the date's slot status without switching tabs.
+  - **Daily Menu Real-Time Sync (`docs/Admin/vault_admin.html`):**
+    - Implemented `syncOrdersClosedQuick()`: toggling or changing the dropdown to `free_bt` immediately persists the configuration to the backend, updates local `S.orderCounts` (e.g. `13 / 24 delivery (default)`), updates `S.btExemptCounts`, and silently refreshes the Orders tab in real-time.
+  - **Backend Hardening (`02_Orders_Menu.gs` & `03_Admin_Kitchen.gs`):**
+    - Expanded BT detection to include `triverni` spelling in `_countActiveMealOrders`, `_submitOrderInternal`, `_getAdminDataUncached`, and `saveMenu`.
+    - `saveMenu` uses `getOrdersInRangeWithArchive(dateStr, dateStr)` to guarantee 100% accurate count calculation.
 - **Free Up Bhosale Nagar & Triveni Nagar Delivery Slots (CODE_VERSION 35.97 / APP_VERSION v26.10.17.01)**
   - **Feature:** Added per-meal, per-day independent toggle in the Admin Daily Menu panel to free up delivery slots in Bhosale Nagar and Triveni Nagar (`"free_bt"`).
   - **Purpose:** Orders in home-turf areas (Bhosale Nagar & Triveni Nagar) can now be decoupled from the daily delivery cap for high-demand meals. When selected, those orders won't hog any allocated delivery slots, freeing them up to accommodate orders from other societies/areas.

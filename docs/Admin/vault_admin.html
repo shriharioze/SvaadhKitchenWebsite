@@ -2152,7 +2152,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
 // Read claude.md and bump version number for pages with changes
-const APP_VERSION = "v26.10.17.01";
+const APP_VERSION = "v26.10.17.02";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -3609,22 +3609,73 @@ function toggleOrdersClosed(meal) {
   setMenuDirty(true);
   renderOrdersClosedPanel();
 }
-function setOrdersClosedState(meal, val) {
+async function syncOrdersClosedQuick() {
+  try {
+    const breakfast = S.bfMaster
+      .filter(m => S.checkedBf[m.id])
+      .map(m => ({ name: m.name, price: m.price }));
+    const payload = {
+      _action:            "saveMenu",
+      pin:                S.sessionPin,
+      date:               S.selectedDate,
+      breakfast,
+      lunch_dry:          S.lunchDry,
+      lunch_curry:        S.lunchCurry,
+      dinner_dry:         S.dinnerDry,
+      dinner_curry:       S.dinnerCurry,
+      cutoff_breakfast:   timeToDecimal(document.getElementById("cutoffBf")?.value) || null,
+      cutoff_lunch:       timeToDecimal(document.getElementById("cutoffL")?.value)  || null,
+      cutoff_dinner:      timeToDecimal(document.getElementById("cutoffD")?.value)  || null,
+      oos_items:          S.oosItems,
+      orders_closed:      S.ordersClosed,
+      stock_limits:       S.stockLimits,
+      order_caps:         S.orderCaps,
+      cap_alt:            S.capAlt,
+    };
+    const res = await safeFetchJson(APPS_SCRIPT_URL, {
+      method: "POST", body: JSON.stringify(payload)
+    });
+    if (res && res.success) {
+      if (res.order_counts) S.orderCounts = res.order_counts;
+      if (res.bt_exempt_counts) S.btExemptCounts = res.bt_exempt_counts;
+      const idx = S.menuEntries.findIndex(e => e.date === S.selectedDate);
+      if (idx >= 0) {
+        S.menuEntries[idx].orders_closed = S.ordersClosed;
+        S.menuEntries[idx].order_counts = S.orderCounts;
+        S.menuEntries[idx].bt_exempt_counts = S.btExemptCounts;
+      }
+      renderOrdersClosedPanel();
+      if (_ordersDataLoaded) {
+        loadOrderSummary(false, true);
+      }
+    }
+  } catch(e) {
+    console.warn("Quick sync note:", e.message);
+  }
+}
+
+async function setOrdersClosedState(meal, val) {
   if (val === "true") S.ordersClosed[meal] = true;
   else if (val === "restricted") S.ordersClosed[meal] = "restricted";
   else if (val === "free_bt") S.ordersClosed[meal] = "free_bt";
   else S.ordersClosed[meal] = false;
   setMenuDirty(true);
   renderOrdersClosedPanel();
+  await syncOrdersClosedQuick();
 }
-function toggleFreeBTSlots(meal) {
-  if (S.ordersClosed[meal] === "free_bt") {
-    S.ordersClosed[meal] = false;
-  } else {
-    S.ordersClosed[meal] = "free_bt";
+
+async function toggleFreeBTSlots(meal) {
+  const current = S.ordersClosed[meal];
+  const newVal = (current === "free_bt") ? false : "free_bt";
+  await setOrdersClosedState(meal, newVal);
+}
+
+async function toggleFreeBTSlotsFromOrders(meal, date) {
+  if (date && date !== S.selectedDate) {
+    selectDate(date);
   }
-  setMenuDirty(true);
-  renderOrdersClosedPanel();
+  await toggleFreeBTSlots(meal);
+  toast(`Updated BT slots for ${meal}!`);
 }
 
 // Set/clear a per-meal max-order cap. Blank / 0 / invalid → no cap (unlimited).
@@ -5153,6 +5204,9 @@ function renderOrderSummary(data) {
         return `<span class="slot-badge shared" title="${c.slotReason || 'Shared Slot'}">🔄 Shared: ${c.slotReason || 'Shared'}</span>`;
       }
       if (c.slotType === "exempt") {
+        if (c.slotReason && (c.slotReason.indexOf("BT") !== -1 || c.slotReason.indexOf("Bhosale") !== -1 || c.slotReason.indexOf("Triveni") !== -1)) {
+          return `<span class="slot-badge exempt" style="background:#e8f8f2;color:#0e7a5f;border-color:#b7ebde;font-weight:800;" title="${c.slotReason}">🆓 ${c.slotReason}</span>`;
+        }
         return `<span class="slot-badge exempt" title="${c.slotReason || 'Exempt'}">⚪ ${c.slotReason || 'Exempt'}</span>`;
       }
       return "";
@@ -5191,14 +5245,31 @@ function renderOrderSummary(data) {
       </tr>`;
     }).join("");
 
+    const effCap = m.cap ? Number(m.cap) : 0;
+    const capHit = effCap > 0 && m.deliverySlots >= effCap;
+    const slotLabel = m.deliverySlots !== undefined
+      ? `${m.deliverySlots}${effCap > 0 ? ' / ' + effCap : ''} delivery`
+      : '';
+    const freedLabel = m.btFreedCount > 0 ? ` · <span style="color:#0e7a5f;font-weight:700;">🆓 ${m.btFreedCount} BT freed</span>` : '';
+
     html += `<div class="meal-section">
       <div class="meal-section-head" onclick="toggleMealSection('${meal}')">
-        <h3>${MEAL_ICONS[meal]} ${meal} <span style="font-weight:400;font-size:0.82rem;color:#888;">(${m.deliverySlots !== undefined ? m.deliverySlots + ' delivery slot' + (m.deliverySlots !== 1 ? 's' : '') + ' • ' : ''}${m.count} order${m.count>1?"s":""})</span></h3>
-        <div class="meal-stats">
-          <span>💰 ${fmtMoney(m.revenue)}</span>
-          <span style="color:#27ae60;">✓ ${fmtMoney(m.paid)}</span>
-          <span style="color:#e67e22;">⏳ ${fmtMoney(m.pending)}</span>
-          <span id="chevron_${meal}" style="transition:transform 0.2s;">▼</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin:0;display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+            ${MEAL_ICONS[meal]} ${meal}
+            <span style="font-weight:400;font-size:0.82rem;color:${capHit ? '#c0392b' : '#888'};">(${slotLabel ? slotLabel + ' • ' : ''}${m.count} order${m.count>1?"s":""}${freedLabel})</span>
+            <button type="button" onclick="event.stopPropagation(); toggleFreeBTSlotsFromOrders('${meal}', '${date}')"
+              title="Toggle freeing up Bhosale Nagar & Triveni Nagar delivery slots for this meal"
+              style="padding:2px 8px;border-radius:6px;border:1px solid ${m.isFreeBT ? '#0e7a5f' : '#ccc'};background:${m.isFreeBT ? '#e8f8f2' : '#f9f9f9'};color:${m.isFreeBT ? '#0e7a5f' : '#666'};font-size:0.65rem;font-weight:700;cursor:pointer;">
+              🆓 Free BT Slots: ${m.isFreeBT ? 'ON' : 'OFF'}
+            </button>
+          </h3>
+          <div class="meal-stats">
+            <span>💰 ${fmtMoney(m.revenue)}</span>
+            <span style="color:#27ae60;">✓ ${fmtMoney(m.paid)}</span>
+            <span style="color:#e67e22;">⏳ ${fmtMoney(m.pending)}</span>
+            <span id="chevron_${meal}" style="transition:transform 0.2s;">▼</span>
+          </div>
         </div>
       </div>
       <div class="meal-section-body" id="mealBody_${meal}">

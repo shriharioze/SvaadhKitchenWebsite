@@ -107,8 +107,8 @@ function _getAdminDataUncached() {
           } else {
             const oc = ordersClosedByDate[dd];
             if (oc && (oc[meal] === "free_bt" || oc[meal] === "free_bt_slots")) {
-              if (ar.indexOf("bhosale") !== -1 || ar.indexOf("triveni") !== -1 ||
-                  addrFull.indexOf("bhosale") !== -1 || addrFull.indexOf("triveni") !== -1) {
+              const fullBTStr = (ar + " " + addrFull).toLowerCase();
+              if (fullBTStr.indexOf("bhosale") !== -1 || fullBTStr.indexOf("triveni") !== -1 || fullBTStr.indexOf("triverni") !== -1) {
                 isDelivery = false;
                 if (!btExemptCounts[dd]) btExemptCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
                 btExemptCounts[dd][meal] = (btExemptCounts[dd][meal] || 0) + 1;
@@ -361,8 +361,8 @@ function saveMenu(body) {
   let freshCounts = { Breakfast: 0, Lunch: 0, Dinner: 0 };
   let freshBtExempt = { Breakfast: 0, Lunch: 0, Dinner: 0 };
   try {
-    const ordersWs2 = getOrCreateTab(ss, TAB_ORDERS, []);
-    const ordersRows2 = getRecentRows(ordersWs2, 500).concat(ls_rowsAsSK());
+    const ordersRows2 = getOrdersInRangeWithArchive(dateStr, dateStr)
+      .concat(typeof ls_rowsAsSK === "function" ? ls_rowsAsSK() : []);
     freshCounts = _countActiveMealOrders(ordersRows2, dateStr, body.orders_closed || {});
     freshBtExempt = freshCounts._btExempt || freshBtExempt;
   } catch (eCnt) {}
@@ -2198,6 +2198,23 @@ function getOrderSummary(date) {
   var rows = getOrdersInRangeWithArchive(date, date)
                .concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
 
+  // Fetch daily menu row for this date to determine orders_closed and order caps
+  var menuWs = getOrCreateTab(ss, TAB_MENU, []);
+  var menuRows = getAllRows(menuWs);
+  var menuRow = menuRows.find(function(mr) {
+    var md = mr.Date instanceof Date
+      ? Utilities.formatDate(mr.Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(mr.Date || "").trim();
+    return md === date;
+  });
+  var ordersClosed = {};
+  var orderCaps = {};
+  if (menuRow) {
+    try { if (menuRow.Orders_Closed) ordersClosed = JSON.parse(menuRow.Orders_Closed); } catch(e) {}
+    try { if (menuRow.Order_Cap_JSON) orderCaps = JSON.parse(menuRow.Order_Cap_JSON); } catch(e) {}
+  }
+  var defaultCaps = typeof _getDefaultOrderCaps === "function" ? _getDefaultOrderCaps() : {};
+
   var dayRows = rows.filter(function(r) {
     var d = r.Order_Date instanceof Date
       ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
@@ -2224,7 +2241,22 @@ function getOrderSummary(date) {
   dayRows.forEach(function(r) {
     var meal = String(r.Meal_Type || "");
     if (!meal) return;
-    if (!meals[meal]) meals[meal] = {count:0, revenue:0, paid:0, pending:0, deliverySlots:0, itemTotals:{}, customers:[]};
+    if (!meals[meal]) {
+      var isFreeBTMeal = !!(ordersClosed && (ordersClosed[meal] === "free_bt" || ordersClosed[meal] === "free_bt_slots"));
+      var capVal = (orderCaps && orderCaps[meal]) ? Number(orderCaps[meal]) : (defaultCaps && defaultCaps[meal] ? Number(defaultCaps[meal]) : 0);
+      meals[meal] = {
+        count: 0,
+        revenue: 0,
+        paid: 0,
+        pending: 0,
+        deliverySlots: 0,
+        btFreedCount: 0,
+        isFreeBT: isFreeBTMeal,
+        cap: capVal,
+        itemTotals: {},
+        customers: []
+      };
+    }
     var m = meals[meal];
     var net = Number(r.Net_Total) || 0;
     var payStatus = String(r.Payment_Status || "Pending");
@@ -2309,6 +2341,10 @@ function getOrderSummary(date) {
     } else if (r._lsTab || String(r.Source || "").trim() === "LS") {
       slotType = "exempt";
       slotReason = "Liviano-Serio (Free Delivery)";
+    } else if (m.isFreeBT && ((ar + " " + addrFull).indexOf("bhosale") !== -1 || (ar + " " + addrFull).indexOf("triveni") !== -1 || (ar + " " + addrFull).indexOf("triverni") !== -1)) {
+      slotType = "exempt";
+      slotReason = "BT Freed";
+      m.btFreedCount = (m.btFreedCount || 0) + 1;
     } else {
       var _isEnkin = rawCustName.toLowerCase().indexOf("enkin") !== -1;
       var _isIA    = rawCustName.toLowerCase().indexOf("[ia]") === 0;
