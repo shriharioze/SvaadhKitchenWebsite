@@ -5065,7 +5065,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.12.02";
+    const APP_VERSION = "v26.10.17.01";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -8177,9 +8177,9 @@
       // Admin-closed meals (orders_closed) AND kitchen-closed meals (closed_meals)
       // are blocked even on future dates.
       return {
-        Breakfast: base.Breakfast && !closed.Breakfast && !kClosed.Breakfast,
-        Lunch:     base.Lunch     && !closed.Lunch     && !kClosed.Lunch,
-        Dinner:    base.Dinner    && !closed.Dinner    && !kClosed.Dinner,
+        Breakfast: base.Breakfast && closed.Breakfast !== true && !kClosed.Breakfast,
+        Lunch:     base.Lunch     && closed.Lunch !== true     && !kClosed.Lunch,
+        Dinner:    base.Dinner    && closed.Dinner !== true    && !kClosed.Dinner,
       };
     }
     function fmtHour(h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60), ampm = hh < 12 ? "AM" : "PM", hr = hh > 12 ? hh - 12 : (hh || 12); return `${hr}:${String(mm).padStart(2, "0")} ${ampm}`; }
@@ -9872,7 +9872,7 @@
             ? `<div class="meal-body ${(sub > 0 && !isAddrMissing) ? "open" : ""}" id="mb_${date}_${meal}">${buildMealBody(date, meal, menu)}</div>`
             : (() => {
                 const isSoldOut = !!(S.menuCache[date]?.sold_out || {})[meal];
-                const isClosed  = !!(S.menuCache[date]?.orders_closed || {})[meal];
+                const isClosed  = (S.menuCache[date]?.orders_closed || {})[meal] === true;
                 const isKitchenClosed = !!(S.menuCache[date]?.closed_meals || {})[meal];
                 const closureReason = (S.menuCache[date]?.closure_reasons && S.menuCache[date]?.closure_reasons[meal])
                   || S.menuCache[date]?.closure_reason
@@ -9931,7 +9931,7 @@
           el.style.color = '';
           return;
         }
-        const isClosed = !!(menu.orders_closed || {})[meal];
+        const isClosed = (menu.orders_closed || {})[meal] === true;
         if (isClosed) { el.textContent = !!(menu.sold_out || {})[meal] ? 'Sold out for today' : 'Not accepting orders'; el.style.color = ''; return; }
 
         // For future dates, show the cutoff time as a static label — no countdown needed.

@@ -1060,8 +1060,9 @@ function checkDeliveryReachable(body) {
 // multiple order rows for the same meal (e.g. 2 Lunch orders), they still count
 // as one delivery. Cancelled rows free their slot. VIPs (Fee_Exempt) count as 0.
 // Shared by getMenu (display) and the submitOrder cap guard (authoritative).
-function _countActiveMealOrders(rows, dateStr) {
+function _countActiveMealOrders(rows, dateStr, ordersClosedObj) {
   const c = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  const btExempt = { Breakfast: 0, Lunch: 0, Dinner: 0 };
   // Track unique customer names per meal — same person = same delivery stop.
   const seen = { Breakfast: {}, Lunch: {}, Dinner: {} };
   const vips = typeof _getVipPhonesCached === "function" ? _getVipPhonesCached() : {};
@@ -1099,6 +1100,18 @@ function _countActiveMealOrders(rows, dateStr) {
     if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1 || addrFull.indexOf("metapercept") !== -1) continue;
     const mt = String(r.Meal_Type || "").trim();
     if (c[mt] === undefined) continue;
+
+    // Free Bhosale/Triveni slots feature: when enabled for this meal on this date, orders from
+    // Bhosale Nagar & Triveni Nagar do not consume delivery slots, freeing them up for other orders.
+    const isFreeBT = ordersClosedObj && (ordersClosedObj[mt] === "free_bt" || ordersClosedObj[mt] === "free_bt_slots");
+    if (isFreeBT) {
+      if (ar.indexOf("bhosale") !== -1 || ar.indexOf("triveni") !== -1 ||
+          addrFull.indexOf("bhosale") !== -1 || addrFull.indexOf("triveni") !== -1) {
+        btExempt[mt]++;
+        continue;
+      }
+    }
+
     if (_isEnkin(r.Customer_Name)) { sawEnkin[mt] = true; continue; }
     if (_isIA(r.Customer_Name))    { sawIA[mt]    = true; continue; }
     
@@ -1158,6 +1171,7 @@ function _countActiveMealOrders(rows, dateStr) {
     if (sawEnkin[m]) c[m]++;
     if (sawIA[m])    c[m]++;
   });
+  c._btExempt = btExempt;
   return c;
 }
 // Public rate card (no login). Breakfast prices come from the SK_Master_Breakfast
@@ -1505,7 +1519,7 @@ function _getMenuUncached(dateStr) {
   // orders_closed — that path stays open. submitOrder is the authoritative guard:
   // it rejects DELIVERY orders past the cap (full-sheet count, under lock) while
   // letting Self Pickup / Porter through.
-  const orderCounts = _countActiveMealOrders(ordersRows2, dateStr);
+  const orderCounts = _countActiveMealOrders(ordersRows2, dateStr, ordersClosed);
   const soldOut = {};
   ["Breakfast","Lunch","Dinner"].forEach(meal => {
     const cap = Number(orderCaps[meal] || 0);
@@ -1532,6 +1546,7 @@ function _getMenuUncached(dateStr) {
     order_caps:    orderCaps,    // admin display: configured per-meal max
     cap_alt:       capAlt,       // admin display: per-meal "offer pickup/porter" flags
     order_counts:  orderCounts,  // admin display: active orders placed so far
+    bt_exempt_counts: orderCounts._btExempt || { Breakfast: 0, Lunch: 0, Dinner: 0 },
     sold_out:      soldOut,      // customer display: meal hit its cap today
     kitchen_closed: _kitchenClosed,               // full-day close (all meals)
     closed_meals:   _closedMealsObj(r),           // per-meal close {Breakfast,Lunch,Dinner}
@@ -2884,7 +2899,7 @@ function _submitOrderInternal(body) {
       _orderCapW = _effectiveOrderCaps(_orderCapW);
       let _capAltW = {};   // per-meal: offer Self Pickup / Porter when full? default ON
       try { if (_menuRowW && _menuRowW.Cap_Alt_JSON) _capAltW = JSON.parse(_menuRowW.Cap_Alt_JSON); } catch(e) {}
-      const _capCountsW   = _isLS ? null : _countActiveMealOrders(allOrderRows, _d);
+      const _capCountsW   = _isLS ? null : _countActiveMealOrders(allOrderRows, _d, _ordersClosedW);
       const _delIdxW = _isLS ? null : _activeDeliveryIndex(allOrderRows, _d);
       const _effCutW = (_d === _wToday) ? _effectiveCutoffsForDate(_d) : null;
       for (const _m of (_o.meals || [])) {

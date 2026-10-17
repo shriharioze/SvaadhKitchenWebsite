@@ -117,6 +117,22 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
 ## Recent Changes (October 2026)
+- **Free Up Bhosale Nagar & Triveni Nagar Delivery Slots (CODE_VERSION 35.97 / APP_VERSION v26.10.17.01)**
+  - **Feature:** Added per-meal, per-day independent toggle in the Admin Daily Menu panel to free up delivery slots in Bhosale Nagar and Triveni Nagar (`"free_bt"`).
+  - **Purpose:** Orders in home-turf areas (Bhosale Nagar & Triveni Nagar) can now be decoupled from the daily delivery cap for high-demand meals. When selected, those orders won't hog any allocated delivery slots, freeing them up to accommodate orders from other societies/areas.
+  - **Admin UI (`docs/Admin/vault_admin.html`):**
+    - Updated per-meal dropdown under Daily Menu to include `🆓 Free Bhosale/Triveni Slots` alongside `🟢 Open`, `🟡 Except Bhosale/Triveni`, and `🔴 Closed Completely`.
+    - Added dedicated 1-click toggle button `🆓 Free BT Slots: ON/OFF` for fast control.
+    - Added live indicator in delivery count: displays `X BT orders freed` (e.g. `5 / 11 delivery · 3 BT orders freed`).
+    - Synchronized with `saveCurrentMenu()` to immediately update local counts from server response without page reload.
+  - **Backend (`02_Orders_Menu.gs` & `03_Admin_Kitchen.gs`):**
+    - Updated `_countActiveMealOrders(rows, dateStr, ordersClosedObj)`: when `ordersClosedObj[mt] === "free_bt"`, skips counting rows where Area, Society, or Full Address matches Bhosale Nagar or Triveni Nagar, tracking freed count in `_btExempt`.
+    - `getMenu(dateStr)` passes `ordersClosed` and returns `bt_exempt_counts`.
+    - `_submitOrderInternal` passes `_ordersClosedW` so `_capCountsW` accurately excludes freed BT orders, allowing standard delivery areas to order up to the full cap limit.
+    - `_getAdminDataUncached` in `03_Admin_Kitchen.gs` indexes `ordersClosedByDate` and excludes BT orders when `"free_bt"` is active, returning `bt_exempt_counts` for each menu entry.
+    - `saveMenu` computes and returns refreshed `order_counts` and `bt_exempt_counts`.
+  - **Storefronts (`docs/Liviano-Serio.html` & `docs/order.html`):**
+    - Ensured `orders_closed[meal] === true` is explicitly checked so `"free_bt"` is treated as completely Open for all customers.
 - **Waive Breakfast ₹40 Minimum for Exact Flat Address Delivery Match (CODE_VERSION 35.96 / APP_VERSION v26.10.14.03)**
   - **Operational Exemption:** If an active delivery is ALREADY scheduled to the exact same address for Breakfast on that date (e.g. Wing P, Flat 601, Laburnum Park), our delivery rider is already traveling to that doorstep anyway. In this case, incoming breakfast orders to the same flat are allowed without meeting the ₹40 breakfast minimum order value.
   - **Address Normalization (`_makeAddrKey`):** Canonical flat-level address key generator standardizing Society (`_normSocietyKey`), Wing (alphanumeric cleaning + prefix stripping + fallback extraction from flat string), and Flat (strict numeric extraction). Collapses variations like "601", "P-601", "Wing P 601" identically while preserving building/wing distinction across complexes.

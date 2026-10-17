@@ -62,10 +62,15 @@ function _getAdminDataUncached() {
   const _isIA    = function (nm) { return String(nm || "").trim().toLowerCase().indexOf("[ia]") === 0; };
 
   const validMenuDates = {};
+  const ordersClosedByDate = {};
   menuRows.forEach(function(r) {
     const d = r.Date instanceof Date ? Utilities.formatDate(r.Date, "Asia/Kolkata", "yyyy-MM-dd") : String(r.Date).trim();
-    if (d) validMenuDates[d] = true;
+    if (d) {
+      validMenuDates[d] = true;
+      try { if (r.Orders_Closed) ordersClosedByDate[d] = JSON.parse(r.Orders_Closed); } catch(e) {}
+    }
   });
+  const btExemptCounts = {};
 
   allOrdersAdm.forEach(function(row) {
     if (_isOrderCancelled(row.Payment_Status)) return;
@@ -97,7 +102,19 @@ function _getAdminDataUncached() {
         if (ar.indexOf("pickup") !== -1 || ar === "porter") isDelivery = false;
         else {
           const addrFull = _normSocietyBase(String(row.Society || "") + " " + String(row.Full_Address || "") + " " + String(row.Flat || "") + " " + String(row.Landmark || ""));
-          if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1 || addrFull.indexOf("metapercept") !== -1) isDelivery = false;
+          if (addrFull.indexOf("shreelaxmivihar") !== -1 || addrFull.indexOf("momstory") !== -1 || addrFull.indexOf("metapercept") !== -1) {
+            isDelivery = false;
+          } else {
+            const oc = ordersClosedByDate[dd];
+            if (oc && (oc[meal] === "free_bt" || oc[meal] === "free_bt_slots")) {
+              if (ar.indexOf("bhosale") !== -1 || ar.indexOf("triveni") !== -1 ||
+                  addrFull.indexOf("bhosale") !== -1 || addrFull.indexOf("triveni") !== -1) {
+                isDelivery = false;
+                if (!btExemptCounts[dd]) btExemptCounts[dd] = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+                btExemptCounts[dd][meal] = (btExemptCounts[dd][meal] || 0) + 1;
+              }
+            }
+          }
         }
       }
       
@@ -238,6 +255,7 @@ function _getAdminDataUncached() {
       order_caps:       orderCaps,
       cap_alt:          capAlt,
       order_counts:     mealOrderCounts[d] || { Breakfast: 0, Lunch: 0, Dinner: 0 },
+      bt_exempt_counts: btExemptCounts[d]  || { Breakfast: 0, Lunch: 0, Dinner: 0 },
       kitchen_closed:   kitchenClosed,
       closed_meals:     closedMeals,
       closure_reason:   _parseClosureReason(r.Closure_Reason).general,
@@ -339,7 +357,22 @@ function saveMenu(body) {
   // Bust per-date menu cache, weekly menu cache, and the aggregated admin-data cache
   _invalidateCache("menu_v2_" + dateStr, "adminData_v1", "kitchen_closed_dates_v1");
   _invalidateWeeklyMenuCache();
-  return {success: true, action: existing ? "updated" : "saved"};
+
+  let freshCounts = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  let freshBtExempt = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  try {
+    const ordersWs2 = getOrCreateTab(ss, TAB_ORDERS, []);
+    const ordersRows2 = getRecentRows(ordersWs2, 500).concat(ls_rowsAsSK());
+    freshCounts = _countActiveMealOrders(ordersRows2, dateStr, body.orders_closed || {});
+    freshBtExempt = freshCounts._btExempt || freshBtExempt;
+  } catch (eCnt) {}
+
+  return {
+    success: true,
+    action: existing ? "updated" : "saved",
+    order_counts: freshCounts,
+    bt_exempt_counts: freshBtExempt
+  };
 }
 
 // ── ADMIN: KITCHEN CLOSURE TOGGLE ─────────────────────────────

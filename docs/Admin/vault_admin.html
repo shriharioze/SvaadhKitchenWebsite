@@ -2152,7 +2152,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
 // Read claude.md and bump version number for pages with changes
-const APP_VERSION = "v26.10.12.04";
+const APP_VERSION = "v26.10.17.01";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2432,6 +2432,7 @@ let S = {
   ordersClosed:   {},   // { Breakfast:bool, Lunch:bool, Dinner:bool }
   orderCaps:      {},   // { Breakfast:N, Lunch:N, Dinner:N } per-meal max order count (blank/0 = unlimited)
   orderCounts:    {},   // { Breakfast:n, Lunch:n, Dinner:n } active orders placed so far (display only)
+  btExemptCounts: {},   // { Breakfast:n, Lunch:n, Dinner:n } freed Bhosale/Triveni orders
   capAlt:         {},   // { Breakfast:false } per-meal: offer Self Pickup/Porter when full? missing/true = ON
   stockLimits:    {},   // { Breakfast:{colKey:limit}, Lunch:{}, Dinner:{} }
   unitsOrdered:   {},   // derived from units_remaining: ordered = limit - remaining
@@ -3069,9 +3070,10 @@ function selectDate(iso) {
     S.oosItems     = existing.oos_items     || { Breakfast: [], Lunch: [], Dinner: [] };
     S.ordersClosed = existing.orders_closed || {};
     // Load per-meal order caps + current active counts (display)
-    S.orderCaps    = existing.order_caps    || {};
-    S.orderCounts  = existing.order_counts  || {};
-    S.capAlt       = existing.cap_alt       || {};
+    S.orderCaps       = existing.order_caps       || {};
+    S.orderCounts     = existing.order_counts     || {};
+    S.btExemptCounts  = existing.bt_exempt_counts || {};
+    S.capAlt          = existing.cap_alt          || {};
     // Load stock limits + derive ordered-count from remaining
     S.stockLimits  = existing.stock_limits  || {};
     S.unitsOrdered = {};
@@ -3093,11 +3095,12 @@ function selectDate(iso) {
     document.getElementById("cutoffD").value  = "";
     ["cutoffBfBadge","cutoffLBadge","cutoffDBadge"].forEach(id => { document.getElementById(id).innerHTML = ""; });
     // Reset OOS and orders closed
-    S.oosItems     = { Breakfast: [], Lunch: [], Dinner: [] };
-    S.ordersClosed = {};
-    S.orderCaps    = {};
-    S.orderCounts  = {};
-    S.capAlt       = {};
+    S.oosItems        = { Breakfast: [], Lunch: [], Dinner: [] };
+    S.ordersClosed    = {};
+    S.orderCaps       = {};
+    S.orderCounts     = {};
+    S.btExemptCounts  = {};
+    S.capAlt          = {};
     S.stockLimits  = {};
     S.unitsOrdered = {};
     S.comboStock   = {};
@@ -3542,31 +3545,42 @@ function renderOrdersClosedPanel() {
     const cState = S.ordersClosed[m.key];
     const isClosed = cState === true;
     const isRestricted = cState === "restricted";
-    const isOpen = !isClosed && !isRestricted;
+    const isFreeBT = cState === "free_bt";
+    const isOpen = !isClosed && !isRestricted && !isFreeBT;
     const cap    = (S.orderCaps && S.orderCaps[m.key]) ? S.orderCaps[m.key] : "";          // per-date override (what the admin typed)
     const defCap = (S.defaultCaps && S.defaultCaps[m.key]) ? Number(S.defaultCaps[m.key]) : 0; // site-wide default (admin-editable via Default Delivery Caps panel)
     const effCap = cap ? Number(cap) : defCap;                                              // what's actually enforced today
     const count = (S.orderCounts && S.orderCounts[m.key] != null) ? Number(S.orderCounts[m.key]) : null;
     const capHit = effCap > 0 && count != null && count >= effCap;
     const altOn = !(S.capAlt && S.capAlt[m.key] === false);   // default ON
+    const btExempt = (S.btExemptCounts && S.btExemptCounts[m.key]) ? Number(S.btExemptCounts[m.key]) : 0;
     return `<div style="text-align:center;">
       <div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:8px;">${m.icon} ${m.key}</div>
-      <select onchange="setOrdersClosedState('${m.key}', this.value)" style="margin-top:4px; font-size:0.75rem; padding:4px; border-radius:6px; border:1px solid var(--border); width:100%; max-width:140px; text-align:center; background:var(--surface); color:var(--ink);">
+      <select onchange="setOrdersClosedState('${m.key}', this.value)" style="margin-top:4px; font-size:0.75rem; padding:4px; border-radius:6px; border:1px solid ${isFreeBT ? '#0e7a5f' : 'var(--border)'}; width:100%; max-width:140px; text-align:center; background:var(--surface); color:var(--ink);">
         <option value="false" ${isOpen ? 'selected' : ''}>🟢 Open</option>
+        <option value="free_bt" ${isFreeBT ? 'selected' : ''}>🆓 Free Bhosale/Triveni Slots</option>
         <option value="restricted" ${isRestricted ? 'selected' : ''}>🟡 Except Bhosale/Triveni</option>
         <option value="true" ${isClosed ? 'selected' : ''}>🔴 Closed Completely</option>
       </select>
-      <button class="toggle ${isClosed ? '' : 'on'}"
-              onclick="toggleOrdersClosed('${m.key}')"></button>
-      <div style="font-size:.72rem;margin-top:6px;font-weight:600;color:${isClosed ? '#2D1A5E' : 'var(--green)'};">
-        ${isClosed ? 'Closed' : 'Open'}
+      <div style="margin-top:6px;">
+        <button class="toggle ${isClosed ? '' : 'on'}"
+                onclick="toggleOrdersClosed('${m.key}')"></button>
+      </div>
+      <div style="font-size:.72rem;margin-top:4px;font-weight:600;color:${isClosed ? '#2D1A5E' : isFreeBT ? '#0e7a5f' : 'var(--green)'};">
+        ${isClosed ? 'Closed' : isFreeBT ? '🆓 Open (BT Freed)' : isRestricted ? 'Except Bhosale/Triveni' : 'Open'}
+      </div>
+      <div style="margin-top:4px;">
+        <button type="button" onclick="toggleFreeBTSlots('${m.key}')" title="When active, orders from Bhosale Nagar & Triveni Nagar do not consume delivery slots, freeing them up for other orders."
+          style="padding:3px 8px;border-radius:6px;border:1px solid ${isFreeBT ? '#0e7a5f' : 'var(--border,#ccc)'};background:${isFreeBT ? '#e8f8f2' : 'var(--bg2,#f7f7f7)'};color:${isFreeBT ? '#0e7a5f' : 'var(--muted,#666)'};font-size:.62rem;font-weight:700;cursor:pointer;">
+          🆓 Free BT Slots: ${isFreeBT ? 'ON' : 'OFF'}
+        </button>
       </div>
       <div style="margin-top:10px;border-top:1px dashed var(--border,#ddd);padding-top:8px;">
         <label style="font-size:.6rem;color:var(--muted);display:block;margin-bottom:3px;" title="Self Pickup & Porter orders do NOT count — they're offered as overflow once delivery is full. Blank = the permanent default; type a number to override JUST this date.">Max <u>delivery</u> orders</label>
         <input type="number" min="0" inputmode="numeric" placeholder="${defCap > 0 ? defCap + ' (default)' : '∞'}"
                value="${cap}" onchange="setOrderCap('${m.key}', this.value)"
                style="width:62px;text-align:center;padding:4px;border-radius:6px;border:1px solid var(--border,#ccc);font-size:.82rem;" />
-        ${count != null ? `<div style="font-size:.6rem;margin-top:4px;color:${capHit ? '#c0392b' : 'var(--muted)'};font-weight:700;">${count}${effCap > 0 ? ' / ' + effCap : ''} delivery${capHit ? ' · FULL' : ''}${(!cap && effCap > 0) ? ' <span style="font-weight:600;">(default)</span>' : ''}</div>` : ''}
+        ${count != null ? `<div style="font-size:.6rem;margin-top:4px;color:${capHit ? '#c0392b' : 'var(--muted)'};font-weight:700;">${count}${effCap > 0 ? ' / ' + effCap : ''} delivery${capHit ? ' · FULL' : ''}${(!cap && effCap > 0) ? ' <span style="font-weight:600;">(default)</span>' : ''}${isFreeBT && btExempt > 0 ? `<div style="color:#0e7a5f;font-weight:700;font-size:0.58rem;margin-top:2px;">🆓 ${btExempt} BT orders freed</div>` : ''}</div>` : ''}
         ${effCap > 0 ? `<div style="margin-top:8px;font-size:.56rem;color:var(--muted);line-height:1.3;">When full, offer<br>Pickup / Porter:
           <button onclick="toggleCapAlt('${m.key}')" title="ON = customers can still order via Self Pickup or Porter when delivery is full. OFF = hard sold-out."
             style="margin-top:4px;display:inline-block;padding:3px 10px;border-radius:8px;border:0;cursor:pointer;font-weight:800;font-size:.6rem;background:${altOn ? '#0e7a5f' : '#b0b0b0'};color:#fff;">${altOn ? 'ON' : 'OFF'}</button>
@@ -3587,14 +3601,28 @@ function toggleCapAlt(meal) {
 }
 
 function toggleOrdersClosed(meal) {
-  S.ordersClosed[meal] = !S.ordersClosed[meal];
+  if (S.ordersClosed[meal] === true) {
+    S.ordersClosed[meal] = false;
+  } else {
+    S.ordersClosed[meal] = true;
+  }
   setMenuDirty(true);
   renderOrdersClosedPanel();
 }
 function setOrdersClosedState(meal, val) {
   if (val === "true") S.ordersClosed[meal] = true;
   else if (val === "restricted") S.ordersClosed[meal] = "restricted";
+  else if (val === "free_bt") S.ordersClosed[meal] = "free_bt";
   else S.ordersClosed[meal] = false;
+  setMenuDirty(true);
+  renderOrdersClosedPanel();
+}
+function toggleFreeBTSlots(meal) {
+  if (S.ordersClosed[meal] === "free_bt") {
+    S.ordersClosed[meal] = false;
+  } else {
+    S.ordersClosed[meal] = "free_bt";
+  }
   setMenuDirty(true);
   renderOrdersClosedPanel();
 }
@@ -3656,6 +3684,9 @@ async function saveCurrentMenu() {
     if (cl)  cutoffOverrides.Lunch     = Number(cl);
     if (cd)  cutoffOverrides.Dinner    = Number(cd);
 
+    if (data.order_counts) S.orderCounts = data.order_counts;
+    if (data.bt_exempt_counts) S.btExemptCounts = data.bt_exempt_counts;
+
     const idx   = S.menuEntries.findIndex(e => e.date === S.selectedDate);
     const entry = {
       date:             S.selectedDate,
@@ -3671,6 +3702,7 @@ async function saveCurrentMenu() {
       order_caps:       S.orderCaps,
       cap_alt:          S.capAlt,
       order_counts:     S.orderCounts,
+      bt_exempt_counts: S.btExemptCounts,
       units_remaining:  (() => {
         const out = {};
         ["Breakfast","Lunch","Dinner"].forEach(meal => {
