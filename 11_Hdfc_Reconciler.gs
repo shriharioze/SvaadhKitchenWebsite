@@ -563,8 +563,9 @@ function reconcilePendingRefunds() {
   const cNote   = H.indexOf("Adjustment_Note");
   if (cSid === -1 || cStatus === -1) return;
 
-  // Build in-memory index from SK_Orders AND LS_Orders once (O(N) read).
-  // orderIndex maps Submission_ID and Gateway_Order_ID -> { ws, row, status, statusCol }
+  // Build in-memory index from SK_Orders AND LS_Orders by Submission_ID ONLY.
+  // STRICT: Keyed strictly by Submission_ID. A single Gateway_Order_ID covers
+  // multiple meal orders; indexing by gateway ID causes sibling meal corruption.
   const orderIndex = {};
   const gwMap = {};
   [TAB_ORDERS, TAB_LS_ORDERS].forEach(function(tName) {
@@ -581,18 +582,17 @@ function reconcilePendingRefunds() {
       var sid = String(od[k][oSid] || "").trim();
       var gwId = oGw !== -1 ? String(od[k][oGw] || "").trim() : "";
       var stat = String(od[k][oStat] || "").trim();
-      var entry = { ws: ordWs, row: k + 1, status: stat, statusCol: oStat + 1 };
       if (sid) {
-        orderIndex[sid] = entry;
+        orderIndex[sid] = { ws: ordWs, row: k + 1, status: stat, statusCol: oStat + 1 };
         if (gwId) gwMap[sid] = gwId;
       }
-      if (gwId) orderIndex[gwId] = entry;
     }
   });
 
-  // Helper to update order status in-memory and in sheet with idempotency guard
-  function updateOrderStatus(sid, gwId, newRemark) {
-    var target = (sid && orderIndex[sid]) || (gwId && orderIndex[gwId]);
+  // Helper to update order status strictly by Submission_ID with idempotency guard
+  function updateOrderStatus(sid, newRemark) {
+    if (!sid) return 0;
+    var target = orderIndex[sid];
     if (!target) return 0;
     var cur = target.status;
     var curLower = cur.toLowerCase();
@@ -602,7 +602,7 @@ function reconcilePendingRefunds() {
     }
     target.ws.getRange(target.row, target.statusCol).setValue(newRemark);
     target.status = newRemark;
-    Logger.log("reconcilePendingRefunds: order " + (sid || gwId) + " updated to '" + newRemark + "'");
+    Logger.log("reconcilePendingRefunds: order " + sid + " updated to '" + newRemark + "'");
     return 1;
   }
 
@@ -610,19 +610,19 @@ function reconcilePendingRefunds() {
 
   // 1. Sync check: If row is already settled (e.g. "Refunded at 2026-10-20 13:40"),
   // ensure matching order in SK_Orders / LS_Orders reflects this settlement timestamp.
-  // Check the last 40 rows of SK_Refunds (fast in-memory lookup).
+  // Check the last 40 rows of SK_Refunds (fast in-memory lookup, strictly by sid).
   var startSync = Math.max(1, data.length - 40);
   for (var j = startSync; j < data.length; j++) {
     var rStat = String(data[j][cStatus] || "").trim();
     if (rStat.toLowerCase().indexOf("refunded") === 0) {
       var rSid = String(data[j][cSid] || "").trim();
-      var rGw = gwMap[rSid] || "";
+      if (!rSid) continue;
       var rMode = cMode === -1 ? "" : String(data[j][cMode] || "").trim().toLowerCase();
       var targetRemark = "Cancelled \u2013 " + rStat;
       if (rMode === "wallet" && targetRemark.indexOf("Wallet") === -1) {
         targetRemark = targetRemark.replace(/Refunded/i, "Refunded to Wallet");
       }
-      synced += updateOrderStatus(rSid, rGw, targetRemark);
+      synced += updateOrderStatus(rSid, targetRemark);
     }
   }
 
@@ -634,7 +634,7 @@ function reconcilePendingRefunds() {
 
     var sid = String(data[i][cSid] || "").trim();
     var gOrderId = gwMap[sid] || "";
-    if (!gOrderId) continue;
+    if (!sid || !gOrderId) continue;
 
     var res = hdfc_getOrderRefunds(gOrderId);
     if (!res || !res.success) continue;
@@ -651,7 +651,7 @@ function reconcilePendingRefunds() {
       refWs.getRange(i + 1, cStatus + 1).setValue("Refunded at " + nowStr);
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(String(data[i][cNote] || "") + " | settled via reconciler @ " + new Date());
       settled++;
-      updateOrderStatus(sid, gOrderId, "Cancelled \u2013 Refunded at " + nowStr);
+      updateOrderStatus(sid, "Cancelled \u2013 Refunded at " + nowStr);
     } else if (st.indexOf("FAIL") !== -1) {
       refWs.getRange(i + 1, cStatus + 1).setValue("Refund Failed");
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(String(data[i][cNote] || "") + " | gateway reported " + st + " @ " + new Date());
@@ -732,5 +732,100 @@ function retryQueuedRefunds() {
   const summary = "retryQueuedRefunds: retried " + retried + ", succeeded " + ok + ".";
   Logger.log(summary);
   return summary;
+}
+
+/**
+ * Scans SK_Orders and LS_Orders for any row where Payment_Status was mistakenly
+ * marked as "Cancelled – Refunded at 2026-10-20 14:01" (or similar) due to a shared
+ * Gateway_Order_ID match, but whose Submission_ID was NEVER in SK_Refunds.
+ * Reverts those rows back to "Paid".
+ *
+ * @param {boolean} commit If true, writes changes to sheets. If false, dry-run only.
+ * @returns {Object} Report of reverted rows
+ */
+function revertSpuriousRefundStatuses(commit) {
+  const ss = getSpreadsheet();
+  const refWs = ss.getSheetByName(TAB_REFUNDS);
+  if (!refWs || refWs.getLastRow() < 2) return { success: false, error: "Refunds tab missing" };
+
+  // Set of legitimate refunded Submission_IDs from SK_Refunds
+  const refData = refWs.getDataRange().getValues();
+  const refH = refData[0];
+  const refSidCol = refH.indexOf("Submission_ID");
+  const refStatCol = refH.indexOf("Status");
+  const legitimateRefunds = {};
+  if (refSidCol !== -1 && refStatCol !== -1) {
+    for (var i = 1; i < refData.length; i++) {
+      var sid = String(refData[i][refSidCol] || "").trim();
+      var stat = String(refData[i][refStatCol] || "").trim();
+      if (sid && stat.toLowerCase().indexOf("refunded") === 0) {
+        legitimateRefunds[sid] = stat;
+      }
+    }
+  }
+
+  const reverted = [];
+  const kept = [];
+  [TAB_ORDERS, TAB_LS_ORDERS].forEach(function(tName) {
+    const ws = ss.getSheetByName(tName);
+    if (!ws || ws.getLastRow() < 2) return;
+    const data = ws.getDataRange().getValues();
+    const H = data[0];
+    const cSid = H.indexOf("Submission_ID");
+    const cPhone = H.indexOf("Phone");
+    const cName = H.indexOf("Customer_Name");
+    const cDate = H.indexOf("Order_Date");
+    const cMeal = H.indexOf("Meal_Type");
+    const cStat = H.indexOf("Payment_Status");
+    if (cSid === -1 || cStat === -1) return;
+
+    for (var r = 1; r < data.length; r++) {
+      var rowSid = String(data[r][cSid] || "").trim();
+      var currentStat = String(data[r][cStat] || "").trim();
+
+      // Check if row has "Refunded at 2026-10-20 14:01" or other spurious 14:00/13:5x settlement timestamps
+      if (currentStat.indexOf("2026-10-20 14:01") !== -1 || currentStat.indexOf("2026-10-20 14:00") !== -1) {
+        // If this row's Submission_ID is a legitimate refund in SK_Refunds:
+        if (legitimateRefunds[rowSid]) {
+          kept.push({
+            tab: tName,
+            row: r + 1,
+            sid: rowSid,
+            reason: "Legitimate refund in SK_Refunds (" + legitimateRefunds[rowSid] + ")"
+          });
+          // Ensure correct timestamp from SK_Refunds
+          var properStatus = "Cancelled \u2013 " + legitimateRefunds[rowSid];
+          if (properStatus !== currentStat && (commit === true || commit === "true" || commit === 1 || commit === "1")) {
+            ws.getRange(r + 1, cStat + 1).setValue(properStatus);
+          }
+        } else {
+          // Mistakenly changed by Gateway ID! Revert to "Paid"!
+          reverted.push({
+            tab: tName,
+            row: r + 1,
+            sid: rowSid,
+            phone: cPhone !== -1 ? String(data[r][cPhone] || "") : "",
+            name: cName !== -1 ? String(data[r][cName] || "") : "",
+            date: cDate !== -1 ? (data[r][cDate] instanceof Date ? Utilities.formatDate(data[r][cDate], "Asia/Kolkata", "yyyy-MM-dd") : String(data[r][cDate] || "")) : "",
+            meal: cMeal !== -1 ? String(data[r][cMeal] || "") : "",
+            oldStatus: currentStat,
+            newStatus: "Paid"
+          });
+          if (commit === true || commit === "true" || commit === 1 || commit === "1") {
+            ws.getRange(r + 1, cStat + 1).setValue("Paid");
+          }
+        }
+      }
+    }
+  });
+
+  return {
+    success: true,
+    commit: !!(commit === true || commit === "true" || commit === 1 || commit === "1"),
+    revertedCount: reverted.length,
+    reverted: reverted,
+    keptCount: kept.length,
+    kept: kept
+  };
 }
 

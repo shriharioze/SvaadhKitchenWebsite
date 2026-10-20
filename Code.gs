@@ -856,6 +856,11 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       reconcilePendingRefunds();
       return jsonRes({success: true, message: "reconcilePendingRefunds executed"});
     }
+    if (action === "revertSpuriousRefunds") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
+      return jsonRes(revertSpuriousRefundStatuses(commit));
+    }
     
     // Keep-alive ping — just wakes GAS, no sheet reads
     if (action === "ping") return jsonRes({ok: true, t: new Date().toISOString()});
@@ -1112,6 +1117,11 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       reconcilePendingRefunds();
       return jsonRes({success: true, message: "reconcilePendingRefunds executed"});
+    }
+    if (action === "revertSpuriousRefunds") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
+      return jsonRes(revertSpuriousRefundStatuses(commit));
     }
     if (action === "reconcileTransactions") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
