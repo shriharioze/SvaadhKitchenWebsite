@@ -735,13 +735,19 @@ function retryQueuedRefunds() {
 }
 
 /**
- * Scans SK_Orders and LS_Orders for any row where Payment_Status was mistakenly
- * marked as "Cancelled – Refunded at 2026-10-20 14:01" (or similar) due to a shared
- * Gateway_Order_ID match, but whose Submission_ID was NEVER in SK_Refunds.
- * Reverts those rows back to "Paid".
+ * Comprehensive audit & restoration of spurious refund statuses in SK_Orders and LS_Orders.
+ * When a refund was settled, past buggy code matched by Gateway_Order_ID and marked
+ * all sibling orders in multi-meal/multi-day bookings as "Cancelled – Refunded at YYYY-MM-DD HH:mm".
  *
- * @param {boolean} commit If true, writes changes to sheets. If false, dry-run only.
- * @returns {Object} Report of reverted rows
+ * This function:
+ * 1. Reads all legitimate refund records from SK_Refunds (plus user-confirmed cancellations).
+ * 2. Scans every row in SK_Orders and LS_Orders.
+ * 3. Any row marked "Refunded at ..." whose Submission_ID is NOT a legitimate refund is restored to "Paid".
+ * 4. Ensures legitimate cancelled orders remain properly marked.
+ * 5. Returns a detailed report grouped by customer.
+ *
+ * @param {boolean} commit If true, writes changes to the sheet; if false, performs a dry run.
+ * @returns {Object} Full audit report with customer-level grouping.
  */
 function revertSpuriousRefundStatuses(commit) {
   const ss = getSpreadsheet();
@@ -754,18 +760,31 @@ function revertSpuriousRefundStatuses(commit) {
   const refSidCol = refH.indexOf("Submission_ID");
   const refStatCol = refH.indexOf("Status");
   const legitimateRefunds = {};
-  if (refSidCol !== -1 && refStatCol !== -1) {
+  if (refSidCol !== -1) {
     for (var i = 1; i < refData.length; i++) {
       var sid = String(refData[i][refSidCol] || "").trim();
-      var stat = String(refData[i][refStatCol] || "").trim();
-      if (sid && stat.toLowerCase().indexOf("refunded") === 0) {
-        legitimateRefunds[sid] = stat;
+      var stat = refStatCol !== -1 ? String(refData[i][refStatCol] || "").trim() : "Refunded";
+      if (sid) {
+        legitimateRefunds[sid] = stat || "Refunded";
       }
     }
   }
 
+  // Explicitly confirm the 7 user-confirmed cancelled orders for 2026-10-20 Dinner
+  const confirmedUserCancelled = {
+    "SK-20260916-1006": "Simil Aggarwal (Dinner 2026-10-20)",
+    "SK-20261018-1635": "Nitin Jadhav (Dinner 2026-10-20)",
+    "SK-20261018-5554": "Rutuja Deshmukh (Dinner 2026-10-20)",
+    "SK-20261018-7196": "Ankit Bansal (Dinner 2026-10-20)",
+    "SK-20261018-9616": "Shivam Lal (Dinner 2026-10-20)",
+    "SK-20261019-6764": "Gargi Mittal (Dinner 2026-10-20)",
+    "SK-20261019-4120": "Anuj Agrawal (Dinner 2026-10-20)"
+  };
+
   const reverted = [];
   const kept = [];
+  const customersAffected = {};
+
   [TAB_ORDERS, TAB_LS_ORDERS].forEach(function(tName) {
     const ws = ss.getSheetByName(tName);
     if (!ws || ws.getLastRow() < 2) return;
@@ -777,40 +796,92 @@ function revertSpuriousRefundStatuses(commit) {
     const cDate = H.indexOf("Order_Date");
     const cMeal = H.indexOf("Meal_Type");
     const cStat = H.indexOf("Payment_Status");
+    const cGw = H.indexOf("Gateway_Order_ID");
+    const cTotal = H.indexOf("Net_Total");
     if (cSid === -1 || cStat === -1) return;
 
     for (var r = 1; r < data.length; r++) {
       var rowSid = String(data[r][cSid] || "").trim();
       var currentStat = String(data[r][cStat] || "").trim();
+      var phone = cPhone !== -1 ? String(data[r][cPhone] || "").trim() : "";
+      var name = cName !== -1 ? String(data[r][cName] || "").trim() : "";
+      var dateStr = cDate !== -1 ? (data[r][cDate] instanceof Date ? Utilities.formatDate(data[r][cDate], "Asia/Kolkata", "yyyy-MM-dd") : String(data[r][cDate] || "")) : "";
+      var meal = cMeal !== -1 ? String(data[r][cMeal] || "").trim() : "";
+      var gw = cGw !== -1 ? String(data[r][cGw] || "").trim() : "";
+      var total = cTotal !== -1 ? Number(data[r][cTotal]) || 0 : 0;
 
-      // Check if row has "Refunded at 2026-10-20 14:01" or other spurious 14:00/13:5x settlement timestamps
-      if (currentStat.indexOf("2026-10-20 14:01") !== -1 || currentStat.indexOf("2026-10-20 14:00") !== -1) {
-        // If this row's Submission_ID is a legitimate refund in SK_Refunds:
-        if (legitimateRefunds[rowSid]) {
+      // Check for any status containing "Refunded at" or "Cancelled – Refunded at"
+      var isRefundTimestampStatus = currentStat.indexOf("Refunded at") !== -1 || currentStat.indexOf("Cancelled \u2013 Refunded at") !== -1;
+
+      if (isRefundTimestampStatus) {
+        // 1. Is this a confirmed cancelled order from today?
+        if (confirmedUserCancelled[rowSid]) {
           kept.push({
             tab: tName,
             row: r + 1,
             sid: rowSid,
-            reason: "Legitimate refund in SK_Refunds (" + legitimateRefunds[rowSid] + ")"
+            phone: phone,
+            name: name,
+            date: dateStr,
+            meal: meal,
+            reason: "User confirmed cancelled order: " + confirmedUserCancelled[rowSid]
           });
-          // Ensure correct timestamp from SK_Refunds
-          var properStatus = "Cancelled \u2013 " + legitimateRefunds[rowSid];
-          if (properStatus !== currentStat && (commit === true || commit === "true" || commit === 1 || commit === "1")) {
-            ws.getRange(r + 1, cStat + 1).setValue(properStatus);
-          }
-        } else {
-          // Mistakenly changed by Gateway ID! Revert to "Paid"!
-          reverted.push({
+        }
+        // 2. Is this a legitimate refund recorded in SK_Refunds?
+        else if (legitimateRefunds[rowSid]) {
+          kept.push({
             tab: tName,
             row: r + 1,
             sid: rowSid,
-            phone: cPhone !== -1 ? String(data[r][cPhone] || "") : "",
-            name: cName !== -1 ? String(data[r][cName] || "") : "",
-            date: cDate !== -1 ? (data[r][cDate] instanceof Date ? Utilities.formatDate(data[r][cDate], "Asia/Kolkata", "yyyy-MM-dd") : String(data[r][cDate] || "")) : "",
-            meal: cMeal !== -1 ? String(data[r][cMeal] || "") : "",
+            phone: phone,
+            name: name,
+            date: dateStr,
+            meal: meal,
+            reason: "Legitimate refund in SK_Refunds (" + legitimateRefunds[rowSid] + ")"
+          });
+          // Ensure correct timestamp formatting from SK_Refunds if needed
+          var properStatus = legitimateRefunds[rowSid].indexOf("Cancelled") === 0 
+            ? legitimateRefunds[rowSid] 
+            : "Cancelled \u2013 " + legitimateRefunds[rowSid];
+          if (properStatus !== currentStat && (commit === true || commit === "true" || commit === 1 || commit === "1")) {
+            ws.getRange(r + 1, cStat + 1).setValue(properStatus);
+          }
+        }
+        // 3. Otherwise: Spurious refund status! Revert to "Paid"!
+        else {
+          var revertInfo = {
+            tab: tName,
+            row: r + 1,
+            sid: rowSid,
+            gw: gw,
+            phone: phone,
+            name: name,
+            date: dateStr,
+            meal: meal,
+            total: total,
             oldStatus: currentStat,
             newStatus: "Paid"
+          };
+          reverted.push(revertInfo);
+
+          var custKey = (name || "Unknown") + " (" + (phone || "No Phone") + ")";
+          if (!customersAffected[custKey]) {
+            customersAffected[custKey] = {
+              name: name,
+              phone: phone,
+              count: 0,
+              orders: []
+            };
+          }
+          customersAffected[custKey].count++;
+          customersAffected[custKey].orders.push({
+            sid: rowSid,
+            date: dateStr,
+            meal: meal,
+            total: total,
+            oldStatus: currentStat
           });
+
           if (commit === true || commit === "true" || commit === 1 || commit === "1") {
             ws.getRange(r + 1, cStat + 1).setValue("Paid");
           }
@@ -823,6 +894,8 @@ function revertSpuriousRefundStatuses(commit) {
     success: true,
     commit: !!(commit === true || commit === "true" || commit === 1 || commit === "1"),
     revertedCount: reverted.length,
+    customersAffectedCount: Object.keys(customersAffected).length,
+    customersAffected: customersAffected,
     reverted: reverted,
     keptCount: kept.length,
     kept: kept
