@@ -851,6 +851,11 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(patch20260808Menu());
     }
+    if (action === "reconcilePendingRefunds") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      reconcilePendingRefunds();
+      return jsonRes({success: true, message: "reconcilePendingRefunds executed"});
+    }
     
     // Keep-alive ping — just wakes GAS, no sheet reads
     if (action === "ping") return jsonRes({ok: true, t: new Date().toISOString()});
@@ -1103,6 +1108,11 @@ function doPost(e) {
       return jsonRes(markOnAccount(body.phone, body.cycle, body.status));
     }
     if (action === "verifyAdminPin") return jsonRes({success: isAdmin});
+    if (action === "reconcilePendingRefunds") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      reconcilePendingRefunds();
+      return jsonRes({success: true, message: "reconcilePendingRefunds executed"});
+    }
     if (action === "reconcileTransactions") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       return jsonRes(reconcileTransactions(body));

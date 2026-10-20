@@ -1011,6 +1011,67 @@ function hdfc_getOrderRefunds(gatewayOrderId) {
 }
 
 /**
+ * Updates Payment_Status in SK_Orders and LS_Orders when a refund is settled.
+ * Matches by Submission_ID (preferred) or Gateway_Order_ID.
+ * Preserves the "Cancelled – " prefix so _isOrderCancelled() remains true.
+ *
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss] Optional spreadsheet instance
+ * @param {string} [submissionId] Order Submission_ID (e.g. "SK-20261019-4120")
+ * @param {string} [gatewayOrderId] Gateway Order ID (e.g. "SK261019GHLKDP7V82")
+ * @param {string} [refundRemark] Target Payment_Status string (e.g. "Cancelled – Refunded at 2026-10-20 13:40")
+ * @returns {number} Number of order rows updated
+ */
+function _markOrderRefundedInOrders(ss, submissionId, gatewayOrderId, refundRemark) {
+  try {
+    if (!ss) ss = (typeof getSpreadsheet === "function" ? getSpreadsheet() : SpreadsheetApp.openById(SHEET_ID));
+    submissionId = String(submissionId || "").trim();
+    gatewayOrderId = String(gatewayOrderId || "").trim();
+    if (!submissionId && !gatewayOrderId) return 0;
+    if (!refundRemark) {
+      const nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
+      refundRemark = "Cancelled \u2013 Refunded at " + nowStr;
+    }
+
+    let updated = 0;
+    const tabs = [TAB_ORDERS, TAB_LS_ORDERS];
+    for (var t = 0; t < tabs.length; t++) {
+      const ws = ss.getSheetByName(tabs[t]);
+      if (!ws || ws.getLastRow() < 2) continue;
+      const data = ws.getDataRange().getValues();
+      const H = data[0];
+      const cSid = H.indexOf("Submission_ID");
+      const cGw  = H.indexOf("Gateway_Order_ID");
+      const cStatus = H.indexOf("Payment_Status");
+      if (cStatus === -1) continue;
+
+      for (var r = 1; r < data.length; r++) {
+        const rowSid = cSid !== -1 ? String(data[r][cSid] || "").trim() : "";
+        const rowGw  = cGw !== -1 ? String(data[r][cGw] || "").trim() : "";
+
+        const matchSid = submissionId && rowSid && (rowSid === submissionId);
+        const matchGw  = gatewayOrderId && rowGw && (rowGw === gatewayOrderId);
+
+        if (matchSid || matchGw) {
+          const cur = String(data[r][cStatus] || "").trim();
+          const curLower = cur.toLowerCase();
+          // Idempotency: if already settled with exact status or already has a refund timestamp, skip
+          if (cur === refundRemark || (curLower.indexOf("refunded") !== -1 && /\d{4}-\d{2}-\d{2}/.test(cur))) {
+            continue;
+          }
+          ws.getRange(r + 1, cStatus + 1).setValue(refundRemark);
+          console.log("_markOrderRefundedInOrders: [" + tabs[t] + "] row " + (r + 1) + " (" + (rowSid || rowGw) + ") set to '" + refundRemark + "'");
+          updated++;
+        }
+      }
+    }
+    return updated;
+  } catch (e) {
+    console.warn("_markOrderRefundedInOrders error:", e.message);
+    return 0;
+  }
+}
+
+/**
  * Marks the matching row in the Refunds sheet as fully refunded once HDFC
  * confirms (REFUND_SUCCEEDED webhook). Best-effort: matches by gateway order_id
  * recorded in the Adjustment_Note. Never throws.
@@ -1019,26 +1080,35 @@ function _hdfcMarkRefundSettled(gatewayOrderId, refundId) {
   try {
     gatewayOrderId = String(gatewayOrderId || "").trim();
     if (!gatewayOrderId) return;
-    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const ss = (typeof getSpreadsheet === "function" ? getSpreadsheet() : SpreadsheetApp.openById(SHEET_ID));
+    const nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
     const ws = ss.getSheetByName(TAB_REFUNDS);
-    if (!ws) return;
-    const data    = ws.getDataRange().getValues();
-    const headers = data[0] || [];
-    const cStatus = headers.indexOf("Status");
-    const cNote   = headers.indexOf("Adjustment_Note");
-    const cMode   = headers.indexOf("Refund_Mode");
-    if (cStatus === -1 || cNote === -1) return;
-    for (var i = 1; i < data.length; i++) {
-      var note   = String(data[i][cNote] || "");
-      var status = String(data[i][cStatus] || "").toLowerCase();
-      var isGw   = cMode === -1 ? true : String(data[i][cMode] || "").toLowerCase() === "gateway";
-      if (isGw && note.indexOf(gatewayOrderId) !== -1 && status.indexOf("refunded") !== 0) {
-        var nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
-        ws.getRange(i + 1, cStatus + 1).setValue("Refunded at " + nowStr);
-        ws.getRange(i + 1, cNote   + 1).setValue(note + " | settled:" + (refundId || "") + " @ " + new Date());
-        console.log("_hdfcMarkRefundSettled: row " + (i+1) + " marked Refunded for " + gatewayOrderId);
+    let matchedSid = "";
+    if (ws && ws.getLastRow() > 1) {
+      const data    = ws.getDataRange().getValues();
+      const headers = data[0] || [];
+      const cStatus = headers.indexOf("Status");
+      const cNote   = headers.indexOf("Adjustment_Note");
+      const cMode   = headers.indexOf("Refund_Mode");
+      const cSid    = headers.indexOf("Submission_ID");
+      if (cStatus !== -1 && cNote !== -1) {
+        for (var i = 1; i < data.length; i++) {
+          var note   = String(data[i][cNote] || "");
+          var status = String(data[i][cStatus] || "").toLowerCase();
+          var isGw   = cMode === -1 ? true : String(data[i][cMode] || "").toLowerCase() === "gateway";
+          if (isGw && note.indexOf(gatewayOrderId) !== -1) {
+            if (cSid !== -1 && !matchedSid) matchedSid = String(data[i][cSid] || "").trim();
+            if (status.indexOf("refunded") !== 0) {
+              ws.getRange(i + 1, cStatus + 1).setValue("Refunded at " + nowStr);
+              ws.getRange(i + 1, cNote   + 1).setValue(note + " | settled:" + (refundId || "") + " @ " + new Date());
+              console.log("_hdfcMarkRefundSettled: row " + (i+1) + " marked Refunded for " + gatewayOrderId);
+            }
+          }
+        }
       }
     }
+    // Also update matching row in SK_Orders / LS_Orders
+    _markOrderRefundedInOrders(ss, matchedSid, gatewayOrderId, "Cancelled \u2013 Refunded at " + nowStr);
   } catch (e) {
     console.warn("_hdfcMarkRefundSettled error:", e.message);
   }

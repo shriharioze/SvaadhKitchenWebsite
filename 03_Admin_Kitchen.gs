@@ -1176,25 +1176,29 @@ function markRefunded(submissionId, forceWallet = false) {
       // "Cancelled – UPI Refund Pending" (or similar); now update it.
       // Searches BOTH storefront tabs (LS rows live in LS_Orders).
       try {
-        [TAB_ORDERS, TAB_LS_ORDERS].some(function (_tabName) {
-          const ordersWs = ss.getSheetByName(_tabName);
-          if (!ordersWs) return false;
-          const ordersData = ordersWs.getDataRange().getValues();
-          const oHeaders = ordersData[0];
-          const oIdIdx = oHeaders.indexOf("Submission_ID");
-          const oStatusIdx = oHeaders.indexOf("Payment_Status");
-          if (oIdIdx === -1 || oStatusIdx === -1) return false;
-          for (var j = 1; j < ordersData.length; j++) {
-            if (String(ordersData[j][oIdIdx]) === String(submissionId)) {
-              const finalRemark = mode === "wallet"
-                ? "Cancelled \u2013 Refunded to Wallet (" + now + ")"
-                : "Cancelled \u2013 Refunded via UPI (" + now + ")";
-              ordersWs.getRange(j + 1, oStatusIdx + 1).setValue(finalRemark);
-              return true;
+        const finalRemark = mode === "wallet"
+          ? "Cancelled \u2013 Refunded to Wallet (" + now + ")"
+          : "Cancelled \u2013 Refunded via UPI (" + now + ")";
+        if (typeof _markOrderRefundedInOrders === "function") {
+          _markOrderRefundedInOrders(ss, submissionId, "", finalRemark);
+        } else {
+          [TAB_ORDERS, TAB_LS_ORDERS].some(function (_tabName) {
+            const ordersWs = ss.getSheetByName(_tabName);
+            if (!ordersWs) return false;
+            const ordersData = ordersWs.getDataRange().getValues();
+            const oHeaders = ordersData[0];
+            const oIdIdx = oHeaders.indexOf("Submission_ID");
+            const oStatusIdx = oHeaders.indexOf("Payment_Status");
+            if (oIdIdx === -1 || oStatusIdx === -1) return false;
+            for (var j = 1; j < ordersData.length; j++) {
+              if (String(ordersData[j][oIdIdx]) === String(submissionId)) {
+                ordersWs.getRange(j + 1, oStatusIdx + 1).setValue(finalRemark);
+                return true;
+              }
             }
-          }
-          return false;
-        });
+            return false;
+          });
+        }
       } catch(e) { /* non-fatal — refund row already updated */ }
 
       return {success: true};

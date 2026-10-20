@@ -563,23 +563,70 @@ function reconcilePendingRefunds() {
   const cNote   = H.indexOf("Adjustment_Note");
   if (cSid === -1 || cStatus === -1) return;
 
-  // Submission_ID → Gateway_Order_ID map from SK_Orders.
+  // Build in-memory index from SK_Orders AND LS_Orders once (O(N) read).
+  // orderIndex maps Submission_ID and Gateway_Order_ID -> { ws, row, status, statusCol }
+  const orderIndex = {};
   const gwMap = {};
-  const ordWs = ss.getSheetByName(TAB_ORDERS);
-  if (ordWs && ordWs.getLastRow() > 1) {
+  [TAB_ORDERS, TAB_LS_ORDERS].forEach(function(tName) {
+    const ordWs = ss.getSheetByName(tName);
+    if (!ordWs || ordWs.getLastRow() < 2) return;
     const od = ordWs.getDataRange().getValues();
     const oH = od[0];
     const oSid = oH.indexOf("Submission_ID");
     const oGw  = oH.indexOf("Gateway_Order_ID");
-    if (oSid !== -1 && oGw !== -1) {
-      for (var k = 1; k < od.length; k++) {
-        var s = String(od[k][oSid] || "").trim();
-        if (s) gwMap[s] = String(od[k][oGw] || "").trim();
+    const oStat = oH.indexOf("Payment_Status");
+    if (oSid === -1 || oStat === -1) return;
+
+    for (var k = 1; k < od.length; k++) {
+      var sid = String(od[k][oSid] || "").trim();
+      var gwId = oGw !== -1 ? String(od[k][oGw] || "").trim() : "";
+      var stat = String(od[k][oStat] || "").trim();
+      var entry = { ws: ordWs, row: k + 1, status: stat, statusCol: oStat + 1 };
+      if (sid) {
+        orderIndex[sid] = entry;
+        if (gwId) gwMap[sid] = gwId;
       }
+      if (gwId) orderIndex[gwId] = entry;
+    }
+  });
+
+  // Helper to update order status in-memory and in sheet with idempotency guard
+  function updateOrderStatus(sid, gwId, newRemark) {
+    var target = (sid && orderIndex[sid]) || (gwId && orderIndex[gwId]);
+    if (!target) return 0;
+    var cur = target.status;
+    var curLower = cur.toLowerCase();
+    // If already has exact status or already settled with a refund timestamp, skip
+    if (cur === newRemark || (curLower.indexOf("refunded") !== -1 && /\d{4}-\d{2}-\d{2}/.test(cur))) {
+      return 0;
+    }
+    target.ws.getRange(target.row, target.statusCol).setValue(newRemark);
+    target.status = newRemark;
+    Logger.log("reconcilePendingRefunds: order " + (sid || gwId) + " updated to '" + newRemark + "'");
+    return 1;
+  }
+
+  var settled = 0, failed = 0, synced = 0;
+
+  // 1. Sync check: If row is already settled (e.g. "Refunded at 2026-10-20 13:40"),
+  // ensure matching order in SK_Orders / LS_Orders reflects this settlement timestamp.
+  // Check the last 40 rows of SK_Refunds (fast in-memory lookup).
+  var startSync = Math.max(1, data.length - 40);
+  for (var j = startSync; j < data.length; j++) {
+    var rStat = String(data[j][cStatus] || "").trim();
+    if (rStat.toLowerCase().indexOf("refunded") === 0) {
+      var rSid = String(data[j][cSid] || "").trim();
+      var rGw = gwMap[rSid] || "";
+      var rMode = cMode === -1 ? "" : String(data[j][cMode] || "").trim().toLowerCase();
+      var targetRemark = "Cancelled \u2013 " + rStat;
+      if (rMode === "wallet" && targetRemark.indexOf("Wallet") === -1) {
+        targetRemark = targetRemark.replace(/Refunded/i, "Refunded to Wallet");
+      }
+      synced += updateOrderStatus(rSid, rGw, targetRemark);
     }
   }
 
-  var settled = 0, failed = 0;
+  // 2. Poll gateway for pending refunds (mode = gateway and status = Processing)
   for (var i = 1; i < data.length; i++) {
     var status = String(data[i][cStatus] || "").trim().toLowerCase();
     var mode   = cMode === -1 ? "" : String(data[i][cMode] || "").trim().toLowerCase();
@@ -604,6 +651,7 @@ function reconcilePendingRefunds() {
       refWs.getRange(i + 1, cStatus + 1).setValue("Refunded at " + nowStr);
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(String(data[i][cNote] || "") + " | settled via reconciler @ " + new Date());
       settled++;
+      updateOrderStatus(sid, gOrderId, "Cancelled \u2013 Refunded at " + nowStr);
     } else if (st.indexOf("FAIL") !== -1) {
       refWs.getRange(i + 1, cStatus + 1).setValue("Refund Failed");
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(String(data[i][cNote] || "") + " | gateway reported " + st + " @ " + new Date());
@@ -611,7 +659,7 @@ function reconcilePendingRefunds() {
     }
     // else still pending at the gateway — leave Processing, retry next sweep.
   }
-  if (settled || failed) Logger.log("reconcilePendingRefunds: settled " + settled + ", failed " + failed + ".");
+  if (settled || failed || synced) Logger.log("reconcilePendingRefunds: settled " + settled + ", failed " + failed + ", synced to orders " + synced + ".");
 }
 
 /**
@@ -635,14 +683,16 @@ function retryQueuedRefunds() {
 
   // Submission_ID → Gateway_Order_ID
   const gwMap = {};
-  const ordWs = ss.getSheetByName(TAB_ORDERS);
-  if (ordWs && ordWs.getLastRow() > 1) {
-    const od = ordWs.getDataRange().getValues();
-    const oH = od[0], oSid = oH.indexOf("Submission_ID"), oGw = oH.indexOf("Gateway_Order_ID");
-    if (oSid !== -1 && oGw !== -1) for (var k = 1; k < od.length; k++) {
-      var s = String(od[k][oSid] || "").trim(); if (s) gwMap[s] = String(od[k][oGw] || "").trim();
+  [TAB_ORDERS, TAB_LS_ORDERS].forEach(function(tName) {
+    const ordWs = ss.getSheetByName(tName);
+    if (ordWs && ordWs.getLastRow() > 1) {
+      const od = ordWs.getDataRange().getValues();
+      const oH = od[0], oSid = oH.indexOf("Submission_ID"), oGw = oH.indexOf("Gateway_Order_ID");
+      if (oSid !== -1 && oGw !== -1) for (var k = 1; k < od.length; k++) {
+        var s = String(od[k][oSid] || "").trim(); if (s) gwMap[s] = String(od[k][oGw] || "").trim();
+      }
     }
-  }
+  });
 
   var retried = 0, ok = 0;
   for (var i = 1; i < data.length; i++) {
@@ -667,10 +717,14 @@ function retryQueuedRefunds() {
     if (rf && rf.success) {
       ok++;
       var nowStr = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm");
-      var st = (rf.status === "SUCCESS" || rf.status === "REFUNDED") ? ("Refunded at " + nowStr) : "Processing";
+      var isSettled = (rf.status === "SUCCESS" || rf.status === "REFUNDED");
+      var st = isSettled ? ("Refunded at " + nowStr) : "Processing";
       refWs.getRange(i + 1, cStatus + 1).setValue(st);
       if (cMode !== -1) refWs.getRange(i + 1, cMode + 1).setValue("gateway");
       if (cNote !== -1) refWs.getRange(i + 1, cNote + 1).setValue(note + " | RETRIED ok: " + (rf.refund_id || reqId) + " (" + rf.status + ")");
+      if (isSettled) {
+        _markOrderRefundedInOrders(ss, sid, gOrderId, "Cancelled \u2013 Refunded at " + nowStr);
+      }
     } else if (cNote !== -1) {
       refWs.getRange(i + 1, cNote + 1).setValue(note + " | retry failed: " + ((rf && rf.error) || "unknown"));
     }
