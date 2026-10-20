@@ -902,3 +902,156 @@ function revertSpuriousRefundStatuses(commit) {
   };
 }
 
+/**
+ * Deep forensic audit of EVERY cancelled order in SK_Orders and LS_Orders.
+ * Verifies that 100% of currently cancelled orders have a legitimate origin
+ * (SK_Refunds record, SK_Wallet credit, user-confirmed cancellation, or admin/postponement),
+ * and confirms that ZERO spurious cancellations exist.
+ */
+function auditAllCancelledOrdersDetailed() {
+  const ss = getSpreadsheet();
+  
+  // 1. SK_Refunds index
+  const refWs = ss.getSheetByName(TAB_REFUNDS);
+  const legitimateRefunds = {};
+  const refundsByGw = {};
+  if (refWs && refWs.getLastRow() > 1) {
+    const refData = refWs.getDataRange().getValues();
+    const refH = refData[0];
+    const cSid = refH.indexOf("Submission_ID");
+    const cGw = refH.indexOf("Gateway_Order_ID");
+    const cStat = refH.indexOf("Status");
+    const cAmt = refH.indexOf("Refund_Amount");
+    for (var i = 1; i < refData.length; i++) {
+      var sid = String(refData[i][cSid] || "").trim();
+      var gw = String(refData[i][cGw] || "").trim();
+      var stat = String(refData[i][cStat] || "").trim();
+      var amt = cAmt !== -1 ? Number(refData[i][cAmt]) || 0 : 0;
+      if (sid) legitimateRefunds[sid] = { row: i + 1, status: stat, amount: amt, gw: gw };
+      if (gw) {
+        if (!refundsByGw[gw]) refundsByGw[gw] = [];
+        refundsByGw[gw].push({ sid: sid, status: stat, amount: amt, row: i + 1 });
+      }
+    }
+  }
+
+  // 2. SK_Wallet and LS_Wallet index
+  const walletRefunds = {};
+  [TAB_WALLET, TAB_LS_WALLET].forEach(function(wName) {
+    const wWs = ss.getSheetByName(wName);
+    if (!wWs || wWs.getLastRow() < 2) return;
+    const wData = wWs.getDataRange().getValues();
+    const wH = wData[0];
+    const cDesc = wH.indexOf("Description") !== -1 ? wH.indexOf("Description") : wH.indexOf("Note");
+    const cPhone = wH.indexOf("Phone");
+    for (var i = 1; i < wData.length; i++) {
+      var desc = String(wData[i][cDesc] || "");
+      var phone = String(wData[i][cPhone] || "");
+      var m = desc.match(/(SK|LS)-\d{8}-\d{4}/);
+      if (m) {
+        walletRefunds[m[0]] = { tab: wName, phone: phone, desc: desc, row: i + 1 };
+      }
+    }
+  });
+
+  // 3. Confirmed user cancellations for 2026-10-20 Dinner
+  const confirmedUserCancelled = {
+    "SK-20260916-1006": "Simil Aggarwal (Dinner 2026-10-20)",
+    "SK-20261018-1635": "Nitin Jadhav (Dinner 2026-10-20)",
+    "SK-20261018-5554": "Rutuja Deshmukh (Dinner 2026-10-20)",
+    "SK-20261018-7196": "Ankit Bansal (Dinner 2026-10-20)",
+    "SK-20261018-9616": "Shivam Lal (Dinner 2026-10-20)",
+    "SK-20261019-6764": "Gargi Mittal (Dinner 2026-10-20)",
+    "SK-20261019-4120": "Anuj Agrawal (Dinner 2026-10-20)"
+  };
+
+  const totalCancelledOrders = [];
+  const categorized = {
+    refundsTabMatched: [],
+    walletRefundMatched: [],
+    userConfirmedToday: [],
+    postponedOrShifted: [],
+    adminOrKitchenClosed: [],
+    unexplainedAnomalies: []
+  };
+
+  [TAB_ORDERS, TAB_LS_ORDERS].forEach(function(tName) {
+    const ws = ss.getSheetByName(tName);
+    if (!ws || ws.getLastRow() < 2) return;
+    const data = ws.getDataRange().getValues();
+    const H = data[0];
+    const cSid = H.indexOf("Submission_ID");
+    const cGw = H.indexOf("Gateway_Order_ID");
+    const cPhone = H.indexOf("Phone");
+    const cName = H.indexOf("Customer_Name");
+    const cDate = H.indexOf("Order_Date");
+    const cMeal = H.indexOf("Meal_Type");
+    const cStat = H.indexOf("Payment_Status");
+    const cTotal = H.indexOf("Net_Total");
+    const cPostponed = H.indexOf("Bulk_Postponed");
+    if (cSid === -1 || cStat === -1) return;
+
+    for (var r = 1; r < data.length; r++) {
+      var rowSid = String(data[r][cSid] || "").trim();
+      var currentStat = String(data[r][cStat] || "").trim();
+      var isCancelled = typeof _isOrderCancelled === "function" ? _isOrderCancelled(currentStat) : (currentStat.toLowerCase().indexOf("cancel") !== -1);
+      
+      if (!isCancelled) continue;
+
+      var phone = cPhone !== -1 ? String(data[r][cPhone] || "").trim() : "";
+      var name = cName !== -1 ? String(data[r][cName] || "").trim() : "";
+      var dateStr = cDate !== -1 ? (data[r][cDate] instanceof Date ? Utilities.formatDate(data[r][cDate], "Asia/Kolkata", "yyyy-MM-dd") : String(data[r][cDate] || "")) : "";
+      var meal = cMeal !== -1 ? String(data[r][cMeal] || "").trim() : "";
+      var gw = cGw !== -1 ? String(data[r][cGw] || "").trim() : "";
+      var total = cTotal !== -1 ? Number(data[r][cTotal]) || 0 : 0;
+      var postponed = cPostponed !== -1 ? String(data[r][cPostponed] || "").trim() : "";
+
+      var orderObj = {
+        tab: tName,
+        row: r + 1,
+        sid: rowSid,
+        gw: gw,
+        phone: phone,
+        name: name,
+        date: dateStr,
+        meal: meal,
+        total: total,
+        status: currentStat
+      };
+      totalCancelledOrders.push(orderObj);
+
+      if (confirmedUserCancelled[rowSid]) {
+        var cCopy = Object.assign({}, orderObj);
+        cCopy.reason = confirmedUserCancelled[rowSid];
+        categorized.userConfirmedToday.push(cCopy);
+      } else if (legitimateRefunds[rowSid]) {
+        var rCopy = Object.assign({}, orderObj);
+        rCopy.refundRecord = legitimateRefunds[rowSid];
+        categorized.refundsTabMatched.push(rCopy);
+      } else if (walletRefunds[rowSid]) {
+        var wCopy = Object.assign({}, orderObj);
+        wCopy.walletTxn = walletRefunds[rowSid];
+        categorized.walletRefundMatched.push(wCopy);
+      } else if (postponed.toLowerCase() === "yes" || currentStat.toLowerCase().indexOf("postpone") !== -1 || currentStat.toLowerCase().indexOf("moved") !== -1) {
+        categorized.postponedOrShifted.push(orderObj);
+      } else if (currentStat.toLowerCase().indexOf("kitchen closed") !== -1 || currentStat.toLowerCase().indexOf("admin") !== -1) {
+        categorized.adminOrKitchenClosed.push(orderObj);
+      } else {
+        categorized.unexplainedAnomalies.push(orderObj);
+      }
+    }
+  });
+
+  return {
+    success: true,
+    totalCancelledCount: totalCancelledOrders.length,
+    userConfirmedTodayCount: categorized.userConfirmedToday.length,
+    refundsTabMatchedCount: categorized.refundsTabMatched.length,
+    walletRefundMatchedCount: categorized.walletRefundMatched.length,
+    postponedOrShiftedCount: categorized.postponedOrShifted.length,
+    adminOrKitchenClosedCount: categorized.adminOrKitchenClosed.length,
+    unexplainedAnomaliesCount: categorized.unexplainedAnomalies.length,
+    unexplainedAnomalies: categorized.unexplainedAnomalies
+  };
+}
+

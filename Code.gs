@@ -861,6 +861,10 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
       return jsonRes(revertSpuriousRefundStatuses(commit));
     }
+    if (action === "auditAllCancelled") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(auditAllCancelledOrdersDetailed());
+    }
     
     // Keep-alive ping — just wakes GAS, no sheet reads
     if (action === "ping") return jsonRes({ok: true, t: new Date().toISOString()});
@@ -1122,6 +1126,10 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
       return jsonRes(revertSpuriousRefundStatuses(commit));
+    }
+    if (action === "auditAllCancelled") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      return jsonRes(auditAllCancelledOrdersDetailed());
     }
     if (action === "reconcileTransactions") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
