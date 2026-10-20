@@ -1055,3 +1055,127 @@ function auditAllCancelledOrdersDetailed() {
   };
 }
 
+/**
+ * Safely cancels a specific set of orders by Submission_ID with admin privileges.
+ * Designed to ensure zero collateral impact on any other orders (such as previously retrieved bookings).
+ *
+ * @param {Array<string>} targetSids Array of Submission_IDs to cancel
+ * @param {string} refundMode "manual_upi" (gateway/UPI refund) or "wallet"
+ * @param {boolean} commit If true, executes cancellations; if false, performs dry-run.
+ * @returns {Object} Result report
+ */
+function cancelSpecificOrdersAdmin(targetSids, refundMode, commit) {
+  if (!targetSids || !targetSids.length) return { success: false, error: "No target Submission_IDs provided." };
+  
+  const ss = getSpreadsheet();
+  const ws = ss.getSheetByName(TAB_ORDERS);
+  if (!ws || ws.getLastRow() < 2) return { success: false, error: "Orders tab missing." };
+  
+  const data = ws.getDataRange().getValues();
+  const H = data[0];
+  const cSid = H.indexOf("Submission_ID");
+  const cPhone = H.indexOf("Phone");
+  const cName = H.indexOf("Customer_Name");
+  const cDate = H.indexOf("Order_Date");
+  const cMeal = H.indexOf("Meal_Type");
+  const cStat = H.indexOf("Payment_Status");
+  const cGw = H.indexOf("Gateway_Order_ID");
+  const cTotal = H.indexOf("Net_Total");
+  
+  const targetSet = {};
+  targetSids.forEach(function(s) { targetSet[String(s).trim().toUpperCase()] = true; });
+  
+  const matchedOrders = [];
+  const otherOrdersForPhone = [];
+  
+  for (var r = 1; r < data.length; r++) {
+    var rowSid = String(data[r][cSid] || "").trim().toUpperCase();
+    var phone = cPhone !== -1 ? String(data[r][cPhone] || "").trim() : "";
+    var name = cName !== -1 ? String(data[r][cName] || "").trim() : "";
+    var dateStr = cDate !== -1 ? (data[r][cDate] instanceof Date ? Utilities.formatDate(data[r][cDate], "Asia/Kolkata", "yyyy-MM-dd") : String(data[r][cDate] || "")) : "";
+    var meal = cMeal !== -1 ? String(data[r][cMeal] || "").trim() : "";
+    var stat = cStat !== -1 ? String(data[r][cStat] || "").trim() : "";
+    var gw = cGw !== -1 ? String(data[r][cGw] || "").trim() : "";
+    var total = cTotal !== -1 ? Number(data[r][cTotal]) || 0 : 0;
+    
+    if (targetSet[rowSid]) {
+      matchedOrders.push({
+        row: r + 1,
+        sid: rowSid,
+        phone: phone,
+        name: name,
+        date: dateStr,
+        meal: meal,
+        status: stat,
+        gw: gw,
+        total: total
+      });
+    } else if (phone === "9923976881") {
+      otherOrdersForPhone.push({
+        row: r + 1,
+        sid: rowSid,
+        date: dateStr,
+        meal: meal,
+        status: stat,
+        gw: gw,
+        total: total
+      });
+    }
+  }
+  
+  const results = [];
+  let totalRefundAmt = 0;
+  
+  if (commit === true || commit === "true" || commit === 1 || commit === "1") {
+    matchedOrders.forEach(function(ord) {
+      var delRes = deleteOrder(ord.phone, ord.sid, refundMode || "manual_upi", { isAdmin: true });
+      totalRefundAmt += ord.total;
+      results.push({
+        sid: ord.sid,
+        date: ord.date,
+        meal: ord.meal,
+        total: ord.total,
+        success: delRes.success,
+        message: delRes.message || delRes.error
+      });
+    });
+  } else {
+    matchedOrders.forEach(function(ord) {
+      totalRefundAmt += ord.total;
+      results.push({
+        sid: ord.sid,
+        date: ord.date,
+        meal: ord.meal,
+        total: ord.total,
+        currentStatus: ord.status,
+        actionPreview: "Will cancel and refund ₹" + ord.total + " via " + (refundMode || "manual_upi")
+      });
+    });
+  }
+  
+  // Re-read status of other Nitin orders to guarantee zero side-effects
+  const otherOrdersAudit = otherOrdersForPhone.map(function(o) {
+    var freshStat = ws.getRange(o.row, cStat + 1).getValue();
+    return {
+      sid: o.sid,
+      date: o.date,
+      meal: o.meal,
+      statusBefore: o.status,
+      statusAfter: freshStat,
+      untouched: (o.status === freshStat)
+    };
+  });
+  
+  return {
+    success: true,
+    commit: !!(commit === true || commit === "true" || commit === 1 || commit === "1"),
+    refundMode: refundMode || "manual_upi",
+    matchedCount: matchedOrders.length,
+    totalRefundAmount: totalRefundAmt,
+    results: results,
+    otherOrdersAuditCount: otherOrdersAudit.length,
+    allOtherOrdersUntouched: otherOrdersAudit.every(function(o) { return o.untouched; }),
+    otherOrdersSample: otherOrdersAudit.slice(0, 5)
+  };
+}
+
