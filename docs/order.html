@@ -5213,7 +5213,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.26.02";
+    const APP_VERSION = "v26.10.26.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8372,11 +8372,8 @@
       
         const cState = closed[m];
         if (cState === true) return true;
-        if (cState === "restricted") {
-           const area = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[m] && S.mealAddrs[m].area) ? S.mealAddrs[m].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
-           if (area.includes("bhosale") || area.includes("triveni") || area.includes("pickup") || area.includes("porter")) return false;
-           return true;
-        }
+        // NOTE: "restricted" (Except Bhosale/Triveni) is a delivery cap constraint, NOT a hard closure.
+        // It leaves the meal body open for item selection, and prompts Self Pickup / Porter at checkout via _deliveryFullDialog.
         return false;
       };
       
@@ -10415,9 +10412,7 @@
             : (() => {
                 const isSoldOut = !!(S.menuCache[date]?.sold_out || {})[meal];
                 const cState = (S.menuCache[date]?.orders_closed || {})[meal];
-                const areaCheck = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
-                const isRestricted = (cState === "restricted" && !(areaCheck.includes("bhosale") || areaCheck.includes("triveni") || areaCheck.includes("pickup") || areaCheck.includes("porter")));
-                const isClosed = cState === true || isRestricted;
+                const isClosed = cState === true;
                 const isKitchenClosed = !!(S.menuCache[date]?.closed_meals || {})[meal];
                 const closureReason = (S.menuCache[date]?.closure_reasons && S.menuCache[date]?.closure_reasons[meal])
                   || S.menuCache[date]?.closure_reason
@@ -10432,22 +10427,6 @@
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🍽️</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Sold Out for Today</div>
                      <div style="font-size:0.72rem;color:#666;">${meal} has reached today's order limit. Please try another day.</div>`
-                  : isRestricted
-                  ? `<div style="font-size:1.4rem;margin-bottom:8px;">🚚🚫</div>
-                     <div style="font-weight:700;font-size:0.9rem;color:#c0392b;margin-bottom:6px;">Delivery Limit Reached</div>
-                     <div style="font-size:0.75rem;color:#555;line-height:1.45;margin-bottom:12px;">
-                       ${meal} delivery order is closed as the delivery limit has been reached for your area.
-                     </div>
-                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:0.74rem;color:#475569;display:inline-block;text-align:left;line-height:1.5;">
-                       💡 <b>Still available for ${meal}:</b><br>
-                       • <b>📦 Self Pickup</b> — free from our kitchen<br>
-                       • <b>🛵 Porter</b> — courier arranged by you
-                     </div>
-                     <div style="margin-top:12px;">
-                       <button type="button" onclick="goToStep(1)" style="background:#2D1A5E;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:0.76rem;font-weight:600;cursor:pointer;">
-                         Change to Self Pickup 📦
-                       </button>
-                     </div>`
                   : isClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🔒</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Not Accepting Orders</div>
@@ -10493,16 +10472,18 @@
           return;
         }
         const cState2 = (menu.orders_closed || {})[meal];
-        const areaCheck2 = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
-        const isRestricted2 = cState2 === "restricted" && !(areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter"));
-        const isClosed = cState2 === true || isRestricted2;
-        if (isRestricted2) {
-          el.textContent = 'Delivery limit reached';
-          el.style.color = '#c0392b';
-          el.style.fontWeight = '600';
-          return;
-        }
+        const isClosed = cState2 === true;
         if (isClosed) { el.textContent = !!(menu.sold_out || {})[meal] ? 'Sold out for today' : 'Not accepting orders'; el.style.color = ''; return; }
+        if (cState2 === "restricted") {
+          const areaCheck2 = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
+          const isLocalOrPickup = areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter");
+          if (!isLocalOrPickup) {
+            el.textContent = 'Delivery full (Pickup/Porter only)';
+            el.style.color = '#c0392b';
+            el.style.fontWeight = '600';
+            return;
+          }
+        }
 
         // For future dates, show the cutoff time as a static label — no countdown needed.
         if (!isToday) {
@@ -12194,11 +12175,25 @@
       const out = [];
       (S.selectedDates || []).forEach(date => {
         const so = (S.menuCache[date] || {}).sold_out || {};
+        const closed = (S.menuCache[date] || {}).orders_closed || {};
         ["Breakfast", "Lunch", "Dinner"].forEach(meal => {
           const mObj = S.orders[date] && S.orders[date][meal];
           if (!mObj || mObj.subtotal <= 0) return;
-          if (!so[meal]) return;
+          const isRestricted = closed[meal] === "restricted";
+          if (!so[meal] && !isRestricted) return;
           const addr = getMealAddr(meal) || {};
+          const a = String((addr && addr.area) || (S.profile && S.profile.area) || "").toLowerCase();
+          const isPickupOrPorter = a.indexOf("pickup") !== -1 || a === "porter";
+          const isBhosaleOrTriveni = a.includes("bhosale") || a.includes("triveni");
+
+          if (isRestricted) {
+            // When restricted (Except Bhosale/Triveni), Bhosale/Triveni and Pickup/Porter deliver normally;
+            // distant areas are offered Self Pickup or Porter via _deliveryFullDialog.
+            if (isPickupOrPorter || isBhosaleOrTriveni) return;
+            out.push({ date, meal, society: addr.society || S.profile.society || "", isRestricted: true });
+            return;
+          }
+
           // Enkin / pickup / porter / free area / ≥ threshold still get delivery → not flagged.
           // Same predicate the menu cap-full banner uses, so the two never disagree.
           if (_mealKeepsDeliveryAtCap(meal, addr, mObj.subtotal)) return;
@@ -12216,7 +12211,7 @@
         // (>= CAP_BYPASS_MIN[meal] meals are skipped by _soldOutDeliveryMealsInCart), so
         // show exactly how much more each needs to qualify for delivery anyway.
         const _bypassTips = mealsList
-          .filter(x => x.meal !== "Breakfast")
+          .filter(x => x.meal !== "Breakfast" && !x.isRestricted)
           .map(x => {
             const _sub = (S.orders[x.date] && S.orders[x.date][x.meal] && S.orders[x.date][x.meal].subtotal) || 0;
             const _min = CAP_BYPASS_MIN[x.meal] || 200;
@@ -12328,7 +12323,7 @@
         (_rd.results || []).forEach(x => { _reach[x.date + "|" + x.meal] = x.reachable; });
       } catch (_) {}
       _capCheckOverlay(false);
-      const _blocked = _soldOut.filter(x => !_reach[x.date + "|" + x.meal]);
+      const _blocked = _soldOut.filter(x => x.isRestricted || !_reach[x.date + "|" + x.meal]);
       if (!_blocked.length) return true; // every capped meal is already on our delivery route
       const choice = await _deliveryFullDialog(_blocked);
       if (choice === "cancel" || !choice) return false;
