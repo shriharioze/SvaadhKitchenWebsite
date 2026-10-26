@@ -487,6 +487,20 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **Vault Admin Customer Tab & Customer Detail Ultra-Fast Speed Optimization (CODE_VERSION 36.13, ADMIN_VERSION v26.10.26.02)**
+  - **Core Problem Solved:**
+    - Previously, opening the Customers tab (getCustomerList) and clicking individual customer cards (getCustomerHistory) both called getOrdersInRangeWithArchive('2024-01-01', today).
+    - This crawled Google Drive and sequentially opened 34 archive spreadsheets via SpreadsheetApp.openById(...), taking > 60 seconds and causing HTTP timeouts (504 Gateway / read operation timed out).
+  - **Backend Optimizations (04_Reports_Misc.gs & Code.gs):**
+    - **Chunked CacheService (_putChunkedCache, _getChunkedCache, _clearChunkedCache):** Chunks data into 90KB segments to safely work within Google Apps Script's 100KB per-key limit.
+    - **Fast getCustomerList(force):** Directly queries active live sheets (SK_Orders + LS_Orders in master spreadsheet) and SK_Customers in ~1.5s (down from >60s!). Caches customer list in chunked cache for 15 minutes, serving repeat requests in ~30ms.
+    - **Fast getCustomerHistory(phone, force):** Scans live SK_Orders and LS_Orders directly (~0.8s), only searching recent archives if customer's registration date strictly predates live orders window, bounded to at most 3 latest archive files (_readArchivedOrdersForPhone). Caches per-customer history in script cache for 10 minutes.
+    - **Cache Invalidation:** Automatically invalidates admin_cust_list and cust_hist_<phone> when mutating customer profiles via toggleFnF, toggleFeeExempt, and adminAddCustomer.
+  - **Frontend Instant Load & Optimistic Preview (docs/Admin/vault_admin.html):**
+    - **0ms Warm Start on Frame 1:** loadCustomers() synchronously reads localStorage key sk_admin_cust_cache on cold start, rendering customer list immediately on frame 1 without a blocking spinner, while silently synchronizing fresh updates in the background.
+    - **Hover Prefetch (prefetchCustomerDetail):** Tying onmouseenter='prefetchCustomerDetail(phone)' to customer cards initiates background fetch during the natural ~200-400ms mouse hover before clicking, enabling instant 0ms card expansion.
+    - **Optimistic Detail Preview:** When a customer card is clicked, renders an instant 0ms optimistic header with Name, Phone, Area, VIP chips, and spent stats directly from _custData while order history loads.
+    - **1-Click Force Refresh:** Refined top Refresh button to pass force=true, bypassing all local and server caches when real-time sheet sync is desired.
 - **Liviano-Serio (LS) Performance Parity & Amazon-Style Direct Landing (CODE_VERSION 36.12, APP_VERSION v26.10.26.02)**
   - **Zero-Latency Direct Landing on Step 3 (Calendar / Page 3 in `docs/Liviano-Serio.html`):**
     - Returning logged-in customers with saved credentials and address land directly on Select Dates (Page 3) on frame 1 in 0ms via synchronous local profile restore (`sk_profile_ls` / `sk_profile`), completely bypassing Phone (Page 1) and Address (Page 2) with zero flashing or blocking spinners.

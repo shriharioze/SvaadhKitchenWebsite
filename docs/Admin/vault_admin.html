@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.26.01">
+  <meta name="app-version" content="v26.10.26.02">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -1829,7 +1829,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
 
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
           <input class="cust-search" type="text" id="custSearch" placeholder="🔍 Search by name or phone…" oninput="_dbCustSearch()">
-          <button class="btn-primary" onclick="loadCustomers()">↺ Refresh</button>
+          <button class="btn-primary" onclick="loadCustomers(true)">↺ Refresh</button>
           <button class="btn-primary" style="background:#16a34a; border-color:#16a34a;" onclick="openNewCustomerModal()">➕ New Customer</button>
           <button class="btn-primary" style="background:#8e44ad; border-color:#8e44ad;" onclick="whitelistNewVIP()">🌟 Whitelist VIP Number</button>
           <button class="btn-primary" style="background:#1e5fa8; border-color:#1e5fa8;" onclick="whitelistOnAccount()">💳 Manage On Account</button>
@@ -2386,7 +2386,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.26.01";
+    const ADMIN_VERSION = "v26.10.26.02";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -6568,6 +6568,7 @@ async function _saveNewCust(openOrder, overlay) {
     } else {
       _custData.unshift(newCustObj);
     }
+    try { localStorage.setItem("sk_admin_cust_cache", JSON.stringify(_custData)); } catch(e) {}
 
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     toast("✅ Customer registered successfully!");
@@ -6590,26 +6591,50 @@ async function loadCustomers(force = false, silent = false) {
     applyCustomerFilters();
     return;
   }
+
+  // Instant 0ms warm start from localStorage on cold boot
+  if (!_custDataLoaded && !force) {
+    try {
+      const localCached = localStorage.getItem("sk_admin_cust_cache");
+      if (localCached) {
+        const parsed = JSON.parse(localCached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          _custData = parsed;
+          _custDataLoaded = true;
+          applyCustomerFilters();
+          silent = true; // Silently sync fresh from server in background without blanking UI
+        }
+      }
+    } catch(e) {}
+  }
+
   const el = document.getElementById("custGridWrap");
   if (!silent && el) {
     el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   }
   const detailWrap = document.getElementById("custDetailWrap");
-  if (detailWrap) detailWrap.innerHTML = "";
-  const custSrch = document.getElementById("custSearch");
-  if (custSrch) custSrch.value = "";
-  _custPayFilter = "all";
-  _custSortKey   = "recent";
-  ["cpf-all","cpf-pending","cpf-paid"].forEach(id=>document.getElementById(id)?.classList.remove("sel"));
-  document.getElementById("cpf-all")?.classList.add("sel");
-  ["csort-recent","csort-name","csort-spent","csort-pending"].forEach(id=>document.getElementById(id)?.classList.remove("sel"));
-  document.getElementById("csort-recent")?.classList.add("sel");
+  if (!silent && detailWrap) detailWrap.innerHTML = "";
+  if (!silent) {
+    const custSrch = document.getElementById("custSearch");
+    if (custSrch) custSrch.value = "";
+    _custPayFilter = "all";
+    _custSortKey   = "recent";
+    ["cpf-all","cpf-pending","cpf-paid"].forEach(id=>document.getElementById(id)?.classList.remove("sel"));
+    document.getElementById("cpf-all")?.classList.add("sel");
+    ["csort-recent","csort-name","csort-spent","csort-pending"].forEach(id=>document.getElementById(id)?.classList.remove("sel"));
+    document.getElementById("csort-recent")?.classList.add("sel");
+  }
+
   try {
-    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}&_t=${Date.now()}`);
+    const url = `${APPS_SCRIPT_URL}?action=getCustomerList&pin=${S.sessionPin}${force ? '&force=1' : ''}&_t=${Date.now()}`;
+    const data = await safeFetchJson(url);
     if (!data.success) throw new Error(data.error);
     _custData = data.customers;
     _custDataLoaded = true;
     _backgroundLoadSuccess.customers = true;
+    try {
+      localStorage.setItem("sk_admin_cust_cache", JSON.stringify(_custData));
+    } catch(e) {}
     applyCustomerFilters();
     loadIACustomers();   // load IA / Intent employees alongside regular customers
   } catch(e) {
@@ -6664,7 +6689,7 @@ function renderCustomerGrid(list) {
     return;
   }
   el.innerHTML = `<div class="cust-grid">${list.map(c=>`
-    <div class="cust-card" onclick="loadCustomerDetail('${c.phone}')">
+    <div class="cust-card" onclick="loadCustomerDetail('${c.phone}')" onmouseenter="prefetchCustomerDetail('${c.phone}')">
       <div class="cust-card-name">
         ${c.name} 
         ${c.Fee_Exempt === 'Yes' ? '<span class="vip-chip">🌟 VIP</span>' : ''}
@@ -6679,10 +6704,48 @@ function renderCustomerGrid(list) {
       ${c.pendingAmt>0?`<div class="pending-tag">⏳ ${fmtM(c.pendingAmt)} pending</div>`:""}
     </div>`).join("")}</div>`;
 }
+
 const _custDetailCache = {}; // in-memory cache: phone -> { data, ts }
-async function loadCustomerDetail(phone) {
+const _custPrefetchInFlight = {}; // phone -> Promise
+
+function prefetchCustomerDetail(phone) {
+  if (!phone || !S.sessionPin) return;
+  const _ttl = 5 * 60 * 1000;
+  const cached = _custDetailCache[phone];
+  if (cached && (Date.now() - cached.ts) < _ttl) return;
+  if (_custPrefetchInFlight[phone]) return;
+  _custPrefetchInFlight[phone] = safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}&_t=${Date.now()}`)
+    .then(data => {
+      if (data && data.success) {
+        _custDetailCache[phone] = { data, ts: Date.now() };
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      delete _custPrefetchInFlight[phone];
+    });
+}
+
+function _wireCustomerDetailButtons(wrap) {
+  if (!wrap) return;
+  wrap.querySelectorAll('.qe-place-btn').forEach(btn => {
+    btn.onclick = () => {
+      const ph   = btn.dataset.phone;
+      const nm   = btn.dataset.name;
+      const itms = btn.dataset.items;
+      const fn   = btn.dataset.favname;
+      const mt   = btn.dataset.meal;
+      quickOrderStandard(ph, nm, itms, fn, mt);
+    };
+  });
+}
+
+async function loadCustomerDetail(phone, force = false) {
   const wrap = document.getElementById("custDetailWrap");
   const _ttl = 5 * 60 * 1000;
+  if (force) {
+    delete _custDetailCache[phone];
+  }
   const cached = _custDetailCache[phone];
   if (cached && (Date.now() - cached.ts) < _ttl) {
     window._currentCustDetail = cached.data;
@@ -6690,42 +6753,62 @@ async function loadCustomerDetail(phone) {
     if (typeof window.renderBulkCalendar === 'function') window.renderBulkCalendar();
     if (typeof window.renderBulkMealPanels === 'function') window.renderBulkMealPanels();
     if (typeof window.updateBulkSummary === 'function') window.updateBulkSummary();
-    wrap.querySelectorAll('.qe-place-btn').forEach(btn => {
-      btn.onclick = () => {
-        const ph   = btn.dataset.phone;
-        const nm   = btn.dataset.name;
-        const itms = btn.dataset.items;
-        const fn   = btn.dataset.favname;
-        const mt   = btn.dataset.meal;
-        quickOrderStandard(ph, nm, itms, fn, mt);
-      };
-    });
+    _wireCustomerDetailButtons(wrap);
     wrap.scrollIntoView({behavior:"smooth", block:"start"});
     return;
   }
-  wrap.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
-  wrap.scrollIntoView({behavior:"smooth", block:"start"});
+
+  // Instant 0ms optimistic preview if customer exists in _custData
+  const custPreview = Array.isArray(_custData) ? _custData.find(c => c.phone === phone) : null;
+  if (custPreview) {
+    const fmtM = v => `₹${Number(v || 0).toLocaleString("en-IN")}`;
+    wrap.innerHTML = `
+      <div class="cust-detail-card" style="padding:16px 20px;border-radius:12px;background:var(--card-bg);border:1px solid var(--border);margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-size:1.15rem;font-weight:700;">${custPreview.name || 'Customer'}
+              ${custPreview.Fee_Exempt === 'Yes' ? '<span class="vip-chip">🌟 VIP</span>' : ''}
+              ${custPreview.onAccount === 'Yes' ? '<span class="on-account-chip">💳 On Account</span>' : ''}
+            </div>
+            <div style="font-size:.85rem;color:var(--muted);margin-top:2px;">📱 ${custPreview.phone} &nbsp;·&nbsp; ${custPreview.area || 'No Area'}</div>
+          </div>
+          <div style="display:flex;gap:12px;font-size:.82rem;">
+            <div><strong>${custPreview.orderCount || 0}</strong> orders</div>
+            <div><strong>${fmtM(custPreview.totalSpent)}</strong> total</div>
+            ${custPreview.pendingAmt > 0 ? `<div style="color:var(--amber);font-weight:700;">⏳ ${fmtM(custPreview.pendingAmt)} pending</div>` : ''}
+          </div>
+        </div>
+        <div style="text-align:center;padding:24px 0 12px 0;">
+          <div class="spinner" style="margin:0 auto 10px auto;"></div>
+          <div style="font-size:.82rem;color:var(--muted);">Loading complete order history & options...</div>
+        </div>
+      </div>`;
+    wrap.scrollIntoView({behavior:"smooth", block:"start"});
+  } else {
+    wrap.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+    wrap.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+
   try {
-    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}&_t=${Date.now()}`);
-    if (!data.success) throw new Error(data.error);
+    let data;
+    if (!force && _custPrefetchInFlight[phone]) {
+      await _custPrefetchInFlight[phone];
+      if (_custDetailCache[phone]) {
+        data = _custDetailCache[phone].data;
+      }
+    }
+    if (!data) {
+      const url = `${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}${force ? '&force=1' : ''}&_t=${Date.now()}`;
+      data = await safeFetchJson(url);
+    }
+    if (!data || !data.success) throw new Error((data && data.error) || "Failed to load customer history");
     _custDetailCache[phone] = { data, ts: Date.now() };
     window._currentCustDetail = data;
     wrap.innerHTML = renderCustomerDetail(data);
-    // Render bulk calendar & meal panels now that the DOM elements exist
     if (typeof window.renderBulkCalendar === 'function') window.renderBulkCalendar();
     if (typeof window.renderBulkMealPanels === 'function') window.renderBulkMealPanels();
     if (typeof window.updateBulkSummary === 'function') window.updateBulkSummary();
-    // Wire up ⚡ Place buttons via event delegation (avoids HTML escaping issues)
-    wrap.querySelectorAll('.qe-place-btn').forEach(btn => {
-      btn.onclick = () => {
-        const ph   = btn.dataset.phone;
-        const nm   = btn.dataset.name;
-        const itms = btn.dataset.items;
-        const fn   = btn.dataset.favname;
-        const mt   = btn.dataset.meal;
-        quickOrderStandard(ph, nm, itms, fn, mt);
-      };
-    });
+    _wireCustomerDetailButtons(wrap);
   } catch(e) {
     wrap.innerHTML = `<p style="color:var(--red);padding:16px;">Error: ${e.message}</p>`;
   }

@@ -722,7 +722,8 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
     }
     if (action === "getCustomerList") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
-      return jsonRes(getCustomerList());
+      var force = (p.force === "1" || p.force === "true");
+      return jsonRes(getCustomerList(force));
     }
     if (action === "adminAddCustomer") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
@@ -740,11 +741,14 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
         billingCycle: p.billingCycle || "Daily"
       };
       _upsertCustomer(getSpreadsheet(), profile);
+      if (typeof _clearChunkedCache === "function") _clearChunkedCache("admin_cust_list");
+      try { CacheService.getScriptCache().remove("cust_hist_" + _normalizePhone(p.phone)); } catch(_) {}
       return jsonRes({success: true, profile: profile});
     }
     if (action === "getCustomerHistory") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
-      return jsonRes(getCustomerHistory(p.phone));
+      var force = (p.force === "1" || p.force === "true");
+      return jsonRes(getCustomerHistory(p.phone, force));
     }
     if (action === "toggleFnF") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
@@ -992,7 +996,8 @@ function doPost(e) {
     // Admin-only read: returns all customer profiles + wallet balances
     if (action === "getCustomerList") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
-      return jsonRes(getCustomerList());
+      var force = (body.force === "1" || body.force === true || body.force === "true");
+      return jsonRes(getCustomerList(force));
     }
     
     // Delivery Actions (Staff PIN ONLY)
@@ -1040,6 +1045,8 @@ function doPost(e) {
         billingCycle: body.billingCycle || "Daily"
       };
       _upsertCustomer(getSpreadsheet(), profile);
+      if (typeof _clearChunkedCache === "function") _clearChunkedCache("admin_cust_list");
+      try { CacheService.getScriptCache().remove("cust_hist_" + _normalizePhone(body.phone)); } catch(_) {}
       return jsonRes({success: true, profile: profile});
     }
     if (action === "markEnRoute") {

@@ -469,9 +469,11 @@ function _autoSettlePendingOrders(phone) {
 // ── WALLET HELPER ──────────────────────────────────────────
 function _calculateWalletBalance(phone, preloadedRows, storefront) {
   if (!phone) return 0;
-  const ss = getSpreadsheet();
-  const ws = (typeof _walletTabFor === "function") ? _walletTabFor(ss, storefront) : getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
-  const rows = Array.isArray(preloadedRows) ? preloadedRows : getAllRows(ws);
+  var rows = Array.isArray(preloadedRows) ? preloadedRows : (function() {
+    var ss = getSpreadsheet();
+    var ws = (typeof _walletTabFor === "function") ? _walletTabFor(ss, storefront) : getOrCreateTab(ss, TAB_WALLET, WALLET_HEADERS);
+    return getAllRows(ws);
+  })();
 
   let balance = 0;
   const pStr = _normalizePhone(phone);
