@@ -5213,7 +5213,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.26.05";
+    const APP_VERSION = "v26.10.26.06";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10267,10 +10267,70 @@
         S.closedMealReasons  = S.closedMealReasons || {};
       }
     }
+    // ── SPECULATIVE PREFETCH CACHES (1A & 1C) ─────────────────────
+    const _menuPrefetchInFlight = {}; // Map of dateStr -> Promise
+    let _dayTotalsPromise = null;
+    let _dayTotalsCache = null;
+    let _dayTotalsKey = "";
+    let _dayTotalsFetchedAt = 0;
+
+    function _prefetchMenuForDate(ds) {
+      if (!ds) return;
+      const _menuTTL = 45 * 1000;
+      const _nowMs = Date.now();
+      const c = S.menuCache && S.menuCache[ds];
+      if (c && c._fetchedAt && (_nowMs - c._fetchedAt) < _menuTTL) return;
+      if (_menuPrefetchInFlight[ds]) return; // already in flight
+
+      _menuPrefetchInFlight[ds] = apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${ds}&_t=${Date.now()}`, {}, { silent: true })
+        .then(res => res.json())
+        .then(data => {
+          const m = (data && data[ds]) || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+          m._fetchedAt = Date.now();
+          if (!S.menuCache) S.menuCache = {};
+          S.menuCache[ds] = m;
+        })
+        .catch(err => {
+          console.warn('[_prefetchMenuForDate] Failed for', ds, err);
+        })
+        .finally(() => {
+          delete _menuPrefetchInFlight[ds];
+        });
+    }
+
+    function _prefetchDayTotals() {
+      if (!S.phone || !S.selectedDates || !S.selectedDates.length) return;
+      const datesKey = S.selectedDates.slice().sort().join(',');
+      const _ttl = 60 * 1000;
+      if (_dayTotalsKey === datesKey && _dayTotalsCache && (Date.now() - _dayTotalsFetchedAt) < _ttl) return;
+      if (_dayTotalsPromise && _dayTotalsKey === datesKey) return;
+
+      _dayTotalsKey = datesKey;
+      _dayTotalsPromise = (async () => {
+        try {
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getDayTotalsForDates&phone=${encodeURIComponent(S.phone)}&dates=${encodeURIComponent(datesKey)}`, {}, { silent: true });
+          const data = await res.json();
+          _dayTotalsCache = (data && data.dayTotals) || {};
+          _dayTotalsFetchedAt = Date.now();
+          return _dayTotalsCache;
+        } catch (e) {
+          console.warn('[_prefetchDayTotals] error:', e);
+          _dayTotalsCache = {};
+          return {};
+        }
+      })();
+    }
+
     function toggleDate(ds) {
       const idx = S.selectedDates.indexOf(ds);
-      if (idx >= 0) { S.selectedDates.splice(idx, 1); delete S.orders[ds]; }
-      else { S.selectedDates.push(ds); S.selectedDates.sort(); }
+      if (idx >= 0) {
+        S.selectedDates.splice(idx, 1);
+        delete S.orders[ds];
+      } else {
+        S.selectedDates.push(ds);
+        S.selectedDates.sort();
+        _prefetchMenuForDate(ds); // [1A] Speculative prefetch on date tap
+      }
       renderCalendar();
     }
     function updateDateSummary() {
@@ -10284,32 +10344,8 @@
     // ═══════════════════════════════════════════════════════════
     async function loadMealScreen() {
       $("mealSelectionContent").innerHTML = `<div class="loader"><div class="spinner"></div><p style="font-size:0.78rem;color:#888;margin-top:4px;">${t('loading_menu')}</p></div>`;
-      // Refetch a date's menu if it's missing OR older than 45s — so admin changes
-      // (sold-out items, delivery caps) reach a customer who's had the page open a while,
-      // instead of being stuck on the once-per-session in-memory copy.
-      const _menuTTL = 45 * 1000;
-      const _nowMs = Date.now();
-      const datesToFetch = S.selectedDates.filter(d => {
-        const c = S.menuCache[d];
-        return !c || !c._fetchedAt || (_nowMs - c._fetchedAt) > _menuTTL;
-      });
-      if (datesToFetch.length > 0) {
-        try {
-          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${datesToFetch.join(',')}&_t=${Date.now()}`);
-          const data = await res.json();
-          datesToFetch.forEach(d => {
-            const m = data[d] || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
-            m._fetchedAt = Date.now();
-            S.menuCache[d] = m;
-          });
-        } catch (fetchErr) {
-          console.error('[DEBUG] batch fetch failed for', datesToFetch, fetchErr);
-          datesToFetch.forEach(d => {
-            // On error, KEEP any existing (stale) menu rather than wiping it to empty.
-            if (!S.menuCache[d]) S.menuCache[d] = { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
-          });
-        }
-      }
+
+      // Pre-initialize S.orders for selected dates so address information is ready for checkActiveBreakfastStops
       S.selectedDates.forEach(date => {
         if (!S.orders[date]) {
           const def = { area: S.profile.area, wing: S.profile.wing, flat: S.profile.flat, floor: S.profile.floor, society: S.profile.society, maps: S.profile.maps, landmark: S.profile.landmark };
@@ -10320,9 +10356,51 @@
           };
         }
       });
-      await checkActiveBreakfastStops();
+
+      // [1B] Run getMenuBatch and checkActiveBreakfastStops in parallel via Promise.all
+      const menuLoadPromise = (async () => {
+        // [1A] Await any in-flight speculative prefetches triggered when user tapped calendar dates
+        const inFlight = S.selectedDates.map(d => _menuPrefetchInFlight[d]).filter(Boolean);
+        if (inFlight.length > 0) {
+          await Promise.all(inFlight);
+        }
+
+        // Refetch a date's menu if it's missing OR older than 45s — so admin changes
+        // (sold-out items, delivery caps) reach a customer who's had the page open a while,
+        // instead of being stuck on the once-per-session in-memory copy.
+        const _menuTTL = 45 * 1000;
+        const _nowMs = Date.now();
+        const datesToFetch = S.selectedDates.filter(d => {
+          const c = S.menuCache[d];
+          return !c || !c._fetchedAt || (_nowMs - c._fetchedAt) > _menuTTL;
+        });
+        if (datesToFetch.length > 0) {
+          try {
+            const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${datesToFetch.join(',')}&_t=${Date.now()}`);
+            const data = await res.json();
+            datesToFetch.forEach(d => {
+              const m = data[d] || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+              m._fetchedAt = Date.now();
+              S.menuCache[d] = m;
+            });
+          } catch (fetchErr) {
+            console.error('[DEBUG] batch fetch failed for', datesToFetch, fetchErr);
+            datesToFetch.forEach(d => {
+              // On error, KEEP any existing (stale) menu rather than wiping it to empty.
+              if (!S.menuCache[d]) S.menuCache[d] = { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+            });
+          }
+        }
+      })();
+
+      const bfCheckPromise = checkActiveBreakfastStops();
+
+      await Promise.all([menuLoadPromise, bfCheckPromise]);
       buildDateTabs();
       renderMealContent(S.selectedDates[0]);
+
+      // [1C] Speculatively prefetch combined-day totals in background so Step 5 (Bill) opens in 0ms
+      _prefetchDayTotals();
     }
     function buildDateTabs() {
       $("dateTabsWrap").innerHTML = S.selectedDates.map((date, i) => `
@@ -10796,6 +10874,7 @@
       for (const [colKey, qty] of Object.entries(mObj.items)) { if (qty <= 0) continue; sub += getPrice(colKey, meal, date) * qty; }
       mObj.subtotal = sub;
       _persistCart();
+      _prefetchDayTotals();
     }
 
     // ── CART PERSISTENCE (sessionStorage) ───────────────────────
@@ -10804,6 +10883,9 @@
     function _restoreCart() { return false; }
     function _clearCart() {
       try { sessionStorage.removeItem('sk_cart_v2'); } catch(e) {}
+      _dayTotalsCache = null;
+      _dayTotalsPromise = null;
+      _dayTotalsKey = "";
     }
 
     async function promptResetCart() {
@@ -11203,14 +11285,26 @@
       wrap.style.display = "block";
       $("billSummaryContent").innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner"></div><p style="font-size:0.78rem;color:#888;margin-top:6px;">Building your summary…</p></div>`;
 
-      // Fetch existing orders for all selected dates (for combined-day billing logic)
+      // [1C] Use prefetched existing orders for all selected dates (for combined-day billing logic)
       let existingDayTotals = {};
-      try {
-        const dates = S.selectedDates.join(',');
-        const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getDayTotalsForDates&phone=${S.phone}&dates=${encodeURIComponent(dates)}`);
-        const data = await res.json();
-        existingDayTotals = data.dayTotals || {};
-      } catch (e) { /* non-fatal: fall back to no existing orders */ }
+      const datesKey = S.selectedDates.slice().sort().join(',');
+      const _ttl = 60 * 1000;
+      if (_dayTotalsCache && _dayTotalsKey === datesKey && (Date.now() - _dayTotalsFetchedAt) < _ttl) {
+        existingDayTotals = _dayTotalsCache;
+      } else if (_dayTotalsPromise && _dayTotalsKey === datesKey) {
+        try {
+          existingDayTotals = await _dayTotalsPromise;
+        } catch (_) { existingDayTotals = {}; }
+      } else {
+        try {
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getDayTotalsForDates&phone=${encodeURIComponent(S.phone)}&dates=${encodeURIComponent(datesKey)}`);
+          const data = await res.json();
+          existingDayTotals = (data && data.dayTotals) || {};
+          _dayTotalsCache = existingDayTotals;
+          _dayTotalsKey = datesKey;
+          _dayTotalsFetchedAt = Date.now();
+        } catch (e) { /* non-fatal: fall back to no existing orders */ }
+      }
 
       // ── Streak progress badge ──────────────────────────────────────────────
       {
@@ -12768,6 +12862,9 @@
 
     function showSuccess(id, skipVerifyModal) {
       if (id) S.lastOrderId = id;
+      _dayTotalsCache = null;
+      _dayTotalsPromise = null;
+      _dayTotalsKey = "";
       // Record what was just placed so Manage Orders can confirm it shows up —
       // and re-read if Google Sheets hasn't propagated the write yet. This kills
       // the "I don't see my order → place it again → duplicate warning" loop.
