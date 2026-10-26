@@ -487,6 +487,21 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **Liviano-Serio (LS) Performance Parity & Amazon-Style Direct Landing (CODE_VERSION 36.12, APP_VERSION v26.10.26.02)**
+  - **Zero-Latency Direct Landing on Step 3 (Calendar / Page 3 in `docs/Liviano-Serio.html`):**
+    - Returning logged-in customers with saved credentials and address land directly on Select Dates (Page 3) on frame 1 in 0ms via synchronous local profile restore (`sk_profile_ls` / `sk_profile`), completely bypassing Phone (Page 1) and Address (Page 2) with zero flashing or blocking spinners.
+    - Background session verification runs silently (`lookupCustomer({ silent: true })`) without intrusive loaders, keeping wallet balance and server notices up-to-date.
+    - Step 1 address saves immediately update local cache, and `logoutCustomer()` cleanly removes cached credentials and profiles.
+  - **1A: Speculative Menu Prefetch on Calendar Date Tap (`toggleDate` in `docs/Liviano-Serio.html`):**
+    - Tapping/selecting any date on Step 3 immediately fires `_prefetchMenuForDate(ds)` with `{ silent: true }` and `&storefront=LS`.
+    - Tracks in-flight promises via `_menuPrefetchInFlight[ds]` so that Step 4 (Meals) opens in 0ms with zero wait.
+  - **1B: Fast Meal Screen Loading (`loadMealScreen` in `docs/Liviano-Serio.html`):**
+    - Pre-initializes `S.orders[date]` and awaits any in-flight speculative prefetches before rendering meal content.
+  - **1C: Background Prefetch of Combined Day Totals (`_prefetchDayTotals` in `docs/Liviano-Serio.html`):**
+    - Prefetches `getDayTotalsForDates` in the background with a 60s TTL during meal customization and cart modifications (`recalcSubtotal`).
+    - When customer taps "Review Order", `buildBillScreen()` consumes `_dayTotalsCache` directly in 0ms, eliminating the "Building your summary…" spinner delay.
+  - **Success Screen '🏠 Go Back to Home' CTA:**
+    - Cleanly wired to `resetForAnotherOrder()`, resetting cart state and returning customers directly to Page 3 (Select Dates), while properly redirecting to `Liviano-Serio.html` if returning from payment gateways.
 - **Success Page 'Go Back to Home' CTA (CODE_VERSION 36.11, APP_VERSION v26.10.26.07 / v26.10.26.01)**
   - **Clarity & Friction Reduction (`docs/order.html` & `docs/Liviano-Serio.html`):**
     - Replaced confusing `+ Place Another Order` button on the order confirmation screen with a clear, welcoming `🏠 Go Back to Home` action.

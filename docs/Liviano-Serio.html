@@ -5072,7 +5072,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.26.01";
+    const APP_VERSION = "v26.10.26.02";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -8709,6 +8709,11 @@
           email: ($("emailInput")?.value || S.profile.email || "").trim(),
           _action: "upsertProfile", storefront: STOREFRONT
         };
+        try {
+          const profData = { ...S.profile, ...profile };
+          localStorage.setItem('sk_profile_ls', JSON.stringify(profData));
+          localStorage.setItem('sk_profile', JSON.stringify(profData));
+        } catch (_) {}
         fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(profile) });
       }
       if (S.step === 2) {
@@ -8990,8 +8995,9 @@
     // ═══════════════════════════════════════════════════════════
     // CUSTOMER LOOKUP
     // ═══════════════════════════════════════════════════════════
-    async function lookupCustomer() {
-      sLoading(true, t('loading_logging_in'));
+    async function lookupCustomer(opts = {}) {
+      const isSilent = !!(opts && opts.silent);
+      if (!isSilent) sLoading(true, t('loading_logging_in'));
       if ($("pinAuthSection")) $("pinAuthSection").style.display = "none";
 
       // ── FAST AUTO-LOGIN ──────────────────────────────────────────────
@@ -9007,9 +9013,23 @@
           try {
             const rv = await fetch(`${APPS_SCRIPT_URL}?action=verifyLogin&phone=${S.phone}&pin=${_sp}&storefront=LS`);
             const vd = await rv.json();
-            if (vd.success) { handleLoginSuccess(vd.profile, false); if (vd.notice) _showLoginNotice(vd.notice, S.phone); return; }
+            if (vd.success) {
+              handleLoginSuccess(vd.profile, false, isSilent);
+              if (vd.notice) _showLoginNotice(vd.notice, S.phone);
+              return;
+            }
             localStorage.removeItem('sk_logged_in_pin'); // stale PIN → fall through to normal flow
-          } catch (e) { /* network blip → fall through to normal getCustomer path */ }
+            localStorage.removeItem('sk_profile_ls');
+            localStorage.removeItem('sk_profile');
+            if (isSilent) {
+              toast("Your session has expired. Please enter your PIN.", 4000);
+              goToStep(0);
+              return;
+            }
+          } catch (e) {
+            if (isSilent) return; // network blip during silent verify -> keep cached state
+            /* network blip → fall through to normal getCustomer path */
+          }
         }
       }
 
@@ -9025,12 +9045,14 @@
           const resVer = await fetch(`${APPS_SCRIPT_URL}?action=verifyLogin&phone=${S.phone}&pin=${savedPin}&storefront=LS`);
           const verData = await resVer.json();
           if (verData.success) {
-            handleLoginSuccess(verData.profile, false);
+            handleLoginSuccess(verData.profile, false, isSilent);
             if (verData.notice) _showLoginNotice(verData.notice, S.phone);
             return;
           } else {
             // Bad saved PIN, clear it
             localStorage.removeItem('sk_logged_in_pin');
+            localStorage.removeItem('sk_profile_ls');
+            localStorage.removeItem('sk_profile');
           }
         }
 
@@ -9038,34 +9060,6 @@
         sLoading(false);
 
         if (data.hasPin) {
-                 const fn = S.profile.firstName || "Customer";
-        const pc = S.profile.promoCount;
-
-        const isReviewed = (pc === "Exhausted" || (pc !== null && !isNaN(pc) && Number(pc) > 0));
-        const wantPromoHtml = isReviewed ? `
-      <div style="margin-top:4px; font-size:0.72rem; color:#f59e0b; font-weight:700; cursor:pointer;" onclick="window.open('https://g.page/r/CasEH8gGAhzLEBM/review', '_blank')">Thank you for the 5-star rating! ❤️</div>
-    ` : `
-      <div style="margin-top:4px; font-size:0.72rem; color:#f59e0b; font-weight:700; cursor:pointer;" onclick="window.open('https://g.page/r/CasEH8gGAhzLEBM/review', '_blank')">🎁 Want 10% OFF? Click here</div>
-    `;
-
-        $("returningBadge").innerHTML = `<div class="customer-badge">
-      <div class="avatar">${fn.charAt(0).toUpperCase()}</div>
-      <div style="flex:1;">
-        <div class="cname">${t('welcome_back', { name: fn })}</div>
-        <div class="csub">${t('welcome_back_hint')}</div>
-        ${wantPromoHtml}
-      </div></div>
-    </div>`;
-
-        // GLOBAL REVIEW PROMO (Banner Style)
-        const promoBannerHtml = showReviewPromoBanner();
-        if ($("reviewRewardWrap")) $("reviewRewardWrap").innerHTML = promoBannerHtml;
-        if ($("step3ReviewPromo")) $("step3ReviewPromo").innerHTML = promoBannerHtml;
-
-        // Discount details notification
-        if (typeof pc === "number" && pc > 0) {
-          // If they have active credits, we can show a small note too, but the banner above covers it.
-        } "grayscale(100%)";
           S.authMode = "verify";
           const parts = (data.name || "").trim().split(" ");
           const firstName = parts[0] || "";
@@ -9116,8 +9110,8 @@
       }
     }
 
-    function handleLoginSuccess(profileData, isNew) {
-      sLoading(false); // Hide any active "Logging you in" loader
+    function handleLoginSuccess(profileData, isNew, isSilentPreload = false) {
+      if (!isSilentPreload) sLoading(false); // Hide any active "Logging you in" loader
       if ($("authActionsWrap")) $("authActionsWrap").style.display = "flex";
       // Hide header Guide button once logged in — it's now in the action bar
       if ($("headerGuideBtn")) $("headerGuideBtn").style.display = "none";
@@ -9129,7 +9123,9 @@
         const pcVal = profileData.promoCount;
         const pc = (pcVal === null || pcVal === "" || pcVal === undefined) ? null : (isNaN(pcVal) ? pcVal : Number(pcVal));
 
-        toast(`Welcome back, ${fn}! Wallet balance: ₹${wb}`, 3000);
+        if (!isSilentPreload) {
+          toast(`Welcome back, ${fn}! Wallet balance: ₹${wb}`, 3000);
+        }
         updateWalletBalanceUI(wb);
         S.isFirstTime = false;
         S.profile = {
@@ -9150,18 +9146,29 @@
         S.walletBalance = wb;
         S.walletMode = true; // Everyone is on wallet/prepaid mode now
 
-        // Monthly On-Account customers: check for an unpaid previous-month bill
-        // and surface a skippable "settle your bill" modal (once per session).
-        maybeShowOnAccountBill();
+        // Cache profile locally so returning visits can boot directly to Calendar in 0ms (Amazon style)
+        try {
+          if (profileData) {
+            localStorage.setItem('sk_profile_ls', JSON.stringify(profileData));
+            localStorage.setItem('sk_profile', JSON.stringify(profileData));
+          }
+          if (S.phone) localStorage.setItem('sk_logged_in_phone', S.phone);
+        } catch (_) {}
 
-        // Nudge returning customers with no email on file to add one (so they can
-        // self-reset their PIN). Skippable; re-appears next visit until added.
-        setTimeout(function () { try { _maybePromptEmail(); } catch (_) {} }, 1000);
+        if (!isSilentPreload) {
+          // Monthly On-Account customers: check for an unpaid previous-month bill
+          // and surface a skippable "settle your bill" modal (once per session).
+          maybeShowOnAccountBill();
 
-        trackGA("login", {
-          method: "PIN",
-          is_new: !!isNew
-        });
+          // Nudge returning customers with no email on file to add one (so they can
+          // self-reset their PIN). Skippable; re-appears next visit until added.
+          setTimeout(function () { try { _maybePromptEmail(); } catch (_) {} }, 1000);
+
+          trackGA("login", {
+            method: "PIN",
+            is_new: !!isNew
+          });
+        }
 
         const isReviewed = (pc === "Exhausted" || (pc !== null && !isNaN(pc) && Number(pc) > 0));
         const wantPromoHtml = isReviewed ? `
@@ -9196,19 +9203,8 @@
           }
         }
 
-        if (S.step === 0) {
-          // Restore saved cart before navigating forward
-          const cartRestored = _restoreCart();
+        if (S.step === 0 && !isSilentPreload) {
           loadExistingOrders(S.phone);
-          goNext();
-          if (cartRestored) {
-            // Cart was restored — jump straight to meal screen
-            setTimeout(() => {
-              if (S.selectedDates.length && S.step === 1) {
-                toast('🛒 Your previous cart was restored!', 3000);
-              }
-            }, 800);
-          }
         }
       } else {
         S.isFirstTime = true;
@@ -9308,7 +9304,25 @@
       _lsPinSocietyInputs(); // LS storefront — pin society fields after any address prefill
 
       $("btnNext").textContent = t('btn_continue'); $("btnNext").disabled = false;
-      S.step++; updateNav(); window.scrollTo(0, 0);
+
+      // Fast-forward to Calendar (Page 3) if user has a saved address; otherwise stop at Details (Page 2)
+      const hasSavedAddr = !isNew && S.profile && (S.profile.wing || S.profile.society || S.profile.first_name || S.profile.name);
+
+      if (S.step <= 1) {
+        if (hasSavedAddr) {
+          S.step = 2; // Jump directly to Step 3: Select Delivery Dates (Calendar)
+        } else if (S.step === 0) {
+          S.step = 1; // Incomplete profile: go to Step 2: Your Details
+        }
+        updateNav();
+        if (S.step === 2 && typeof renderCalendar === "function") {
+          renderCalendar();
+        }
+        window.scrollTo(0, 0);
+      } else {
+        // Already on a subsequent step (e.g. background session refresh) — just refresh nav
+        updateNav();
+      }
     }
 
     async function logoutCustomer() {
@@ -9324,6 +9338,8 @@
       S.selectedDates = [];
       localStorage.removeItem('sk_logged_in_phone');
       localStorage.removeItem('sk_logged_in_pin');
+      localStorage.removeItem('sk_profile_ls');
+      localStorage.removeItem('sk_profile');
       location.reload();
     }
 
@@ -9706,10 +9722,70 @@
         S.closedMealReasons  = S.closedMealReasons || {};
       }
     }
+    // ── SPECULATIVE PREFETCH CACHES (1A & 1C) ─────────────────────
+    const _menuPrefetchInFlight = {}; // Map of dateStr -> Promise
+    let _dayTotalsPromise = null;
+    let _dayTotalsCache = null;
+    let _dayTotalsKey = "";
+    let _dayTotalsFetchedAt = 0;
+
+    function _prefetchMenuForDate(ds) {
+      if (!ds) return;
+      const _menuTTL = 45 * 1000;
+      const _nowMs = Date.now();
+      const c = S.menuCache && S.menuCache[ds];
+      if (c && c._fetchedAt && (_nowMs - c._fetchedAt) < _menuTTL) return;
+      if (_menuPrefetchInFlight[ds]) return; // already in flight
+
+      _menuPrefetchInFlight[ds] = apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${ds}&_t=${Date.now()}&storefront=LS`, {}, { silent: true })
+        .then(res => res.json())
+        .then(data => {
+          const m = (data && data[ds]) || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
+          m._fetchedAt = Date.now();
+          if (!S.menuCache) S.menuCache = {};
+          S.menuCache[ds] = m;
+        })
+        .catch(err => {
+          console.warn('[_prefetchMenuForDate] Failed for', ds, err);
+        })
+        .finally(() => {
+          delete _menuPrefetchInFlight[ds];
+        });
+    }
+
+    function _prefetchDayTotals() {
+      if (!S.phone || !S.selectedDates || !S.selectedDates.length) return;
+      const datesKey = S.selectedDates.slice().sort().join(',');
+      const _ttl = 60 * 1000;
+      if (_dayTotalsKey === datesKey && _dayTotalsCache && (Date.now() - _dayTotalsFetchedAt) < _ttl) return;
+      if (_dayTotalsPromise && _dayTotalsKey === datesKey) return;
+
+      _dayTotalsKey = datesKey;
+      _dayTotalsPromise = (async () => {
+        try {
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getDayTotalsForDates&phone=${encodeURIComponent(S.phone)}&dates=${encodeURIComponent(datesKey)}&storefront=LS`, {}, { silent: true });
+          const data = await res.json();
+          _dayTotalsCache = (data && data.dayTotals) || {};
+          _dayTotalsFetchedAt = Date.now();
+          return _dayTotalsCache;
+        } catch (e) {
+          console.warn('[_prefetchDayTotals] error:', e);
+          _dayTotalsCache = {};
+          return {};
+        }
+      })();
+    }
+
     function toggleDate(ds) {
       const idx = S.selectedDates.indexOf(ds);
-      if (idx >= 0) { S.selectedDates.splice(idx, 1); delete S.orders[ds]; }
-      else { S.selectedDates.push(ds); S.selectedDates.sort(); }
+      if (idx >= 0) {
+        S.selectedDates.splice(idx, 1);
+        delete S.orders[ds];
+      } else {
+        S.selectedDates.push(ds);
+        S.selectedDates.sort();
+        _prefetchMenuForDate(ds); // [1A] Speculative prefetch on date tap
+      }
       renderCalendar();
     }
     function updateDateSummary() {
@@ -9723,6 +9799,26 @@
     // ═══════════════════════════════════════════════════════════
     async function loadMealScreen() {
       $("mealSelectionContent").innerHTML = `<div class="loader"><div class="spinner"></div><p style="font-size:0.78rem;color:#888;margin-top:4px;">${t('loading_menu')}</p></div>`;
+
+      // Pre-initialize S.orders for selected dates so address information is ready
+      S.selectedDates.forEach(date => {
+        if (!S.orders[date]) {
+          const def = { area: S.profile.area, wing: S.profile.wing, flat: S.profile.flat, floor: S.profile.floor, society: S.profile.society, maps: S.profile.maps, landmark: S.profile.landmark };
+          S.orders[date] = {
+            Breakfast: { items: {}, notes: "", subtotal: 0, bfItems: [], ...def },
+            Lunch: { items: {}, notes: "", subtotal: 0, ...def },
+            Dinner: { items: {}, notes: "", subtotal: 0, ...def },
+          };
+        }
+      });
+
+      // [1B] Fast menu loading with in-flight prefetch await
+      // [1A] Await any in-flight speculative prefetches triggered when user tapped calendar dates
+      const inFlight = S.selectedDates.map(d => _menuPrefetchInFlight[d]).filter(Boolean);
+      if (inFlight.length > 0) {
+        await Promise.all(inFlight);
+      }
+
       // Refetch a date's menu if it's missing OR older than 45s — so admin changes
       // (sold-out items, delivery caps) reach a customer who's had the page open a while,
       // instead of being stuck on the once-per-session in-memory copy.
@@ -9734,7 +9830,7 @@
       });
       if (datesToFetch.length > 0) {
         try {
-          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${datesToFetch.join(',')}&_t=${Date.now()}`);
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenuBatch&dates=${datesToFetch.join(',')}&_t=${Date.now()}&storefront=LS`);
           const data = await res.json();
           datesToFetch.forEach(d => {
             const m = data[d] || { breakfast: [], lunch_dry: "", lunch_curry: "", dinner_dry: "", dinner_curry: "", cutoff_overrides: {} };
@@ -9749,18 +9845,12 @@
           });
         }
       }
-      S.selectedDates.forEach(date => {
-        if (!S.orders[date]) {
-          const def = { area: S.profile.area, wing: S.profile.wing, flat: S.profile.flat, floor: S.profile.floor, society: S.profile.society, maps: S.profile.maps, landmark: S.profile.landmark };
-          S.orders[date] = {
-            Breakfast: { items: {}, notes: "", subtotal: 0, bfItems: [], ...def },
-            Lunch: { items: {}, notes: "", subtotal: 0, ...def },
-            Dinner: { items: {}, notes: "", subtotal: 0, ...def },
-          };
-        }
-      });
+
       buildDateTabs();
       renderMealContent(S.selectedDates[0]);
+
+      // [1C] Speculatively prefetch combined-day totals in background so Step 5 (Bill) opens in 0ms
+      _prefetchDayTotals();
     }
     function buildDateTabs() {
       $("dateTabsWrap").innerHTML = S.selectedDates.map((date, i) => `
@@ -10217,6 +10307,7 @@
       for (const [colKey, qty] of Object.entries(mObj.items)) { if (qty <= 0) continue; sub += getPrice(colKey, meal, date) * qty; }
       mObj.subtotal = sub;
       _persistCart();
+      _prefetchDayTotals();
     }
 
     // ── CART PERSISTENCE (sessionStorage) ───────────────────────
@@ -10225,6 +10316,9 @@
     function _restoreCart() { return false; }
     function _clearCart() {
       try { sessionStorage.removeItem('sk_cart_v2'); } catch(e) {}
+      _dayTotalsCache = null;
+      _dayTotalsPromise = null;
+      _dayTotalsKey = "";
     }
 
     async function promptResetCart() {
@@ -10509,14 +10603,26 @@
       wrap.style.display = "block";
       $("billSummaryContent").innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner"></div><p style="font-size:0.78rem;color:#888;margin-top:6px;">Building your summary…</p></div>`;
 
-      // Fetch existing orders for all selected dates (for combined-day billing logic)
+      // [1C] Use prefetched existing orders for all selected dates (for combined-day billing logic)
       let existingDayTotals = {};
-      try {
-        const dates = S.selectedDates.join(',');
-        const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getDayTotalsForDates&phone=${S.phone}&dates=${encodeURIComponent(dates)}`);
-        const data = await res.json();
-        existingDayTotals = data.dayTotals || {};
-      } catch (e) { /* non-fatal: fall back to no existing orders */ }
+      const datesKey = S.selectedDates.slice().sort().join(',');
+      const _ttl = 60 * 1000;
+      if (_dayTotalsCache && _dayTotalsKey === datesKey && (Date.now() - _dayTotalsFetchedAt) < _ttl) {
+        existingDayTotals = _dayTotalsCache;
+      } else if (_dayTotalsPromise && _dayTotalsKey === datesKey) {
+        try {
+          existingDayTotals = await _dayTotalsPromise;
+        } catch (_) { existingDayTotals = {}; }
+      } else {
+        try {
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getDayTotalsForDates&phone=${encodeURIComponent(S.phone)}&dates=${encodeURIComponent(datesKey)}&storefront=LS`);
+          const data = await res.json();
+          existingDayTotals = (data && data.dayTotals) || {};
+          _dayTotalsCache = existingDayTotals;
+          _dayTotalsKey = datesKey;
+          _dayTotalsFetchedAt = Date.now();
+        } catch (e) { /* non-fatal: fall back to no existing orders */ }
+      }
 
       // ── Streak progress badge ──────────────────────────────────────────────
       {
@@ -12015,6 +12121,10 @@
     }
 
     function showSuccess(id, skipVerifyModal) {
+      if (id) S.lastOrderId = id;
+      _dayTotalsCache = null;
+      _dayTotalsPromise = null;
+      _dayTotalsKey = "";
       // Record what was just placed so Manage Orders can confirm it shows up —
       // and re-read if Google Sheets hasn't propagated the write yet. This kills
       // the "I don't see my order → place it again → duplicate warning" loop.
@@ -12545,7 +12655,7 @@
       // If we're on the GAS exec URL (post-HDFC redirect), send the customer
       // to the real order page instead of resetting in place.
       if (window.location.hostname === "script.google.com") {
-        window.location.href = "https://svaadhkitchen.in/order.html";
+        window.location.href = "https://svaadhkitchen.in/Liviano-Serio.html";
         return;
       }
 
@@ -16468,6 +16578,22 @@
 
       // Refresh nudge is shown when user reaches the calendar (step 2) — see updateNav()
 
+      // ── FAST PRELOAD FOR RETURNING LOGGED-IN CUSTOMER (Amazon Style) ───────
+      // If customer is already logged in on this device with a saved address,
+      // restore their profile synchronously and skip Phone (Page 1) and Address (Page 2)
+      // to land directly on Select Dates (Page 3) instantly on load!
+      const savedPhone = (localStorage.getItem('sk_logged_in_phone') || "").trim();
+      const savedPin = localStorage.getItem('sk_logged_in_pin');
+      const cachedProfileStr = localStorage.getItem('sk_profile_ls') || localStorage.getItem('sk_profile');
+      let cachedProfile = null;
+      try { if (cachedProfileStr) cachedProfile = JSON.parse(cachedProfileStr); } catch (_) {}
+      const hasCachedAddr = cachedProfile && (cachedProfile.wing || cachedProfile.society || cachedProfile.flat || cachedProfile.first_name || cachedProfile.name);
+
+      if (savedPhone && savedPin && hasCachedAddr) {
+        S.phone = savedPhone;
+        if ($("phoneInput")) $("phoneInput").value = savedPhone.replace(/^\+91/, "").replace(/\D/g, "");
+        handleLoginSuccess(cachedProfile, false, true);
+      }
 
       loadAreas();
       updateNav();
@@ -16478,7 +16604,7 @@
       (async () => {
         try {
           const todayStr = (() => { const t = getIST(); return `${t.getUTCFullYear()}-${String(t.getUTCMonth()+1).padStart(2,'0')}-${String(t.getUTCDate()).padStart(2,'0')}`; })();
-          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenu&date=${todayStr}`, {}, { silent: true });
+          const res = await apiFetch(`${APPS_SCRIPT_URL}?action=getMenu&date=${todayStr}&storefront=LS`, {}, { silent: true });
           const data = await res.json();
           if (data && !data.error) {
             S.menuCache[todayStr] = data;
@@ -16499,13 +16625,17 @@
       // Close how modal on backdrop click
       $("howModal").addEventListener("click", e => { if (e.target === $("howModal")) $("howModal").style.display = "none"; });
 
-      const savedPhone = (localStorage.getItem('sk_logged_in_phone') || "").trim();
-      const savedPin = localStorage.getItem('sk_logged_in_pin');
       if (savedPhone && savedPin) {
         // Strip any accidental whitespace or stale country-code formatting before using.
         S.phone = savedPhone;
         if ($("phoneInput")) $("phoneInput").value = savedPhone.replace(/^\+91/, "").replace(/\D/g, "");
-        lookupCustomer();
+        if (hasCachedAddr) {
+          // Already preloaded to Calendar — verify session silently in background without blocking loader
+          lookupCustomer({ silent: true });
+        } else {
+          // Uncached profile or first visit — normal auto-login with loader
+          lookupCustomer();
+        }
       }
     });
   </script>
