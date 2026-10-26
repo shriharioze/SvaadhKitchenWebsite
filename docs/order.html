@@ -5213,7 +5213,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.20.01";
+    const APP_VERSION = "v26.10.26.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8386,6 +8386,7 @@
         Breakfast: base.Breakfast && !checkClosed("Breakfast") && !kClosed.Breakfast,
         Lunch:     base.Lunch     && !checkClosed("Lunch")     && !kClosed.Lunch,
         Dinner:    base.Dinner    && !checkClosed("Dinner")    && !kClosed.Dinner,
+        timeAvail: base
       };
     }
     function fmtHour(h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60), ampm = hh < 12 ? "AM" : "PM", hr = hh > 12 ? hh - 12 : (hh || 12); return `${hr}:${String(mm).padStart(2, "0")} ${ampm}`; }
@@ -10179,9 +10180,10 @@
       for (let d = 1; d <= dim; d++) {
         const ds = toISO(y, m, d), isSun = new Date(ds + "T12:00:00").getDay() === 0, past = ds < today, sel = S.selectedDates.includes(ds);
         const isKitchenClosed = !past && closedSet.has(ds);
-        // Issue 3: disable today if all meal cutoffs have already passed
+        // Issue 3: disable today if all meal cutoffs have already passed (by time)
         const avail = getMealAvailability(ds);
-        const allCutoffPassed = ds === today && !avail.Breakfast && !avail.Lunch && !avail.Dinner;
+        const timeAvail = avail.timeAvail || avail;
+        const allCutoffPassed = ds === today && !timeAvail.Breakfast && !timeAvail.Lunch && !timeAvail.Dinner;
         // Reorder of a special breakfast item → only its valid dates are selectable.
         const reorderBlocked = !isSun && !past && S.reorderDateFilter && !S.reorderDateFilter.has(ds);
         const disabled = isSun || past || allCutoffPassed || isKitchenClosed || reorderBlocked;
@@ -10414,7 +10416,8 @@
                 const isSoldOut = !!(S.menuCache[date]?.sold_out || {})[meal];
                 const cState = (S.menuCache[date]?.orders_closed || {})[meal];
                 const areaCheck = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
-                const isClosed = cState === true || (cState === "restricted" && !(areaCheck.includes("bhosale") || areaCheck.includes("triveni") || areaCheck.includes("pickup") || areaCheck.includes("porter")));
+                const isRestricted = (cState === "restricted" && !(areaCheck.includes("bhosale") || areaCheck.includes("triveni") || areaCheck.includes("pickup") || areaCheck.includes("porter")));
+                const isClosed = cState === true || isRestricted;
                 const isKitchenClosed = !!(S.menuCache[date]?.closed_meals || {})[meal];
                 const closureReason = (S.menuCache[date]?.closure_reasons && S.menuCache[date]?.closure_reasons[meal])
                   || S.menuCache[date]?.closure_reason
@@ -10429,6 +10432,23 @@
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🍽️</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Sold Out for Today</div>
                      <div style="font-size:0.72rem;color:#666;">${meal} has reached today's order limit. Please try another day.</div>`
+                  : isRestricted
+                  ? `<div style="font-size:1.4rem;margin-bottom:8px;">🚚🚫</div>
+                     <div style="font-weight:700;font-size:0.9rem;color:#c0392b;margin-bottom:6px;">Delivery Limit Reached</div>
+                     <div style="font-size:0.75rem;color:#555;line-height:1.45;margin-bottom:12px;">
+                       ${meal} delivery order is closed as the delivery limit has been reached for your area.
+                     </div>
+                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;font-size:0.74rem;color:#475569;display:inline-block;text-align:left;line-height:1.5;">
+                       💡 <b>Still available for ${meal}:</b><br>
+                       • <b>📦 Self Pickup</b> — free from our kitchen<br>
+                       • <b>🛵 Porter</b> — courier arranged by you<br>
+                       • Delivery in <b>Bhosale Nagar</b> &amp; <b>Triveni Nagar</b>
+                     </div>
+                     <div style="margin-top:12px;">
+                       <button type="button" onclick="goToStep(1)" style="background:#2D1A5E;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:0.76rem;font-weight:600;cursor:pointer;">
+                         Change to Self Pickup 📦
+                       </button>
+                     </div>`
                   : isClosed
                   ? `<div style="font-size:1.3rem;margin-bottom:8px;">🔒</div>
                      <div style="font-weight:700;font-size:0.85rem;margin-bottom:4px;">Not Accepting Orders</div>
@@ -10475,7 +10495,14 @@
         }
         const cState2 = (menu.orders_closed || {})[meal];
         const areaCheck2 = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
-        const isClosed = cState2 === true || (cState2 === "restricted" && !(areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter")));
+        const isRestricted2 = cState2 === "restricted" && !(areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter"));
+        const isClosed = cState2 === true || isRestricted2;
+        if (isRestricted2) {
+          el.textContent = 'Delivery limit reached';
+          el.style.color = '#c0392b';
+          el.style.fontWeight = '600';
+          return;
+        }
         if (isClosed) { el.textContent = !!(menu.sold_out || {})[meal] ? 'Sold out for today' : 'Not accepting orders'; el.style.color = ''; return; }
 
         // For future dates, show the cutoff time as a static label — no countdown needed.

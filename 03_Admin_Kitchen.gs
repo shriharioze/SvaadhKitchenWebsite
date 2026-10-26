@@ -123,16 +123,8 @@ function _getAdminDataUncached() {
         else if (_isIA(row.Customer_Name)) { sawIA[dd][meal] = true; }
         else {
           const nameKey = "name|" + String(row.Customer_Name || "").trim().toLowerCase();
-          var fRaw = String(row.Flat || "").trim().toLowerCase();
-          var fMatch = fRaw.match(/\d+/);
-          var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
-          var w = String(row.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-          var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(row.Society) : _normSocietyBase(row.Society || "");
-          if (w && sStr && (sStr.indexOf(w) !== -1 || w.indexOf(sStr) !== -1 || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === sStr))) {
-            w = "";
-          }
-          var addrKey = "";
-          if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
+          var parsedAddr = _parseWingAndFlat(row.Wing, row.Flat, row.Society);
+          var addrKey = parsedAddr.addrKey;
 
           // Magarpatta Cybercity Towers 1–12 grouping (synced with _countActiveMealOrders).
           var towerKey = "";
@@ -2378,17 +2370,10 @@ function getOrderSummary(date) {
       } else {
         var nameKey = "name|" + rawCustName.toLowerCase();
 
-        var fRaw = String(r.Flat || "").trim().toLowerCase();
-        var fMatch = fRaw.match(/\d+/);
-        var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
-        var w = String(r.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-        var sStr = typeof _normSocietyKey === "function" 
-          ? _normSocietyKey(r.Society) 
-          : (typeof _normSocietyBase === "function" ? _normSocietyBase(r.Society || "") : String(r.Society || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
-        if (w && sStr && (sStr.indexOf(w) !== -1 || w.indexOf(sStr) !== -1 || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === sStr))) {
-          w = "";
-        }
-        var addrKey = (f && sStr) ? "addr|" + w + "|" + f + "|" + sStr : "";
+        var parsedAddr = _parseWingAndFlat(r.Wing, r.Flat, r.Society);
+        var f = parsedAddr.flat;
+        var w = parsedAddr.wing;
+        var addrKey = parsedAddr.addrKey;
 
         var towerKey = "";
         var tNum = 0;

@@ -960,43 +960,84 @@ function listDistinctSocieties() {
   return { groups: groups, count: groups.length };
 }
 /**
+ * Canonical parser for wing, flat, and society into a robust address key and parsed components.
+ * Prevents false slot collisions when flat contains wing prefix (e.g. "G1-403", "F1 201", "A-502", "B2-1004")
+ * or where wing field duplicates society name ("Jasminium Socity" vs "Jasminium").
+ */
+function _parseWingAndFlat(wingRaw, flatRaw, societyRaw) {
+  var s = typeof _normSocietyKey === "function" 
+    ? _normSocietyKey(societyRaw) 
+    : (typeof _normSocietyBase === "function" ? _normSocietyBase(societyRaw || "") : String(societyRaw || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+
+  var wRaw = String(wingRaw || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  var w = wRaw.replace(/^(wing|block|tower|building)/, "").trim();
+
+  // If wing contains society or society contains wing (redundancy), e.g. "Jasminium Socity" vs "Jasminium"
+  if (w && s) {
+    if (w === s || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === s)) {
+      w = "";
+    } else if (w.indexOf(s) === 0) {
+      // e.g. "cosmosm" -> starts with "cosmos" -> remaining is "m"
+      var remainder = w.substring(s.length).replace(/^(wing|block|tower|society|socity)/, "").trim();
+      w = (remainder === "society" || remainder === "socity") ? "" : remainder;
+    } else if (w.length > 3 && s.indexOf(w) !== -1) {
+      w = "";
+    }
+  }
+
+  var fStr = String(flatRaw || "").trim().toLowerCase();
+  // Strip common prefixes from flat string (e.g. "flat no. 201", "unit 502")
+  var cleanF = fStr.replace(/^(flat\s*(no\.?)?|unit\s*(no\.?)?|office\s*(no\.?)?|room\s*(no\.?)?)\s*/i, "").trim();
+
+  var extractedWing = "";
+  var extractedFlat = "";
+
+  // Pattern 1: Wing prefix before flat number, e.g. "G1-403", "F1 201", "A-502", "B2/104", "A1-1602", "M 402"
+  var m1 = cleanF.match(/^([a-z]+\d*|\d+[a-z]+)[\s\-_/,\.]+(\d+)$/i);
+  if (m1) {
+    extractedWing = m1[1].toLowerCase().replace(/^(wing|block|tower|flat|office)/, "");
+    extractedFlat = parseInt(m1[2], 10).toString();
+  } else {
+    // Pattern 2: Flat number before wing suffix, e.g. "601, P", "403-G1", "502 A", "601 P"
+    var m2 = cleanF.match(/^(\d+)[\s\-_/,\.]+([a-z]+\d*)$/i);
+    if (m2) {
+      extractedFlat = parseInt(m2[1], 10).toString();
+      extractedWing = m2[2].toLowerCase().replace(/^(wing|block|tower|flat|office)/, "");
+    } else {
+      // Pattern 3: Single letter directly followed by 2-5 digits, e.g. "A502", "P601", "G403"
+      var m3 = cleanF.match(/^([a-z])(\d{2,5})$/i);
+      if (m3) {
+        extractedWing = m3[1].toLowerCase();
+        extractedFlat = parseInt(m3[2], 10).toString();
+      } else {
+        // Pattern 4: Extract all numbers, choose the last one as the flat number
+        // e.g. "Flat 201", "4th Floor 403", "Tower 11 Flat 602"
+        var allNums = cleanF.match(/\d+/g);
+        if (allNums && allNums.length > 0) {
+          extractedFlat = parseInt(allNums[allNums.length - 1], 10).toString();
+        } else {
+          extractedFlat = cleanF.replace(/[^a-z0-9]/g, "");
+        }
+      }
+    }
+  }
+
+  // Final wing: prioritize explicitly provided wing if valid, else extracted wing from flat string
+  var finalWing = w || extractedWing;
+  var finalFlat = extractedFlat;
+  var addrKey = (finalFlat && s) ? "addr|" + finalWing + "|" + finalFlat + "|" + s : "";
+
+  return { wing: finalWing, flat: finalFlat, society: s, addrKey: addrKey };
+}
+
+/**
  * Normalizes an address into a canonical key for exact flat-level matching.
  * Format: "addr|<wing>|<flat>|<canonicalSociety>"
  * e.g. Society="Laburnum park", Wing="P", Flat="601" -> "addr|p|601|laburnumpark"
  */
 function _makeAddrKey(society, wing, flat) {
-  var s = typeof _normSocietyKey === "function" 
-    ? _normSocietyKey(society) 
-    : (typeof _normSocietyBase === "function" ? _normSocietyBase(society || "") : String(society || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
-  if (!s) return "";
-
-  var fRaw = String(flat || "").trim().toLowerCase();
-  var fMatch = fRaw.match(/\d+/);
-  var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
-  if (!f) return "";
-
-  var wRaw = String(wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  var w = wRaw.replace(/^(wing|block|tower)/, "").trim();
-
-  // If wing was not specified in wing field, inspect fRaw for leading or trailing letters (e.g. "P 601", "P-601", "601 P")
-  if (!w) {
-    var leadW = fRaw.match(/^([a-z]+)[\s\-]*\d+/i);
-    var trailW = fRaw.match(/\d+[\s\-,]*([a-z]+)$/i);
-    if (leadW) {
-      var cand = leadW[1].toLowerCase().replace(/^(wing|block|tower|flat|office)/, "");
-      if (cand) w = cand;
-    } else if (trailW) {
-      var cand = trailW[1].toLowerCase().replace(/^(wing|block|tower|flat|office)/, "");
-      if (cand) w = cand;
-    }
-  }
-
-  // If wing matches society completely or is redundant with society, collapse to ""
-  if (w && (s === w || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === s) || (w.length > 3 && s.indexOf(w) !== -1))) {
-    w = "";
-  }
-
-  return "addr|" + w + "|" + f + "|" + s;
+  var parsed = _parseWingAndFlat(wing, flat, society);
+  return parsed.addrKey;
 }
 
 // For one date, per meal, the sets of normalized societies, normalized phones,
@@ -1117,18 +1158,10 @@ function _countActiveMealOrders(rows, dateStr, ordersClosedObj) {
     
     const nameKey = "name|" + String(r.Customer_Name || "").trim().toLowerCase();
     
-    // Aggressively extract numeric part of Flat (so "601,P", "0601", "601 K" all become "601").
-    // This ensures typos or trailing letters in the same building don't hog extra delivery slots.
-    var fRaw = String(r.Flat || "").trim().toLowerCase();
-    var fMatch = fRaw.match(/\d+/);
-    var f = fMatch ? parseInt(fMatch[0], 10).toString() : fRaw.replace(/[^a-z0-9]/g, "");
-    var w = String(r.Wing || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-    var sStr = typeof _normSocietyKey === "function" ? _normSocietyKey(r.Society) : _normSocietyBase(r.Society || "");
-    if (w && sStr && (sStr.indexOf(w) !== -1 || w.indexOf(sStr) !== -1 || (typeof _normSocietyKey === "function" && _normSocietyKey(w) === sStr))) {
-      w = "";
-    }
-    var addrKey = "";
-    if (f && sStr) addrKey = "addr|" + w + "|" + f + "|" + sStr;
+    // Robust flat & wing parsing: prevents wing prefixes in flat (e.g. "G1-403", "F1 201")
+    // or society-redundant wings from causing false slot-sharing across different flats.
+    var parsedAddr = _parseWingAndFlat(r.Wing, r.Flat, r.Society);
+    var addrKey = parsedAddr.addrKey;
 
     // Magarpatta Cybercity Towers 1–12 grouping: all orders at the same tower
     // collapse to ONE delivery slot (driver delivers to one building gate).
