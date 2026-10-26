@@ -487,6 +487,14 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **Success Page 'Go Back to Home' CTA (CODE_VERSION 36.11, APP_VERSION v26.10.26.07 / v26.10.26.01)**
+  - **Clarity & Friction Reduction (`docs/order.html` & `docs/Liviano-Serio.html`):**
+    - Replaced confusing `+ Place Another Order` button on the order confirmation screen with a clear, welcoming `🏠 Go Back to Home` action.
+    - Prevents customer hesitation or doubt about whether their initial order went through successfully.
+  - **Subtle Visual Highlighting:**
+    - Upgraded from a plain white outlined button to a soft, refined mint-green gradient background (`linear-gradient(135deg, #f0fdf4, #dcfce7)`), crisp emerald border (`1.5px solid #16a34a`), deep forest-green typography (`#15803d`), gentle drop shadow (`box-shadow: 0 3px 12px rgba(22,163,74,0.16)`), and interactive hover elevation.
+  - **Direct Page 3 Return:**
+    - Clicking smoothly wipes placed cart state (`_clearCart()`) and returns customers straight to Page 3 (Calendar / Select Dates, `S.step = 2`), matching the standard Amazon-style home view for logged-in users.
 - **Operations Portals Speed Boost: Kitchen, Driver & Admin (CODE_VERSION 36.10, ADMIN_VERSION v26.10.26.01, KITCHEN_VERSION v26.10.26.01, DRIVER_VERSION v26.10.26.01)**
   - **Kitchen Operations Portal (`docs/Admin/kitchen.html`):**
     - Silent background 5-minute auto-refresh: replaced blocking full-screen `sLoading` overlay with silent in-place DOM updates (`loadKitchen(true)`), eliminating tablet screen freezes while cooks and packers work.

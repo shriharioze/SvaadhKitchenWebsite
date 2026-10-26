@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.12.02">
+  <meta name="app-version" content="v26.10.26.01">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -4674,12 +4674,19 @@
             </span>
           </a>
 
-          <!-- Place Another Order CTA -->
+          <!-- Go Back to Home CTA (Returns to Page 3: Calendar) -->
           <button onclick="resetForAnotherOrder()"
-                  style="width:100%;padding:16px;border-radius:14px;border:2px solid #2e7d32;
-                         background:white;color:#2e7d32;font-size:1rem;font-weight:700;
-                         cursor:pointer;margin-bottom:10px;letter-spacing:0.2px;">
-            + Place Another Order
+                  id="btnSuccessBackHome"
+                  style="width:100%;padding:16px;border-radius:14px;border:1.5px solid #16a34a;
+                         background:linear-gradient(135deg, #f0fdf4, #dcfce7);color:#15803d;
+                         font-size:1.02rem;font-weight:700;cursor:pointer;margin-bottom:12px;
+                         display:flex;align-items:center;justify-content:center;gap:8px;
+                         box-shadow:0 3px 12px rgba(22,163,74,0.16);transition:all 0.15s ease;
+                         font-family:inherit;letter-spacing:0.2px;"
+                  onmouseover="this.style.background='linear-gradient(135deg, #dcfce7, #bbf7d0)';this.style.transform='translateY(-1px)'"
+                  onmouseout="this.style.background='linear-gradient(135deg, #f0fdf4, #dcfce7)';this.style.transform='none'">
+            <span style="font-size:1.25rem;line-height:1;">🏠</span>
+            <span>Go Back to Home</span>
           </button>
 
           <!-- Help / WhatsApp -->
@@ -5065,7 +5072,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.20.01";
+    const APP_VERSION = "v26.10.26.01";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
