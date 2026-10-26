@@ -5213,7 +5213,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.26.03";
+    const APP_VERSION = "v26.10.26.04";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -10474,16 +10474,6 @@
         const cState2 = (menu.orders_closed || {})[meal];
         const isClosed = cState2 === true;
         if (isClosed) { el.textContent = !!(menu.sold_out || {})[meal] ? 'Sold out for today' : 'Not accepting orders'; el.style.color = ''; return; }
-        if (cState2 === "restricted") {
-          const areaCheck2 = ((typeof S !== 'undefined' && S.mealAddrs && S.mealAddrs[meal] && S.mealAddrs[meal].area) ? S.mealAddrs[meal].area : (typeof S !== 'undefined' && S.profile && S.profile.area) ? S.profile.area : "").toLowerCase();
-          const isLocalOrPickup = areaCheck2.includes("bhosale") || areaCheck2.includes("triveni") || areaCheck2.includes("pickup") || areaCheck2.includes("porter");
-          if (!isLocalOrPickup) {
-            el.textContent = 'Delivery full (Pickup/Porter only)';
-            el.style.color = '#c0392b';
-            el.style.fontWeight = '600';
-            return;
-          }
-        }
 
         // For future dates, show the cutoff time as a static label — no countdown needed.
         if (!isToday) {
