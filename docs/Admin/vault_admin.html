@@ -6,7 +6,7 @@
        compares this to the *_VERSION constant baked into the JS and
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.17.02">
+  <meta name="app-version" content="v26.10.26.01">
 <title>Svaadh Kitchen — Menu Admin</title>
 <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
 <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -891,7 +891,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
     </div>
     <div class="login-err" id="loginErr"></div>
     <div style="margin-top:16px;text-align:center;">
-      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.17.02</span>
+      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.26.01</span>
     </div>
   </div>
 </div>
@@ -902,7 +902,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--i
   <div class="topbar">
     <div class="topbar-brand">
       Svaadh Kitchen <span>ADMIN</span>
-      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.10.17.02</span>
+      <span class="app-ver-badge" id="topbarVerBadge" style="font-size:0.68rem; color:#fbbf24; font-weight:700; background:rgba(0,0,0,0.35); padding:2px 8px; border-radius:8px; border:1px solid rgba(251,191,36,0.4); margin-left:8px; letter-spacing:0.3px; display:inline-block; vertical-align:middle;">v26.10.26.01</span>
     </div>
     <div class="topbar-nav">
       <button class="topbar-btn active" id="navMenu" onclick="switchPage('menu')">📅 Daily Menu</button>
@@ -2152,7 +2152,7 @@ function showUIConfirm(message, title = "Confirm Action", icon = "⚠️") {
 // ════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
 // Read claude.md and bump version number for pages with changes
-const APP_VERSION = "v26.10.17.02";
+const APP_VERSION = "v26.10.26.01";
 (function() {
   const savedVer = localStorage.getItem("sk_admin_ver");
   if (savedVer !== APP_VERSION) {
@@ -2386,7 +2386,7 @@ function colKeyToDisplayName(k) {
     // user is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts.
     // Read claude.md and bump version number for pages with changes
-    const ADMIN_VERSION = "v26.10.17.02";
+    const ADMIN_VERSION = "v26.10.26.01";
     (async function _versionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -2488,6 +2488,7 @@ async function verifyPin() {
     
     attempts = 0;
     S.sessionPin = pinAttempt;
+    try { sessionStorage.setItem('sk-admin-pin', pinAttempt); } catch(_) {}
     S.pin = ""; renderPinDots();
     
     // Populate menu data immediately so Daily Menu tab is fully loaded!
@@ -2520,6 +2521,18 @@ async function verifyPin() {
     sLoading(false);
   }
 }
+
+// Auto-restore session PIN from sessionStorage if available (prevents lockout on browser refresh)
+(function _restoreSessionPin() {
+  try {
+    const saved = sessionStorage.getItem('sk-admin-pin');
+    if (saved && saved.length === 4) {
+      setTimeout(() => {
+        for (let i = 0; i < saved.length; i++) pp(parseInt(saved[i], 10));
+      }, 80);
+    }
+  } catch (_) {}
+})();
 
 async function loadFullAdminData() {
   sLoading(true, "Synchronising system data...");
@@ -2589,16 +2602,17 @@ async function triggerBackgroundTabLoading() {
     orderDatePicker.value = toISO(now);
   }
 
+  // Stagger background preloading to eliminate Google Apps Script thread contention on startup
   const tasks = [
-    { name: 'customers', fn: () => loadCustomers(false, true) },
-    { name: 'reviews',   fn: () => loadReviewUsers(false, true) },
-    { name: 'orders',    fn: () => loadOrderSummary(false, true) },
-    { name: 'payments',  fn: () => loadPayments(false, true) },
-    { name: 'packaging', fn: () => loadPackaging(false, true) }
+    { name: 'orders',    fn: () => loadOrderSummary(false, true), delay: 0 },
+    { name: 'payments',  fn: () => loadPayments(false, true),     delay: 800 },
+    { name: 'customers', fn: () => loadCustomers(false, true),    delay: 1600 },
+    { name: 'packaging', fn: () => loadPackaging(false, true),    delay: 2400 },
+    { name: 'reviews',   fn: () => loadReviewUsers(false, true),   delay: 3200 }
   ];
 
   for (const task of tasks) {
-    runBackgroundTabTask(task);
+    setTimeout(() => { runBackgroundTabTask(task); }, task.delay);
   }
 }
 
@@ -2617,6 +2631,7 @@ async function runBackgroundTabTask(task) {
 }
 function logout() {
   S.sessionPin = "";
+  try { sessionStorage.removeItem('sk-admin-pin'); } catch(_) {}
   window.location.reload();
 }
 
@@ -2640,8 +2655,11 @@ async function bootApp() {
 
   // Initialize UI state
   switchPage('menu');
-  await loadDefaultCutoffs(); // populate S_DEFAULT_CUTOFFS before selectDate renders today's badges
-  await loadDefaultCaps();    // populate default delivery cap inputs + per-date cap placeholders
+  // Parallel non-blocking initialization of cutoffs and delivery caps
+  await Promise.all([
+    loadDefaultCutoffs(),
+    loadDefaultCaps()
+  ]);
   selectDate(toISO(ist));
 
   renderBfMasterTable();
@@ -4215,6 +4233,7 @@ function decimalTo12hr(dec) {
 async function loadDefaultCutoffs() {
   try {
     const res = await fetch(`${APPS_SCRIPT_URL}?action=getDefaultCutoffs&pin=${S.sessionPin}&_t=${Date.now()}`);
+    const data = await res.json();
     if (data && data.success && data.defaults) S_DEFAULT_CUTOFFS = data.defaults;
   } catch (e) { console.warn("loadDefaultCutoffs failed, using fallback", e); }
   const d = S_DEFAULT_CUTOFFS;
@@ -4258,12 +4277,15 @@ async function saveDefaultCutoffs() {
 // ─────────────────────────────────────────────────────────────
 // DEFAULT DELIVERY CAPS — load from backend + save (same pattern as cutoffs)
 async function loadDefaultCaps() {
-  try {
-    const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getDefaultOrderCaps&pin=${S.sessionPin}&_t=${Date.now()}`);
-    if (data && data.success && data.defaults) {
-      S.defaultCaps = data.defaults;
-    }
-  } catch (e) { console.warn("loadDefaultCaps failed, using fallback", e); }
+  // If S.defaultCaps was already populated during login via getAdminData, reuse it directly (0ms)
+  if (!S.defaultCaps || Object.keys(S.defaultCaps).length === 0) {
+    try {
+      const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getDefaultOrderCaps&pin=${S.sessionPin}&_t=${Date.now()}`);
+      if (data && data.success && data.defaults) {
+        S.defaultCaps = data.defaults;
+      }
+    } catch (e) { console.warn("loadDefaultCaps failed, using fallback", e); }
+  }
   const d = S.defaultCaps || {};
   const bfEl = document.getElementById("defCapBf");
   const lEl  = document.getElementById("defCapL");
@@ -5130,12 +5152,27 @@ async function saveLabelsToDrive() {
 
 
 let _ordersDataLoaded = false;
+const _orderSummaryCache = {}; // in-memory cache: date -> { data, ts }
 async function loadOrderSummary(manual=false, silent=false) {
   const date = document.getElementById("orderDatePicker")?.value || S.selectedDate;
   if (!date) { if (!silent) sAlert("Please pick a date first."); return; }
   if (manual) sLoading(true, "Refreshing orders...");
-  
+
   const el = document.getElementById("orderSummaryContent");
+  const _ttl = 60 * 1000;
+  const cached = _orderSummaryCache[date];
+  if (!manual && cached && (Date.now() - cached.ts) < _ttl) {
+    if (el) el.innerHTML = renderOrderSummary(cached.data);
+    _ordersDataLoaded = true;
+    _backgroundLoadSuccess.orders = true;
+    const srchWrap = document.getElementById("orderSearchWrap");
+    if (srchWrap) { srchWrap.style.display = "block"; const si = document.getElementById("orderSearchInput"); if (si) si.value = ""; }
+    const today = new Date(new Date().getTime()+5.5*3600000).toISOString().slice(0,10);
+    if (date === today) startOrdersAutoRefresh();
+    else stopOrdersAutoRefresh();
+    return;
+  }
+
   if (!manual && !silent && el) el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div><p style="color:#aaa;margin-top:12px;font-size:0.85rem;">Loading orders…</p></div>`;
 
   try {
@@ -5147,6 +5184,7 @@ async function loadOrderSummary(manual=false, silent=false) {
       if (!silent && el) el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">${data.error}</p>`; 
       throw new Error(data.error); 
     }
+    _orderSummaryCache[date] = { data, ts: Date.now() };
     if (el) el.innerHTML = renderOrderSummary(data);
     _ordersDataLoaded = true;
     _backgroundLoadSuccess.orders = true;
@@ -5829,15 +5867,27 @@ let _lastAnalyticsData = null;
 let _lastAnalyticsFrom = "";
 let _lastAnalyticsTo = "";
 
+const _analyticsCache = {}; // in-memory cache: from_to -> { data, ts }
 async function loadAnalytics() {
   const from = document.getElementById("analyticsFrom").value;
   const to   = document.getElementById("analyticsTo").value;
   if (!from || !to) { toast("Pick a date range first"); return; }
+  const cacheKey = `${from}_${to}`;
+  const _ttl = 5 * 60 * 1000;
+  const cached = _analyticsCache[cacheKey];
   const el = document.getElementById("analyticsContent");
+  if (cached && (Date.now() - cached.ts) < _ttl) {
+    _lastAnalyticsData = cached.data;
+    _lastAnalyticsFrom = from;
+    _lastAnalyticsTo = to;
+    el.innerHTML = renderAnalytics(cached.data, from, to);
+    return;
+  }
   el.innerHTML = `<div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   try {
     const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getAnalytics&dateFrom=${from}&dateTo=${to}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
+    _analyticsCache[cacheKey] = { data, ts: Date.now() };
     _lastAnalyticsData = data;
     _lastAnalyticsFrom = from;
     _lastAnalyticsTo = to;
@@ -6629,13 +6679,36 @@ function renderCustomerGrid(list) {
       ${c.pendingAmt>0?`<div class="pending-tag">⏳ ${fmtM(c.pendingAmt)} pending</div>`:""}
     </div>`).join("")}</div>`;
 }
+const _custDetailCache = {}; // in-memory cache: phone -> { data, ts }
 async function loadCustomerDetail(phone) {
   const wrap = document.getElementById("custDetailWrap");
+  const _ttl = 5 * 60 * 1000;
+  const cached = _custDetailCache[phone];
+  if (cached && (Date.now() - cached.ts) < _ttl) {
+    window._currentCustDetail = cached.data;
+    wrap.innerHTML = renderCustomerDetail(cached.data);
+    if (typeof window.renderBulkCalendar === 'function') window.renderBulkCalendar();
+    if (typeof window.renderBulkMealPanels === 'function') window.renderBulkMealPanels();
+    if (typeof window.updateBulkSummary === 'function') window.updateBulkSummary();
+    wrap.querySelectorAll('.qe-place-btn').forEach(btn => {
+      btn.onclick = () => {
+        const ph   = btn.dataset.phone;
+        const nm   = btn.dataset.name;
+        const itms = btn.dataset.items;
+        const fn   = btn.dataset.favname;
+        const mt   = btn.dataset.meal;
+        quickOrderStandard(ph, nm, itms, fn, mt);
+      };
+    });
+    wrap.scrollIntoView({behavior:"smooth", block:"start"});
+    return;
+  }
   wrap.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
   wrap.scrollIntoView({behavior:"smooth", block:"start"});
   try {
     const data = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getCustomerHistory&phone=${encodeURIComponent(phone)}&pin=${S.sessionPin}&_t=${Date.now()}`);
     if (!data.success) throw new Error(data.error);
+    _custDetailCache[phone] = { data, ts: Date.now() };
     window._currentCustDetail = data;
     wrap.innerHTML = renderCustomerDetail(data);
     // Render bulk calendar & meal panels now that the DOM elements exist

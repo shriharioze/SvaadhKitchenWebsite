@@ -487,6 +487,22 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **Operations Portals Speed Boost: Kitchen, Driver & Admin (CODE_VERSION 36.10, ADMIN_VERSION v26.10.26.01, KITCHEN_VERSION v26.10.26.01, DRIVER_VERSION v26.10.26.01)**
+  - **Kitchen Operations Portal (`docs/Admin/kitchen.html`):**
+    - Silent background 5-minute auto-refresh: replaced blocking full-screen `sLoading` overlay with silent in-place DOM updates (`loadKitchen(true)`), eliminating tablet screen freezes while cooks and packers work.
+    - 0ms Warm Start on Auto-login: cached last loaded kitchen summary in `localStorage` (`sk_kitchen_cache`) to render daily prep counts on frame 1 in 0ms, verifying and updating silently in the background.
+    - Fast In-Memory Label Generation: `generateBulkLabels()` immediately renders label preview from in-memory orders if already loaded for that date, bypassing redundant network roundtrips.
+  - **Driver Delivery Portal (`docs/Admin/driver.html`):**
+    - 0ms Warm Start on Auto-login: cached today's delivery drops in `localStorage` (`sk_driver_orders_cache`) to immediately surface the driver's drop list upon opening on mobile.
+    - Route Caching (12-hour TTL): cached learned route (`_deliveryRoute`) in `localStorage` (`sk_driver_route_cache`), eliminating redundant network calls for `getDeliveryRoute` on every date change or refresh.
+    - Optimistic UI Delivery Actions: visual completion on delivery tap in 0ms without UI stalls in spotty mobile signal areas.
+  - **Vault Admin Portal (`docs/Admin/vault_admin.html`):**
+    - Boot Deduplication: reused `S.defaultCaps` from the `getAdminData` login payload in `loadDefaultCaps()`, eliminating a duplicate network request, and parallelized cutoffs and caps initialization via `Promise.all`.
+    - Staggered Background Preloading: sequenced background preloading tasks (Orders -> Payments -> Customers -> Packaging -> Reviews) with staggered delays, preventing Google Apps Script execution thread contention at startup.
+    - In-Memory Customer Detail Cache: added `_custDetailCache[phone]` (5m TTL) in `loadCustomerDetail()`, opening previously inspected customer records in 0ms without spinners.
+    - In-Memory Orders Date Cache: added `_orderSummaryCache[date]` (60s TTL) in `loadOrderSummary()`, enabling instant 0ms flipping between Today, Yesterday, and Tomorrow.
+    - In-Memory Analytics Range Cache: added `_analyticsCache[from_to]` (5m TTL) in `loadAnalytics()`, making date preset switches (7 Days, 14 Days, This Month) instant (0ms).
+    - Session PIN Restore: persisted verified PIN in `sessionStorage` (`sk-admin-pin`), preventing lockouts and re-typing on browser refresh.
 - **Order Flow Speed Boost: Speculative Prefetch & Concurrency (CODE_VERSION 36.09, APP_VERSION v26.10.26.06)**
   - **1A: Speculative Menu Prefetch on Calendar Date Tap (`toggleDate` in `docs/order.html`):**
     - When a customer selects or toggles any date on Step 3 (Calendar), `_prefetchMenuForDate(ds)` immediately fires in the background with `{ silent: true }`.

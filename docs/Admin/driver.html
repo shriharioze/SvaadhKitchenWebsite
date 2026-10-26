@@ -7,7 +7,7 @@
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
   <!-- Read claude.md and bump version number for pages with changes -->
-  <meta name="app-version" content="v26.10.12.03">
+  <meta name="app-version" content="v26.10.26.01">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -186,7 +186,7 @@
     </div>
     <div class="login-err" id="dErr"></div>
     <div style="margin-top:16px;text-align:center;">
-      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.12.03</span>
+      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.26.01</span>
     </div>
   </div>
 </div>
@@ -277,7 +277,7 @@
 // compare its meta-version to this constant. If they differ, the
 // driver is running cached/stale HTML — silently hard-reload so the
 // newest build always wins.
-const DRIVER_VERSION  = "v26.10.12.03";
+const DRIVER_VERSION  = "v26.10.26.01";
 (async function _driverVersionCheck() {
   try {
     const loginBadge = document.getElementById("loginVerBadge");
@@ -442,6 +442,19 @@ async function verifyPin(autoPin) {
   const pinToVerify = autoPin || D.pin;
   try {
     const today = todayIST();
+    // 0ms Warm Start from local cache on auto-login
+    if (autoPin) {
+      try {
+        const cached = JSON.parse(localStorage.getItem("sk_driver_orders_cache") || "null");
+        if (cached && cached.data && cached.date === today) {
+          document.getElementById("loginWrap").style.display = "none";
+          document.getElementById("shell").classList.add("on");
+          document.getElementById("datePicker").value = today;
+          renderAll(cached.data);
+          autoSwitchMeal();
+        }
+      } catch (_) {}
+    }
     const data  = await safeFetchJson(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${today}&pin=${pinToVerify}&_t=${Date.now()}`);
     if (data.error) {
       if (!autoPin) {
@@ -465,6 +478,7 @@ async function verifyPin(autoPin) {
     document.getElementById("loginWrap").style.display = "none";
     document.getElementById("shell").classList.add("on");
     document.getElementById("datePicker").value = today;
+    try { localStorage.setItem("sk_driver_orders_cache", JSON.stringify({ date: today, data, ts: Date.now() })); } catch(_) {}
     renderAll(data);
     autoSwitchMeal();
     startPoll();
@@ -517,10 +531,30 @@ async function loadOrders() {
     document.getElementById("panel_"+m).innerHTML = `<div class="spinner"></div>`;
   });
   try {
-    // Fetch orders + the learned delivery route together.
+    // Check local route cache (12-hour TTL) to eliminate redundant network overhead
+    const ROUTE_TTL = 12 * 3600 * 1000;
+    let cachedRoute = null;
+    try {
+      const cr = JSON.parse(localStorage.getItem("sk_driver_route_cache") || "null");
+      if (cr && cr.ts && (Date.now() - cr.ts) < ROUTE_TTL && cr.route) {
+        cachedRoute = cr;
+      }
+    } catch (_) {}
+
+    if (cachedRoute) {
+      _deliveryRoute = cachedRoute.route || {};
+      _routeUpdated = cachedRoute.updated || "";
+      _routeAliasRules = cachedRoute.alias_rules || null;
+    }
+
+    const routeFetchPromise = cachedRoute
+      ? Promise.resolve(null)
+      : fetch(`${APPS_SCRIPT_URL}?action=getDeliveryRoute&pin=${D.sessionPin}&_t=${Date.now()}`).catch(() => null);
+
+    // Fetch orders + (if not cached) learned delivery route together.
     const [res, routeRes] = await Promise.all([
       safeFetchJson(`${APPS_SCRIPT_URL}?action=getDriverOrders&date=${date}&pin=${D.sessionPin}&_t=${Date.now()}`),
-      fetch(`${APPS_SCRIPT_URL}?action=getDeliveryRoute&pin=${D.sessionPin}&_t=${Date.now()}`).catch(() => null)
+      routeFetchPromise
     ]);
     const data = res;
     if (data.error) throw new Error(data.error);
@@ -530,10 +564,19 @@ async function loadOrders() {
         if (rd && rd.success) {
           _deliveryRoute = rd.route || {};
           _routeUpdated = rd.updated || "";
-          _routeAliasRules = rd.alias_rules || null; // canonical matching rules (SK_Society_Aliases)
+          _routeAliasRules = rd.alias_rules || null;
+          try {
+            localStorage.setItem("sk_driver_route_cache", JSON.stringify({
+              route: rd.route,
+              updated: rd.updated,
+              alias_rules: rd.alias_rules,
+              ts: Date.now()
+            }));
+          } catch (_) {}
         }
       } catch (e) {}
     }
+    try { localStorage.setItem("sk_driver_orders_cache", JSON.stringify({ date, data, ts: Date.now() })); } catch(_) {}
     updateRouteStatus();
     updateSortToggleUI();
     renderAll(data);

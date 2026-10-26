@@ -9,7 +9,7 @@
        compares this to the KITCHEN_VERSION constant baked into the
        loaded JS and silently hard-refreshes if they differ — closes
        the "staff is running yesterday's cached HTML" gap. -->
-  <meta name="app-version" content="v26.10.12.02">
+  <meta name="app-version" content="v26.10.26.01">
   <title>Svaadh Kitchen</title>
   <link rel="icon" type="image/x-icon" href="../images/svaadh-kitchen-hero.PNG">
   <link rel="shortcut icon" href="../images/svaadh-kitchen-hero.PNG">
@@ -930,7 +930,7 @@
       </div>
       <div class="login-err" id="kErr"></div>
       <div style="margin-top:16px;text-align:center;">
-        <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.12.02</span>
+        <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.26.01</span>
       </div>
     </div>
   </div>
@@ -1006,7 +1006,7 @@
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec";
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.12.02";
+    const APP_VERSION = "v26.10.26.01";
     (function() {
       const loginBadge = document.getElementById("loginVerBadge");
       if (loginBadge) loginBadge.textContent = APP_VERSION;
@@ -1101,6 +1101,19 @@
       const pinToVerify = autoPin || K.pin;
       try {
         const fetchDate = document.getElementById("datePicker").value || todayIST();
+        // 0ms Warm Start from local cache on auto-login
+        if (autoPin) {
+          try {
+            const cached = JSON.parse(localStorage.getItem("sk_kitchen_cache") || "null");
+            if (cached && cached.data && cached.date === fetchDate) {
+              document.getElementById("loginWrap").style.display = "none";
+              document.getElementById("shell").style.display = "block";
+              _lastData = cached.data;
+              _lastCutoffs = cached.data.cutoffs || {};
+              switchKTab(_currentTab);
+            }
+          } catch (_) {}
+        }
         const res = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getKitchenSummary&date=${fetchDate}&pin=${pinToVerify}&_t=${Date.now()}`);
         const data = await res.json();
         if (data.error) {
@@ -1122,6 +1135,7 @@
         document.getElementById("shell").style.display = "block";
         _lastData = data;
         _lastCutoffs = data.cutoffs || {};
+        try { localStorage.setItem("sk_kitchen_cache", JSON.stringify({ date: fetchDate, data, ts: Date.now() })); } catch(_) {}
         switchKTab(_currentTab);
         _lastUpdated = new Date();
         startAutoRefresh();
@@ -1154,24 +1168,25 @@
       return ist.toISOString().slice(0, 10);
     }
 
-    async function loadKitchen() {
+    async function loadKitchen(silent = false) {
       const date = document.getElementById("datePicker").value;
-      if (!date) { await sAlert("Please select a date first.", "Date Required", "📅"); return; }
-      sLoading(true, "Fetching data...");
+      if (!date) { if (!silent) await sAlert("Please select a date first.", "Date Required", "📅"); return; }
+      if (!silent) sLoading(true, "Fetching data...");
       try {
         const res = await fetchWithTimeout(`${APPS_SCRIPT_URL}?action=getKitchenSummary&date=${date}&pin=${K.sessionPin}&_t=${Date.now()}`, { redirect: "follow", cache: "no-store" });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         _lastData = data;
         _lastCutoffs = data.cutoffs || {};
+        try { localStorage.setItem("sk_kitchen_cache", JSON.stringify({ date, data, ts: Date.now() })); } catch(_) {}
         renderView();
         _lastUpdated = new Date();
         // Re-schedule auto-label fires now that we have today's cutoffs.
         try { scheduleAutoLabels(); } catch(_) {}
       } catch (e) {
-        document.getElementById("kbody").innerHTML = `<div class="no-orders" style="color:#c0392b;">${e.message}</div>`;
+        if (!silent) document.getElementById("kbody").innerHTML = `<div class="no-orders" style="color:#c0392b;">${e.message}</div>`;
       } finally {
-        sLoading(false);
+        if (!silent) sLoading(false);
       }
     }
 
@@ -1900,7 +1915,7 @@
     // staff is running cached/stale HTML — silently hard-reload so the
     // newest build always wins. No prompts, no surprises.
     // Read claude.md and bump version number for pages with changes
-    const KITCHEN_VERSION = "v26.10.12.02";
+    const KITCHEN_VERSION = "v26.10.26.01";
     (async function _kitchenVersionCheck() {
       try {
         const loginBadge = document.getElementById("loginVerBadge");
@@ -1962,7 +1977,7 @@
       }
       function doRefresh() {
         scheduleNext();
-        loadKitchen();
+        loadKitchen(true); // Silent background auto-refresh: zero UI freeze / no blocking spinner
       }
 
       scheduleNext();
@@ -2381,6 +2396,34 @@
       const btn = document.getElementById("bulkDownloadBtn");
 
       if (!date) { sAlert("Select a date first"); return; }
+
+      // Fast in-memory rendering if orders for this date are already loaded
+      if (_lastData && _lastData.orders && _lastData.date === date) {
+        _bulkLabelOrders = (_lastData.orders || []).filter(o => !o.Packed && o.Meal_Type === meal);
+        if (_bulkLabelOrders.length > 0) {
+          const d = new Date(date + "T00:00:00");
+          const disp = d.getDate().toString().padStart(2, "0") + "/" + (d.getMonth() + 1).toString().padStart(2, "0") + "/" + d.getFullYear();
+          let html = `<h3>${_bulkLabelOrders.length} Labels · ${meal} · ${disp}</h3>`;
+          _bulkLabelOrders.forEach((o, i) => {
+            const summary = getBulkItemSummary(o, meal, lang);
+            html += `
+              <div class="label-card">
+                <div>
+                  <div class="lname">${o.name}</div>
+                  <div class="lsummary">${summary}</div>
+                  ${o.area ? `<div class="larea">${o.area}</div>` : ''}
+                  ${o.notes ? `<div class="lnotes">★ ${o.notes}</div>` : ""}
+                </div>
+                <div class="lnum">#${i + 1}</div>
+              </div>`;
+          });
+          preview.style.display = "block";
+          preview.innerHTML = html;
+          btn.style.display = "block";
+          btn.textContent = "💾 Save to Drive";
+          return;
+        }
+      }
 
       preview.style.display = "block";
       preview.innerHTML = '<div style="text-align:center;padding:30px;color:#aaa;">Loading…</div>';
