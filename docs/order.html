@@ -5213,7 +5213,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.26.04";
+    const APP_VERSION = "v26.10.26.05";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8905,6 +8905,7 @@
           email: ($("emailInput")?.value || S.profile.email || "").trim(),
           _action: "upsertProfile"
         };
+        try { localStorage.setItem('sk_profile', JSON.stringify({ ...S.profile, ...profile })); } catch (_) {}
         fetch(APPS_SCRIPT_URL, { method: "POST", body: JSON.stringify(profile) });
       }
       if (S.step === 2) {
@@ -9208,8 +9209,9 @@
     // ═══════════════════════════════════════════════════════════
     // CUSTOMER LOOKUP
     // ═══════════════════════════════════════════════════════════
-    async function lookupCustomer() {
-      sLoading(true, t('loading_logging_in'));
+    async function lookupCustomer(opts = {}) {
+      const isSilent = !!(opts && opts.silent);
+      if (!isSilent) sLoading(true, t('loading_logging_in'));
       if ($("pinAuthSection")) $("pinAuthSection").style.display = "none";
 
       // ── FAST AUTO-LOGIN ──────────────────────────────────────────────
@@ -9225,9 +9227,22 @@
           try {
             const rv = await fetch(`${APPS_SCRIPT_URL}?action=verifyLogin&phone=${S.phone}&pin=${_sp}`);
             const vd = await rv.json();
-            if (vd.success) { handleLoginSuccess(vd.profile, false); if (vd.notice) _showLoginNotice(vd.notice, S.phone); return; }
+            if (vd.success) {
+              handleLoginSuccess(vd.profile, false, isSilent);
+              if (vd.notice) _showLoginNotice(vd.notice, S.phone);
+              return;
+            }
             localStorage.removeItem('sk_logged_in_pin'); // stale PIN → fall through to normal flow
-          } catch (e) { /* network blip → fall through to normal getCustomer path */ }
+            localStorage.removeItem('sk_profile');
+            if (isSilent) {
+              toast("Your session has expired. Please enter your PIN.", 4000);
+              goToStep(0);
+              return;
+            }
+          } catch (e) {
+            if (isSilent) return; // network blip during silent verify -> keep cached state
+            /* network blip → fall through to normal getCustomer path */
+          }
         }
       }
 
@@ -9334,8 +9349,8 @@
       }
     }
 
-    function handleLoginSuccess(profileData, isNew) {
-      sLoading(false); // Hide any active "Logging you in" loader
+    function handleLoginSuccess(profileData, isNew, isSilentPreload = false) {
+      if (!isSilentPreload) sLoading(false); // Hide any active "Logging you in" loader
       if ($("authActionsWrap")) $("authActionsWrap").style.display = "flex";
       // Hide header Guide button once logged in — it's now in the action bar
       if ($("headerGuideBtn")) $("headerGuideBtn").style.display = "none";
@@ -9347,7 +9362,9 @@
         const pcVal = profileData.promoCount;
         const pc = (pcVal === null || pcVal === "" || pcVal === undefined) ? null : (isNaN(pcVal) ? pcVal : Number(pcVal));
 
-        toast(`Welcome back, ${fn}! Wallet balance: ₹${wb}`, 3000);
+        if (!isSilentPreload) {
+          toast(`Welcome back, ${fn}! Wallet balance: ₹${wb}`, 3000);
+        }
         updateWalletBalanceUI(wb);
         S.isFirstTime = false;
         S.profile = {
@@ -9370,23 +9387,31 @@
         S.walletBalance = wb;
         S.walletMode = true; // Everyone is on wallet/prepaid mode now
 
-        // Monthly On-Account customers: check for an unpaid previous-month bill
-        // and surface a skippable "settle your bill" modal (once per session).
-        maybeShowOnAccountBill();
+        // Cache profile locally so returning visits can boot directly to Calendar in 0ms (Amazon style)
+        try {
+          if (profileData) localStorage.setItem('sk_profile', JSON.stringify(profileData));
+          if (S.phone) localStorage.setItem('sk_logged_in_phone', S.phone);
+        } catch (_) {}
 
-        // Nudge returning customers with no email on file to add one (so they can
-        // self-reset their PIN). Skippable; re-appears next visit until added.
-        setTimeout(function () { try { _maybePromptEmail(); } catch (_) {} }, 1000);
+        if (!isSilentPreload) {
+          // Monthly On-Account customers: check for an unpaid previous-month bill
+          // and surface a skippable "settle your bill" modal (once per session).
+          maybeShowOnAccountBill();
 
-        // One-time pricing & quality update notice for returning existing customers only
-        if (!isNew && !S.isFirstTime) {
-          setTimeout(function () { try { _maybeShowPricingUpdateNotice(); } catch (_) {} }, 1200);
+          // Nudge returning customers with no email on file to add one (so they can
+          // self-reset their PIN). Skippable; re-appears next visit until added.
+          setTimeout(function () { try { _maybePromptEmail(); } catch (_) {} }, 1000);
+
+          // One-time pricing & quality update notice for returning existing customers only
+          if (!isNew && !S.isFirstTime) {
+            setTimeout(function () { try { _maybeShowPricingUpdateNotice(); } catch (_) {} }, 1200);
+          }
+
+          trackGA("login", {
+            method: "PIN",
+            is_new: !!isNew
+          });
         }
-
-        trackGA("login", {
-          method: "PIN",
-          is_new: !!isNew
-        });
 
         const isReviewed = (pc === "Exhausted" || (pc !== null && !isNaN(pc) && Number(pc) > 0));
         const wantPromoHtml = isReviewed ? `
@@ -9421,19 +9446,8 @@
           }
         }
 
-        if (S.step === 0) {
-          // Restore saved cart before navigating forward
-          const cartRestored = _restoreCart();
+        if (S.step === 0 && !isSilentPreload) {
           loadExistingOrders(S.phone);
-          goNext();
-          if (cartRestored) {
-            // Cart was restored — jump straight to meal screen
-            setTimeout(() => {
-              if (S.selectedDates.length && S.step === 1) {
-                toast('🛒 Your previous cart was restored!', 3000);
-              }
-            }, 800);
-          }
         }
       } else {
         S.isFirstTime = true;
@@ -9536,7 +9550,25 @@
       }
 
       $("btnNext").textContent = t('btn_continue'); $("btnNext").disabled = false;
-      S.step++; updateNav(); window.scrollTo(0, 0);
+
+      // Fast-forward to Calendar (Page 3) if user has a saved address; otherwise stop at Details (Page 2)
+      const hasSavedAddr = !isNew && S.profile && (S.profile.area === "Self Pickup" || (S.profile.area && (S.profile.society || S.profile.first_name || S.profile.name)));
+
+      if (S.step <= 1) {
+        if (hasSavedAddr) {
+          S.step = 2; // Jump directly to Step 3: Select Delivery Dates (Calendar)
+        } else if (S.step === 0) {
+          S.step = 1; // Incomplete profile: go to Step 2: Your Details
+        }
+        updateNav();
+        if (S.step === 2 && typeof renderCalendar === "function") {
+          renderCalendar();
+        }
+        window.scrollTo(0, 0);
+      } else {
+        // Already on a subsequent step (e.g. background session refresh) — just refresh nav
+        updateNav();
+      }
     }
 
     async function logoutCustomer() {
@@ -9552,6 +9584,7 @@
       S.selectedDates = [];
       localStorage.removeItem('sk_logged_in_phone');
       localStorage.removeItem('sk_logged_in_pin');
+      localStorage.removeItem('sk_profile');
       location.reload();
     }
 
@@ -17513,6 +17546,22 @@
 
       // Refresh nudge is shown when user reaches the calendar (step 2) — see updateNav()
 
+      // ── FAST PRELOAD FOR RETURNING LOGGED-IN CUSTOMER (Amazon Style) ───────
+      // If customer is already logged in on this device with a saved address,
+      // restore their profile synchronously and skip Phone (Page 1) and Address (Page 2)
+      // to land directly on Select Dates (Page 3) instantly on load!
+      const savedPhone = (localStorage.getItem('sk_logged_in_phone') || "").trim();
+      const savedPin = localStorage.getItem('sk_logged_in_pin');
+      const cachedProfileStr = localStorage.getItem('sk_profile');
+      let cachedProfile = null;
+      try { if (cachedProfileStr) cachedProfile = JSON.parse(cachedProfileStr); } catch (_) {}
+      const hasCachedAddr = cachedProfile && (cachedProfile.area === "Self Pickup" || (cachedProfile.area && (cachedProfile.society || cachedProfile.first_name || cachedProfile.name)));
+
+      if (savedPhone && savedPin && hasCachedAddr) {
+        S.phone = savedPhone;
+        if ($("phoneInput")) $("phoneInput").value = savedPhone.replace(/^\+91/, "").replace(/\D/g, "");
+        handleLoginSuccess(cachedProfile, false, true);
+      }
 
       loadAreas();
       updateNav();
@@ -17546,13 +17595,17 @@
       // Close how modal on backdrop click
       $("howModal").addEventListener("click", e => { if (e.target === $("howModal")) $("howModal").style.display = "none"; });
 
-      const savedPhone = (localStorage.getItem('sk_logged_in_phone') || "").trim();
-      const savedPin = localStorage.getItem('sk_logged_in_pin');
       if (savedPhone && savedPin) {
         // Strip any accidental whitespace or stale country-code formatting before using.
         S.phone = savedPhone;
         if ($("phoneInput")) $("phoneInput").value = savedPhone.replace(/^\+91/, "").replace(/\D/g, "");
-        lookupCustomer();
+        if (hasCachedAddr) {
+          // Already preloaded to Calendar — verify session silently in background without blocking loader
+          lookupCustomer({ silent: true });
+        } else {
+          // Uncached profile or first visit — normal auto-login with loader
+          lookupCustomer();
+        }
       }
     });
   </script>
