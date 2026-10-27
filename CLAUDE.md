@@ -487,6 +487,21 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **iOS Safari & Mobile Optimization: Server Timeout, Payment Screen & Button Loading Fixes (APP_VERSION v26.10.27.02, SW svaadh-cache-v4)**
+  - **1. 'Safari could not open the page because server stopped responding' Fix:**
+    - In `docs/sw.js`, stopped intercepting HTML page navigation requests (`if (event.request.mode === 'navigate') return;`). Intercepting navigations in WebKit previously caused fatal connection aborts whenever redirected (HTTP -> HTTPS, non-www -> www) or on slow cellular data. Browsers now navigate natively using standard HTTP/ETag revalidation.
+    - Bumped Service Worker cache to `svaadh-cache-v4`, evicting older caches, and added `reg.update()` on page load to force immediate worker update across Safari browsers.
+  - **2. Payment Screen Doesn't Open Fix (iOS / Safari & Mobile):**
+    - Removed desktop popup (`window.open("about:blank")`) on mobile devices (`isMobileDevice() || isIOS()`) across `hdfc_initiatePayment`, `_hdfcGatewayTopup` (wallet recharge & on-account), and `bulk_pay`.
+    - iOS Safari blocks popups by default and strictly cancels asynchronous cross-origin window navigations after `await` calls.
+    - On mobile, payments now use direct same-tab redirect (`window.location.href = data.payment_url`), which opens the payment gateway cleanly without popup blocking and seamlessly supports GPay/PhonePe UPI app-switching, returning to the verified order handler (`hdfc_handleReturnParams`). Desktop browsers retain popup mode.
+  - **3. Buttons Don't Load / Unresponsive Next Button Fix:**
+    - **Safe Area Insets & GPU Compositing:** Added `viewport-fit=cover` to `<meta name="viewport">` and updated `.bottom-nav` with `padding-bottom: max(12px, calc(12px + env(safe-area-inset-bottom)))` and GPU compositing (`transform: translateZ(0)`). This prevents the iOS Safari bottom floating URL bar and Home Indicator bar from covering or intercepting taps on `btnNext`, and prevents fixed-bar repaint disappearing glitches after keyboard dismissal.
+    - **Tap Response:** Added `touch-action: manipulation` and `-webkit-tap-highlight-color: transparent` to `.btn` to remove the 300ms iOS Safari tap delay.
+    - **Cleaned Corrupted Block in `lookupCustomer`:** Removed duplicate review badge code and dangling syntax error (`} "grayscale(100%)";`) in `docs/order.html`.
+    - **DOM Attribute Cleanup:** Ensured `delete btn.dataset.locked; btn.removeAttribute('data-locked');` cleanly clears disabled styling and lock state.
+    - **Safari Private Browsing Resilience:** Wrapped bare `localStorage.setItem` and `sessionStorage.setItem` calls in try/catch across `docs/order.html` and `docs/Liviano-Serio.html` to eliminate unhandled `QuotaExceededError` crashes.
+    - Applied identically to both main storefront (`docs/order.html`) and Liviano-Serio storefront (`docs/Liviano-Serio.html`).
 - **Monthly On-Account Payment Deadline Moved to 3rd of the Month (CODE_VERSION 36.14, APP_VERSION v26.10.27.01)**
   - **Payment Deadline Shift:**
     - Shifted the monthly on-account billing payment deadline from the 5th to the 3rd of the month (`now.getDate() >= 3` in `getOnAccountBill` in `04_Reports_Misc.gs`).

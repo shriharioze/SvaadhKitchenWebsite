@@ -99,7 +99,11 @@ const sBtnLoading = (btn, isLoading, loadingText = "") => {
     btn.innerHTML = `<div class="s-spinner"></div> <span>${txt}...</span>`;
   } else {
     btn.disabled = false;
-    if (btn.dataset.origHtml) btn.innerHTML = btn.dataset.origHtml;
+    if (btn.dataset.origHtml) {
+      btn.innerHTML = btn.dataset.origHtml;
+      delete btn.dataset.origHtml;
+      try { btn.removeAttribute('data-orig-html'); } catch(_) {}
+    }
   }
 };
 

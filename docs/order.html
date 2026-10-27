@@ -4,10 +4,10 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.27.01">
+  <meta name="app-version" content="v26.10.27.02">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -587,6 +587,10 @@
       cursor: pointer;
       transition: transform 0.1s, box-shadow 0.2s;
       text-align: center;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .btn:active {
@@ -1498,8 +1502,11 @@
       background: white;
       border-top: 1px solid #eee;
       padding: 12px 14px;
+      padding-bottom: max(12px, calc(12px + env(safe-area-inset-bottom)));
       box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
       z-index: 100;
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
     }
 
     .bottom-nav-inner {
@@ -5064,7 +5071,7 @@
       </div>
     </div>
 
-    <div style="text-align:center; padding: 8px 0 60px; color: #999; font-size: 0.7rem; font-weight: 500;">
+    <div style="text-align:center; padding: 8px 0 calc(70px + env(safe-area-inset-bottom)); color: #999; font-size: 0.7rem; font-weight: 500;">
       Svaadh Kitchen <span id="verLabel"></span>
     </div>
   </div><!-- /container -->
@@ -5220,7 +5227,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.27.01";
+    const APP_VERSION = "v26.10.27.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8214,6 +8221,12 @@
     // UTILS
     // ═══════════════════════════════════════════════════════════
     const $ = id => document.getElementById(id);
+    function isIOS() {
+      return (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.MSStream;
+    }
+    function isMobileDevice() {
+      return isIOS() || /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window && window.innerWidth <= 800);
+    }
     const toISO = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const getIST = () => new Date(Date.now() + 330 * 60000);
     const todayISO = () => {
@@ -8625,6 +8638,7 @@
       $("btnNext").disabled = false; $("btnNext").style.opacity = "1";
       const btn = $("btnNext");
       delete btn.dataset.locked;
+      btn.removeAttribute('data-locked');
       btn.style.filter = "none";
       const labels = [t('btn_continue'), t('btn_save_continue'), t('btn_continue'), t('btn_review'), t('btn_place')];
       btn.innerHTML = labels[s];
@@ -8662,7 +8676,7 @@
             const nudge = $("refreshNudge");
             if (nudge) {
               nudge.style.display = "block";
-              sessionStorage.setItem("sk_nudge_shown", "1");
+              try { sessionStorage.setItem("sk_nudge_shown", "1"); } catch (_) {}
               setTimeout(dismissRefreshNudge, 8000); // auto-dismiss after 8s
             }
           }, 1500);
@@ -8719,6 +8733,7 @@
         btn.style.filter = "grayscale(100%)";
       } else {
         delete btn.dataset.locked;
+        btn.removeAttribute('data-locked');
         btn.style.opacity = "1";
         btn.style.filter = "none";
       }
@@ -8731,6 +8746,7 @@
       if (S.step === 0 && $("pinAuthSection")?.style.display === "block") {
         if (val.length === 4) {
           delete btn.dataset.locked;
+          btn.removeAttribute('data-locked');
           btn.style.opacity = "1";
           btn.style.filter = "none";
         } else {
@@ -8856,8 +8872,10 @@
             const verData = await res.json();
             sBtnLoading($("btnNext"), false);
             if (verData.success) {
-              localStorage.setItem('sk_logged_in_phone', S.phone);
-              localStorage.setItem('sk_logged_in_pin', enteredPin);
+              try {
+                localStorage.setItem('sk_logged_in_phone', S.phone);
+                localStorage.setItem('sk_logged_in_pin', enteredPin);
+              } catch (_) {}
               handleLoginSuccess(verData.profile, false);
               if (verData.notice) _showLoginNotice(verData.notice, S.phone);
             } else {
@@ -8873,8 +8891,10 @@
           if (forbidden_pins.includes(enteredPin)) { toast("Please choose a stronger PIN.", 3000); return; }
 
           S.profile.pin = enteredPin;
-          localStorage.setItem('sk_logged_in_phone', S.phone);
-          localStorage.setItem('sk_logged_in_pin', enteredPin);
+          try {
+            localStorage.setItem('sk_logged_in_phone', S.phone);
+            localStorage.setItem('sk_logged_in_pin', enteredPin);
+          } catch (_) {}
 
           // If existing user resetting PIN -> Save immediately
           if (S.tempProfileData && !S.tempProfileData._newAccount && S.tempProfileData.found) {
@@ -9278,34 +9298,6 @@
         sLoading(false);
 
         if (data.hasPin) {
-                 const fn = S.profile.firstName || "Customer";
-        const pc = S.profile.promoCount;
-
-        const isReviewed = (pc === "Exhausted" || (pc !== null && !isNaN(pc) && Number(pc) > 0));
-        const wantPromoHtml = isReviewed ? `
-      <div style="margin-top:4px; font-size:0.72rem; color:#f59e0b; font-weight:700; cursor:pointer;" onclick="window.open('https://g.page/r/CasEH8gGAhzLEBM/review', '_blank')">Thank you for the 5-star rating! ❤️</div>
-    ` : `
-      <div style="margin-top:4px; font-size:0.72rem; color:#f59e0b; font-weight:700; cursor:pointer;" onclick="window.open('https://g.page/r/CasEH8gGAhzLEBM/review', '_blank')">🎁 Want 10% OFF? Click here</div>
-    `;
-
-        $("returningBadge").innerHTML = `<div class="customer-badge">
-      <div class="avatar">${fn.charAt(0).toUpperCase()}</div>
-      <div style="flex:1;">
-        <div class="cname">${t('welcome_back', { name: fn })}</div>
-        <div class="csub">${t('welcome_back_hint')}</div>
-        ${wantPromoHtml}
-      </div></div>
-    </div>`;
-
-        // GLOBAL REVIEW PROMO (Banner Style)
-        const promoBannerHtml = showReviewPromoBanner();
-        if ($("reviewRewardWrap")) $("reviewRewardWrap").innerHTML = promoBannerHtml;
-        if ($("step3ReviewPromo")) $("step3ReviewPromo").innerHTML = promoBannerHtml;
-
-        // Discount details notification
-        if (typeof pc === "number" && pc > 0) {
-          // If they have active credits, we can show a small note too, but the banner above covers it.
-        } "grayscale(100%)";
           S.authMode = "verify";
           const parts = (data.name || "").trim().split(" ");
           const firstName = parts[0] || "";
@@ -9459,7 +9451,7 @@
       } else {
         S.isFirstTime = true;
         // Suppress pricing notice permanently for new users (current prices are their default)
-        localStorage.setItem("sk_pricing_notice_20261012", "1");
+        try { localStorage.setItem("sk_pricing_notice_20261012", "1"); } catch (_) {}
         $("returningBadge").innerHTML = "";
         $("reviewRewardWrap").innerHTML = "";
 
@@ -11985,7 +11977,6 @@
       }
       buildBillScreen();
     }
-    function isIOS() { return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream; }
     function toggleExtraBundle(id) { const el = $(id), icon = $(`icon_${id}`); if (el) el.classList.toggle('open'); if (icon) icon.classList.toggle('open'); }
 
     function openWalletRecharge() {
@@ -13355,7 +13346,7 @@
         // we don't nag on every reload), UNLESS it is overdue, in which case we force it.
         const seenKey = `sk_bill_seen_${S.phone}_${data.cycle || 'm'}_${data.periodLabel}`;
         if (data.isOverdue || !sessionStorage.getItem(seenKey)) {
-          if (!data.isOverdue) sessionStorage.setItem(seenKey, "1");
+          if (!data.isOverdue) { try { sessionStorage.setItem(seenKey, "1"); } catch (_) {} }
           showOnAccountBillModal();
         }
       } catch (e) { /* non-blocking — bill is optional UX */ }
@@ -15686,13 +15677,20 @@
     async function _hdfcGatewayTopup(opts) {
       if (!S.gatewayEnabled) { await sAlert("Payment gateway is not available right now. Please try again in a moment.", "Gateway Unavailable", "⚠️"); return; }
 
-      const _w = (screen && screen.availWidth)  ? screen.availWidth  : 1280;
-      const _h = (screen && screen.availHeight) ? screen.availHeight : 800;
-      const popup = window.open("about:blank", "hdfc_" + opts.kind,
-        `width=${_w},height=${_h},top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes`);
-      const popupBlocked = !popup || popup.closed || typeof popup.closed === "undefined";
+      const isMobile = isMobileDevice();
+      let popup = null;
+      let popupBlocked = false;
 
-      try { localStorage.setItem("svaadh_hdfc_popup_active", JSON.stringify({ kind: opts.kind, ts: Date.now() })); } catch(_) {}
+      if (!isMobile) {
+        const _w = (screen && screen.availWidth)  ? screen.availWidth  : 1280;
+        const _h = (screen && screen.availHeight) ? screen.availHeight : 800;
+        popup = window.open("about:blank", "hdfc_" + opts.kind,
+          `width=${_w},height=${_h},top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes`);
+        popupBlocked = !popup || popup.closed || typeof popup.closed === "undefined";
+        try { localStorage.setItem("svaadh_hdfc_popup_active", JSON.stringify({ kind: opts.kind, ts: Date.now() })); } catch(_) {}
+      } else {
+        popupBlocked = true;
+      }
 
       if (popup && !popupBlocked) {
         try {
@@ -15718,7 +15716,7 @@
             localStorage.setItem(opts.pendingKey, data.order_id);
             localStorage.setItem(opts.pendingKey + "_ts", String(Date.now()));
           } catch(_) {}
-          if (popupBlocked) {
+          if (isMobile || popupBlocked) {
             try { localStorage.removeItem("svaadh_hdfc_popup_active"); } catch(_) {}
             window.location.href = data.payment_url;
             return;
@@ -16536,19 +16534,23 @@
       // Open the popup maximised — screen.availWidth/Height excludes the
       // OS taskbar, so the window fills the usable screen area on desktop.
       // Mobile browsers ignore these hints and use their own tab UI.
-      const _w = (screen && screen.availWidth)  ? screen.availWidth  : 1280;
-      const _h = (screen && screen.availHeight) ? screen.availHeight : 800;
-      const popup = window.open("about:blank", "hdfc_payment",
-        `width=${_w},height=${_h},top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes`);
-      const popupBlocked = !popup || popup.closed || typeof popup.closed === "undefined";
+      const isMobile = isMobileDevice();
+      let popup = null;
+      let popupBlocked = false;
 
-      // Set the marker BEFORE the popup navigates anywhere so that even if
-      // the popup races ahead and lands on order.html first, the top-of-page
-      // script can identify it as a popup and relay back to us.
-      try {
-        localStorage.setItem("svaadh_hdfc_popup_active",
-          JSON.stringify({ kind: "payment", ts: Date.now() }));
-      } catch(_) {}
+      if (!isMobile) {
+        const _w = (screen && screen.availWidth)  ? screen.availWidth  : 1280;
+        const _h = (screen && screen.availHeight) ? screen.availHeight : 800;
+        popup = window.open("about:blank", "hdfc_payment",
+          `width=${_w},height=${_h},top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes`);
+        popupBlocked = !popup || popup.closed || typeof popup.closed === "undefined";
+        try {
+          localStorage.setItem("svaadh_hdfc_popup_active",
+            JSON.stringify({ kind: "payment", ts: Date.now() }));
+        } catch(_) {}
+      } else {
+        popupBlocked = true; // Mobile devices (iOS Safari safe) use direct same-tab redirect
+      }
 
       const payBtns = ["hdfcPayBtn", "splitHdfcPayBtn"].map(id => $(id)).filter(b => b);
       const origBtnHtml = {};
@@ -16676,9 +16678,9 @@
         const data = await res.json();
 
         if (data.success && data.payment_url) {
-          if (popupBlocked) {
+          if (isMobile || popupBlocked) {
             try { localStorage.removeItem("svaadh_hdfc_popup_active"); } catch(_) {}
-            console.warn("Popup blocked — falling back to same-tab redirect.");
+            console.log("Mobile/popup-free mode: redirecting same-tab to HDFC payment page.");
             window.location.href = data.payment_url;
             return;
           }
@@ -17359,18 +17361,20 @@
       const _isSplit = (mode === "Split");
       const _walletHint = (Number(S.walletBalance) < 0) ? Number(S.walletBalance) : (_isSplit ? Math.min(Math.max(0, Number(S.walletBalance) || 0), total) : 0);
       if (S.bulkBusy) return; S.bulkBusy = true; _bulkPlacedShown = false;
-      const _w = (screen && screen.availWidth) ? screen.availWidth : 1280, _h = (screen && screen.availHeight) ? screen.availHeight : 800;
-      const popup = window.open("about:blank", "hdfc_payment", "width=" + _w + ",height=" + _h + ",top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes");
-      const blocked = !popup || popup.closed || typeof popup.closed === "undefined";
+      const isMobile = isMobileDevice();
+      let popup = null;
+      let blocked = false;
+      if (!isMobile) {
+        const _w = (screen && screen.availWidth) ? screen.availWidth : 1280, _h = (screen && screen.availHeight) ? screen.availHeight : 800;
+        popup = window.open("about:blank", "hdfc_payment", "width=" + _w + ",height=" + _h + ",top=0,left=0,menubar=no,toolbar=no,location=yes,scrollbars=yes,resizable=yes");
+        blocked = !popup || popup.closed || typeof popup.closed === "undefined";
+        try { localStorage.setItem("svaadh_hdfc_popup_active", JSON.stringify({ kind: "payment", ts: Date.now() })); } catch (_) {}
+      } else {
+        blocked = true;
+      }
       const now = new Date();
       const tempId = "SK" + now.getFullYear().toString().slice(-2) + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0") + "G" + Math.random().toString(36).substr(2, 9).toUpperCase();
       try { localStorage.setItem("svaadh_hdfc_pending_order", tempId); localStorage.setItem("svaadh_hdfc_pending_ts", String(Date.now())); } catch (_) {}
-      // Popup-mode marker — SET BEFORE the popup navigates (same as hdfc_initiatePayment).
-      // When the popup returns to order.html the relay short-circuit fires on the _popup=1
-      // URL param OR this marker; HDFC sometimes drops the query param on the way back, in
-      // which case the marker is the ONLY signal — without it the popup loaded the FULL
-      // order page (surcharge modal) instead of relaying back, so it never closed.
-      try { localStorage.setItem("svaadh_hdfc_popup_active", JSON.stringify({ kind: "payment", ts: Date.now() })); } catch (_) {}
       if (popup && !blocked) { try { popup.document.write('<!DOCTYPE html><body style="font-family:system-ui,Arial;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fef9f6;"><div style="text-align:center;font-weight:800;color:#c0392b;">Connecting to HDFC…</div></body>'); } catch (_) {} }
       closeBulkFlow();
       try {
@@ -17400,7 +17404,7 @@
         S.bulkBusy = false;
         if (!data.success || !data.payment_url) { try { popup && popup.close(); } catch (_) {} await sAlert(data.error || "Couldn't start the payment session. Please try again.", "Payment Error", "⚠️"); return; }
         S.bulkPayActive = true;
-        if (blocked) { window.location.href = data.payment_url; return; }
+        if (blocked || isMobile) { window.location.href = data.payment_url; return; }
         try { popup.location.href = data.payment_url; } catch (_) { window.location.href = data.payment_url; return; }
         if (typeof _hdfcInstallPopupResultListener === "function") {
           _hdfcInstallPopupResultListener(tempId, "hdfc_payment", function (d) { try { popup.close(); } catch (_) {} bulk_afterPaid(tempId, d && d.status); });
@@ -17538,7 +17542,7 @@
         if (!_hasCustomerOrderedInLast30Days()) return;
 
         // Mark as shown immediately in localStorage so it can never be shown again
-        localStorage.setItem("sk_pricing_notice_20261012", "1");
+        try { localStorage.setItem("sk_pricing_notice_20261012", "1"); } catch (_) {}
 
         const ov = document.createElement("div");
         ov.id = "pricingNoticeModal";
@@ -17591,7 +17595,7 @@
 
     function _dismissPricingNotice() {
       try {
-        localStorage.setItem("sk_pricing_notice_20261012", "1");
+        try { localStorage.setItem("sk_pricing_notice_20261012", "1"); } catch (_) {}
         const m = document.getElementById("pricingNoticeModal");
         if (m) m.remove();
       } catch (_) {}
@@ -17605,7 +17609,7 @@
           // Safety: Only refresh if no items in cart
           const orders = JSON.parse(localStorage.getItem('sk_orders') || '{}');
           if (Object.keys(orders).length === 0) {
-            localStorage.setItem("sk_force_refresh_ver", APP_VERSION);
+            try { localStorage.setItem("sk_force_refresh_ver", APP_VERSION); } catch (_) {}
             console.log("Svaadh Kitchen: Force refreshing for latest updates...");
             location.reload(true);
             return;
@@ -17723,7 +17727,10 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('SW Registered'))
+          .then(reg => {
+            console.log('SW Registered');
+            if (reg && reg.update) reg.update();
+          })
           .catch(err => console.log('SW Failed', err));
       });
     }
@@ -17953,7 +17960,7 @@
                 ';transition:all .3s;flex-shrink:0;"></div>';
       }
       dots.innerHTML = html;
-      sessionStorage.setItem(IDX_KEY, _pos);
+      try { sessionStorage.setItem(IDX_KEY, _pos); } catch (_) {}
     }
 
     function nextTip() {
@@ -17996,7 +18003,7 @@
     }
 
     function dismissTips() {
-      sessionStorage.setItem(SESSION_KEY, "1");
+      try { sessionStorage.setItem(SESSION_KEY, "1"); } catch (_) {}
       clearInterval(_timer);
       document.removeEventListener("click", _outsideClickHandler, true);
       var banner = document.getElementById("tipBanner");
