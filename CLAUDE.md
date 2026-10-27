@@ -487,6 +487,12 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **Monthly On-Account Payment Deadline Moved to 3rd of the Month (CODE_VERSION 36.14, APP_VERSION v26.10.27.01)**
+  - **Payment Deadline Shift:**
+    - Shifted the monthly on-account billing payment deadline from the 5th to the 3rd of the month (`now.getDate() >= 3` in `getOnAccountBill` in `04_Reports_Misc.gs`).
+    - **1st & 2nd of Month:** Bill is presented with a polite, skippable reminder ("Remind me later"), allowing customers to place orders.
+    - **3rd of Month & Onwards:** Becomes a mandatory hard block (`isOverdue = true`). The "Remind me later" option is removed, and order submission (`submitOrder` & `submitBulkOrder`) strictly blocks until previous month's dues are settled via gateway or marked paid by admin.
+    - Synchronized across backend `04_Reports_Misc.gs`, `02_Orders_Menu.gs`, `06_Bulk_Orders.gs`, and frontend `docs/order.html` and `docs/Liviano-Serio.html`.
 - **Kitchen Page Revert 5-Min Silent Reload & Label Generation Fix (KITCHEN_VERSION v26.10.27.01)**
   - **Reverted 5-Minute Silent Auto-Refresh:**
     - Returned startAutoRefresh() to calling standard loadKitchen() with active loading feedback (sLoading), ensuring kitchen staff clearly sees refresh status and is never stuck on silent network drops.
@@ -647,4 +653,4 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
 
 ### Billing & On-Account
-- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 5th of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.
+- **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 3rd of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.
