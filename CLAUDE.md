@@ -487,6 +487,13 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Portion & Container Sizing Clarity (Volume vs Weight):** Explicitly calibrated that 100ml (Mini) and 250ml (Full) sabji portions and 200ml dal portions represent food-grade container liquid volumetric capacity (water equivalent); physical weight in grams fluctuates naturally depending on vegetable density and gravy style. Phulka and Ghee Phulka dimensions standardized to 5–5.5 inches diameter.
   - **Cooking Standards & Oil Transparency:** Refined Groundnut Oil for sabjis, Sunflower Oil for chapatis/parathas/frying, Pure Cow Ghee for ghee phulkas and breakfast, Zero Oil for diet items.
   - **Omnichannel Sync:** Synced across `Backend/business.json`, `BUSINESS_CONTEXT` (`00_Config.gs`), `buildSystemPrompt` (`04_Reports_Misc.gs`), `docs/order-chat.js`, Guides & FAQs in `docs/order.html` and `docs/Liviano-Serio.html`, and FAQ accordion + JSON-LD structured data in `docs/index.html`.
+- **Kitchen Page Revert 5-Min Silent Reload & Label Generation Fix (KITCHEN_VERSION v26.10.27.01)**
+  - **Reverted 5-Minute Silent Auto-Refresh:**
+    - Returned startAutoRefresh() to calling standard loadKitchen() with active loading feedback (sLoading), ensuring kitchen staff clearly sees refresh status and is never stuck on silent network drops.
+    - Removed sk_kitchen_cache warm start from auto-login (verifyPin) and added boot cache eviction to prevent stale order counts on shift transitions.
+  - **Fixed Bulk Label Generation (generateBulkLabels):**
+    - Removed flawed in-memory shortcut that read raw _lastData.orders (which caused 'undefined' customer names and blank meal item summaries).
+    - Restored direct call to getLabelOrders endpoint, ensuring all labels correctly render customer name (o.name), delivery area (o.area), kitchen special notes (o.notes), and complete bilingual item summaries (getBulkItemSummary).
 - **Vault Admin Customer Tab & Customer Detail Ultra-Fast Speed Optimization (CODE_VERSION 36.13, ADMIN_VERSION v26.10.26.02)**
   - **Core Problem Solved:**
     - Previously, opening the Customers tab (getCustomerList) and clicking individual customer cards (getCustomerHistory) both called getOrdersInRangeWithArchive('2024-01-01', today).
