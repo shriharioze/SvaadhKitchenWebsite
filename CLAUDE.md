@@ -665,5 +665,13 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - `git log` — every commit message is a full incident/design writeup. Start any investigation with `git log --oneline -15`.
 - CODE_VERSION comment in 00_Config.gs — reverse-chronological changelog of every backend release.
 
+### Duplicate Order Handling & Gateway Reconciler (CODE_VERSION 36.15 / APP_VERSION v26.10.27.04)
+- **Paid Gateway & Confirmed Duplicate Order Allowance:**
+  - Fixed critical bug where an intentional second identical order (same customer, date, meal, and items) paid via HDFC SmartGateway or confirmed manually was rejected or silently dropped by the duplicate guards.
+  - **Backend Layer 4 Pre-flight:** In `02_Orders_Menu.gs`, exempts verified paid gateway transactions (`body.gateway_order_id && (body.payment_status === "Paid" || body.gateway_status === "CHARGED" || body.gateway_paid === true)`) and `body.confirm_duplicate === true` from pre-flight rejection.
+  - **Backend In-Loop Dedup (Layers 1-3):** Namespaces `_dupKey` by `gateway_order_id` (and `request_id` for confirmed duplicates) so separate payment sessions never collide in CacheService, and restricts `_dupRow` matching so distinct gateway payments and confirmed duplicates are never skipped.
+  - **Reconciler & Webhook Auto-Write:** In `11_Hdfc_Reconciler.gs` (`_buildSubmitBodyFromPending`), explicitly passes `confirm_duplicate: true` and `gateway_paid: true` when writing paid orders from the stash.
+  - **Frontend:** In `docs/order.html` and `docs/Liviano-Serio.html`, passes `confirm_duplicate: true` in `hdfc_submitVerifiedOrder`. Added a clean tip above Pay buttons instructing users to tap "Allow" / "Open" if prompted by their browser for pop-ups.
+
 ### Billing & On-Account
 - **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 3rd of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.

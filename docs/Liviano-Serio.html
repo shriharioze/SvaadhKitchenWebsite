@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.27.03">
+  <meta name="app-version" content="v26.10.27.04">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -4313,6 +4313,9 @@
         <div id="hdfcGatewayAmount"
           style="font-size:2rem;font-weight:800;color:#1a6640;text-align:center;margin:10px 0 18px;">₹0</div>
 
+        <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:0.75rem;color:#475569;text-align:center;line-height:1.4;">
+          💡 <strong>Tip:</strong> If your browser asks, please tap <strong>&ldquo;Allow&rdquo;</strong> or <strong>&ldquo;Open&rdquo;</strong> to open the secure payment page.
+        </div>
         <button id="hdfcPayBtn" onclick="hdfc_initiatePayment()"
           style="width:100%;padding:14px;background:linear-gradient(135deg,#1565c0,#0d47a1);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 14px rgba(13,71,161,0.35);">
           🔒 Click here to Pay ₹<span id="hdfcPayBtnAmt">0</span>
@@ -4486,6 +4489,9 @@
                 <div style="font-size:0.75rem;color:#3b82f6;">Secured by HDFC SmartGateway · 256-bit SSL</div>
               </div>
               <div style="margin-left:auto;font-size:1.5rem;font-weight:900;color:#15803d;letter-spacing:-0.5px;">₹<span id="splitGatewayAmtDisplay">0</span></div>
+            </div>
+            <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:0.75rem;color:#475569;text-align:center;line-height:1.4;">
+              💡 <strong>Tip:</strong> If your browser asks, please tap <strong>&ldquo;Allow&rdquo;</strong> or <strong>&ldquo;Open&rdquo;</strong> to open the secure payment page.
             </div>
             <button id="splitHdfcPayBtn" onclick="hdfc_initiatePayment()"
               style="width:100%;padding:14px;background:linear-gradient(135deg,#1565c0,#0d47a1);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 14px rgba(13,71,161,0.35);">
@@ -5079,7 +5085,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.27.03";
+    const APP_VERSION = "v26.10.27.04";
     // ══ LIVIANO-SERIO STOREFRONT MARKER ════════════════════════════════════
     // This page is the Liviano-Serio storefront (single fixed drop location).
     // STOREFRONT is injected into EVERY POST body by apiPost() below — the
@@ -15971,6 +15977,8 @@
         wallet_credit:    isSplitGateway ? (S.walletCredit || 0) : undefined,
         gateway_order_id: gatewayOrderId,
         gateway_status:   hdfcStatus,
+        gateway_paid:     true,
+        confirm_duplicate: true,
         settle_all: false
       };
 

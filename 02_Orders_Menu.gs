@@ -3223,7 +3223,8 @@ function _submitOrderInternal(body) {
   // earlier meals' rows were already appended — a half-placed order the
   // customer believed had failed.) Recent rows (≤5 min) are excluded here:
   // those are legitimate retries, silently deduped by layers 1–3 in the loop.
-  if (body.confirm_duplicate !== true) {
+  const _isPaidGateway = !!(body.gateway_order_id && (body.payment_status === "Paid" || body.gateway_status === "CHARGED" || body.gateway_paid === true));
+  if (body.confirm_duplicate !== true && !_isPaidGateway) {
     for (const _o of orders) {
       let _mealsPF = _o.meals || [];
       for (const _m of _mealsPF) {
@@ -3271,7 +3272,7 @@ function _submitOrderInternal(body) {
       }
     }
   } else {
-    console.log("Duplicate order ALLOWED (confirm_duplicate=true) — phone=" + _normPhone);
+    console.log("Duplicate order ALLOWED (" + (_isPaidGateway ? "paid gateway order: " + body.gateway_order_id : "confirm_duplicate=true") + ") — phone=" + _normPhone);
   }
 
   // ── Streak gap guard (mirrors the frontend fix) ──────────────────────────
@@ -3601,7 +3602,17 @@ function _submitOrderInternal(body) {
       const _incomingSig = _itemsSig(itemsObj);
       // Namespaced per storefront — the script-wide cache is shared, and a key
       // collision between tabs would false-dedupe a legitimate LS order (or vice versa).
-      const _dupKey      = `dup_${_isLS ? "ls" : "sk"}_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`;
+      // If gateway_order_id is present, namespace by gateway_order_id so distinct
+      // gateway payments are NEVER deduped against each other, while retries of the SAME
+      // gateway payment are safely deduped.
+      // If confirm_duplicate=true (manual checkout), namespace by request_id so it doesn't
+      // collide with the unconfirmed order placed a moment ago.
+      const _gwIdForDedup = String(body.gateway_order_id || "").trim();
+      const _dupKey      = _gwIdForDedup
+        ? `dup_${_isLS ? "ls" : "sk"}_gw_${_gwIdForDedup}_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`
+        : (body.confirm_duplicate
+            ? `dup_${_isLS ? "ls" : "sk"}_conf_${body.request_id || Date.now()}_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`
+            : `dup_${_isLS ? "ls" : "sk"}_${_normPhone}_${_normDate(orderDate)}_${mealType}_${_incomingSig}`);
       const _cache       = CacheService.getScriptCache();
 
       // Layer 1: cache lookup — TRUST BUT VERIFY. The key is reserved BEFORE the
@@ -3644,6 +3655,17 @@ function _submitOrderInternal(body) {
         if (_normalizePhone(r.Phone) !== _normPhone) return false;
         if (_normDate(r.Order_Date) !== _normDate(orderDate)) return false;
         if (r.Meal_Type !== mealType) return false;
+        // If this is a gateway order, it can ONLY match a row with the EXACT SAME gateway_order_id.
+        // A distinct gateway payment is NEVER a duplicate of a different gateway order or cash order!
+        if (_gwIdForDedup) {
+          const rGw = String(r.Gateway_Order_ID || "").trim();
+          if (rGw !== _gwIdForDedup) return false;
+        }
+        // If the customer explicitly confirmed placing another identical order (confirm_duplicate === true),
+        // do not match existing historical rows from a previous submission.
+        if (body.confirm_duplicate === true && !_gwIdForDedup) {
+          return false;
+        }
         const rMs = r.Submitted_At ? new Date(r.Submitted_At).getTime() : 0;
         if (!rMs || (_nowMsFresh - rMs) > _FIVE_MIN_MS) return false;
         try {

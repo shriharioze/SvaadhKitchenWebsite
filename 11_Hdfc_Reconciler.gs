@@ -379,6 +379,7 @@ function _buildSubmitBodyFromPending(orderId, entry, statusCheck) {
     gateway_order_id: orderId,
     gateway_status:   statusCheck.status || "CHARGED",
     gateway_paid:     true,
+    confirm_duplicate: true,
     settle_all:       false,
     // Tag the source so logs make it clear this row came from the reconciler
     placed_via:       "reconciler"

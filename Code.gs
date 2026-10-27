@@ -860,6 +860,16 @@ if (action === "fixCustomerPins") { if (!isAdmin) return jsonRes({ error: "STRIC
       reconcilePendingRefunds();
       return jsonRes({success: true, message: "reconcilePendingRefunds executed"});
     }
+    if (action === "reconcilePendingOrders") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      reconcilePendingOrders();
+      return jsonRes({success: true, message: "reconcilePendingOrders executed"});
+    }
+    if (action === "reconcileSingleOrder") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const res = hdfc_reconcileOrderFromStash(p.orderId || p.order_id);
+      return jsonRes(res);
+    }
     if (action === "revertSpuriousRefunds") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       const commit = (p.commit === "1" || p.commit === true || p.commit === "true");
@@ -1144,6 +1154,16 @@ function doPost(e) {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
       reconcilePendingRefunds();
       return jsonRes({success: true, message: "reconcilePendingRefunds executed"});
+    }
+    if (action === "reconcilePendingOrders") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      reconcilePendingOrders();
+      return jsonRes({success: true, message: "reconcilePendingOrders executed"});
+    }
+    if (action === "reconcileSingleOrder") {
+      if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
+      const res = hdfc_reconcileOrderFromStash(p.orderId || p.order_id);
+      return jsonRes(res);
     }
     if (action === "revertSpuriousRefunds") {
       if (!isAdmin) return jsonRes({error:"STRICT ADMIN PIN REQUIRED"});
