@@ -685,3 +685,8 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - **Payment Guidance & Legacy Cleanup:**
   - Replaced obsolete 'Already Paid' instructions in `docs/order.html` and `docs/Liviano-Serio.html` FAQs with guidance to wait up to 10 minutes for the automated reconciler to retrieve the order.
   - Added bank-account UPI preference and browser pop-up window permission tips across prompts, business context, and FAQs.
+- **Legal & Policy Pages Synchronization (`docs/terms.html`, `docs/privacy.html`, `docs/refund.html`, `docs/shipping.html`):**
+  - Updated "Last updated" to 28 October 2026 and stamped `v26.10.28.01` app-version tags.
+  - Aligned terms and shipping with current ₹12 delivery fee, ₹59 small order threshold (₹12 fee), ₹117/₹175/₹209 free delivery tiers, Breakfast ₹40 minimum (with Bhosale/Triveni/Pickup/Address waivers), and Ganga Serio Kharadi storefront.
+  - Aligned on-account policy with 3rd of the following month settlement deadline (hard-block from 3rd onwards).
+  - Aligned refunds policy with instant wallet credits vs 1–2 days bank source refunds, bulk postpone rules (2 lunch + 2 dinner days on 15-day; 4 lunch + 4 dinner days on month plan), bulk clawback on cancellation, and kitchen closure auto-rescheduling for bulk plans vs full refund for standard orders.
