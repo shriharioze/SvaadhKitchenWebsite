@@ -675,3 +675,13 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 
 ### Billing & On-Account
 - **Monthly Dues:** Monthly On-Account users are hard-blocked from placing new orders if it is the 3rd of the month (or later) and they have unpaid dues from previous month(s). UI shows an unskippable mandatory payment prompt.
+### FAQ, Content & AI Knowledge Base Synchronization (CODE_VERSION 36.16 / APP_VERSION v26.10.28.01)
+- **Monthly On-Account Settlement Deadline:** Updated from the 5th to the **3rd of the following month** across `Backend/business.json`, `docs/index.html` (FAQ and Schema), `docs/order.html` (FAQ), `docs/Liviano-Serio.html` (FAQ), `00_Config.gs` (`BUSINESS_CONTEXT`), and `04_Reports_Misc.gs` (`buildSystemPrompt`). 1st & 2nd serve as review reminders; hard-block activates on the 3rd.
+- **Breakfast ₹40 Minimum Food Value:** Added ₹40 minimum food value requirement and waiver conditions (Free Delivery areas Bhosale Nagar & Triveni Nagar, Self Pickup, or if an active breakfast delivery is already scheduled to that exact flat address) to `Backend/business.json`, `docs/index.html` schema and FAQ, and `docs/order.html`.
+- **Pricing & Menu Corrections:**
+  - `docs/index.html`: Hero card updated to `(₹40–₹85)` and Curd `₹14` (was `(₹35–₹70)` and `₹13`). Typical meal calculation corrected to `₹115` (was `₹105`).
+  - `docs/Liviano-Serio.html`: Corrected staple prices in FAQ item 6 to current rates (Chapati ₹11, Phulka ₹9, Jowar ₹25, Bajra ₹22, Sabji Mini ₹26 / Full ₹52, Dal ₹26, Dal Fry ₹42, Rice ₹15, Salad ₹9, Curd ₹14). Updated pickup location to G2 804 Ganga Serio Kharadi.
+  - `04_Reports_Misc.gs`: Updated `_formatMenuForPrompt` staples to current prices (₹26/₹52 sabji, ₹11/₹9/₹25/₹22 breads, ₹26 dal, ₹42 dal fry, ₹15 rice, ₹9 salad, ₹14 curd).
+- **Payment Guidance & Legacy Cleanup:**
+  - Replaced obsolete 'Already Paid' instructions in `docs/order.html` and `docs/Liviano-Serio.html` FAQs with guidance to wait up to 10 minutes for the automated reconciler to retrieve the order.
+  - Added bank-account UPI preference and browser pop-up window permission tips across prompts, business context, and FAQs.

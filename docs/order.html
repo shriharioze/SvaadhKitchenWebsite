@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.10.27.04">
+  <meta name="app-version" content="v26.10.28.01">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -5233,7 +5233,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.10.27.04";
+    const APP_VERSION = "v26.10.28.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8464,7 +8464,7 @@
     // ═══════════════════════════════════════════════════════════
     const FAQ_ITEMS = [
       { q: "Where do I find Manage Orders, Wallet, Guide etc.?", a: "After login, tap the <strong>profile avatar (your initials)</strong> at the top-right of the order page. A side drawer opens with: 📍 Addresses · 📖 Guide · 🛒 Manage Orders · 💳 Wallet · 📞 Contact us · 🛵 Call delivery partner · ⭐ Rate &amp; Review · 🚪 Log out." },
-      { q: "How do payments work?", a: "Payments go through the secure <strong>HDFC payment gateway</strong> — pay by <strong>UPI or card</strong> and your order confirms <strong>automatically</strong> (no screenshots, no waiting for verification). If you have Svaadh Wallet balance, it's used first and the gateway collects only the remainder (<strong>split payment</strong>). Approved regular customers can also order <strong>On Account</strong> and settle monthly." },
+      { q: "How do payments work?", a: "Payments go through the secure <strong>HDFC payment gateway</strong> — pay by <strong>UPI or card</strong> and your order confirms <strong>automatically</strong> (no screenshots, no waiting for verification). If you have Svaadh Wallet balance, it's used first and the gateway collects only the remainder (<strong>split payment</strong>). Approved regular customers can also order <strong>On Account</strong> and settle their monthly bill before the <strong>3rd of the following month</strong> via the gateway (or within 7 days for daily accounts). 💡 <em>Payment Tip:</em> Please pay from a bank-account UPI (GPay, PhonePe, Paytm, etc.). If your browser asks, please tap 'Allow' or 'Open' to open the secure payment page." },
       { q: "What is Svaadh Wallet (Prepaid Credits)?", a: "Svaadh Wallet is a prepaid system for <strong>1-tap instant ordering</strong>. Recharge ₹100+ through the secure payment gateway — the balance credits <strong>instantly</strong>. Your balance is always visible at the top-left wallet chip from Step 2 onwards. To add funds, tap the wallet chip or open the avatar drawer → <strong>Wallet</strong>. Cancellation refunds land here instantly." },
       { q: "How do I track my delivery in real-time?", a: "Open avatar drawer → <strong>Manage Orders</strong>. Once our driver marks your order as 'Out for Delivery', a <strong>🚗 Out for Delivery</strong> badge appears next to that order's timing. To call the delivery partner directly, use <strong>🛵 Call delivery partner (Abhijeet · 86055 12646)</strong> from the drawer." },
       { q: "Can I install this as an App on my phone?", a: "Yes! Look for the <strong>📲 Install App</strong> button on the home screen. This adds Svaadh Kitchen to your home screen for fast, one-tap access just like a regular app." },
@@ -8483,7 +8483,7 @@
       { q: "What is the Friends & Family privilege?", a: "Accounts verified under Friends & Family automatically receive an exclusive flat <strong>10% discount</strong> on all food items (<strong>🌟 Exclusive Privilege (10% off)</strong>) and are exempt from delivery slot limits." },
       { q: "Do you offer self-pickup?", a: "Yes! Select <strong>📦 Self Pickup</strong> as your delivery area. Both the delivery charge and the small-order fee are <strong>completely waived</strong> for pickup. Free delivery also applies to 🏠 Bhosale Nagar and 📍 Triveni Nagar." },
       { q: "Is there a minimum order value for Breakfast?", a: "Breakfast orders require a minimum food value of <strong>₹40</strong> per day for standard delivery areas (even if other meals are ordered). This minimum is <strong>waived for Free Delivery areas (Bhosale Nagar, Triveni Nagar), Self Pickup, or if an active breakfast delivery is already scheduled to your exact flat address on that date</strong>. Lunch and Dinner have no minimum order value." },
-      { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. If it's missing, place again and choose 'Already Paid' if you've already completed the UPI payment." },
+      { q: "I didn't see a confirmation — was my order placed?", a: "Open avatar drawer → <strong>Manage Orders</strong> and check the Upcoming list. If your order shows there, it's locked in — <strong>do not pay again</strong>. In rare cases where an order takes a few minutes to confirm, please wait up to 10 minutes for our automated reconciler to retrieve and record it. If it still doesn't appear, please message us on WhatsApp with your payment details." },
     ];
 
     function buildFAQ() {

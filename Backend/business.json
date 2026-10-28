@@ -28,15 +28,18 @@
     "lunch": "before 9:00 AM",
     "dinner": "before 4:00 PM",
     "closed_on": "Sunday",
+    "holiday_notice": "Diwali Break: Kitchen service pauses after 7th Nov Lunch and resumes on 13th Nov morning (closed 7th Nov Dinner through 12th Nov).",
     "note": "Cutoffs are for same-day delivery. Future dates can be ordered any time. Occasionally the kitchen closes a specific day or a specific meal — closed days/meals are greyed out on the order calendar, and any already-placed orders for them are auto-cancelled with a full refund."
   },
   "delivery": {
     "free_area": "Bhosale Nagar, Triveni Nagar, Self Pickup — always free",
     "delivery_charge": "₹12 per meal. Delivery becomes FREE when the day's food total reaches ₹117 (ordering 1 meal that day), ₹175 (2 meals) or ₹209 (3 meals). Always free for Bhosale Nagar, Triveni Nagar, and Self Pickup.",
     "small_order_fee": "A small ₹12 cart fee applies to a Lunch or Dinner meal whose food subtotal is below ₹59.",
+    "breakfast_minimum": "Breakfast orders require a minimum food value of ₹40 per day in regular delivery areas (waived for Free Delivery areas like Bhosale Nagar, Triveni Nagar, and Self Pickup, or if an active breakfast delivery is already scheduled to your exact flat address on that date).",
     "outside_service": "We only deliver in listed Hadapsar areas.",
     "per_meal_address": "Each meal can go to a different address — breakfast at home, lunch at office, dinner back home.",
-    "delivery_full": "On high-demand days, delivery slots for a meal can fill up. Orders of ₹200+ for that meal (₹100+ for breakfast) still get home delivery even when slots are full. Otherwise you can still order with free Self Pickup, or Porter (you book a courier from our kitchen and pay the courier directly — we add no fee)."
+    "delivery_full": "On high-demand days, delivery slots for a meal can fill up. Orders of ₹200+ for that meal (₹100+ for breakfast) still get home delivery even when slots are full. Otherwise you can still order with free Self Pickup, or Porter (you book a courier from our kitchen and pay the courier directly — we add no fee).",
+    "liviano_serio": "Dedicated second storefront at https://www.svaadhkitchen.in/Liviano-Serio.html exclusively for Ganga Serio residents in Kharadi with 100% free delivery for Lunch & Dinner."
   },
   "menu": {
     "note": "Today's sabji (dry and curry) changes daily and is shown in the order form. Breakfast items also rotate daily.",
@@ -168,6 +171,7 @@
     "bulk": "Bulk plans add their own discount on every day's food: Week 5%, 15-Day 7.5%, Month 10% — and the daily tiers above stack on top.",
     "loyalty_streak": "Order 6 days in a row (Sundays and kitchen-closed days don't break the streak) and get a loyalty reward on day 6 — 5% of each streak day's food is given back.",
     "review_promo": "Leave a 5-star Google review and get an extra 10% off your next order.",
+    "fnf_privilege": "Verified Friends & Family members receive an exclusive flat 10% discount on food subtotals ('🌟 Exclusive Privilege (10% off)') and are exempt from delivery caps.",
     "note": "All discounts are applied automatically when you place an order online."
   },
   "payment": {
@@ -177,14 +181,14 @@
       "Wallet + Gateway split payment",
       "On Account (for approved regular customers)"
     ],
-    "gateway": "Payments are processed instantly through the HDFC SmartGateway — pay by UPI or card and your order confirms automatically, no screenshots or manual verification needed.",
+    "gateway": "Payments are processed instantly through the HDFC SmartGateway — pay by bank-account UPI (GPay, PhonePe, Paytm, BHIM, etc.) or card and your order confirms automatically, no screenshots needed. Note: Credit-linked UPI (RuPay credit cards) and prepaid wallets (PPI) carry extra surcharges and are not supported. If your browser asks, please tap 'Allow' or 'Open' to open the secure payment window.",
     "wallet": {
       "name": "Svaadh Wallet",
       "recharge": "Recharge instantly (min ₹100) through the secure HDFC payment gateway on the order page — the balance credits immediately.",
       "benefit": "Enables 1-tap ordering without paying every time. Balance is visible at the top of the order page. If your balance covers part of an order, you can split — wallet pays what it can and the gateway collects the rest.",
       "refunds": "Order cancellations refund instantly to your Svaadh Wallet, or to your original payment method on request."
     },
-    "on_account": "Approved regular customers can order on account and settle their bill monthly (or per their agreed cycle) via the gateway — the order page shows a Pay Bill option when dues are ready."
+    "on_account": "Approved regular customers can order on account and settle their bill via the gateway. Monthly bills are generated at the start of each month (with a review reminder on 1st & 2nd) and must be paid before the 3rd of the month; from the 3rd onwards, new orders are blocked until previous dues are settled. Daily on-account accounts have a 7-day payment window before orders are blocked."
   },
   "ordering": {
     "platform": "Website order form / PWA Mobile App",

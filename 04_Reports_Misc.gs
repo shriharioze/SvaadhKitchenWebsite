@@ -97,7 +97,7 @@ function _formatMenuForPrompt(dateStr, dateObj) {
 
     out += "• BREAKFAST (Order Cutoff: 7:00 AM" + (cm.Breakfast ? " — CLOSED FOR THIS DATE" : "") + "):\n";
     out += "  Today's rotating items: " + (bfList || "Exact items & prices shown on the order form") + "\n";
-    out += "  Note: Made in Pure Ghee. Curd 50g (₹13) available as add-on.\n";
+    out += "  Note: Made in Pure Ghee. Curd 50g (₹14) available as add-on.\n";
 
     out += "• LUNCH SABJIS (Order Cutoff: 9:00 AM" + (cm.Lunch ? " — CLOSED FOR THIS DATE" : "") + "):\n";
     if (m.lunch_dry || m.lunch_curry) {
@@ -118,7 +118,7 @@ function _formatMenuForPrompt(dateStr, dateObj) {
     if (closedList.length > 0 && closedList.length < 3) {
       out += "IMPORTANT NOTE: The kitchen has CLOSED ordering specifically for " + closedList.join(", ") + " on this date.\n";
     }
-    out += "HOW TO BUILD THIS MEAL: Customers pair these sabjis (Mini 100ml ₹24 or Full 250ml ₹48) with Breads (Chapati ₹10, Phulka ₹8, Bhakri ₹22), Dal (₹24), Rice (₹13), Salad (₹8) & Curd (₹13) to create their own custom plate!\n=======================================================\n";
+    out += "HOW TO BUILD THIS MEAL: Customers pair these sabjis (Mini 100ml ₹26 or Full 250ml ₹52) with Breads (Chapati ₹11, Phulka ₹9, Jowar Bhakri ₹25, Bajra Bhakri ₹22), Dal (₹26), Dal Fry (₹42), Rice (₹15), Salad (₹9) & Curd (₹14) to create their own custom plate!\n=======================================================\n";
     return out;
   } catch (e) {
     return "\n=== MENU FOR " + dateStr + " ===\nCheck live items directly on the order calendar or WhatsApp group.\n";
@@ -171,9 +171,9 @@ function buildSystemPrompt(extraMenu, page) {
     + "   • Postpone Days (Free Reschedule): Change of plans? Instead of cancelling, you can POSTPONE up to 2 lunch + 2 dinner days on the 15-Day plan (and 4 + 4 days on the Month plan) to another working day within 30 days for free! Same items, price, and discount kept.\n"
     + "   • Cancelling Bulk Days: Any day can be cancelled before its cutoff. Cancelling forfeits the bulk commitment discount for that meal, and the rest is refunded immediately to your Svaadh Wallet.\n\n"
     + "6. PAYMENTS, SVAADH WALLET & ON ACCOUNT:\n"
-    + "   • Instant Gateway: Pay by UPI or card via secure HDFC SmartGateway — instant confirmation, no screenshots needed.\n"
+    + "   • Instant Gateway: Pay by UPI or card via secure HDFC SmartGateway — instant confirmation, no screenshots needed. Please pay from a bank-account UPI (credit UPI / PPI wallets are not supported). If prompted for a pop-up window, tap 'Allow' or 'Open'.\n"
     + "   • Svaadh Wallet (Prepaid Credits): Recharge ₹100+ anytime via the gateway. Balance credits instantly -> enables 1-tap fast checkout. If your wallet covers part of an order, you can do a Split Payment (wallet pays what it has, gateway collects the remainder).\n"
-    + "   • On Account: Approved regular customers can order On Account and settle their dues monthly (or per cycle) using the Pay Bill button.\n\n"
+    + "   • On Account: Approved regular customers can order On Account and settle their dues via the gateway. Monthly bills must be cleared before the 3rd of the following month (1st & 2nd reminder, hard block from 3rd until cleared). Daily on-account accounts have a 7-day payment window.\n\n"
     + "7. TRACKING, MANAGE ORDERS & CONTACTS:\n"
     + "   • Manage Orders & Drawer: Tap your profile initials (avatar) top-right to access Manage Orders, Svaadh Wallet, Saved Addresses, and 📖 Guide.\n"
     + "   • Real-time Tracking: In Manage Orders, check status badges: '🕐 Upcoming', '🚗 Out for Delivery', '✅ Delivered'.\n"
