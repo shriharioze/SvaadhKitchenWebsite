@@ -690,3 +690,6 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - Aligned terms and shipping with current ₹12 delivery fee, ₹59 small order threshold (₹12 fee), ₹117/₹175/₹209 free delivery tiers, Breakfast ₹40 minimum (with Bhosale/Triveni/Pickup/Address waivers), and Ganga Serio Kharadi storefront.
   - Aligned on-account policy with 3rd of the following month settlement deadline (hard-block from 3rd onwards).
   - Aligned refunds policy with instant wallet credits vs 1–2 days bank source refunds, bulk postpone rules (2 lunch + 2 dinner days on 15-day; 4 lunch + 4 dinner days on month plan), bulk clawback on cancellation, and kitchen closure auto-rescheduling for bulk plans vs full refund for standard orders.
+
+### Diwali Break Notice Cleanup (CODE_VERSION 36.17 / APP_VERSION v26.11.12.01)
+- **Removed Expired Notice Banner & Fallbacks:** Removed the Diwali Break announcement banner (`#kitchenClosureBanner`), November 2026 display trigger, and hardcoded fallback strings across `docs/order.html` and `docs/Liviano-Serio.html`. Also removed the stale `holiday_notice` from `Backend/business.json` and `00_Config.gs` (`BUSINESS_CONTEXT`) as regular service resumes on 13th Nov.

@@ -28,7 +28,6 @@
     "lunch": "before 9:00 AM",
     "dinner": "before 4:00 PM",
     "closed_on": "Sunday",
-    "holiday_notice": "Diwali Break: Kitchen service pauses after 7th Nov Lunch and resumes on 13th Nov morning (closed 7th Nov Dinner through 12th Nov).",
     "note": "Cutoffs are for same-day delivery. Future dates can be ordered any time. Occasionally the kitchen closes a specific day or a specific meal — closed days/meals are greyed out on the order calendar, and any already-placed orders for them are auto-cancelled with a full refund."
   },
   "delivery": {
