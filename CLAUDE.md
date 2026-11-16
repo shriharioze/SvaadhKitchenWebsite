@@ -693,3 +693,15 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 
 ### Diwali Break Notice Cleanup (CODE_VERSION 36.17 / APP_VERSION v26.11.12.01)
 - **Removed Expired Notice Banner & Fallbacks:** Removed the Diwali Break announcement banner (`#kitchenClosureBanner`), November 2026 display trigger, and hardcoded fallback strings across `docs/order.html` and `docs/Liviano-Serio.html`. Also removed the stale `holiday_notice` from `Backend/business.json` and `00_Config.gs` (`BUSINESS_CONTEXT`) as regular service resumes on 13th Nov.
+
+### Mobile Profile Drawer & MyGate PIN UX Optimization (APP_VERSION v26.11.16.01)
+- **Profile Drawer Mobile Scrolling Fix (`docs/order.html`, `docs/Liviano-Serio.html`):**
+  - Replaced rigid `height: 100vh` on `#profileDrawer` with `top: 0; bottom: 0; right: 0; height: 100%; height: 100dvh; max-height: 100dvh;`.
+  - Fixes mobile browser bug where expanded URL/navigation bars pushed drawer bottom 60–80px off-screen, causing `nav` to calculate `scrollHeight <= clientHeight` and become completely unscrollable until the user scrolled the page down to collapse browser bars.
+  - Added `flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y;` to `#profileDrawerNav`, reset `nav.scrollTop = 0` on open, and added `env(safe-area-inset-top)` / `env(safe-area-inset-bottom)` safe area paddings.
+- **MyGate Modal Mobile Skip & Layout Fix (`docs/order.html`):**
+  - Added prominent `✕` skip/close button (`btnCloseMyGateX`) at the top right of the modal card.
+  - Enabled backdrop click-to-dismiss (`closeAndNext`) on the overlay.
+  - Added `overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;` to `overlay` and flex-column layout with `margin: auto; max-height: calc(100dvh - 32px)` on the card.
+  - Placed Skip button into a fixed card footer (`flex-shrink: 0`) styled as a clean button (`Skip for now →`), ensuring it is always visible on all mobile screen sizes.
+  - Suppressed auto-focusing inputs on touch devices so the virtual keyboard does not automatically pop up and obscure the modal upon order confirmation. Added instant 6-digit paste support.
