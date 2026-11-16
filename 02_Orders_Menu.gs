@@ -2697,21 +2697,18 @@ function _submitOrderInternal(body) {
   // - Monthly: >= 3rd of month with unpaid bill from previous month(s)
   // - Daily: has unpaid orders older than 7 days
   // Completely block them from placing new orders until the bill is paid.
-  if (String(profile.onAccount || "").toLowerCase() === "yes") {
-    var cycle = String(profile.billingCycle || "Daily").toLowerCase();
-    if (cycle === "monthly" || cycle === "daily") {
-      if (typeof getOnAccountBill === "function") {
-        var billInfo = getOnAccountBill(profile.phone);
-        if (billInfo && billInfo.due && billInfo.isOverdue) {
-          var reminderMsg = (cycle === "monthly")
-            ? "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊"
-            : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊";
-          return {
-            error: reminderMsg,
-            isOverdue: true
-          };
-        }
-      }
+  // CRITICAL: Must use authoritative database lookup via getOnAccountBill(pStr),
+  // NEVER rely on client-supplied body.profile.onAccount (which is omitted by frontend).
+  if (pStr && typeof getOnAccountBill === "function") {
+    var billInfo = getOnAccountBill(pStr);
+    if (billInfo && billInfo.due && billInfo.isOverdue) {
+      var reminderMsg = (billInfo.cycle === "monthly")
+        ? "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊"
+        : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues of ₹" + billInfo.total + " so we can keep your fresh meals coming! 😊";
+      return {
+        error: reminderMsg,
+        isOverdue: true
+      };
     }
   }
 

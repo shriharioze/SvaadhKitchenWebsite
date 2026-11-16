@@ -619,22 +619,17 @@ function submitBulkOrder(body) {
   // - Monthly: >= 3rd of month with unpaid bill from previous month(s)
   // - Daily: has unpaid orders older than 7 days
   // Block bulk orders too.
-  if (cRow && String(cRow.On_Account || "").trim().toLowerCase() === "yes") {
-    var bCycle = String(cRow.Billing_Cycle || "Daily").trim().toLowerCase();
-    if (bCycle === "monthly" || bCycle === "daily") {
-      if (typeof getOnAccountBill === "function") {
-        var bBillInfo = getOnAccountBill(phone);
-        if (bBillInfo && bBillInfo.due && bBillInfo.isOverdue) {
-          var bReminderMsg = (bCycle === "monthly")
-            ? "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + bBillInfo.total + " so we can keep your fresh meals coming! 😊"
-            : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues of ₹" + bBillInfo.total + " so we can keep your fresh meals coming! 😊";
-          return {
-            success: false,
-            error: bReminderMsg,
-            isOverdue: true
-          };
-        }
-      }
+  if (phone && typeof getOnAccountBill === "function") {
+    var bBillInfo = getOnAccountBill(phone);
+    if (bBillInfo && bBillInfo.due && bBillInfo.isOverdue) {
+      var bReminderMsg = (bBillInfo.cycle === "monthly")
+        ? "Friendly reminder: please take a quick moment to clear your previous month's bill of ₹" + bBillInfo.total + " so we can keep your fresh meals coming! 😊"
+        : "Friendly reminder: you have unpaid orders older than 7 days. Please clear your total dues of ₹" + bBillInfo.total + " so we can keep your fresh meals coming! 😊";
+      return {
+        success: false,
+        error: bReminderMsg,
+        isOverdue: true
+      };
     }
   }
 

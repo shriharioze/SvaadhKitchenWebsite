@@ -651,6 +651,18 @@ function hdfc_createSession(body) {
     return { error: "Gateway credentials not configured in Script Properties." };
   }
 
+  // OVERDUE ON-ACCOUNT CHECK: Block overdue on-account customers from placing new orders via gateway
+  const _pGwNorm = _normalizePhone(phone);
+  if (_pGwNorm && typeof getOnAccountBill === "function") {
+    const _gwBillInfo = getOnAccountBill(_pGwNorm);
+    if (_gwBillInfo && _gwBillInfo.due && _gwBillInfo.isOverdue) {
+      return {
+        error: "Friendly reminder: please clear your previous month's bill of ₹" + _gwBillInfo.total + " before placing new orders. 😊",
+        isOverdue: true
+      };
+    }
+  }
+
   // ────────────────────────────────────────────────────────────────────────
   // SECURITY (HDFC UAT — Parameter Manipulation / Request Amount Tampering):
   // Never trust the client-supplied `amount` parameter. An attacker can

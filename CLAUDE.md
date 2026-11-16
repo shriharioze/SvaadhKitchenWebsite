@@ -719,3 +719,13 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
     - Hadapsar / Kirtane Baug / DP Road / Bhosale Nagar (Kumar Prospera, Kumar Paradise, Konark Icon, 47 East, Amar Ornate, Shree Laxmi Vihar, Marvel Diva, Ganga Village, Ganga Florentina, Bimbisara, Kumar Pebble Park, Green City).
     - Generic fallback for unlisted societies matching `society`, `towers`, `heights`, `enclave`, `apartments`, `residency`, `vihar` without negative office/PG keywords.
   - **Multi-Meal Address Sensitivity:** Inspects destination addresses of the specific meals placed in the current session (`S.justPlaced` / `S.orders` / `BK.cart` via `getMealAddr`). If any delivered meal is going to a gated society, the modal is shown; if all meals are office/PG/pickup, it is completely skipped with zero interruption.
+
+### Mandatory Overdue On-Account Barrier Hardening (CODE_VERSION 36.18 / APP_VERSION v26.11.16.03)
+- **Root Cause & Fix for Unsettled Defaulters Ordering:**
+  - **Backend Authority Fix (`02_Orders_Menu.gs`):** `_submitOrderInternal` previously checked `body.profile.onAccount`, which was omitted by the frontend `placeOrder` payload. Replaced with direct authoritative lookup `getOnAccountBill(pStr)` from `SK_Customers`. Any overdue bill (e.g. Monthly >= 3rd of month with previous month unpaid, or Daily > 7 days) now hard-rejects the order with `{ error, isOverdue: true }`.
+  - **Bulk & Gateway Guards (`06_Bulk_Orders.gs`, `10_Hdfc_Gateway.gs`):** Added the same `getOnAccountBill` guard to `submitBulkOrder` and `hdfc_createSession`, preventing overdue customers from bypassing via bulk orders or gateway checkout.
+  - **Frontend Instant Enforcement on Refresh & Silent Preload (`docs/order.html`, `docs/Liviano-Serio.html`):**
+    - `handleLoginSuccess` was previously skipping `maybeShowOnAccountBill()` when `isSilentPreload` was true (returning customers landing on calendar). Now fires `maybeShowOnAccountBill()` unconditionally on boot, refresh, and silent preload.
+    - Added fallback for `On_Account` / `Billing_Cycle` casing from server responses.
+    - Added synchronous overdue checks in `goNext()` (step transitions) and `placeOrder()` (order submit), ensuring the unclosable modal immediately locks the screen if bills are overdue.
+    - Included `onAccount` and `billingCycle` in `payload.profile` for `placeOrder()`.

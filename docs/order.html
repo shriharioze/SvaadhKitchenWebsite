@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.11.16.02">
+  <meta name="app-version" content="v26.11.16.03">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -5253,7 +5253,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.11.16.02";
+    const APP_VERSION = "v26.11.16.03";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -8879,7 +8879,16 @@
         return;
       }
       if ($("btnNext").disabled) return;
-      if (S.step > 0 && S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
+      if (S.profile && String(S.profile.onAccount || S.profile.On_Account || "").toLowerCase() === "yes") {
+        if (!S.onAccountBill && typeof maybeShowOnAccountBill === "function") {
+          await maybeShowOnAccountBill();
+        }
+        if (S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
+          toast("Friendly reminder: please clear your previous bill so we can keep your meals rolling! 😊", 4500);
+          showOnAccountBillModal();
+          return;
+        }
+      } else if (S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
         toast("Friendly reminder: please clear your previous bill so we can keep your meals rolling! 😊", 4500);
         showOnAccountBillModal();
         return;
@@ -9403,8 +9412,8 @@
           promoCount: pc,
           feeExempt: (profileData.feeExempt === true || String(profileData.feeExempt) === "true"),
           isFnF: (profileData.isFnF === true || String(profileData.isFnF) === "true" || String(profileData.friends_family || profileData.Friends_Family || "").toLowerCase() === "yes"),
-          onAccount: String(profileData.onAccount || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
-          billingCycle: profileData.billingCycle || "Daily",
+          onAccount: String(profileData.onAccount || profileData.On_Account || "").trim().toLowerCase() === "yes" ? "Yes" : "No",
+          billingCycle: profileData.billingCycle || profileData.Billing_Cycle || "Daily",
           pending_amount: Number(profileData.pending_amount) || 0,
           last_order_at: profileData.last_order_at || "",
           ordered_last_30_days: (profileData.ordered_last_30_days === true || String(profileData.ordered_last_30_days) === "true")
@@ -9418,10 +9427,10 @@
           if (S.phone) localStorage.setItem('sk_logged_in_phone', S.phone);
         } catch (_) {}
 
+        // ALWAYS check for on-account dues & enforce overdue barrier on boot, refresh & silent preload
+        maybeShowOnAccountBill();
+
         if (!isSilentPreload) {
-          // Monthly On-Account customers: check for an unpaid previous-month bill
-          // and surface a skippable "settle your bill" modal (once per session).
-          maybeShowOnAccountBill();
 
           // Nudge returning customers with no email on file to add one (so they can
           // self-reset their PIN). Skippable; re-appears next visit until added.
@@ -12474,6 +12483,19 @@
 
     async function placeOrder(settleAll = false) {
       if (S.isPlacingOrder) return;
+
+      // OVERDUE ON-ACCOUNT GUARD: Stop overdue customers from placing new orders
+      if (S.profile && String(S.profile.onAccount || S.profile.On_Account || "").toLowerCase() === "yes") {
+        if (!S.onAccountBill && typeof maybeShowOnAccountBill === "function") {
+          await maybeShowOnAccountBill();
+        }
+      }
+      if (S.onAccountBill && S.onAccountBill.due && S.onAccountBill.isOverdue) {
+        toast("Friendly reminder: please clear your previous bill so we can keep your meals rolling! 😊", 4500);
+        showOnAccountBillModal();
+        S.isPlacingOrder = false;
+        return;
+      }
       // Delivery-cap overflow gate. If a meal's delivery is full, FIRST check
       // whether we're already delivering to this customer's building (same stop →
       // let it through). Only if not, offer Self Pickup / Porter. Free areas
@@ -12595,7 +12617,8 @@
           delivery_point: S.profile.delivery_point,
           area: S.profile.area, maps: S.profile.maps, landmark: S.profile.landmark,
           meal_addresses: JSON.stringify(S.mealAddrs),
-          payment_preference: S.profile.payment_preference, isFirstTime: S.isFirstTime
+          payment_preference: S.profile.payment_preference, isFirstTime: S.isFirstTime,
+          onAccount: S.profile.onAccount, billingCycle: S.profile.billingCycle
         },
         orders,
         payment_method: isFreeOrder ? "Wallet"
@@ -13478,8 +13501,8 @@
     async function maybeShowOnAccountBill() {
       try {
         if (!S.phone) return;
-        const cycle = String((S.profile && S.profile.billingCycle) || "Daily").toLowerCase();
-        const isOnAccount = S.profile && (String(S.profile.onAccount || "").toLowerCase() === "yes");
+        const cycle = String((S.profile && (S.profile.billingCycle || S.profile.Billing_Cycle)) || "Daily").toLowerCase();
+        const isOnAccount = S.profile && (String(S.profile.onAccount || S.profile.On_Account || "").toLowerCase() === "yes");
         if (!isOnAccount || (cycle !== "monthly" && cycle !== "daily")) return;
 
         const res = await apiFetch(
