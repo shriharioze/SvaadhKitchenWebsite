@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.11.16.01">
+  <meta name="app-version" content="v26.11.16.02">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -5253,7 +5253,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.11.16.01";
+    const APP_VERSION = "v26.11.16.02";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -13052,26 +13052,126 @@
     // (order lands a minute or two late) resolves itself — the customer never has
     // to re-pay or re-order. A manual "Check my orders" button is always available.
     
+    // ── MYGATE ELIGIBILITY DETECTOR ──────────────────────
+    const NO_MYGATE_EXCLUSIONS_REGEX = /\b(pg|p\.g|paying\s*guest|boys\s*pg|girls\s*pg|hostel|coliving|co-living|zolo|stanza|boston\s*living|youthville|flock|cybercity|cyber\s*city|gandharv|gandharva|marvel\s*fuego|fuego|destination\s*cent(?:re|er)|\bdc\b|mega\s*cent(?:re|er)|city\s*cent(?:re|er)|metapercept|office|corporate|tech\s*park|it\s*park|\bsez\b|workplace|desk|reception|cabin|hospital|clinic|momstory|sahyadri|\bbank\b|shop|store|showroom|commercial|pickup|self\s*pickup|porter|independent|bungalow|chawl)\b/i;
+
+    const CYBERCITY_TOWER_REGEX = /\b(?:cybercity|cyber\s*city\s*)?tower\s*(?:[1-9]|1[0-2])\b/i;
+
+    const MYGATE_RESIDENTIAL_SOCIETIES = [
+      // Amanora Park Town
+      "amanora", "future towers", "future tower", "adreno", "gold tower", "metro tower",
+      "desire tower", "gateway tower", "neo tower", "elevate tower",
+      "sweet water", "trendy tower", "aspire tower", "vrindavan heights",
+      // Magarpatta City Residential
+      "jasminium", "cosmos", "laburnum", "heliconia", "sylvania", "trillium",
+      "roystonea", "zinnia", "grevillea", "iris", "daffodils", "erica",
+      "mulberry", "acacia", "royal palms",
+      // Other Hadapsar / Kirtane Baug / DP Road / Bhosale Nagar
+      "kumar prospera", "kumar paradise", "konark icon", "47 east",
+      "amar ornate", "laxmi vihar", "shree laxmi", "marvel diva",
+      "ganga village", "ganga florentina", "bimbisara", "kumar pebble park",
+      "green city"
+    ];
+
+    const GENERIC_RESIDENTIAL_REGEX = /\b(society|towers?|heights|enclave|apartments?|residency|vihar)\b/i;
+
+    function isMyGateEligibleAddress(society, area, landmark) {
+      const soc = String(society || "").trim();
+      const ar  = String(area || "").trim();
+      const lm  = String(landmark || "").trim();
+      if (!soc) return false;
+
+      const combined = `${soc} ${ar} ${lm}`.toLowerCase();
+
+      // 1. Explicit pickup
+      if (ar.toLowerCase() === "self pickup" || combined.includes("self pickup")) return false;
+
+      // 2. Strict non-residential, PG, hostel, commercial, office exclusions
+      if (NO_MYGATE_EXCLUSIONS_REGEX.test(combined)) return false;
+
+      // 3. Cybercity Tower 1-12 exclusion (when not within Amanora context)
+      if (!combined.includes("amanora") && CYBERCITY_TOWER_REGEX.test(combined)) return false;
+
+      // 4. Whitelisted residential societies / towers
+      for (let i = 0; i < MYGATE_RESIDENTIAL_SOCIETIES.length; i++) {
+        if (combined.includes(MYGATE_RESIDENTIAL_SOCIETIES[i])) return true;
+      }
+
+      // 5. Generic residential indicators (e.g. 'XYZ Society', 'Panchshil Towers')
+      if (GENERIC_RESIDENTIAL_REGEX.test(soc)) return true;
+
+      return false;
+    }
+
+    function shouldShowMyGateModal() {
+      const addrsToCheck = [];
+
+      // 1. From active order meals placed (S.justPlaced, S.orders, BK.cart)
+      const mealsPlaced = new Set();
+      if (Array.isArray(S.justPlaced) && S.justPlaced.length > 0) {
+        S.justPlaced.forEach(j => { if (j && j.meal) mealsPlaced.add(j.meal); });
+      } else if (S.orders) {
+        Object.values(S.orders).forEach(dayMeals => {
+          if (dayMeals) {
+            Object.keys(dayMeals).forEach(m => {
+              if (dayMeals[m] && (dayMeals[m].subtotal > 0 || (dayMeals[m].items && Object.keys(dayMeals[m].items).length > 0))) {
+                mealsPlaced.add(m);
+              }
+            });
+          }
+        });
+      } else if (S.bulkActive && typeof BK !== 'undefined' && BK.cart) {
+        Object.values(BK.cart).forEach(dayMeals => {
+          if (dayMeals) {
+            Object.keys(dayMeals).forEach(m => { if (dayMeals[m] > 0) mealsPlaced.add(m); });
+          }
+        });
+      }
+
+      if (mealsPlaced.size > 0 && typeof getMealAddr === "function") {
+        mealsPlaced.forEach(m => {
+          const a = getMealAddr(m);
+          if (a) addrsToCheck.push(a);
+        });
+      }
+
+      // 2. Fallback to DOM inputs and current profile/mealAddrs
+      if (addrsToCheck.length === 0) {
+        if (S.sameAddr) {
+          const domSoc = document.getElementById("societyInput")?.value.trim();
+          const domArea = document.getElementById("areaSelect")?.value.trim();
+          const domLm = document.getElementById("landmarkInput")?.value.trim();
+          if (domSoc || domArea) {
+            addrsToCheck.push({ society: domSoc || S.profile?.society || "", area: domArea || S.profile?.area || "", landmark: domLm || S.profile?.landmark || "" });
+          } else if (S.profile) {
+            addrsToCheck.push({ society: S.profile.society || "", area: S.profile.area || "", landmark: S.profile.landmark || "" });
+          }
+        } else {
+          ["bf", "l", "d"].forEach(pfx => {
+            const domSoc = document.getElementById(pfx + "_societyInput")?.value.trim();
+            const domArea = document.getElementById(pfx + "_areaSelect")?.value.trim();
+            const domLm = document.getElementById(pfx + "_landmarkInput")?.value.trim();
+            if (domSoc || domArea) {
+              addrsToCheck.push({ society: domSoc, area: domArea, landmark: domLm });
+            }
+          });
+          if (S.mealAddrs) {
+            Object.values(S.mealAddrs).forEach(a => { if (a && (a.society || a.area)) addrsToCheck.push(a); });
+          }
+        }
+      }
+
+      // Show MyGate modal ONLY if at least one delivered meal address qualifies as a gated residential society
+      return addrsToCheck.some(a => isMyGateEligibleAddress(a.society, a.area, a.landmark));
+    }
+
     // ── MYGATE PRE-APPROVAL ──────────────────────────────
     function showMyGateModal(onComplete, order_id) {
       if (document.getElementById("myGateModal")) return; // already open
       
-      // OPTIONAL UX: Only show if the customer lives in a society and did not choose Self Pickup.
-      if (S.profile && (S.profile.area === "Self Pickup" || (S.orders && Object.values(S.orders).every(m => Object.values(m).every(o => o.area === "Self Pickup"))))) {
-        if (typeof onComplete === "function") onComplete();
-        return;
-      }
-      let hasSociety = false;
-      try {
-        if (S.sameAddr) {
-          hasSociety = !!document.getElementById("societyInput")?.value.trim();
-        } else {
-          ["bf", "l", "d"].forEach(pfx => {
-            if (document.getElementById(pfx + "_societyInput")?.value.trim()) hasSociety = true;
-          });
-        }
-      } catch (_) {}
-      if (!hasSociety) {
+      // Segregated MyGate UX: Only show for residential societies & towers.
+      // Suppress for PGs, hostels, offices, Cybercity towers, commercial complexes, and self-pickups.
+      if (!shouldShowMyGateModal()) {
         if (typeof onComplete === "function") onComplete();
         return;
       }

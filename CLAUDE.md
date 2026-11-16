@@ -705,3 +705,17 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - Added `overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;` to `overlay` and flex-column layout with `margin: auto; max-height: calc(100dvh - 32px)` on the card.
   - Placed Skip button into a fixed card footer (`flex-shrink: 0`) styled as a clean button (`Skip for now →`), ensuring it is always visible on all mobile screen sizes.
   - Suppressed auto-focusing inputs on touch devices so the virtual keyboard does not automatically pop up and obscure the modal upon order confirmation. Added instant 6-digit paste support.
+
+### MyGate Society & Tower Segregation Filter (APP_VERSION v26.11.16.02)
+- **Intelligent Gate Pass Modal Suppression (`docs/order.html`):**
+  - Restricted the post-order MyGate / NoBroker pre-approval passcode modal strictly to gated residential societies and residential towers where gate security passes are actually required.
+  - **Suppressed for Non-Gate Locations:**
+    - Corporate & Tech Parks: Cybercity Towers 1–12, Gandharv Capital, Metapercept, Marvel Fuego, Destination Centre, Mega Centre, City Centre, Sahyadri Momstory Hospital, clinics, banks, and general office spaces.
+    - PGs & Hostels: Boys/Girls PGs, Paying Guest accommodations, student hostels, and co-living brands (Zolo, Stanza Living, Boston Living, Youthville, Flock).
+    - Commercial, Independent & Pickup: Standalone bungalows, row houses, chawls, local street drops, and Self Pickup / Porter orders.
+  - **Whitelisted Gated Residential Communities:**
+    - Amanora Park Town (Future, Adreno, Gold, Metro, Desire, Gateway, Neo, Elevate, Trendy, Aspire, Sweet Water Villas, Vrindavan Heights).
+    - Magarpatta City Residential (Jasminium, Cosmos, Laburnum, Heliconia, Sylvania, Trillium, Roystonea, Zinnia, Grevillea, Iris, Daffodils, Erica, Mulberry, Acacia, Royal Palms).
+    - Hadapsar / Kirtane Baug / DP Road / Bhosale Nagar (Kumar Prospera, Kumar Paradise, Konark Icon, 47 East, Amar Ornate, Shree Laxmi Vihar, Marvel Diva, Ganga Village, Ganga Florentina, Bimbisara, Kumar Pebble Park, Green City).
+    - Generic fallback for unlisted societies matching `society`, `towers`, `heights`, `enclave`, `apartments`, `residency`, `vihar` without negative office/PG keywords.
+  - **Multi-Meal Address Sensitivity:** Inspects destination addresses of the specific meals placed in the current session (`S.justPlaced` / `S.orders` / `BK.cart` via `getMealAddr`). If any delivered meal is going to a gated society, the modal is shown; if all meals are office/PG/pickup, it is completely skipped with zero interruption.
