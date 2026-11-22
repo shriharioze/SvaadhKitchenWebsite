@@ -299,9 +299,8 @@ function _findCustomerEmailAnywhere(phone, storefront) {
 
 // Set a new PIN AFTER OTP verification — bypasses _upsertCustomer's takeover guard
 // (a valid code to the on-file email already proves ownership). Restores an archived
-// customer into live first so they then log in normally. If email was supplied / missing,
-// saves it permanently to the customer row.
-function _setPinAfterOtp(phone, newPin, storefront, email) {
+// customer into live first so they then log in normally.
+function _setPinAfterOtp(phone, newPin, storefront) {
   var ss = getSpreadsheet();
   var pStr = _normalizePhone(phone);
   var ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
@@ -316,35 +315,19 @@ function _setPinAfterOtp(phone, newPin, storefront, email) {
   if (hIdx["PIN"]) {
     ws.getRange(r._row, hIdx["PIN"]).setValue("'" + String(newPin).trim());
   }
-  if (email && _sanitizeEmail(email) && hIdx["Email"]) {
-    var curEmail = String(r.Email || "").trim();
-    if (!curEmail) {
-      ws.getRange(r._row, hIdx["Email"]).setValue(String(email).trim().toLowerCase());
-    }
-  }
   SpreadsheetApp.flush();
   return true;
 }
 
-// STEP 1 — email a fresh OTP to the address on file, or compulsory user-supplied email if missing. { ok, emailHint } or a reason.
-function requestPinResetOtp(phone, storefront, email) {
+// STEP 1 — email a fresh OTP to the address on file. { ok, emailHint } or a reason.
+// SECURITY: Strictly uses on-file email only. If no email on file, returns reason: "no_email"
+// requiring admin WhatsApp verification (prevents account takeover by entering arbitrary email).
+function requestPinResetOtp(phone, storefront) {
   var pStr = _normalizePhone(phone);
   if (!pStr) return { ok: false, reason: "bad_phone" };
   var info = _findCustomerEmailAnywhere(pStr, storefront);
   if (!info.found) return { ok: false, reason: "not_found" };
-
-  var targetEmail = info.email;
-  var isNewEmail = false;
-
-  if (!targetEmail) {
-    // Missing email on account: compulsory for user to enter their email
-    var cleanProvided = _sanitizeEmail(email);
-    if (!cleanProvided) {
-      return { ok: false, reason: "no_email", needsEmail: true };
-    }
-    targetEmail = cleanProvided;
-    isNewEmail = true;
-  }
+  if (!info.email) return { ok: false, reason: "no_email" };
 
   var cache = CacheService.getScriptCache();
   var rlKey = "pinotp_rl_" + pStr;
@@ -354,8 +337,7 @@ function requestPinResetOtp(phone, storefront, email) {
   var otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
   cache.put("pinotp_" + pStr, JSON.stringify({
     otp: otp,
-    email: targetEmail,
-    isNewEmail: isNewEmail,
+    email: info.email,
     attempts: 0,
     exp: Date.now() + _OTP_TTL_SEC * 1000
   }), _OTP_TTL_SEC);
@@ -364,7 +346,7 @@ function requestPinResetOtp(phone, storefront, email) {
   var mins = Math.round(_OTP_TTL_SEC / 60);
   try {
     MailApp.sendEmail({
-      to: targetEmail,
+      to: info.email,
       name: "Svaadh Kitchen",
       subject: "Your Svaadh Kitchen PIN reset code: " + otp,
       body: "Hi" + (info.name ? " " + String(info.name).split(" ")[0] : "") + ",\n\n" +
@@ -374,13 +356,13 @@ function requestPinResetOtp(phone, storefront, email) {
             "— Team Svaadh Kitchen"
     });
   } catch (e) {
-    console.error("Failed to send PIN reset email to " + targetEmail + ": " + e.message);
-    return { ok: false, reason: "send_failed", error: "Could not deliver email. Please check the address and try again." };
+    console.error("Failed to send PIN reset email to " + info.email + ": " + e.message);
+    return { ok: false, reason: "send_failed", error: "Could not deliver email. Please try again or message us." };
   }
-  return { ok: true, emailHint: _maskEmail(targetEmail), expiresInMin: mins, isNewEmail: isNewEmail };
+  return { ok: true, emailHint: _maskEmail(info.email), expiresInMin: mins };
 }
 
-// STEP 2 — verify the code and set the new PIN (+ save email to sheet if missing). { ok } or a reason (+ attemptsLeft).
+// STEP 2 — verify the code and set the new PIN. { ok } or a reason (+ attemptsLeft).
 function verifyPinResetOtp(phone, otp, newPin, storefront) {
   var pStr = _normalizePhone(phone);
   var code = String(otp || "").trim();
@@ -405,7 +387,7 @@ function verifyPinResetOtp(phone, otp, newPin, storefront) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { ok: false, reason: "busy" }; }
   try {
-    if (!_setPinAfterOtp(pStr, pin, storefront, data.email)) return { ok: false, reason: "not_found" };
+    if (!_setPinAfterOtp(pStr, pin, storefront)) return { ok: false, reason: "not_found" };
     cache.remove(key);
     cache.remove("pinotp_rl_" + pStr); // clear the rate-limit once they're through
     return { ok: true };

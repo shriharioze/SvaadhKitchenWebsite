@@ -740,16 +740,10 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Bulk Order Exemption (`06_Bulk_Orders.gs`):** Added `!_isAdminBulkSubmit` check in `submitBulkOrder(body)` ensuring admin bulk order placement is likewise exempt from customer overdue blocks.
   - **Admin Interface (`docs/Admin/vault_admin.html`):** Verified all admin order submission pathways (`openDirectOrderModal`, `quickOrderStandard`, `sQuickBulkModal`, `submitManualEntry`) pass `pin: S.sessionPin`, allowing seamless order creation for any customer. Bumped `ADMIN_VERSION` to `v26.11.22.01`.
 
-### Compulsory Email Entry on PIN Reset When Missing (CODE_VERSION 36.20 / APP_VERSION v26.11.22.01)
-- **Problem Statement:**
-  - When customers who forgot their PIN had no email address saved on file, the PIN reset flow previously blocked them with a WhatsApp contact button, requiring manual admin assistance.
-- **Fix & Implementation:**
-  - **Self-Service Compulsory Email Entry (`docs/order.html`, `docs/Liviano-Serio.html`):**
-    - Updated `_openForgotPinFlow()` so when `requestPinResetOtp` returns `reason: "no_email"` (or `needsEmail: true`), the modal transitions to an inline email input view: *"No email is linked to your account yet. Enter your email address to receive your 6-digit reset code:"*.
-    - Validates email format on the client, posts `{ _action: "requestPinResetOtp", phone, email, storefront }`, and immediately proceeds to OTP verification upon dispatch.
-    - Updated keyboard support (pressing Enter in email and PIN inputs triggers submission).
-    - Fixed LS storefront `verifyLogin` call in `_loginWithNewPin` to include `&storefront=LS`.
-  - **Backend Secure OTP & Auto-Linking (`02_Orders_Menu.gs`, `Code.gs`):**
-    - Updated `requestPinResetOtp(phone, storefront, email)`: If customer has an on-file email, it strictly prioritizes the on-file address (preventing takeover). If email is missing, it validates the caller-provided email, sends the 6-digit OTP, and marks `isNewEmail: true` in the session cache.
-    - Storefront-aware lookup (`_customersTabFor`) ensures Liviano-Serio customers are correctly resolved in `LS_Customers`.
-    - In `verifyPinResetOtp`, upon successful code verification, `_setPinAfterOtp` sets the new 4-digit PIN and **permanently writes the verified email into the customer's record (`Email` column in `SK_Customers` / `LS_Customers`)**, automating future resets and order receipts.
+### Security Hardening: Enforce On-File Email Only for PIN Reset (CODE_VERSION 36.21 / APP_VERSION v26.11.22.02)
+- **Security Vulnerability Prevented:**
+  - Allowing arbitrary email entry during PIN reset on accounts without an email address posed an account takeover risk (an attacker knowing a customer's phone number could provide their own email, receive the OTP, reset the victim's PIN, and access the account/wallet balance).
+- **Hardening & Fix:**
+  - **Removed Client-Side Email Input (`docs/order.html`, `docs/Liviano-Serio.html`):** Removed `showEmailInput()`. When `reason === "no_email"`, the modal strictly displays: *"We don't have an email on your account yet, so we can't send a code. Please reset via WhatsApp — and next time you're logged in, add your email so you can do this yourself."* with the direct WhatsApp support link.
+  - **Backend Strict Verification (`02_Orders_Menu.gs`, `Code.gs`):** `requestPinResetOtp(phone, storefront)` strictly requires an existing on-file email (`!info.email` immediately returns `{ ok: false, reason: "no_email" }`). Removed any caller-supplied `email` parameter to bind an OTP or update customer email during PIN reset. Storefront-aware lookup (`_customersTabFor`) and `_setPinAfterOtp` are retained safely.
+  - **Retained Fast Login (`docs/Liviano-Serio.html`):** Kept `&storefront=LS` parameter in `verifyLogin` for seamless login post-reset.
