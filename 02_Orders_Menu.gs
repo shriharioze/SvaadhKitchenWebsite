@@ -2692,6 +2692,11 @@ function _submitOrderInternal(body) {
   const firstTime    = profile.isFirstTime ? "Yes" : "No";
   const payFreq      = profile.payment_preference || "Daily Payment";
 
+  // ── ADMIN EXEMPTION CHECK ──────────────────────────────────────
+  // Submissions originating from Admin (vault_admin.html) with verified ADMIN_PIN
+  // can bypass customer-facing overdue barriers, delivery window limits, etc.
+  const _isAdminSubmit = body.is_admin === true || (String(body.pin || "") !== "" && typeof _pinMatch === "function" && _pinMatch(String(body.pin || ""), ADMIN_PIN));
+
   // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
   // If customer is On Account and has overdue unpaid orders:
   // - Monthly: >= 3rd of month with unpaid bill from previous month(s)
@@ -2699,7 +2704,9 @@ function _submitOrderInternal(body) {
   // Completely block them from placing new orders until the bill is paid.
   // CRITICAL: Must use authoritative database lookup via getOnAccountBill(pStr),
   // NEVER rely on client-supplied body.profile.onAccount (which is omitted by frontend).
-  if (pStr && typeof getOnAccountBill === "function") {
+  // ADMIN EXEMPTION: Admin placing an order on behalf of a customer (via vault_admin.html)
+  // is NEVER blocked by pending dues or overdue bills.
+  if (!_isAdminSubmit && pStr && typeof getOnAccountBill === "function") {
     var billInfo = getOnAccountBill(pStr);
     if (billInfo && billInfo.due && billInfo.isOverdue) {
       var reminderMsg = (billInfo.cycle === "monthly")
@@ -3063,7 +3070,6 @@ function _submitOrderInternal(body) {
     if (_wViolations.length) {
       // Admin bypass: submissions carrying the verified ADMIN_PIN (e.g. the
       // vault's Place Bulk Orders tool) may legitimately order late/closed.
-      const _isAdminSubmit = String(body.pin || "") !== "" && _pinMatch(String(body.pin || ""), ADMIN_PIN);
       if (_isAdminSubmit) {
         console.log("Ordering-window violation(s) bypassed by ADMIN submission: " + _wViolations.join(" | "));
       } else if (payMethod !== "Gateway (HDFC)" && payMethod !== "Split (HDFC)") {

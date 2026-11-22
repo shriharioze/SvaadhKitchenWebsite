@@ -614,12 +614,15 @@ function submitBulkOrder(body) {
   const isPickup = ctx.isPickup;
   const ss = getSpreadsheet();
 
+  // ── ADMIN CHECK ───────────────────────────────────────────────
+  const _isAdminBulkSubmit = body.is_admin === true || (String(body.pin || "") !== "" && typeof _pinMatch === "function" && _pinMatch(String(body.pin || ""), ADMIN_PIN));
+
   // ── OVERDUE ACCOUNT CHECK ─────────────────────────────────────
   // If customer is On Account and has overdue unpaid orders:
   // - Monthly: >= 3rd of month with unpaid bill from previous month(s)
   // - Daily: has unpaid orders older than 7 days
-  // Block bulk orders too.
-  if (phone && typeof getOnAccountBill === "function") {
+  // Block bulk orders too (exempt for admin placing on behalf of customer).
+  if (!_isAdminBulkSubmit && phone && typeof getOnAccountBill === "function") {
     var bBillInfo = getOnAccountBill(phone);
     if (bBillInfo && bBillInfo.due && bBillInfo.isOverdue) {
       var bReminderMsg = (bBillInfo.cycle === "monthly")

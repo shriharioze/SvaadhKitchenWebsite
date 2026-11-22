@@ -729,3 +729,13 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
     - Added fallback for `On_Account` / `Billing_Cycle` casing from server responses.
     - Added synchronous overdue checks in `goNext()` (step transitions) and `placeOrder()` (order submit), ensuring the unclosable modal immediately locks the screen if bills are overdue.
     - Included `onAccount` and `billingCycle` in `payload.profile` for `placeOrder()`.
+
+### Admin Exemption from Overdue On-Account Dues Block (CODE_VERSION 36.19 / ADMIN_VERSION v26.11.22.01)
+- **Problem Statement:**
+  - On customer order pages (`docs/order.html` and `docs/Liviano-Serio.html`), monthly on-account customers must clear their previous month's bill by the 3rd of the next month, or they are hard-blocked from ordering.
+  - However, the business needs administrators to be able to place orders on behalf of any customer (irrespective of whether previous dues are cleared, pending, or overdue) directly from the Admin Portal (`docs/Admin/vault_admin.html`).
+- **Fix & Implementation:**
+  - **Backend Router Authentication (`Code.gs`):** In `doPost(e)` for `processOrder`, `submitOrder`, `submitBulkOrder`, `submitBulkDirect`, and default order submission, automatically stamped `body.is_admin = true` whenever the request carries a verified `ADMIN_PIN`. Enforced strict admin PIN verification for `processOrder`.
+  - **Order Submission Exemption (`02_Orders_Menu.gs`):** Hoisted `_isAdminSubmit` to the top of `_submitOrderInternal` verifying `body.is_admin === true` or valid `ADMIN_PIN`. Added `!_isAdminSubmit` condition to the `getOnAccountBill(pStr)` overdue check so administrators placing orders on behalf of customers are never blocked by past unpaid bills. Also reused `_isAdminSubmit` for ordering-window violation bypass.
+  - **Bulk Order Exemption (`06_Bulk_Orders.gs`):** Added `!_isAdminBulkSubmit` check in `submitBulkOrder(body)` ensuring admin bulk order placement is likewise exempt from customer overdue blocks.
+  - **Admin Interface (`docs/Admin/vault_admin.html`):** Verified all admin order submission pathways (`openDirectOrderModal`, `quickOrderStandard`, `sQuickBulkModal`, `submitManualEntry`) pass `pin: S.sessionPin`, allowing seamless order creation for any customer. Bumped `ADMIN_VERSION` to `v26.11.22.01`.

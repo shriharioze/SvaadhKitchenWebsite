@@ -1475,15 +1475,25 @@ function doPost(e) {
     // name) to submitOrder. Same orders[]-present guard as the no-action path so
     // a malformed payload can't produce the old phantom "success".
     if (action === "processOrder" || action === "submitOrder") {
+      if (action === "processOrder" && !isAdmin) {
+        return jsonRes({ error: "STRICT ADMIN PIN REQUIRED for processOrder" });
+      }
       if (Array.isArray(body.orders) && body.orders.length) {
+        if (isAdmin) body.is_admin = true;
         return jsonRes(submitOrder(body));
       }
       return jsonRes({ error: "No orders found in payload for " + action + " (empty or missing orders array)" });
     }
 
     // Bulk weekly / 15-day / month order (bulk-orders branch — not yet on LIVE).
-    if (action === "submitBulkOrder") return jsonRes(submitBulkOrder(body));
-    if (action === "submitBulkDirect") return jsonRes(submitBulkDirect(body)); // On-Account / full-Wallet bulk — no gateway
+    if (action === "submitBulkOrder") {
+      if (isAdmin) body.is_admin = true;
+      return jsonRes(submitBulkOrder(body));
+    }
+    if (action === "submitBulkDirect") {
+      if (isAdmin) body.is_admin = true;
+      return jsonRes(submitBulkDirect(body));
+    } // On-Account / full-Wallet bulk — no gateway
     if (action === "hdfc_finalizeBulkOrder") return jsonRes(hdfc_finalizeBulkOrder(body)); // instant post-payment write from the frozen stash
 
     // Regular order submission — the ONLY POST with no _action. Anything else
@@ -1491,6 +1501,7 @@ function doPost(e) {
     // to submitOrder: that used to return {success:true, submissionId:""} for a
     // body with no orders — a phantom "success" with nothing written.
     if (action === "" && Array.isArray(body.orders) && body.orders.length) {
+      if (isAdmin) body.is_admin = true;
       return jsonRes(submitOrder(body));
     }
     return jsonRes({ error: "Unknown action" + (action ? ": '" + action + "'" : " (no orders payload)") });
