@@ -988,7 +988,7 @@ function doPost(e) {
     if (action === "previewCancellation") return jsonRes(_deleteOrderInternal(body.phone, body.rowId, body.refundType || "wallet", { dryRun: true }));
     if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone, _lsStorefront(body)));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(body.phone));
-    if (action === "requestPinResetOtp") return jsonRes(requestPinResetOtp(body.phone, _lsStorefront(body))); // Forgot PIN: email a 6-digit OTP to the on-file address
+    if (action === "requestPinResetOtp") return jsonRes(requestPinResetOtp(body.phone, _lsStorefront(body), body.email)); // Forgot PIN: email a 6-digit OTP (on-file or compulsory user-supplied email)
     if (action === "verifyPinResetOtp") return jsonRes(verifyPinResetOtp(body.phone, body.otp, body.newPin, _lsStorefront(body))); // Forgot PIN: verify OTP + set the new PIN (POST — newPin never in a URL)
     if (action === "checkDeliveryReachable") return jsonRes(checkDeliveryReachable(body));
     if (action === "verifyOrderPlaced") return jsonRes(verifyOrderPlaced(body));

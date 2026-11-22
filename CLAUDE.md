@@ -739,3 +739,17 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Order Submission Exemption (`02_Orders_Menu.gs`):** Hoisted `_isAdminSubmit` to the top of `_submitOrderInternal` verifying `body.is_admin === true` or valid `ADMIN_PIN`. Added `!_isAdminSubmit` condition to the `getOnAccountBill(pStr)` overdue check so administrators placing orders on behalf of customers are never blocked by past unpaid bills. Also reused `_isAdminSubmit` for ordering-window violation bypass.
   - **Bulk Order Exemption (`06_Bulk_Orders.gs`):** Added `!_isAdminBulkSubmit` check in `submitBulkOrder(body)` ensuring admin bulk order placement is likewise exempt from customer overdue blocks.
   - **Admin Interface (`docs/Admin/vault_admin.html`):** Verified all admin order submission pathways (`openDirectOrderModal`, `quickOrderStandard`, `sQuickBulkModal`, `submitManualEntry`) pass `pin: S.sessionPin`, allowing seamless order creation for any customer. Bumped `ADMIN_VERSION` to `v26.11.22.01`.
+
+### Compulsory Email Entry on PIN Reset When Missing (CODE_VERSION 36.20 / APP_VERSION v26.11.22.01)
+- **Problem Statement:**
+  - When customers who forgot their PIN had no email address saved on file, the PIN reset flow previously blocked them with a WhatsApp contact button, requiring manual admin assistance.
+- **Fix & Implementation:**
+  - **Self-Service Compulsory Email Entry (`docs/order.html`, `docs/Liviano-Serio.html`):**
+    - Updated `_openForgotPinFlow()` so when `requestPinResetOtp` returns `reason: "no_email"` (or `needsEmail: true`), the modal transitions to an inline email input view: *"No email is linked to your account yet. Enter your email address to receive your 6-digit reset code:"*.
+    - Validates email format on the client, posts `{ _action: "requestPinResetOtp", phone, email, storefront }`, and immediately proceeds to OTP verification upon dispatch.
+    - Updated keyboard support (pressing Enter in email and PIN inputs triggers submission).
+    - Fixed LS storefront `verifyLogin` call in `_loginWithNewPin` to include `&storefront=LS`.
+  - **Backend Secure OTP & Auto-Linking (`02_Orders_Menu.gs`, `Code.gs`):**
+    - Updated `requestPinResetOtp(phone, storefront, email)`: If customer has an on-file email, it strictly prioritizes the on-file address (preventing takeover). If email is missing, it validates the caller-provided email, sends the 6-digit OTP, and marks `isNewEmail: true` in the session cache.
+    - Storefront-aware lookup (`_customersTabFor`) ensures Liviano-Serio customers are correctly resolved in `LS_Customers`.
+    - In `verifyPinResetOtp`, upon successful code verification, `_setPinAfterOtp` sets the new 4-digit PIN and **permanently writes the verified email into the customer's record (`Email` column in `SK_Customers` / `LS_Customers`)**, automating future resets and order receipts.

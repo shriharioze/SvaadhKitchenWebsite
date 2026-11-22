@@ -283,14 +283,14 @@ function _maskEmail(email) {
   return (name.length <= 2 ? name.charAt(0) : name.slice(0, 2)) + "***" + e.slice(at);
 }
 
-// Find a customer's email in LIVE or ARCHIVE (Forgot-PIN cold path).
-function _findCustomerEmailAnywhere(phone) {
+// Find a customer's email in LIVE or ARCHIVE (Forgot-PIN cold path). Storefront-aware.
+function _findCustomerEmailAnywhere(phone, storefront) {
   var ss = getSpreadsheet();
   var pStr = _normalizePhone(phone);
-  var r = getAllRows(getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS))
-            .find(function (x) { return _normalizePhone(x.Phone) === pStr; });
+  var ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var r = getAllRows(ws).find(function (x) { return _normalizePhone(x.Phone) === pStr; });
   if (r) return { found: true, source: "live", email: _sanitizeEmail(r.Email), name: r.Customer_Name || "" };
-  if (typeof _findArchivedCustomer === "function") {
+  if (storefront !== "LS" && typeof _findArchivedCustomer === "function") {
     var arc = _findArchivedCustomer(pStr);
     if (arc) return { found: true, source: "archive", email: _sanitizeEmail(arc.profile && arc.profile.email), name: arc.name || "" };
   }
@@ -299,31 +299,52 @@ function _findCustomerEmailAnywhere(phone) {
 
 // Set a new PIN AFTER OTP verification — bypasses _upsertCustomer's takeover guard
 // (a valid code to the on-file email already proves ownership). Restores an archived
-// customer into live first so they then log in normally.
-function _setPinAfterOtp(phone, newPin) {
+// customer into live first so they then log in normally. If email was supplied / missing,
+// saves it permanently to the customer row.
+function _setPinAfterOtp(phone, newPin, storefront, email) {
   var ss = getSpreadsheet();
   var pStr = _normalizePhone(phone);
-  var ws = getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
+  var ws = (typeof _customersTabFor === "function") ? _customersTabFor(ss, storefront) : getOrCreateTab(ss, TAB_CUSTOMERS, CUSTOMERS_HEADERS);
   var find = function () { return getAllRows(ws).find(function (x) { return _normalizePhone(x.Phone) === pStr; }); };
   var r = find();
-  if (!r && typeof _findArchivedCustomer === "function") {
+  if (!r && storefront !== "LS" && typeof _findArchivedCustomer === "function") {
     var arc = _findArchivedCustomer(pStr);
     if (arc) { _restoreArchivedCustomer(arc); r = find(); }
   }
   if (!r) return false;
   var hIdx = headerIndex(ws);
-  ws.getRange(r._row, hIdx["PIN"]).setValue("'" + String(newPin).trim());
+  if (hIdx["PIN"]) {
+    ws.getRange(r._row, hIdx["PIN"]).setValue("'" + String(newPin).trim());
+  }
+  if (email && _sanitizeEmail(email) && hIdx["Email"]) {
+    var curEmail = String(r.Email || "").trim();
+    if (!curEmail) {
+      ws.getRange(r._row, hIdx["Email"]).setValue(String(email).trim().toLowerCase());
+    }
+  }
   SpreadsheetApp.flush();
   return true;
 }
 
-// STEP 1 — email a fresh OTP to the address on file. { ok, emailHint } or a reason.
-function requestPinResetOtp(phone) {
+// STEP 1 — email a fresh OTP to the address on file, or compulsory user-supplied email if missing. { ok, emailHint } or a reason.
+function requestPinResetOtp(phone, storefront, email) {
   var pStr = _normalizePhone(phone);
   if (!pStr) return { ok: false, reason: "bad_phone" };
-  var info = _findCustomerEmailAnywhere(pStr);
+  var info = _findCustomerEmailAnywhere(pStr, storefront);
   if (!info.found) return { ok: false, reason: "not_found" };
-  if (!info.email) return { ok: false, reason: "no_email" };
+
+  var targetEmail = info.email;
+  var isNewEmail = false;
+
+  if (!targetEmail) {
+    // Missing email on account: compulsory for user to enter their email
+    var cleanProvided = _sanitizeEmail(email);
+    if (!cleanProvided) {
+      return { ok: false, reason: "no_email", needsEmail: true };
+    }
+    targetEmail = cleanProvided;
+    isNewEmail = true;
+  }
 
   var cache = CacheService.getScriptCache();
   var rlKey = "pinotp_rl_" + pStr;
@@ -331,13 +352,19 @@ function requestPinResetOtp(phone) {
   if (sends >= _OTP_MAX_SENDS_PER_HR) return { ok: false, reason: "rate_limited" };
 
   var otp = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
-  cache.put("pinotp_" + pStr, JSON.stringify({ otp: otp, email: info.email, attempts: 0, exp: Date.now() + _OTP_TTL_SEC * 1000 }), _OTP_TTL_SEC);
+  cache.put("pinotp_" + pStr, JSON.stringify({
+    otp: otp,
+    email: targetEmail,
+    isNewEmail: isNewEmail,
+    attempts: 0,
+    exp: Date.now() + _OTP_TTL_SEC * 1000
+  }), _OTP_TTL_SEC);
   cache.put(rlKey, String(sends + 1), 3600);
 
   var mins = Math.round(_OTP_TTL_SEC / 60);
   try {
     MailApp.sendEmail({
-      to: info.email,
+      to: targetEmail,
       name: "Svaadh Kitchen",
       subject: "Your Svaadh Kitchen PIN reset code: " + otp,
       body: "Hi" + (info.name ? " " + String(info.name).split(" ")[0] : "") + ",\n\n" +
@@ -346,11 +373,14 @@ function requestPinResetOtp(phone) {
             "Didn't request this? You can safely ignore this email — your PIN stays unchanged.\n\n" +
             "— Team Svaadh Kitchen"
     });
-  } catch (e) { return { ok: false, reason: "send_failed" }; }
-  return { ok: true, emailHint: _maskEmail(info.email), expiresInMin: mins };
+  } catch (e) {
+    console.error("Failed to send PIN reset email to " + targetEmail + ": " + e.message);
+    return { ok: false, reason: "send_failed", error: "Could not deliver email. Please check the address and try again." };
+  }
+  return { ok: true, emailHint: _maskEmail(targetEmail), expiresInMin: mins, isNewEmail: isNewEmail };
 }
 
-// STEP 2 — verify the code and set the new PIN. { ok } or a reason (+ attemptsLeft).
+// STEP 2 — verify the code and set the new PIN (+ save email to sheet if missing). { ok } or a reason (+ attemptsLeft).
 function verifyPinResetOtp(phone, otp, newPin, storefront) {
   var pStr = _normalizePhone(phone);
   var code = String(otp || "").trim();
@@ -375,7 +405,7 @@ function verifyPinResetOtp(phone, otp, newPin, storefront) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { ok: false, reason: "busy" }; }
   try {
-    if (!_setPinAfterOtp(pStr, pin, storefront)) return { ok: false, reason: "not_found" };
+    if (!_setPinAfterOtp(pStr, pin, storefront, data.email)) return { ok: false, reason: "not_found" };
     cache.remove(key);
     cache.remove("pinotp_rl_" + pStr); // clear the rate-limit once they're through
     return { ok: true };

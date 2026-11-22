@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="index, follow">
   <meta name="author" content="Svaadh Kitchen">
-  <meta name="app-version" content="v26.11.16.03">
+  <meta name="app-version" content="v26.11.22.01">
 
   <!-- PWA & Mobile Web App -->
   <link rel="manifest" href="manifest.json">
@@ -5253,7 +5253,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.11.16.03";
+    const APP_VERSION = "v26.11.22.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -16120,24 +16120,69 @@
       };
 
       function showRequest() {
-        bodyEl.innerHTML = '<p>We\'ll email a 6-digit code to the address saved on your account, so you can set a new PIN yourself.</p>'
+        bodyEl.innerHTML = '<p>We\'ll email a 6-digit code to your email address, so you can set a new PIN yourself.</p>'
           + '<button id="fpSend" style="' + PRIMARY + '">📧 Email me a reset code</button>'
           + '<button id="fpCancel" style="' + PLAIN + '">Cancel</button>';
         box.querySelector("#fpCancel").onclick = close;
         const b = box.querySelector("#fpSend");
         b.onclick = async () => {
           b.disabled = true; b.textContent = "Sending…";
-          const r = await post({ _action: "requestPinResetOtp", phone: phone });
+          const r = await post({ _action: "requestPinResetOtp", phone: phone, storefront: (typeof STOREFRONT !== 'undefined' ? STOREFRONT : '') });
           if (r && r.ok) { showVerify(r.emailHint, r.expiresInMin); return; }
           b.disabled = false; b.textContent = "📧 Email me a reset code";
+          if (r && (r.reason === "no_email" || r.needsEmail)) {
+            showEmailInput();
+            return;
+          }
           showReason(r && r.reason);
         };
       }
 
+      function showEmailInput(errMsg) {
+        bodyEl.innerHTML = '<p style="margin-bottom:6px;">No email is linked to your account yet. <b>Enter your email address</b> to receive your 6-digit reset code:</p>'
+          + '<input id="fpEmail" type="email" placeholder="name@example.com" style="' + INP + '" autocomplete="email">'
+          + '<div id="fpEmailErr" style="color:#dc2626;font-size:0.75rem;margin-top:6px;min-height:1em;">' + (errMsg || '') + '</div>'
+          + '<button id="fpSendWithEmail" style="' + PRIMARY + '">📧 Send reset code</button>'
+          + '<button id="fpCancel" style="' + PLAIN + '">Cancel</button>';
+        box.querySelector("#fpCancel").onclick = close;
+        const emailInp = box.querySelector("#fpEmail");
+        const sendBtn = box.querySelector("#fpSendWithEmail");
+        const errEl = box.querySelector("#fpEmailErr");
+        setTimeout(() => { if (emailInp) emailInp.focus(); }, 60);
+
+        const doSend = async () => {
+          const val = (emailInp.value || '').trim();
+          if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(val)) {
+            errEl.textContent = "Please enter a valid email address.";
+            return;
+          }
+          errEl.textContent = "";
+          sendBtn.disabled = true; sendBtn.textContent = "Sending…";
+          const r = await post({
+            _action: "requestPinResetOtp",
+            phone: phone,
+            email: val,
+            storefront: (typeof STOREFRONT !== 'undefined' ? STOREFRONT : '')
+          });
+          if (r && r.ok) {
+            showVerify(r.emailHint, r.expiresInMin);
+            return;
+          }
+          sendBtn.disabled = false; sendBtn.textContent = "📧 Send reset code";
+          if (r && r.reason === "rate_limited") {
+            showReason("rate_limited");
+          } else {
+            errEl.textContent = (r && r.error) || "Could not send reset code. Please check your email and try again.";
+          }
+        };
+
+        sendBtn.onclick = doSend;
+        emailInp.onkeyup = (e) => { if (e.key === "Enter") doSend(); };
+      }
+
       function showReason(reason) {
         let msg;
-        if (reason === "no_email") msg = "We don't have an email on your account yet, so we can't send a code. Please reset via WhatsApp — and next time you're logged in, add your email so you can do this yourself.";
-        else if (reason === "not_found") msg = "We couldn't find an account for this number.";
+        if (reason === "not_found") msg = "We couldn't find an account for this number.";
         else if (reason === "rate_limited") msg = "You've asked for a few codes already. Please wait a little while, then try again — or WhatsApp us.";
         else msg = "Sorry, we couldn't send the code right now. Please try again in a moment, or WhatsApp us.";
         bodyEl.innerHTML = '<p>' + msg + '</p>'
@@ -16159,13 +16204,13 @@
         pinEl.oninput = () => pinEl.value = pinEl.value.replace(/\D/g, "").slice(0, 4);
         box.querySelector("#fpResend").onclick = showRequest;
         const go = box.querySelector("#fpGo");
-        go.onclick = async () => {
+        const doVerify = async () => {
           const otp = otpEl.value.trim(), np = pinEl.value.trim();
           errEl.textContent = "";
           if (!/^\d{6}$/.test(otp)) { errEl.textContent = "Enter the 6-digit code from your email."; return; }
           if (!/^\d{4}$/.test(np)) { errEl.textContent = "Choose a new 4-digit PIN."; return; }
           go.disabled = true; go.textContent = "Verifying…";
-          const r = await post({ _action: "verifyPinResetOtp", phone: phone, otp: otp, newPin: np });
+          const r = await post({ _action: "verifyPinResetOtp", phone: phone, otp: otp, newPin: np, storefront: (typeof STOREFRONT !== 'undefined' ? STOREFRONT : '') });
           if (r && r.ok) { close(); await _loginWithNewPin(phone, np); return; }
           go.disabled = false; go.textContent = "Set new PIN";
           const reason = r && r.reason;
@@ -16177,6 +16222,8 @@
             reason === "bad_pin" ? "PIN must be 4 digits." :
             "Something went wrong. Please try again.";
         };
+        go.onclick = doVerify;
+        pinEl.onkeyup = (e) => { if (e.key === "Enter") doVerify(); };
       }
       showRequest();
     }
