@@ -107,6 +107,7 @@ function doGet(e) {
     if (action === "getBulkWindow") return jsonRes(getBulkWindow(p.plan)); // bulk order date windows
     if (action === "getBulkPostponeInfo") return jsonRes(getBulkPostponeInfo(p.phone, p.rowId)); // read-only: postpone eligibility + valid dates for one bulk row
     if (action === "backfillBulkPlan") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillBulkPlan(p.commit === "1")); } // one-time: stamp Bulk_Plan on pre-v26 bulk rows (dry-run unless commit=1)
+  if (action === "backfillDeliveredStatus") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(backfillDeliveredStatus(p.commit === "1")); } // one-time: backfill Delivered=true on orders <= 2026-11-23 (dry-run unless commit=1)
     if (action === "compactWalletLedger") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(compactWalletLedger(p.commit === "1", p.keepDays)); } // wallet ledger compaction: dry-run unless commit=1; keepDays default 90 (min 30)
     if (action === "lsTrimSchema") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(lsTrimSchema(p.commit === "1")); } // LS_Orders schema trim (drops Maps_Link/Landmark): dry-run unless commit=1
             if (action === "stripLSPrefix") { if (!isAdmin) return jsonRes({ error: "STRICT ADMIN PIN REQUIRED" }); return jsonRes(stripLSPrefix(p.commit === "1")); } // remove [LS] prefix from Customer_Name in LS_Orders (dry-run unless commit=1)

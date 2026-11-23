@@ -7,7 +7,7 @@
        silently hard-refreshes if they differ — closes the "user is
        running yesterday's cached HTML" gap. -->
   <!-- Read claude.md and bump version number for pages with changes -->
-  <meta name="app-version" content="v26.10.26.01">
+  <meta name="app-version" content="v26.11.23.01">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Svaadh Delivery</title>
@@ -186,7 +186,7 @@
     </div>
     <div class="login-err" id="dErr"></div>
     <div style="margin-top:16px;text-align:center;">
-      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.10.26.01</span>
+      <span id="loginVerBadge" style="font-size:0.75rem; color:#64748b; font-weight:700; background:#f1f5f9; padding:3px 10px; border-radius:12px; border:1px solid #cbd5e1; display:inline-block; letter-spacing:0.5px;">v26.11.23.01</span>
     </div>
   </div>
 </div>
@@ -277,7 +277,7 @@
 // compare its meta-version to this constant. If they differ, the
 // driver is running cached/stale HTML — silently hard-reload so the
 // newest build always wins.
-const DRIVER_VERSION  = "v26.10.26.01";
+const DRIVER_VERSION  = "v26.11.23.01";
 (async function _driverVersionCheck() {
   try {
     const loginBadge = document.getElementById("loginVerBadge");
@@ -615,10 +615,10 @@ async function silentPoll() {
         if (o.deliveredAt && btn && !btn.classList.contains("done")) {
           btn.className = "btn-delivered done";
           btn.disabled = true;
-          btn.innerHTML = `✅ ${isPorter ? "Handed to Courier" : "Delivered"} at ${fmtTime(o.deliveredAt)}`;
+          btn.innerHTML = `✅ ${isPorter ? "Handed to Courier" : "Delivered"}${fmtTime(o.deliveredAt) ? " at " + fmtTime(o.deliveredAt) : ""}`;
           if (card) { card.classList.add("delivered"); }
           const tBadge = document.getElementById("dtag_"+o.submissionId);
-          if (tBadge) { tBadge.style.display=""; tBadge.textContent = `✅ ${fmtTime(o.deliveredAt)}`; }
+          if (tBadge) { tBadge.style.display=""; tBadge.textContent = `✅ ${fmtTime(o.deliveredAt) || "Delivered"}`; }
           if (ubtn) ubtn.style.display = "flex";
           // Update local data + push to bottom
           const local = (_ordersData[meal]||[]).find(lo=>lo.submissionId===o.submissionId);
@@ -1046,7 +1046,7 @@ function renderCard(o, i, meal) {
         ${isPorter ? `<span style="background:#f59e0b;color:#1a1400;font-weight:800;padding:2px 8px;border-radius:6px;font-size:0.68rem;letter-spacing:0.04em;display:inline-flex;align-items:center;gap:4px;">🛵 PORTER PICKUP</span>` : (isPickup ? `<span style="background:#fee2e2;color:#991b1b;font-weight:800;padding:2px 8px;border-radius:6px;font-size:0.68rem;letter-spacing:0.04em;display:inline-flex;align-items:center;gap:4px;">🏠 SELF PICKUP</span>` : '')}
       </div>
       ${isDelivered
-        ? `<div class="delivered-time" id="dtag_${o.submissionId}">✅ ${fmtTime(o.deliveredAt)}</div>`
+        ? `<div class="delivered-time" id="dtag_${o.submissionId}">✅ ${fmtTime(o.deliveredAt) || "Delivered"}</div>`
         : `<div class="delivered-time" id="dtag_${o.submissionId}" style="display:none;"></div>`}
     </div>
     <div class="cust-name">${o.name || "—"}</div>
@@ -1136,7 +1136,7 @@ function renderCard(o, i, meal) {
         onclick="markDelivered('${o.submissionId}','${meal}',this)"
         ${(isDelivered || !o.enRouteAt) ? "disabled" : ""}>
         ${o.enRouteAt && !isDelivered ? `<span style="float:left;">${isPorter ? "🛵" : (isPickup ? "🏠" : "🚗")}</span>` : ""}
-        ${isDelivered ? `✅ ${isPorter ? "Handed to Courier" : "Delivered"} at ${fmtTime(o.deliveredAt)}` : (!o.enRouteAt ? "🔒 Start Delivery to Unlock" : (isEnkinGroup ? `⬜ Mark All ${o._enkinGroupIds.length} Delivered` : (isPorter ? "⬜ Handed Over to Porter Courier" : "⬜ Mark Delivered")))}
+        ${isDelivered ? `✅ ${isPorter ? "Handed to Courier" : "Delivered"}${fmtTime(o.deliveredAt) ? " at " + fmtTime(o.deliveredAt) : ""}` : (!o.enRouteAt ? "🔒 Start Delivery to Unlock" : (isEnkinGroup ? `⬜ Mark All ${o._enkinGroupIds.length} Delivered` : (isPorter ? "⬜ Handed Over to Porter Courier" : "⬜ Mark Delivered")))}
       </button>
       <button class="btn-unmark" id="ubtn_${o.submissionId}" 
         onclick="unmarkDelivered('${o.submissionId}','${meal}',this)" 
@@ -1510,13 +1510,16 @@ async function activateMarkDelivered(meal) {
 const restartDelivery = activateMarkDelivered; // backwards-compatible alias
 
 function fmtTime(isoStr) {
-  if (!isoStr) return "";
+  if (!isoStr || isoStr === true || isoStr === "true") return "";
   try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return "";
     // Always treat stored value as UTC and convert to IST (+5:30)
-    const ist = new Date(new Date(isoStr).getTime() + 5.5*3600000);
+    const ist = new Date(d.getTime() + 5.5*3600000);
     const h = ist.getUTCHours(), m = ist.getUTCMinutes();
+    if (isNaN(h)) return "";
     return `${h}:${String(m).padStart(2,"0")}`;
-  } catch(e) { return isoStr.slice(11,16); }
+  } catch(e) { return ""; }
 }
 
 // ── ROUTE OPTIMISATION ────────────────────────────────────────────────────────

@@ -1548,18 +1548,12 @@ function getDriverOrders(date) {
     .concat(ls_rowsAsSK());
   var meals = {Breakfast: [], Lunch: [], Dinner: []};
 
-  // Load delivery status from SK_Deliveries tab (both EnRoute_At and Delivered_At)
-  var delMap = {};
-  var delWs  = ss.getSheetByName("SK_Deliveries");
-  if (delWs) {
-    getRecentRows(delWs, 1500).forEach(function(r) {
-      var sid = String(r.Submission_ID || "").trim();
-      if (sid) delMap[sid] = {
-        deliveredAt: String(r.Delivered_At || ""),
-        enRouteAt:   String(r.EnRoute_At   || "")
-      };
-    });
-  }
+  // En Route status from fast script properties (no 12,000-row sheet needed)
+  var enRouteProps = PropertiesService.getScriptProperties();
+  var mealEnRoute = {};
+  ["Breakfast", "Lunch", "Dinner"].forEach(function(m) {
+    mealEnRoute[m] = enRouteProps.getProperty("ENROUTE_" + date + "_" + m) || "";
+  });
 
   // Load customer meal preferences (Source of Truth)
   var custMap = {};
@@ -1589,6 +1583,7 @@ function getDriverOrders(date) {
     if (!meals[meal]) return;
     var sid = String(r.Submission_ID || "");
     var normP = _normalizePhone(r.Phone);
+    var isDel = r.Delivered === true || String(r.Delivered).toLowerCase() === "true" || String(r.Delivered).toLowerCase() === "yes";
     meals[meal].push({
       myGateCode:    String(r.MyGate_Code || "") || (custMap[normP] || {}).myGateCode || "",
       submissionId:  sid,
@@ -1603,8 +1598,8 @@ function getDriverOrders(date) {
       deliveryPoint: String(r.Delivery_Point || ""),
       maps:          String(r.Maps_Link || ""),
       notes:         String(r.Special_Notes_Delivery || ""),
-      deliveredAt:   (delMap[sid] && delMap[sid].deliveredAt) || "",
-      enRouteAt:     (delMap[sid] && delMap[sid].enRouteAt)   || "",
+      deliveredAt:   isDel ? (r.Delivered === true ? "true" : String(r.Delivered)) : "",
+      enRouteAt:     isDel ? "" : (mealEnRoute[meal] || ""),
       amount:        Number(r.Net_Total || r.Food_Subtotal || 0),
       paymentStatus: String(r.Payment_Status || ""),
       mealAddresses: custMap[normP] ? custMap[normP].mealAddresses : ""

@@ -4669,71 +4669,35 @@ function getChurnReport(sinceDate) {
 // ── LIVE TRACKER LOGIC: En Route & Delivered ──────────────────────────────────
 function batchMarkEnRoute(body) {
   var sids      = body.submissionIds;
-  var enRouteAt = body.enRouteAt;
+  var enRouteAt = body.enRouteAt || new Date().toISOString();
   if (!sids || !sids.length) return {success:false, error:"submissionIds required"};
 
   var ss   = getSpreadsheet();
-  var ws   = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  var data = ws.getDataRange().getValues();
-  var headers = data[0];
-  var erIdx   = headers.indexOf("EnRoute_At");
-  var sidIdx  = headers.indexOf("Submission_ID");
+  var rows = _getAllOrdersBothTabsIfPresent(ss);
+  var sidSet = {};
+  sids.forEach(function(s) { sidSet[String(s).trim()] = true; });
 
-  if (erIdx === -1) {
-    ws.getRange(1, headers.length + 1).setValue("EnRoute_At");
-    erIdx = headers.length;
-  }
-
-  // Create lookup for existing rows
-  var sidToRowMap = {};
-  for (var i = 1; i < data.length; i++) {
-    sidToRowMap[String(data[i][sidIdx])] = i + 1;
-  }
-
-  sids.forEach(function(sid) {
-    var row = sidToRowMap[String(sid)];
-    if (row) {
-      ws.getRange(row, erIdx + 1).setValue(enRouteAt);
-    } else {
-      // Append if not found (though usually we expect them to be found if already rendered)
-      ws.appendRow([sid, "", enRouteAt]);
+  // Store EnRoute by date and meal in Script Properties for instant retrieval without sheet bloat
+  var firstOrder = rows.find(function(r) { return sidSet[String(r.Submission_ID || "").trim()]; });
+  if (firstOrder) {
+    var d = firstOrder.Order_Date instanceof Date
+      ? Utilities.formatDate(firstOrder.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(firstOrder.Order_Date || "").trim();
+    var m = String(firstOrder.Meal_Type || "").trim();
+    if (d && m) {
+      PropertiesService.getScriptProperties().setProperty("ENROUTE_" + d + "_" + m, enRouteAt);
     }
-  });
+  }
 
   return {success:true};
 }
 
 function markEnRoute(body) {
-  var sid         = body.submissionId;
-  var enRouteAt   = body.enRouteAt;
+  var sid       = String(body.submissionId || "").trim();
+  var enRouteAt = body.enRouteAt || new Date().toISOString();
   if (!sid) return {success:false, error:"submissionId required"};
 
-  var ss  = getSpreadsheet();
-  var ws  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  var rows = getAllRows(ws);
-  
-  // Ensure "EnRoute_At" header exists
-  var headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
-  if (headers.indexOf("EnRoute_At") === -1) {
-    ws.getRange(1, headers.length + 1).setValue("EnRoute_At");
-  }
-  var hIdx = headerIndex(ws);
-
-  var existing = null;
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].Submission_ID) === String(sid)) { existing = rows[i]; break; }
-  }
-  if (existing) {
-    ws.getRange(existing._row, hIdx["EnRoute_At"]).setValue(enRouteAt);
-  } else {
-    // Note: Append Row pushes based on sheet width. Best to be safe using indices.
-    var newRowArr = [];
-    newRowArr[hIdx["Submission_ID"] - 1] = sid;
-    newRowArr[hIdx["Delivered_At"] - 1] = "";
-    newRowArr[hIdx["EnRoute_At"] - 1] = enRouteAt;
-    ws.appendRow(newRowArr);
-  }
-  return {success:true, submissionId:sid, enRouteAt:enRouteAt};
+  return batchMarkEnRoute({ submissionIds: [sid], enRouteAt: enRouteAt });
 }
 
 // ── WALLET TOPUP LOGIC ────────────────────────────────────────────────────────
@@ -5063,215 +5027,161 @@ function getPendingUPIPayments() {
              });
 }
 
-// ── MARK DELIVERED ────────────────────────────────────────────────────────────
+// ── MARK DELIVERED (Master Orders 'Delivered' Column) ─────────────────────────
 function markDelivered(body) {
-  var sid         = body.submissionId;
-  var deliveredAt = body.deliveredAt;
-  if (!sid) return {success:false, error:"submissionId required"};
+  var sid = String(body.submissionId || "").trim();
+  if (!sid) return { success: false, error: "submissionId required" };
 
-  var ss  = getSpreadsheet();
-  // Ensure we define the tab properly
-  var ws  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  
-  var headers = ws.getRange(1, 1, 1, ws.getLastColumn()).getValues()[0];
-  if (headers.indexOf("EnRoute_At") === -1) {
-    ws.getRange(1, headers.length + 1).setValue("EnRoute_At");
+  var ss = getSpreadsheet();
+  var rows = _getAllOrdersBothTabsIfPresent(ss);
+  var matched = rows.filter(function(r) { return String(r.Submission_ID || "").trim() === sid; });
+  if (!matched.length) {
+    return { success: false, error: "Order not found in active orders." };
   }
-  
-  var rows = getAllRows(ws);
-  var hIdx = headerIndex(ws);
 
-  var existing = null;
-  for (var i = 0; i < rows.length; i++) {
-    if (String(rows[i].Submission_ID) === sid) { existing = rows[i]; break; }
-  }
-  if (existing) {
-    ws.getRange(existing._row, hIdx["Delivered_At"]).setValue(deliveredAt);
-  } else {
-    var newRowArr = [];
-    newRowArr[hIdx["Submission_ID"] - 1] = sid;
-    newRowArr[hIdx["Delivered_At"] - 1] = deliveredAt;
-    newRowArr[hIdx["EnRoute_At"] - 1] = "";
-    ws.appendRow(newRowArr);
-  }
-  return {success:true, submissionId:sid, deliveredAt:deliveredAt};
-}
-
-// ── BATCH MARK DELIVERED (Enkin consolidated card) ────────────────────────────
-// Accepts { submissionIds: [...], deliveredAt: "..." } and marks all IDs as
-// delivered in SK_Deliveries. Used by the driver page's consolidated Enkin card
-// so one tap marks all 5–10 Enkin orders as delivered at once.
-function batchMarkDelivered(body) {
-  var ids         = body.submissionIds;
-  var deliveredAt = body.deliveredAt;
-  if (!ids || !ids.length) return {success:false, error:"submissionIds required"};
-
-  var ss  = getSpreadsheet();
-  var ws  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  var rows = getAllRows(ws);
-  var hIdx = headerIndex(ws);
-
-  // Build a set of existing SIDs for fast lookup
-  var existingMap = {};
-  rows.forEach(function(r) { existingMap[String(r.Submission_ID || "")] = r; });
-
-  var updated = 0;
-  ids.forEach(function(sid) {
-    sid = String(sid);
-    if (existingMap[sid]) {
-      ws.getRange(existingMap[sid]._row, hIdx["Delivered_At"]).setValue(deliveredAt);
-    } else {
-      var newRowArr = [];
-      newRowArr[hIdx["Submission_ID"] - 1] = sid;
-      newRowArr[hIdx["Delivered_At"] - 1]  = deliveredAt;
-      newRowArr[hIdx["EnRoute_At"] - 1]    = "";
-      ws.appendRow(newRowArr);
+  matched.forEach(function(order) {
+    var ws = order._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    var hIdx = headerIndex(ws);
+    var col = hIdx["Delivered"];
+    if (!col) {
+      ws.getRange(1, ws.getLastColumn() + 1).setValue("Delivered");
+      col = ws.getLastColumn();
     }
-    updated++;
+    ws.getRange(order._row, col).setValue(true);
   });
 
-  return {success:true, updated:updated, deliveredAt:deliveredAt};
+  SpreadsheetApp.flush();
+  return { success: true, submissionId: sid, delivered: true, deliveredAt: body.deliveredAt || new Date().toISOString() };
 }
 
-// ── UNMARK DELIVERED ─────────────────────────────────────────────────────────
-// Reverts an accidental "Delivered" mark by clearing Delivered_At in SK_Deliveries.
-// Supports single submissionId or an array of submissionIds (e.g. Enkin group).
-function unmarkDelivered(body) {
-  var sid = body.submissionId;
-  var ids = body.submissionIds || (sid ? [sid] : []);
-  if (!ids || !ids.length) return {success:false, error:"submissionId or submissionIds required"};
+// ── BATCH MARK DELIVERED (Enkin consolidated card & bulk) ──────────────────────
+function batchMarkDelivered(body) {
+  var ids = body.submissionIds;
+  if (!ids || !ids.length) return { success: false, error: "submissionIds required" };
 
-  var ss  = getSpreadsheet();
-  var ws  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  var rows = getAllRows(ws);
-  var hIdx = headerIndex(ws);
+  var idSet = {};
+  ids.forEach(function(x) { idSet[String(x).trim()] = true; });
 
-  var existingMap = {};
-  rows.forEach(function(r) { existingMap[String(r.Submission_ID || "")] = r; });
+  var ss = getSpreadsheet();
+  var rows = _getAllOrdersBothTabsIfPresent(ss);
 
   var updated = 0;
-  ids.forEach(function(id) {
-    id = String(id);
-    if (existingMap[id]) {
-      ws.getRange(existingMap[id]._row, hIdx["Delivered_At"]).setValue("");
+  rows.forEach(function(order) {
+    var sid = String(order.Submission_ID || "").trim();
+    if (idSet[sid]) {
+      var ws = order._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+      var hIdx = headerIndex(ws);
+      var col = hIdx["Delivered"];
+      if (!col) {
+        ws.getRange(1, ws.getLastColumn() + 1).setValue("Delivered");
+        col = ws.getLastColumn();
+      }
+      ws.getRange(order._row, col).setValue(true);
       updated++;
     }
   });
 
-  return {success:true, updated:updated, submissionIds:ids};
+  SpreadsheetApp.flush();
+  return { success: true, updated: updated, deliveredAt: body.deliveredAt || new Date().toISOString() };
+}
+
+// ── UNMARK DELIVERED ─────────────────────────────────────────────────────────
+function unmarkDelivered(body) {
+  var sid = body.submissionId;
+  var ids = body.submissionIds || (sid ? [sid] : []);
+  if (!ids || !ids.length) return { success: false, error: "submissionId or submissionIds required" };
+
+  var idSet = {};
+  ids.forEach(function(x) { idSet[String(x).trim()] = true; });
+
+  var ss = getSpreadsheet();
+  var rows = _getAllOrdersBothTabsIfPresent(ss);
+
+  var updated = 0;
+  rows.forEach(function(order) {
+    var sid = String(order.Submission_ID || "").trim();
+    if (idSet[sid]) {
+      var ws = order._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+      var hIdx = headerIndex(ws);
+      var col = hIdx["Delivered"];
+      if (col) {
+        ws.getRange(order._row, col).setValue("");
+        updated++;
+      }
+    }
+  });
+
+  SpreadsheetApp.flush();
+  return { success: true, updated: updated, submissionIds: ids };
 }
 
 // ── AUTO-MARK DELIVERED (daily 00:00 IST safety net) ─────────────────────────
-// If the driver forgets to tap "Mark Delivered", any order dated BEFORE today
-// is auto-marked delivered at the start of the next day. Deliveries are keyed
-// by Submission_ID and one submission can span several dates, so a submission
-// is only auto-marked once ALL its (non-cancelled) orders are in the past —
-// otherwise we'd pre-mark tomorrow's delivery as done.
 function autoMarkDeliveredDaily() {
   try { cleanupOldLabels(); } catch(e) { Logger.log("cleanupOldLabels err: " + e.message); }
   var ss    = getSpreadsheet();
   var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
-  var ws    = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows  = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  var rows  = _getAllOrdersBothTabsIfPresent(ss);
 
-  var bySid = {}; // sid → { past: has orders before today, current: has orders today/future }
+  var marked = 0;
   rows.forEach(function(r) {
-    var sid = String(r.Submission_ID || "").trim();
-    if (!sid) return;
     if (_isOrderCancelled(r.Payment_Status)) return;
     var d = r.Order_Date instanceof Date
       ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(r.Order_Date || "").trim();
-    if (!d) return;
-    if (!bySid[sid]) bySid[sid] = { past: false, current: false };
-    if (d < today) bySid[sid].past = true; else bySid[sid].current = true;
-  });
+    if (!d || d >= today) return;
 
-  var delWs   = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  var hIdx    = headerIndex(delWs);
-  var delMap  = {};
-  getAllRows(delWs).forEach(function(r) {
-    var s = String(r.Submission_ID || "").trim();
-    if (s) delMap[s] = r;
-  });
+    var isDel = r.Delivered === true || String(r.Delivered).toLowerCase() === "true" || String(r.Delivered).toLowerCase() === "yes";
+    if (isDel) return;
 
-  var stamp  = new Date().toISOString();
-  var marked = 0;
-  Object.keys(bySid).forEach(function(sid) {
-    var s = bySid[sid];
-    if (!s.past || s.current) return; // nothing past-due, or still has today/future orders
-    var existing = delMap[sid];
-    if (existing && String(existing.Delivered_At || "").trim() !== "") return; // already delivered
-    if (existing) {
-      delWs.getRange(existing._row, hIdx["Delivered_At"]).setValue(stamp);
-    } else {
-      var arr = [];
-      arr[hIdx["Submission_ID"] - 1] = sid;
-      arr[hIdx["Delivered_At"] - 1]  = stamp;
-      arr[hIdx["EnRoute_At"] - 1]    = "";
-      delWs.appendRow(arr);
+    var ws = r._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    var hIdx = headerIndex(ws);
+    var col = hIdx["Delivered"];
+    if (!col) {
+      ws.getRange(1, ws.getLastColumn() + 1).setValue("Delivered");
+      col = ws.getLastColumn();
     }
+    ws.getRange(r._row, col).setValue(true);
     marked++;
   });
-  Logger.log("autoMarkDeliveredDaily: auto-marked " + marked + " submission(s) delivered.");
+
+  SpreadsheetApp.flush();
+  Logger.log("autoMarkDeliveredDaily: auto-marked " + marked + " order(s) delivered.");
   return { success: true, marked: marked };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MEAL-SPECIFIC AUTO-DELIVERY HELPERS
-// Runs after each meal's expected service window and marks all unmarked
-// Submission_IDs whose last order of that meal type is on or before today.
 // ─────────────────────────────────────────────────────────────────────────────
 function autoMarkDeliveredByMeal_(mealType) {
   var ss    = getSpreadsheet();
   var today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
-  var ws    = getOrCreateTab(ss, TAB_ORDERS, []);
-  var rows  = getRecentRows(ws, 1500).concat(typeof ia_rowsAsSK === "function" ? ia_rowsAsSK() : []);
+  var rows  = _getAllOrdersBothTabsIfPresent(ss);
 
-  // Group by SID — only look at rows whose Meal_Type matches the target
-  var bySid = {};
+  var marked = 0;
   rows.forEach(function(r) {
     if (String(r.Meal_Type || "").trim() !== mealType) return;
-    var sid = String(r.Submission_ID || "").trim();
-    if (!sid) return;
     if (_isOrderCancelled(r.Payment_Status)) return;
     var d = r.Order_Date instanceof Date
       ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
       : String(r.Order_Date || "").trim();
-    if (!d) return;
-    if (!bySid[sid]) bySid[sid] = { past: false, current: false };
-    // Order_Date <= today  →  meal is done (past or today after service time)
-    // Order_Date >  today  →  still upcoming
-    if (d <= today) bySid[sid].past = true; else bySid[sid].current = true;
-  });
+    if (!d || d > today) return;
 
-  var delWs  = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID","Delivered_At","EnRoute_At"]);
-  var hIdx   = headerIndex(delWs);
-  var delMap = {};
-  getAllRows(delWs).forEach(function(r) {
-    var s = String(r.Submission_ID || "").trim();
-    if (s) delMap[s] = r;
-  });
+    var isDel = r.Delivered === true || String(r.Delivered).toLowerCase() === "true" || String(r.Delivered).toLowerCase() === "yes";
+    if (isDel) return;
 
-  var stamp  = new Date().toISOString();
-  var marked = 0;
-  Object.keys(bySid).forEach(function(sid) {
-    var s = bySid[sid];
-    if (!s.past || s.current) return; // nothing to mark (no past, or still has future orders)
-    var existing = delMap[sid];
-    if (existing && String(existing.Delivered_At || "").trim() !== "") return; // already marked
-    if (existing) {
-      delWs.getRange(existing._row, hIdx["Delivered_At"]).setValue(stamp);
-    } else {
-      var arr = [];
-      arr[hIdx["Submission_ID"] - 1] = sid;
-      arr[hIdx["Delivered_At"] - 1]  = stamp;
-      arr[hIdx["EnRoute_At"] - 1]    = "";
-      delWs.appendRow(arr);
+    var ws = r._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    var hIdx = headerIndex(ws);
+    var col = hIdx["Delivered"];
+    if (!col) {
+      ws.getRange(1, ws.getLastColumn() + 1).setValue("Delivered");
+      col = ws.getLastColumn();
     }
+    ws.getRange(r._row, col).setValue(true);
     marked++;
   });
-  Logger.log("autoMarkDelivered[" + mealType + "]: auto-marked " + marked + " submission(s) delivered.");
+
+  SpreadsheetApp.flush();
+  Logger.log("autoMarkDelivered[" + mealType + "]: auto-marked " + marked + " " + mealType + " order(s) delivered.");
   return { success: true, marked: marked, meal: mealType };
 }
 
@@ -5283,6 +5193,101 @@ function autoMarkLunchDelivered()     { return autoMarkDeliveredByMeal_("Lunch")
 
 /** Triggered at 10:00 PM IST — marks all due Dinner orders delivered. */
 function autoMarkDinnerDelivered()    { return autoMarkDeliveredByMeal_("Dinner"); }
+
+// ── BACKFILL DELIVERED STATUS (Orders <= 2026-11-23 marked true) ─────────────
+function backfillDeliveredStatus(commit) {
+  var ss = getSpreadsheet();
+  var cutoffDate = "2026-11-23";
+  var result = {
+    commit: !!commit,
+    cutoffDate: cutoffDate,
+    orders: { total: 0, marked: 0, keptBlank: 0 },
+    ls_orders: { total: 0, marked: 0, keptBlank: 0 }
+  };
+
+  // 1. Process Orders
+  var skWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+  var skLastCol = skWs.getLastColumn();
+  var skHeaders = skWs.getRange(1, 1, 1, skLastCol).getValues()[0];
+  var skDelCol = skHeaders.indexOf("Delivered") + 1;
+  if (skDelCol === 0) {
+    if (commit) {
+      skWs.getRange(1, skLastCol + 1).setValue("Delivered");
+      skDelCol = skLastCol + 1;
+    } else {
+      skDelCol = skLastCol + 1;
+    }
+  }
+
+  var skLastRow = skWs.getLastRow();
+  if (skLastRow > 1) {
+    var skDateCol = skHeaders.indexOf("Order_Date") + 1;
+    var skDateVals = skWs.getRange(2, skDateCol, skLastRow - 1, 1).getValues();
+    var newSkDelVals = [];
+    for (var i = 0; i < skDateVals.length; i++) {
+      result.orders.total++;
+      var val = skDateVals[i][0];
+      var d = val instanceof Date
+        ? Utilities.formatDate(val, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(val || "").trim();
+      if (d && d <= cutoffDate) {
+        newSkDelVals.push([true]);
+        result.orders.marked++;
+      } else {
+        newSkDelVals.push([""]);
+        result.orders.keptBlank++;
+      }
+    }
+    if (commit) {
+      skWs.getRange(2, skDelCol, newSkDelVals.length, 1).setValues(newSkDelVals);
+    }
+  }
+
+  // 2. Process LS_Orders (if exists)
+  var lsWs = ss.getSheetByName(TAB_LS_ORDERS);
+  if (lsWs) {
+    var lsLastCol = lsWs.getLastColumn();
+    var lsHeaders = lsWs.getRange(1, 1, 1, lsLastCol).getValues()[0];
+    var lsDelCol = lsHeaders.indexOf("Delivered") + 1;
+    if (lsDelCol === 0) {
+      if (commit) {
+        lsWs.getRange(1, lsLastCol + 1).setValue("Delivered");
+        lsDelCol = lsLastCol + 1;
+      } else {
+        lsDelCol = lsLastCol + 1;
+      }
+    }
+
+    var lsLastRow = lsWs.getLastRow();
+    if (lsLastRow > 1) {
+      var lsDateCol = lsHeaders.indexOf("Order_Date") + 1;
+      var lsDateVals = lsWs.getRange(2, lsDateCol, lsLastRow - 1, 1).getValues();
+      var newLsDelVals = [];
+      for (var j = 0; j < lsDateVals.length; j++) {
+        result.ls_orders.total++;
+        var valJ = lsDateVals[j][0];
+        var dJ = valJ instanceof Date
+          ? Utilities.formatDate(valJ, "Asia/Kolkata", "yyyy-MM-dd")
+          : String(valJ || "").trim();
+        if (dJ && dJ <= cutoffDate) {
+          newLsDelVals.push([true]);
+          result.ls_orders.marked++;
+        } else {
+          newLsDelVals.push([""]);
+          result.ls_orders.keptBlank++;
+        }
+      }
+      if (commit) {
+        lsWs.getRange(2, lsDelCol, newLsDelVals.length, 1).setValues(newLsDelVals);
+      }
+    }
+  }
+
+  if (commit) {
+    SpreadsheetApp.flush();
+  }
+  return { success: true, result: result };
+}
 
 // Run once (Apps Script editor or admin action) to register all triggers.
 function setupAutoDeliveredTrigger() {

@@ -3581,6 +3581,10 @@ function _submitOrderInternal(body) {
         ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue("Gateway_Order_ID");
         hIdx["Gateway_Order_ID"] = ordersWs.getLastColumn();
       }
+      if (!hIdx["Delivered"]) {
+        ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue("Delivered");
+        hIdx["Delivered"] = ordersWs.getLastColumn();
+      }
       set("Items_JSON",          JSON.stringify(itemsObj));
       set("Special_Notes_Kitchen",  nKitchen);
       set("Special_Notes_Delivery", nDelivery);
@@ -4449,18 +4453,7 @@ function getCustomerOrders(phone, storefront) {
       : String(r.Order_Date).trim();
   };
 
-  const delWs = ss.getSheetByName("SK_Deliveries");
-  const deliveryMap = {};
-  if (delWs) {
-    const delRows = getAllRows(delWs);
-    delRows.forEach(d => {
-      const sid = String(d.Submission_ID || "");
-      if (sid) deliveryMap[sid] = {
-        deliveredAt: d.Delivered_At || null,
-        enRouteAt: d.EnRoute_At || null
-      };
-    });
-  }
+  const _isDel = (r) => (r.Delivered === true || String(r.Delivered).toLowerCase() === "true" || String(r.Delivered).toLowerCase() === "yes");
 
   const allFiltered = rows.filter(r => String(r.Phone).trim() === String(phone).trim());
   
@@ -4468,10 +4461,10 @@ function getCustomerOrders(phone, storefront) {
     .filter(r => fmtD(r) >= today)
     .sort((a,b) => fmtD(a).localeCompare(fmtD(b)))
     .map(r => {
-      const delTracker = deliveryMap[String(r.Submission_ID)] || {};
       let itemsRaw = {};
       try { itemsRaw = JSON.parse(r.Items_JSON || "{}"); } catch(e) {}
       const _isBulkRow = String(r.Source || "").trim() === "Bulk" || !!String(r.Batch_ID || "").trim();
+      const isDelivered = _isDel(r);
       return {
         rowId:              r.Submission_ID,
         date:               fmtD(r),
@@ -4494,8 +4487,8 @@ function getCustomerOrders(phone, storefront) {
         batch_id:           String(r.Batch_ID || "").trim(),
         bulk_plan:          _isBulkRow ? String(r.Bulk_Plan || "").trim() : "",
         bulk_postponed:     _isBulkRow ? (typeof _isCustomerBulkPostponed === "function" ? _isCustomerBulkPostponed(r.Bulk_Postponed) : !!String(r.Bulk_Postponed || "").trim()) : false,
-        deliveredAt:        delTracker.deliveredAt,
-        enRouteAt:          delTracker.enRouteAt
+        deliveredAt:        isDelivered ? "true" : null,
+        enRouteAt:          null
       };
     });
 
@@ -4504,10 +4497,10 @@ function getCustomerOrders(phone, storefront) {
     .sort((a,b) => fmtD(b).localeCompare(fmtD(a))) // newest first
     .slice(0, 10)
     .map(r => {
-      const delTracker = deliveryMap[String(r.Submission_ID)] || {};
       // items_raw: structured {itemName: qty} for "Order Again" feature on frontend
       let itemsRaw = {};
       try { itemsRaw = JSON.parse(r.Items_JSON || "{}"); } catch(e) {}
+      const isDelivered = _isDel(r);
       return {
         rowId:              r.Submission_ID,
         date:               fmtD(r),
@@ -4520,8 +4513,8 @@ function getCustomerOrders(phone, storefront) {
         payment_status:     r.Payment_Status,
         payment_method:     r.Payment_Method,
         wallet_credit:      Number(r.Wallet_Credit) || 0,
-        deliveredAt:        delTracker.deliveredAt,
-        enRouteAt:          delTracker.enRouteAt
+        deliveredAt:        isDelivered ? "true" : null,
+        enRouteAt:          null
       };
     });
 

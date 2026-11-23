@@ -666,7 +666,7 @@ function submitBulkOrder(body) {
   // Write rows (routed tab: LS storefront → LS_Orders, else SK_Orders)
   const ordersWs = _lsOrdersWs(ss, _sfBulk);
   const hIdx = headerIndex(ordersWs);
-  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Wallet_Credit", "Bulk_Plan", "Bulk_Postponed"].forEach(function (col) {
+  ["Small_Order_Fee", "Inflation_Surcharge", "Loyalty_Discount", "Gateway_Order_ID", "Batch_ID", "Bulk_Clawback", "Wallet_Credit", "Bulk_Plan", "Bulk_Postponed", "Delivered"].forEach(function (col) {
     if (!hIdx[col]) { ordersWs.getRange(1, ordersWs.getLastColumn() + 1).setValue(col); hIdx[col] = ordersWs.getLastColumn(); }
   });
 

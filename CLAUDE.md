@@ -768,3 +768,23 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - Interactive swap modal displays current vs target sabji with daily menu vegetable names (from `S.menuCache`) if available, quantity selector (if Qty > 1), and size parity clarity note.
   - Calls `_action: "swapOrderSabji"` and refreshes orders via `loadExistingOrders(S.phone)` upon success.
 
+### Direct 'Delivered' Column in Orders & Deprecated SK_Deliveries (CODE_VERSION 36.23 / DRIVER_VERSION v26.11.23.01)
+- **Problem Solved:**
+  - `SK_Deliveries` sheet had accumulated 12,000+ rows, severely slowing down delivery marking and customer/driver order fetching (multi-second timeouts from `getAllRows` on 12,000 rows).
+- **Architecture & Implementation:**
+  - **Delivered Column in Orders Schema (`00_Config.gs`, `02_Orders_Menu.gs`, `06_Bulk_Orders.gs`):**
+    - Added `"Delivered"` column to `ORDERS_HEADERS` (column 64), matching the existing `"Packed"` pattern.
+    - Added automatic self-healing for `"Delivered"` across `Orders` and `LS_Orders` on write.
+  - **Atomic Marking Directly on Order Rows (`04_Reports_Misc.gs`):**
+    - `markDelivered`, `batchMarkDelivered`, and `unmarkDelivered` directly find and update the order row(s) in `Orders` / `LS_Orders` (`Delivered = true` or `Delivered = ""`).
+    - `autoMarkDeliveredDaily` and `autoMarkDeliveredByMeal_` update past orders directly in `Orders` / `LS_Orders`.
+    - `batchMarkEnRoute` caches en route state in Script Properties (`ENROUTE_<date>_<meal>`) without bloating sheets.
+  - **Zero-Overhead Delivery Reads (`02_Orders_Menu.gs`, `03_Admin_Kitchen.gs`):**
+    - `getCustomerOrders` and `getDriverData` read `r.Delivered` directly from active order rows, eliminating slow reads of the 12,000-row `SK_Deliveries` sheet.
+  - **Pre-Nov 24 Orders Backfill Endpoint (`04_Reports_Misc.gs`, `Code.gs`):**
+    - Added `backfillDeliveredStatus(commit)` admin endpoint to batch-mark all orders with `Order_Date <= 2026-11-23` as `Delivered = true`, while keeping future orders (`>= 2026-11-24`) blank.
+  - **Delivery App Update (`docs/Admin/driver.html`):**
+    - Updated `fmtTime` to safely handle boolean `"true"`, cleanly rendering `✅ Delivered` for backfilled rows and `✅ Delivered at HH:mm` for freshly marked rows.
+    - Bumped `DRIVER_VERSION` to `v26.11.23.01`.
+
+
