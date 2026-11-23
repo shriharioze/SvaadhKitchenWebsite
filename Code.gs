@@ -985,6 +985,7 @@ function doPost(e) {
     // Customer self-service (phone-verified inside each function)
     if (action === "deleteOrder") return jsonRes(deleteOrder(body.phone, body.rowId, body.refundType, { isAdmin: isAdmin }));
     if (action === "postponeBulkOrder") return jsonRes(postponeBulkOrder(body)); // reschedule a bulk day (15-day/month); phone-verified + capped inside
+    if (action === "swapOrderSabji") return jsonRes(swapOrderSabji(body)); // swap Dry <-> Curry sabji (strict size parity; before cutoff)
     if (action === "previewCancellation") return jsonRes(_deleteOrderInternal(body.phone, body.rowId, body.refundType || "wallet", { dryRun: true }));
     if (action === "getCustomerOrders") return jsonRes(getCustomerOrders(body.phone, _lsStorefront(body)));
     if (action === "fetchArchivedAddress") return jsonRes(fetchArchivedAddress(body.phone));

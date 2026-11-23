@@ -4478,6 +4478,10 @@ function getCustomerOrders(phone, storefront) {
         meal:               r.Meal_Type,
         summary:            _buildSummary(r),
         items_raw:          itemsRaw,
+        dry_sabji_mini:     Number(r.Dry_Sabji_Mini) || 0,
+        dry_sabji_full:     Number(r.Dry_Sabji_Full) || 0,
+        curry_sabji_mini:   Number(r.Curry_Sabji_Mini) || 0,
+        curry_sabji_full:   Number(r.Curry_Sabji_Full) || 0,
         total:              r.Net_Total,
         inflation_surcharge: Number(r.Inflation_Surcharge) || 0,
         loyalty_discount:   String(r.Loyalty_Discount || "").trim().toLowerCase() === "yes",
@@ -5510,3 +5514,234 @@ function updateMyGateCode(body) {
   
   return { success: false, error: 'Could not find matching order in SK_Orders.' };
 }
+
+// ── SWAP ORDER SABJI (Dry <-> Curry with Strict Size Parity) ──────
+function swapOrderSabji(body) {
+  body = body || {};
+  const phone = _normalizePhone(body.phone || "");
+  const targetId = String(body.rowId || "").trim().toUpperCase();
+  const fromSabjiRaw = String(body.fromSabji || "").trim();
+  const toSabjiRaw = String(body.toSabji || "").trim();
+  const requestedQty = Math.max(1, parseInt(body.qty, 10) || 1);
+
+  if (!phone || !targetId) {
+    return { success: false, error: "Missing phone or order identifier." };
+  }
+  if (!fromSabjiRaw || !toSabjiRaw) {
+    return { success: false, error: "Missing sabji selection." };
+  }
+
+  // Strict rule: 250ml <-> 250ml ONLY, 100ml <-> 100ml ONLY.
+  const NORM_MAP = {
+    // 250ml variants
+    "dry_sabji_full": "Dry_Sabji_Full",
+    "dry sabji full": "Dry_Sabji_Full",
+    "dry sabji full [250ml]": "Dry_Sabji_Full",
+    "dry 250": "Dry_Sabji_Full",
+    "dry 250ml": "Dry_Sabji_Full",
+    "l_dry_full": "Dry_Sabji_Full",
+    "d_dry_full": "Dry_Sabji_Full",
+
+    "curry_sabji_full": "Curry_Sabji_Full",
+    "curry sabji full": "Curry_Sabji_Full",
+    "curry sabji full [250ml]": "Curry_Sabji_Full",
+    "curry 250": "Curry_Sabji_Full",
+    "curry 250ml": "Curry_Sabji_Full",
+    "l_curry_full": "Curry_Sabji_Full",
+    "d_curry_full": "Curry_Sabji_Full",
+
+    // 100ml variants
+    "dry_sabji_mini": "Dry_Sabji_Mini",
+    "dry sabji mini": "Dry_Sabji_Mini",
+    "dry sabji mini [100ml]": "Dry_Sabji_Mini",
+    "dry 100": "Dry_Sabji_Mini",
+    "dry 100ml": "Dry_Sabji_Mini",
+    "l_dry_mini": "Dry_Sabji_Mini",
+    "d_dry_mini": "Dry_Sabji_Mini",
+
+    "curry_sabji_mini": "Curry_Sabji_Mini",
+    "curry sabji mini": "Curry_Sabji_Mini",
+    "curry sabji mini [100ml]": "Curry_Sabji_Mini",
+    "curry 100": "Curry_Sabji_Mini",
+    "curry 100ml": "Curry_Sabji_Mini",
+    "l_curry_mini": "Curry_Sabji_Mini",
+    "d_curry_mini": "Curry_Sabji_Mini"
+  };
+
+  const normKey = (s) => NORM_MAP[String(s).trim().toLowerCase()] || null;
+  const fromCol = normKey(fromSabjiRaw);
+  const toCol = normKey(toSabjiRaw);
+
+  if (!fromCol || !toCol) {
+    return { success: false, error: "Only sabji items can be swapped." };
+  }
+  if (fromCol === toCol) {
+    return { success: false, error: "Please select a different sabji to swap." };
+  }
+
+  // Size parity validation
+  const isValidPair =
+    (fromCol === "Dry_Sabji_Full" && toCol === "Curry_Sabji_Full") ||
+    (fromCol === "Curry_Sabji_Full" && toCol === "Dry_Sabji_Full") ||
+    (fromCol === "Dry_Sabji_Mini" && toCol === "Curry_Sabji_Mini") ||
+    (fromCol === "Curry_Sabji_Mini" && toCol === "Dry_Sabji_Mini");
+
+  if (!isValidPair) {
+    return {
+      success: false,
+      error: "Strict size rule: 250ml can only be swapped with 250ml, and 100ml with 100ml."
+    };
+  }
+
+  const DISPLAY_NAMES = {
+    "Dry_Sabji_Full": "Dry Sabji Full (250ml)",
+    "Curry_Sabji_Full": "Curry Sabji Full (250ml)",
+    "Dry_Sabji_Mini": "Dry Sabji Mini (100ml)",
+    "Curry_Sabji_Mini": "Curry Sabji Mini (100ml)"
+  };
+
+  const CANONICAL_JSON_NAMES = {
+    "Dry_Sabji_Full": "Dry Sabji Full",
+    "Curry_Sabji_Full": "Curry Sabji Full",
+    "Dry_Sabji_Mini": "Dry Sabji Mini",
+    "Curry_Sabji_Mini": "Curry Sabji Mini"
+  };
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (e) {
+    return { success: false, error: "System busy. Please try again in a moment." };
+  }
+
+  try {
+    const ss = getSpreadsheet();
+    const rows = _getAllOrdersBothTabsIfPresent(ss);
+
+    const r = rows.find(x => {
+      const sid = String(x.Submission_ID || "").trim().toUpperCase();
+      if (sid !== targetId) return false;
+      return _normalizePhone(x.Phone) === phone;
+    });
+
+    if (!r) {
+      return { success: false, error: "Order record not found or permission denied." };
+    }
+
+    if (_isOrderCancelled(r.Payment_Status)) {
+      return { success: false, error: "Cannot change items on a cancelled order." };
+    }
+
+    // Cutoff validation
+    const orderDateStr = r.Order_Date instanceof Date
+      ? Utilities.formatDate(r.Order_Date, "Asia/Kolkata", "yyyy-MM-dd")
+      : String(r.Order_Date).trim();
+    const now = getISTDate();
+    const today = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd");
+    const hourIST = now.getHours() + now.getMinutes() / 60;
+
+    if (orderDateStr < today) {
+      return { success: false, error: "Cannot change items for past orders." };
+    }
+
+    const mealNorm = String(r.Meal_Type || "").trim().toLowerCase();
+    const mealKey  = mealNorm.charAt(0).toUpperCase() + mealNorm.slice(1);
+
+    if (orderDateStr === today) {
+      const effCutoffs = _effectiveCutoffsForDate(orderDateStr);
+      const cutoffHour = effCutoffs[mealKey];
+      if (cutoffHour !== undefined && hourIST >= cutoffHour) {
+        return { success: false, error: `Cutoff for ${mealKey} has already passed. Sabji changes are closed.` };
+      }
+    }
+
+    // Current quantity check
+    let curFromQty = Number(r[fromCol]) || 0;
+    let itemsObj = {};
+    try {
+      itemsObj = typeof r.Items_JSON === "string" ? JSON.parse(r.Items_JSON) : (r.Items_JSON || {});
+    } catch(e) { itemsObj = {}; }
+
+    if (curFromQty <= 0) {
+      for (const k in itemsObj) {
+        if (normKey(k) === fromCol) {
+          curFromQty = Number(itemsObj[k]) || 0;
+          break;
+        }
+      }
+    }
+
+    if (curFromQty <= 0) {
+      return {
+        success: false,
+        error: `No ${DISPLAY_NAMES[fromCol]} found in this order to swap.`
+      };
+    }
+
+    const swapQty = Math.min(requestedQty, curFromQty);
+    const newFromQty = curFromQty - swapQty;
+    const curToQty = Number(r[toCol]) || 0;
+    const newToQty = curToQty + swapQty;
+
+    // Update Items_JSON
+    let remainingToDeduct = swapQty;
+    for (const k in itemsObj) {
+      if (normKey(k) === fromCol) {
+        const val = Number(itemsObj[k]) || 0;
+        if (val > 0) {
+          const deduct = Math.min(val, remainingToDeduct);
+          itemsObj[k] = val - deduct;
+          remainingToDeduct -= deduct;
+          if (itemsObj[k] <= 0) delete itemsObj[k];
+          if (remainingToDeduct <= 0) break;
+        }
+      }
+    }
+
+    const targetJsonKey = CANONICAL_JSON_NAMES[toCol];
+    let existingToKey = null;
+    for (const k in itemsObj) {
+      if (normKey(k) === toCol) {
+        existingToKey = k;
+        break;
+      }
+    }
+    const toKeyToUse = existingToKey || targetJsonKey;
+    itemsObj[toKeyToUse] = (Number(itemsObj[toKeyToUse]) || 0) + swapQty;
+
+    // Update Sheet
+    const ws = r._ws || getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
+    const hIdx = headerIndex(ws);
+
+    if (hIdx[fromCol]) {
+      ws.getRange(r._row, hIdx[fromCol]).setValue(newFromQty > 0 ? newFromQty : "");
+    }
+    if (hIdx[toCol]) {
+      ws.getRange(r._row, hIdx[toCol]).setValue(newToQty > 0 ? newToQty : "");
+    }
+    if (hIdx["Items_JSON"]) {
+      ws.getRange(r._row, hIdx["Items_JSON"]).setValue(JSON.stringify(itemsObj));
+    }
+
+    SpreadsheetApp.flush();
+
+    Logger.log(`swapOrderSabji: Order ${r.Submission_ID} (${phone}) row ${r._row} swapped ${swapQty}x ${fromCol} -> ${toCol}`);
+
+    return {
+      success: true,
+      rowId: targetId,
+      meal: r.Meal_Type,
+      date: orderDateStr,
+      fromName: DISPLAY_NAMES[fromCol],
+      toName: DISPLAY_NAMES[toCol],
+      qty: swapQty,
+      message: `Successfully swapped ${swapQty} portion(s) of ${DISPLAY_NAMES[fromCol]} to ${DISPLAY_NAMES[toCol]}.`
+    };
+  } catch (err) {
+    console.error(`swapOrderSabji failed: ${err && err.message}\n${err && err.stack}`);
+    return { success: false, error: "Failed to swap sabji: " + (err && err.message) };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+

@@ -747,3 +747,24 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
   - **Removed Client-Side Email Input (`docs/order.html`, `docs/Liviano-Serio.html`):** Removed `showEmailInput()`. When `reason === "no_email"`, the modal strictly displays: *"We don't have an email on your account yet, so we can't send a code. Please reset via WhatsApp — and next time you're logged in, add your email so you can do this yourself."* with the direct WhatsApp support link.
   - **Backend Strict Verification (`02_Orders_Menu.gs`, `Code.gs`):** `requestPinResetOtp(phone, storefront)` strictly requires an existing on-file email (`!info.email` immediately returns `{ ok: false, reason: "no_email" }`). Removed any caller-supplied `email` parameter to bind an OTP or update customer email during PIN reset. Storefront-aware lookup (`_customersTabFor`) and `_setPinAfterOtp` are retained safely.
   - **Retained Fast Login (`docs/Liviano-Serio.html`):** Kept `&storefront=LS` parameter in `verifyLogin` for seamless login post-reset.
+
+### Sabji Swap Functionality with Strict Size Parity (CODE_VERSION 36.22 / APP_VERSION v26.11.23.01)
+- **Feature & Objective:**
+  - Users with active upcoming orders can swap their Sabji before meal cutoff (especially beneficial for multi-day bulk order customers who pre-booked meals and want to change their sabji choice based on the announced daily menu vegetable, but available to all daily and bulk users).
+- **Strict Business & Size Rules:**
+  - **Sabji Only:** Only sabjis can be swapped (no chapatis, dal, rice, curd, breakfast, or other items).
+  - **Strict Size Parity:** 250ml $\leftrightarrow$ 250ml only (`Dry_Sabji_Full` $\leftrightarrow$ `Curry_Sabji_Full`), and 100ml $\leftrightarrow$ 100ml only (`Dry_Sabji_Mini` $\leftrightarrow$ `Curry_Sabji_Mini`). No size upgrades or downgrades.
+  - **Before Cutoff Only:** Permitted strictly before the cutoff for that meal on that order date (e.g. before Lunch cutoff for Lunch; before Dinner cutoff for Dinner). Past orders and post-cutoff meals are hard-blocked.
+  - **Financial Neutrality:** Dry and Curry sabjis of the same size share identical pricing (₹52 for 250ml, ₹26 for 100ml), so total bill, payments, and wallet balances remain 100% unchanged.
+- **Backend Architecture (`02_Orders_Menu.gs`, `Code.gs`):**
+  - Added `swapOrderSabji(body)` with `LockService.getScriptLock()` (15s timeout).
+  - Validates customer phone authentication, exact order row lookup via `_getAllOrdersBothTabsIfPresent`, active status check (rejects cancelled or delivered orders), order date and dynamic cutoff evaluation via `_effectiveCutoffsForDate`.
+  - Enforces strict size pair validation and checks existing portion quantity.
+  - Atomically updates target sheet columns (`Dry_Sabji_Full`, `Curry_Sabji_Full`, etc.) and recalculates `Items_JSON`.
+  - Updated `getCustomerOrders` upcoming mapping to return `dry_sabji_mini`, `dry_sabji_full`, `curry_sabji_mini`, `curry_sabji_full`.
+  - Exposed `swapOrderSabji` action in `Code.gs` doPost router.
+- **Frontend UI & Customer Experience (`docs/order.html`, `docs/Liviano-Serio.html`):**
+  - In upcoming orders list under "My Orders", renders `⇄ Swap Sabji` button for orders with eligible sabjis before cutoff.
+  - Interactive swap modal displays current vs target sabji with daily menu vegetable names (from `S.menuCache`) if available, quantity selector (if Qty > 1), and size parity clarity note.
+  - Calls `_action: "swapOrderSabji"` and refreshes orders via `loadExistingOrders(S.phone)` upon success.
+

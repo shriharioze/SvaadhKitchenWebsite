@@ -1685,6 +1685,35 @@
       color: #1E1240;
     }
 
+    
+    .omr-swap-btn {
+      padding: 5px 10px;
+      border-radius: 7px;
+      border: 1.5px solid #fed7aa;
+      background: #fff7ed;
+      color: #9a3412;
+      font-size: 0.73rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .omr-swap-btn:hover {
+      background: #ffedd5;
+      border-color: #fdba74;
+    }
+    [data-theme="dark"] .omr-swap-btn {
+      background: #431407;
+      border-color: #9a3412;
+      color: #fdba74;
+    }
+    [data-theme="dark"] .omr-swap-btn:hover {
+      background: #541c0a;
+    }
+
     .omr-del-btn {
       padding: 5px 10px;
       border-radius: 7px;
@@ -5253,7 +5282,7 @@
     // ═══════════════════════════════════════════════════════════
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5X9JS_PsN-f-IMHeYkQMj54fwXRs6PevK0W/exec"; // PRODUCTION
     // Read claude.md and bump version number for pages with changes
-    const APP_VERSION = "v26.11.22.02";
+    const APP_VERSION = "v26.11.23.01";
     const UPI_VPA = "9819969682@hdfc";
     const UPI_NAME = "Svaadh Kitchen";
     let FREE_AREAS = ["Bhosale Nagar"];   // populated dynamically from API
@@ -14886,6 +14915,19 @@
               ? `<button class="omr-del-btn" style="opacity:0.55;border-style:dashed;cursor:not-allowed;" onclick="cancelBlockedMsg()" title="Cutoff crossed — no cancellation allowed">🔒 Cancellation closed</button>`
               : `<button class="omr-del-btn" onclick="${_cancelCall}">🗑 Delete</button>`;
 
+            let sabjiInfo = getOrderSabjiCounts(firstRow);
+            let sabjiRowId = o.rowId;
+            if (!sabjiInfo.hasSabji && o.rowIds && o.rowIds.length > 1) {
+              for (const rid of o.rowIds) {
+                const r = fullUpcomingRaw.find(x => String(x.rowId) === String(rid));
+                const s = getOrderSabjiCounts(r);
+                if (s.hasSabji) { sabjiInfo = s; sabjiRowId = rid; break; }
+              }
+            }
+            const swapSabjiBtnHtml = (!cutoffCrossed && sabjiInfo.hasSabji)
+              ? `<button class="omr-swap-btn" onclick="openSwapSabjiModal('${sabjiRowId}','${o.date}','${o.meal}')" title="Swap Sabji (Dry ↔ Curry)">⇄ Swap Sabji</button>`
+              : "";
+
             const checkboxHtml = cutoffCrossed
               ? `<input type="checkbox" disabled style="opacity:0.5; cursor:not-allowed; width:18px; height:18px; flex-shrink:0; accent-color:#e65100;" title="Cutoff crossed">`
               : `<input type="checkbox" class="bulk-cancel-cb" value="${o.rowId}" data-date="${o.date}" data-meal="${o.meal}" onchange="updateBulkCancelBtn()" style="cursor:pointer; width:18px; height:18px; flex-shrink:0; accent-color:#e65100;">`;
@@ -14904,6 +14946,7 @@
               </div>
             </div>
             <div class="omr-actions">
+              ${swapSabjiBtnHtml}
               ${delBtnHtml}
             </div>
           </div>
@@ -17203,6 +17246,254 @@
         BK.win = data;
         _bulkRenderItems();
       } catch (e) { _bulkErr("Couldn't load the bulk dates. Please check your connection and try again."); }
+    }
+
+
+    // ── SABJI SWAP (Dry ↔ Curry with Strict Size Parity) ─────────────────────
+    function getOrderSabjiCounts(row) {
+      if (!row) return { dm: 0, df: 0, cm: 0, cf: 0, hasSabji: false };
+      let dm = Number(row.dry_sabji_mini) || 0;
+      let df = Number(row.dry_sabji_full) || 0;
+      let cm = Number(row.curry_sabji_mini) || 0;
+      let cf = Number(row.curry_sabji_full) || 0;
+      const raw = row.items_raw || {};
+      if (!dm && !df && !cm && !cf && raw) {
+        for (const k in raw) {
+          const nk = k.replace(/[\s_\[\]\(\)]/g, '').toLowerCase();
+          const qty = Number(raw[k]) || 0;
+          if (nk === 'drysabjimini') dm = qty;
+          else if (nk === 'drysabjifull') df = qty;
+          else if (nk === 'currysabjimini') cm = qty;
+          else if (nk === 'currysabjifull') cf = qty;
+        }
+      }
+      return { dm, df, cm, cf, hasSabji: (dm > 0 || df > 0 || cm > 0 || cf > 0) };
+    }
+
+    function _swapSabjiModalEl() {
+      let el = document.getElementById("swapSabjiModal");
+      if (el) { el.style.zIndex = "55000"; return el; }
+      el = document.createElement("div");
+      el.id = "swapSabjiModal";
+      el.style.cssText = "position:fixed;inset:0;z-index:55000;background:rgba(0,0,0,0.55);display:none;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;";
+      el.innerHTML = '<div id="swapSabjiCard" style="background:#fff;border-radius:18px;max-width:440px;width:100%;margin:auto;box-shadow:0 16px 50px rgba(0,0,0,0.3);overflow:hidden;"></div>';
+      document.body.appendChild(el);
+      el.addEventListener("click", function (e) { if (e.target === el) closeSwapSabjiModal(); });
+      return el;
+    }
+
+    function closeSwapSabjiModal() {
+      const el = document.getElementById("swapSabjiModal");
+      if (el) el.style.display = "none";
+    }
+
+    function _renderSwapSabji(html) {
+      _swapSabjiModalEl();
+      document.getElementById("swapSabjiCard").innerHTML = html;
+      const m = document.getElementById("swapSabjiModal");
+      m.style.display = "flex";
+      m.scrollTop = 0;
+    }
+
+    function _getSwapSabjiOptions(sabjiInfo, date, meal) {
+      const dayMenu = (S.menuCache && S.menuCache[date]) || {};
+      const isLunch = (meal || "").toLowerCase() === "lunch";
+      const dryVeg = (isLunch ? dayMenu.lunch_dry : dayMenu.dinner_dry) || "";
+      const curryVeg = (isLunch ? dayMenu.lunch_curry : dayMenu.dinner_curry) || "";
+
+      const options = [];
+      if (sabjiInfo.df > 0) {
+        options.push({
+          id: "df_to_cf",
+          fromCol: "Dry_Sabji_Full",
+          toCol: "Curry_Sabji_Full",
+          fromTitle: "Dry Sabji Full [250ml]",
+          fromSubtitle: dryVeg ? `(${dryVeg})` : "Dry Vegetable (250ml)",
+          toTitle: "Curry Sabji Full [250ml]",
+          toSubtitle: curryVeg ? `(${curryVeg})` : "Curry / Gravy Vegetable (250ml)",
+          qty: sabjiInfo.df
+        });
+      }
+      if (sabjiInfo.cf > 0) {
+        options.push({
+          id: "cf_to_df",
+          fromCol: "Curry_Sabji_Full",
+          toCol: "Dry_Sabji_Full",
+          fromTitle: "Curry Sabji Full [250ml]",
+          fromSubtitle: curryVeg ? `(${curryVeg})` : "Curry / Gravy Vegetable (250ml)",
+          toTitle: "Dry Sabji Full [250ml]",
+          toSubtitle: dryVeg ? `(${dryVeg})` : "Dry Vegetable (250ml)",
+          qty: sabjiInfo.cf
+        });
+      }
+      if (sabjiInfo.dm > 0) {
+        options.push({
+          id: "dm_to_cm",
+          fromCol: "Dry_Sabji_Mini",
+          toCol: "Curry_Sabji_Mini",
+          fromTitle: "Dry Sabji Mini [100ml]",
+          fromSubtitle: dryVeg ? `(${dryVeg})` : "Dry Vegetable (100ml)",
+          toTitle: "Curry Sabji Mini [100ml]",
+          toSubtitle: curryVeg ? `(${curryVeg})` : "Curry / Gravy Vegetable (100ml)",
+          qty: sabjiInfo.dm
+        });
+      }
+      if (sabjiInfo.cm > 0) {
+        options.push({
+          id: "cm_to_dm",
+          fromCol: "Curry_Sabji_Mini",
+          toCol: "Dry_Sabji_Mini",
+          fromTitle: "Curry Sabji Mini [100ml]",
+          fromSubtitle: curryVeg ? `(${curryVeg})` : "Curry / Gravy Vegetable (100ml)",
+          toTitle: "Dry Sabji Mini [100ml]",
+          toSubtitle: dryVeg ? `(${dryVeg})` : "Dry Vegetable (100ml)",
+          qty: sabjiInfo.cm
+        });
+      }
+      return options;
+    }
+
+    let _currentSwapContext = null;
+
+    function openSwapSabjiModal(rowId, date, meal) {
+      const allOrders = [...(S.existingOrders || []), ...(S.pastOrders || [])];
+      let row = allOrders.find(x => String(x.rowId) === String(rowId));
+      if (!row) {
+        sAlert("Order not found.", "Error", "⚠️");
+        return;
+      }
+      const sabjiInfo = getOrderSabjiCounts(row);
+      if (!sabjiInfo.hasSabji) {
+        sAlert("No eligible sabji was found in this order.", "Info", "ℹ️");
+        return;
+      }
+
+      const options = _getSwapSabjiOptions(sabjiInfo, date, meal);
+      if (!options.length) {
+        sAlert("No swap options available.", "Info", "ℹ️");
+        return;
+      }
+
+      _currentSwapContext = { rowId, date, meal, options, selectedIdx: 0 };
+      _renderSwapSabjiModalContent();
+    }
+
+    function _onSwapRadioChange(idx) {
+      if (_currentSwapContext) {
+        _currentSwapContext.selectedIdx = Number(idx) || 0;
+        _renderSwapSabjiModalContent();
+      }
+    }
+
+    function _renderSwapSabjiModalContent() {
+      if (!_currentSwapContext) return;
+      const { rowId, date, meal, options, selectedIdx } = _currentSwapContext;
+      const selectedOpt = options[selectedIdx] || options[0];
+
+      let optionsHtml = "";
+      if (options.length === 1) {
+        optionsHtml = `
+          <div style="background:#fff7ed;border:1.5px solid #fed7aa;border-radius:12px;padding:14px;margin-bottom:14px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+              <div style="flex:1;">
+                <div style="font-size:0.68rem;color:#9a3412;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Current Sabji</div>
+                <div style="font-size:0.92rem;font-weight:700;color:#1e293b;margin-top:2px;">${selectedOpt.fromTitle}</div>
+                <div style="font-size:0.78rem;color:#64748b;margin-top:1px;">${selectedOpt.fromSubtitle}</div>
+              </div>
+              <div style="font-size:1.3rem;color:#ea580c;padding-top:6px;font-weight:800;">➔</div>
+              <div style="flex:1;text-align:right;">
+                <div style="font-size:0.68rem;color:#16a34a;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">New Sabji</div>
+                <div style="font-size:0.92rem;font-weight:700;color:#15803d;margin-top:2px;">${selectedOpt.toTitle}</div>
+                <div style="font-size:0.78rem;color:#64748b;margin-top:1px;">${selectedOpt.toSubtitle}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        optionsHtml = `
+          <div style="font-size:0.8rem;color:#475569;font-weight:600;margin-bottom:8px;">Choose which sabji to swap:</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+            ${options.map((opt, i) => {
+              const isChecked = (i === selectedIdx);
+              return `
+                <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid ${isChecked ? '#ea580c' : '#e2e8f0'};border-radius:12px;background:${isChecked ? '#fff7ed' : '#fff'};cursor:pointer;transition:all 0.15s ease;">
+                  <input type="radio" name="swapChoice" value="${i}" ${isChecked ? 'checked' : ''} onchange="_onSwapRadioChange(${i})" style="accent-color:#ea580c;width:17px;height:17px;cursor:pointer;">
+                  <div style="flex:1;font-size:0.83rem;line-height:1.4;">
+                    <span style="font-weight:700;color:#1e293b;">${opt.fromTitle}</span>
+                    <span style="color:#ea580c;font-weight:800;margin:0 4px;">➔</span>
+                    <span style="font-weight:700;color:#15803d;">${opt.toTitle}</span>
+                    <div style="font-size:0.72rem;color:#64748b;">${opt.fromSubtitle} ➔ ${opt.toSubtitle}</div>
+                  </div>
+                </label>
+              `;
+            }).join("")}
+          </div>
+        `;
+      }
+
+      let qtySelectorHtml = "";
+      if (selectedOpt.qty > 1) {
+        qtySelectorHtml = `
+          <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:10px 14px;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:14px;">
+            <span style="font-size:0.82rem;color:#334155;font-weight:600;">Quantity to swap:</span>
+            <select id="swapSabjiQtySelect" style="padding:4px 8px;border-radius:6px;border:1px solid #cbd5e1;font-weight:700;font-size:0.85rem;background:#fff;">
+              ${Array.from({length: selectedOpt.qty}, (_, i) => `<option value="${i+1}" ${i+1===selectedOpt.qty ? 'selected' : ''}>${i+1} portion${i > 0 ? 's' : ''}</option>`).join("")}
+            </select>
+          </div>
+        `;
+      }
+
+      const html = `
+        <div style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:16px 18px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:800;font-size:1.05rem;">⇄ Swap Sabji</div>
+            <button onclick="closeSwapSabjiModal()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:1rem;cursor:pointer;">✕</button>
+          </div>
+          <div style="font-size:0.78rem;opacity:0.95;margin-top:3px;">${meal} · ${formatDate(date)}</div>
+        </div>
+        <div style="padding:18px 20px;">
+          ${optionsHtml}
+          ${qtySelectorHtml}
+          <div style="font-size:0.74rem;color:#64748b;line-height:1.45;margin-bottom:16px;background:#f1f5f9;padding:10px 12px;border-radius:8px;">
+            ℹ️ <b>Strict Size Rule:</b> 250ml swaps with 250ml only, and 100ml with 100ml only. Identical price — your total bill and wallet balance remain unchanged.
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button onclick="closeSwapSabjiModal()" style="flex:1;padding:11px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#475569;font-weight:700;font-size:0.86rem;cursor:pointer;">Cancel</button>
+            <button onclick="_doExecuteSabjiSwap('${rowId}', '${selectedOpt.fromCol}', '${selectedOpt.toCol}')" style="flex:1.2;padding:11px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;box-shadow:0 3px 10px rgba(234,88,12,0.3);">Confirm Swap</button>
+          </div>
+        </div>
+      `;
+      _renderSwapSabji(html);
+    }
+
+    async function _doExecuteSabjiSwap(rowId, fromCol, toCol) {
+      const qtyEl = document.getElementById("swapSabjiQtySelect");
+      const qty = qtyEl ? (parseInt(qtyEl.value, 10) || 1) : 1;
+      closeSwapSabjiModal();
+      sLoading(true, "Swapping sabji…");
+      try {
+        const res = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            _action: "swapOrderSabji",
+            phone: S.phone,
+            rowId: rowId,
+            fromSabji: fromCol,
+            toSabji: toCol,
+            qty: qty
+          })
+        }).then(r => r.json());
+        sLoading(false);
+        if (!res.success) {
+          await sAlert(res.error || "Could not swap sabji. Please try again.", "Swap Failed", "⚠️");
+          return;
+        }
+        await sAlert(res.message || "Sabji swapped successfully!", "Sabji Swapped", "✅");
+        await loadExistingOrders(S.phone);
+      } catch (e) {
+        sLoading(false);
+        await sAlert("Network error while swapping sabji: " + e.message, "Failure", "❌");
+      }
     }
 
     // ── BULK CANCEL vs POSTPONE (Manage Orders) ─────────────────────────────
