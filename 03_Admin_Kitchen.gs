@@ -1614,7 +1614,7 @@ function getDriverOrders(date) {
 // ════════════════════════════════════════════════════════════════════
 // DELIVERY ROUTE LEARNING
 // Learns the driver's preferred stop order from the sequence in which he
-// marks orders delivered (SK_Deliveries.Delivered_At timestamps), grouped
+// marks orders delivered (Order rows 'Delivered' status), grouped
 // by Society/building, separately per meal. The driver page then sorts
 // undelivered orders by this learned order so deliveries follow his route.
 // ════════════════════════════════════════════════════════════════════
@@ -1656,17 +1656,20 @@ function buildDeliveryRoute(days) {
     days = Number(days) > 0 ? Number(days) : 30;
     var ss = getSpreadsheet();
     var ordersWs = getOrCreateTab(ss, TAB_ORDERS, ORDERS_HEADERS);
-    var delWs    = getOrCreateTab(ss, "SK_Deliveries", ["Submission_ID", "Delivered_At", "EnRoute_At"]);
+    // Legacy fallback: read SK_Deliveries ONLY if it still exists; never recreate it!
+    var delWs    = ss.getSheetByName("SK_Deliveries");
 
     // submissionId → deliveredAt (ms)
     var delMap = {};
-    getAllRows(delWs).forEach(function (d) {
-      var sid = String(d.Submission_ID || "").trim();
-      var da  = d.Delivered_At;
-      if (!sid || !da) return;
-      var ms = (da instanceof Date) ? da.getTime() : new Date(da).getTime();
-      if (!isNaN(ms)) delMap[sid] = ms;
-    });
+    if (delWs) {
+      getAllRows(delWs).forEach(function (d) {
+        var sid = String(d.Submission_ID || "").trim();
+        var da  = d.Delivered_At;
+        if (!sid || !da) return;
+        var ms = (da instanceof Date) ? da.getTime() : new Date(da).getTime();
+        if (!isNaN(ms)) delMap[sid] = ms;
+      });
+    }
 
     var now = getISTDate();
 
@@ -1677,8 +1680,20 @@ function buildDeliveryRoute(days) {
     var prettyAcc = {};
     getAllRows(ordersWs).forEach(function (r) {
       var sid = String(r.Submission_ID || "").trim();
+      var isDel = r.Delivered === true || String(r.Delivered).toLowerCase() === "true" || String(r.Delivered).toLowerCase() === "yes";
       var t   = delMap[sid];
-      if (!t) return; // must have been delivered (has a Delivered_At timestamp)
+      if (!t && isDel) {
+        var da = r.Delivered;
+        var ms = (da instanceof Date) ? da.getTime() : new Date(da).getTime();
+        if (!isNaN(ms)) {
+          t = ms;
+        } else {
+          var ts = r.Timestamp;
+          var tms = (ts instanceof Date) ? ts.getTime() : (ts ? new Date(ts).getTime() : 0);
+          t = isNaN(tms) ? 0 : tms;
+        }
+      }
+      if (!t && !isDel) return; // must have been delivered
       if (_isOrderCancelled(r.Payment_Status)) return;
       var meal = String(r.Meal_Type || "").trim();
       if (!meal) return;
@@ -1693,7 +1708,7 @@ function buildDeliveryRoute(days) {
       if (raw) { (prettyAcc[soc] = prettyAcc[soc] || {})[raw] = (prettyAcc[soc][raw] || 0) + 1; }
       byMealDay[meal] = byMealDay[meal] || {};
       byMealDay[meal][od] = byMealDay[meal][od] || [];
-      byMealDay[meal][od].push({ soc: soc, t: t });
+      byMealDay[meal][od].push({ soc: soc, t: t || 0 });
     });
 
     // Canonical display name per key, falling back to most-used raw spelling.

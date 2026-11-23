@@ -116,6 +116,19 @@ Base: `https://script.google.com/macros/s/AKfycbz-wwECc_mSh949babtRt8OAvFbnJJzH5
 - Archive policy: due-slice (1-10→18th, 11-20→28th, 21-end→next-month 8th), terminal rows only (Paid/Cancelled/Refunded), Pending/On-Account stay live, per-month existing files appended, daily ~22:30 IST trigger, preview `archiveDueDryRun`.
 - Contact: WhatsApp +91 93222 46765; calls 9930748908 / 9819969682. Keep BUSINESS_CONTEXT, Backend/business.json, index.html FAQ/JSON-LD, order.html FAQ/GUIDES in sync when facts change.
 
+- **Safe Removal of SK_Deliveries Sheet (CODE_VERSION 36.24)**
+  - Audited all codebase files for `SK_Deliveries` references.
+  - Replaced `getOrCreateTab(ss, "SK_Deliveries", ...)` in `buildDeliveryRoute` (`03_Admin_Kitchen.gs`) with `ss.getSheetByName("SK_Deliveries")`.
+  - Safely falls back to `r.Delivered` in order rows, ensuring that deleting `SK_Deliveries` will never recreate the sheet or cause errors during route learning.
+
+- **Direct 'Delivered' Column in Orders & Deprecation of SK_Deliveries (CODE_VERSION 36.23 / DRIVER_VERSION v26.11.23.01)**
+  - Added `Delivered` column (boolean `true`/`""`) to `ORDERS_HEADERS` (64th column) in `00_Config.gs`, `02_Orders_Menu.gs`, and `06_Bulk_Orders.gs`.
+  - Updated `markDelivered`, `batchMarkDelivered`, `unmarkDelivered`, and auto-delivery daily/meal helpers in `04_Reports_Misc.gs` to update order rows directly.
+  - Cached en route timestamps in Script Properties (`ENROUTE_<date>_<meal>`) via `batchMarkEnRoute`.
+  - Updated `getCustomerOrders` (`02_Orders_Menu.gs`) and `getDriverData` (`03_Admin_Kitchen.gs`) to read delivery status directly from order rows, eliminating 12,000+ row sheet reads.
+  - Backfilled all historical orders $\le$ 2026-11-23 with `Delivered = true` (539 rows in `Orders`, 1 row in `LS_Orders`) and kept orders $\ge$ 2026-11-24 blank.
+  - Updated `driver.html` `fmtTime` to cleanly support boolean `"true"`.
+
 - **Orders Tab Slot Attribution & Live Sync for Freed Bhosale/Triveni Slots (CODE_VERSION 35.98 / APP_VERSION v26.10.17.02)**
   - **Orders Tab (`03_Admin_Kitchen.gs` `getOrderSummary` & `docs/Admin/vault_admin.html`):**
     - `getOrderSummary(date)` reads `Orders_Closed` for the date. When `isFreeBT` is active for a meal, orders from Bhosale Nagar and Triveni Nagar (supporting both `triveni` and `triverni` spellings across all address/society/area fields) are marked `slotType = 'exempt'` with `slotReason = 'BT Freed'`, without incrementing the meal's delivery slot count (`st.slotCount`).
